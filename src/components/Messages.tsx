@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ConversationItem } from "../types";
 import { Markdown } from "./Markdown";
 import { DiffBlock } from "./DiffBlock";
@@ -11,9 +11,49 @@ type MessagesProps = {
 
 export function Messages({ items, isThinking }: MessagesProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const seenItems = useRef(new Set<string>());
+  const [openItems, setOpenItems] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    setOpenItems((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      items.forEach((item) => {
+        if (seenItems.current.has(item.id)) {
+          return;
+        }
+        seenItems.current.add(item.id);
+        const shouldOpen =
+          item.kind === "tool" && item.toolType === "fileChange";
+        if (shouldOpen) {
+          next.add(item.id);
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [items]);
+
+  useEffect(() => {
+    if (!bottomRef.current) {
+      return undefined;
+    }
+    let raf1 = 0;
+    let raf2 = 0;
+    const target = bottomRef.current;
+    raf1 = window.requestAnimationFrame(() => {
+      raf2 = window.requestAnimationFrame(() => {
+        target.scrollIntoView({ behavior: "smooth", block: "end" });
+      });
+    });
+    return () => {
+      if (raf1) {
+        window.cancelAnimationFrame(raf1);
+      }
+      if (raf2) {
+        window.cancelAnimationFrame(raf2);
+      }
+    };
   }, [items.length, isThinking]);
 
   return (
@@ -47,7 +87,23 @@ export function Messages({ items, isThinking }: MessagesProps) {
               ? `${cleanTitle.slice(0, 80)}…`
               : cleanTitle || "Reasoning";
           return (
-            <details key={item.id} className="item-card reasoning">
+            <details
+              key={item.id}
+              className="item-card reasoning"
+              open={openItems.has(item.id)}
+              onToggle={(event) => {
+                const isOpen = event.currentTarget.open;
+                setOpenItems((prev) => {
+                  const next = new Set(prev);
+                  if (isOpen) {
+                    next.add(item.id);
+                  } else {
+                    next.delete(item.id);
+                  }
+                  return next;
+                });
+              }}
+            >
               <summary>
                 <span className="item-summary-left">
                   <span className="item-chevron" aria-hidden>
@@ -67,29 +123,50 @@ export function Messages({ items, isThinking }: MessagesProps) {
             </details>
           );
         }
-        if (item.kind === "diff") {
+        if (item.kind === "review") {
+          const title =
+            item.state === "started" ? "Review started" : "Review completed";
           return (
-            <details key={item.id} className="item-card diff">
-              <summary>
-                <span className="item-summary-left">
-                  <span className="item-chevron" aria-hidden>
-                    ▸
-                  </span>
-                  <span className="item-title">{item.title}</span>
+            <div key={item.id} className="item-card review">
+              <div className="review-header">
+                <span className="review-title">{title}</span>
+                <span
+                  className={`review-badge ${
+                    item.state === "started" ? "active" : "done"
+                  }`}
+                >
+                  Review
                 </span>
-                {item.status && <span className="item-status">{item.status}</span>}
-              </summary>
-              <div className="item-body">
-                <div className="diff-viewer-output">
-                  <DiffBlock diff={item.diff} />
-                </div>
               </div>
-            </details>
+              {item.text && (
+                <Markdown value={item.text} className="item-text markdown" />
+              )}
+            </div>
           );
         }
         const isFileChange = item.toolType === "fileChange";
         return (
-          <details key={item.id} className="item-card tool">
+          <details
+            key={item.id}
+            className="item-card tool"
+            open={isFileChange ? openItems.has(item.id) : undefined}
+            onToggle={
+              isFileChange
+                ? (event) => {
+                    const isOpen = event.currentTarget.open;
+                    setOpenItems((prev) => {
+                      const next = new Set(prev);
+                      if (isOpen) {
+                        next.add(item.id);
+                      } else {
+                        next.delete(item.id);
+                      }
+                      return next;
+                    });
+                  }
+                : undefined
+            }
+          >
             <summary>
               <span className="item-summary-left">
                 <span className="item-chevron" aria-hidden>
@@ -140,13 +217,6 @@ export function Messages({ items, isThinking }: MessagesProps) {
                   codeBlock
                 />
               )}
-              {isFileChange && item.output && item.changes?.length ? (
-                <Markdown
-                  value={item.output}
-                  className="item-output markdown"
-                  codeBlock
-                />
-              ) : null}
             </div>
           </details>
         );

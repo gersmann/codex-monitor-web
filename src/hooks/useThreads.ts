@@ -22,7 +22,10 @@ type ThreadState = {
   activeThreadIdByWorkspace: Record<string, string | null>;
   itemsByThread: Record<string, ConversationItem[]>;
   threadsByWorkspace: Record<string, ThreadSummary[]>;
-  threadStatusById: Record<string, { isProcessing: boolean; hasUnread: boolean }>;
+  threadStatusById: Record<
+    string,
+    { isProcessing: boolean; hasUnread: boolean; isReviewing: boolean }
+  >;
   approvals: ApprovalRequest[];
 };
 
@@ -31,6 +34,7 @@ type ThreadAction =
   | { type: "ensureThread"; workspaceId: string; threadId: string }
   | { type: "removeThread"; workspaceId: string; threadId: string }
   | { type: "markProcessing"; threadId: string; isProcessing: boolean }
+  | { type: "markReviewing"; threadId: string; isReviewing: boolean }
   | { type: "markUnread"; threadId: string; hasUnread: boolean }
   | { type: "addUserMessage"; threadId: string; text: string }
   | { type: "setThreadName"; workspaceId: string; threadId: string; name: string }
@@ -38,7 +42,6 @@ type ThreadAction =
   | { type: "completeAgentMessage"; threadId: string; itemId: string; text: string }
   | { type: "upsertItem"; threadId: string; item: ConversationItem }
   | { type: "setThreadItems"; threadId: string; items: ConversationItem[] }
-  | { type: "setTurnDiff"; threadId: string; diff: string }
   | {
       type: "appendReasoningSummary";
       threadId: string;
@@ -85,6 +88,8 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
                 isProcessing:
                   state.threadStatusById[action.threadId]?.isProcessing ?? false,
                 hasUnread: false,
+                isReviewing:
+                  state.threadStatusById[action.threadId]?.isReviewing ?? false,
               },
             }
           : state.threadStatusById,
@@ -106,7 +111,11 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         },
         threadStatusById: {
           ...state.threadStatusById,
-          [action.threadId]: { isProcessing: false, hasUnread: false },
+          [action.threadId]: {
+            isProcessing: false,
+            hasUnread: false,
+            isReviewing: false,
+          },
         },
         activeThreadIdByWorkspace: {
           ...state.activeThreadIdByWorkspace,
@@ -146,6 +155,21 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
           [action.threadId]: {
             isProcessing: action.isProcessing,
             hasUnread: state.threadStatusById[action.threadId]?.hasUnread ?? false,
+            isReviewing:
+              state.threadStatusById[action.threadId]?.isReviewing ?? false,
+          },
+        },
+      };
+    case "markReviewing":
+      return {
+        ...state,
+        threadStatusById: {
+          ...state.threadStatusById,
+          [action.threadId]: {
+            isProcessing:
+              state.threadStatusById[action.threadId]?.isProcessing ?? false,
+            hasUnread: state.threadStatusById[action.threadId]?.hasUnread ?? false,
+            isReviewing: action.isReviewing,
           },
         },
       };
@@ -158,6 +182,8 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
             isProcessing:
               state.threadStatusById[action.threadId]?.isProcessing ?? false,
             hasUnread: action.hasUnread,
+            isReviewing:
+              state.threadStatusById[action.threadId]?.isReviewing ?? false,
           },
         },
       };
@@ -252,36 +278,6 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
           [action.threadId]: action.items,
         },
       };
-    case "setTurnDiff": {
-      const list = state.itemsByThread[action.threadId] ?? [];
-      const existingIndex = list.findIndex(
-        (item) => item.kind === "diff" && item.id === `${action.threadId}-diff`,
-      );
-      const nextItem: ConversationItem = {
-        id: `${action.threadId}-diff`,
-        kind: "diff",
-        title: "Turn diff",
-        diff: action.diff,
-      };
-      if (existingIndex === -1) {
-        return {
-          ...state,
-          itemsByThread: {
-            ...state.itemsByThread,
-            [action.threadId]: [...list, nextItem],
-          },
-        };
-      }
-      const next = [...list];
-      next[existingIndex] = nextItem;
-      return {
-        ...state,
-        itemsByThread: {
-          ...state.itemsByThread,
-          [action.threadId]: next,
-        },
-      };
-    }
     case "appendReasoningSummary": {
       const list = state.itemsByThread[action.threadId] ?? [];
       const index = list.findIndex((entry) => entry.id === action.itemId);
@@ -501,12 +497,9 @@ function buildConversationItem(item: Record<string, unknown>): ConversationItem 
   if (type === "enteredReviewMode" || type === "exitedReviewMode") {
     return {
       id,
-      kind: "tool",
-      toolType: type,
-      title: type === "enteredReviewMode" ? "Review started" : "Review completed",
-      detail: asString(item.review ?? ""),
-      status: "",
-      output: "",
+      kind: "review",
+      state: type === "enteredReviewMode" ? "started" : "completed",
+      text: asString(item.review ?? ""),
     };
   }
   return null;
@@ -584,6 +577,23 @@ function buildItemsFromThread(thread: Record<string, unknown>) {
     });
   });
   return items;
+}
+
+function isReviewingFromThread(thread: Record<string, unknown>) {
+  const turns = Array.isArray(thread.turns) ? thread.turns : [];
+  let reviewing = false;
+  turns.forEach((turn) => {
+    const turnItems = Array.isArray((turn as any)?.items) ? (turn as any).items : [];
+    turnItems.forEach((item) => {
+      const type = asString((item as Record<string, unknown>)?.type ?? "");
+      if (type === "enteredReviewMode") {
+        reviewing = true;
+      } else if (type === "exitedReviewMode") {
+        reviewing = false;
+      }
+    });
+  });
+  return reviewing;
 }
 
 function previewThreadName(text: string, fallback: string) {
@@ -682,6 +692,12 @@ export function useThreads({
       },
       onItemStarted: (workspaceId: string, threadId: string, item) => {
         dispatch({ type: "ensureThread", workspaceId, threadId });
+        const itemType = asString((item as Record<string, unknown>)?.type ?? "");
+        if (itemType === "enteredReviewMode") {
+          dispatch({ type: "markReviewing", threadId, isReviewing: true });
+        } else if (itemType === "exitedReviewMode") {
+          dispatch({ type: "markReviewing", threadId, isReviewing: false });
+        }
         const converted = buildConversationItem(item);
         if (converted) {
           dispatch({ type: "upsertItem", threadId, item: converted });
@@ -694,6 +710,12 @@ export function useThreads({
       },
       onItemCompleted: (workspaceId: string, threadId: string, item) => {
         dispatch({ type: "ensureThread", workspaceId, threadId });
+        const itemType = asString((item as Record<string, unknown>)?.type ?? "");
+        if (itemType === "enteredReviewMode") {
+          dispatch({ type: "markReviewing", threadId, isReviewing: true });
+        } else if (itemType === "exitedReviewMode") {
+          dispatch({ type: "markReviewing", threadId, isReviewing: false });
+        }
         const converted = buildConversationItem(item);
         if (converted) {
           dispatch({ type: "upsertItem", threadId, item: converted });
@@ -756,9 +778,6 @@ export function useThreads({
       },
       onTurnCompleted: (_workspaceId: string, threadId: string) => {
         dispatch({ type: "markProcessing", threadId, isProcessing: false });
-      },
-      onTurnDiffUpdated: (_workspaceId: string, threadId: string, diff: string) => {
-        dispatch({ type: "setTurnDiff", threadId, diff });
       },
     }),
     [
@@ -850,6 +869,11 @@ export function useThreads({
           if (items.length > 0) {
             dispatch({ type: "setThreadItems", threadId, items });
           }
+          dispatch({
+            type: "markReviewing",
+            threadId,
+            isReviewing: isReviewingFromThread(thread),
+          });
           const preview = asString(thread?.preview ?? "");
           if (preview) {
             dispatch({
