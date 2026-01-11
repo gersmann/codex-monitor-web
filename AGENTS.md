@@ -31,11 +31,15 @@ CodexMonitor is a macOS Tauri app that orchestrates Codex agents across local wo
 - Initializes with `initialize` request and `initialized` notification.
 - Streams JSON-RPC notifications over stdout; request/response pairs use `id`.
 - Approval requests arrive as server-initiated JSON-RPC requests.
+- Threads are fetched via `thread/list`, filtered by `cwd`, and resumed via `thread/resume` when selected.
+- Archiving uses `thread/archive` and removes the thread from the UI list.
 
 ## Workspace Persistence
 
 - Workspaces are stored in `workspaces.json` under the app data directory.
 - `list_workspaces` returns saved items; `add_workspace` persists and spawns a session.
+- On launch, the app connects each workspace once and loads its thread list.
+  - `src/App.tsx` guards this with a `Set` to avoid connect/list loops.
 
 ## Running Locally
 
@@ -49,8 +53,12 @@ npm run tauri dev
 - UI layout or styling: update `src/components/*` and `src/styles/*`.
 - App-server event handling: edit `src/hooks/useAppServerEvents.ts`.
 - Tauri IPC: add wrappers in `src/services/tauri.ts` and implement in `src-tauri/src/lib.rs`.
+- Git diff behavior: `src/hooks/useGitStatus.ts` (polling + activity refresh) and `src-tauri/src/lib.rs` (libgit2 status).
+- Thread history rendering: `src/hooks/useThreads.ts` converts `thread/resume` turns into UI items.
+  - Thread names update on first user message (preview-based), and on resume if a preview exists.
 
 ## Notes
 
 - The window uses `titleBarStyle: "Overlay"` and macOS private APIs for transparency.
 - Avoid breaking the JSON-RPC format; app-server rejects requests before initialization.
+- The debug panel is UI-only; it logs client/server/app-server events from `useAppServerEvents`.
