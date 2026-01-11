@@ -26,26 +26,26 @@ export async function connectWorkspace(id: string): Promise<void> {
   return invoke("connect_workspace", { id });
 }
 
-export async function startThread(workspace_id: string) {
-  return invoke<any>("start_thread", { workspace_id });
+export async function startThread(workspaceId: string) {
+  return invoke<any>("start_thread", { workspaceId });
 }
 
 export async function sendUserMessage(
-  workspace_id: string,
-  thread_id: string,
+  workspaceId: string,
+  threadId: string,
   text: string,
 ) {
-  return invoke("send_user_message", { workspace_id, thread_id, text });
+  return invoke("send_user_message", { workspaceId, threadId, text });
 }
 
 export async function respondToServerRequest(
-  workspace_id: string,
-  request_id: number,
+  workspaceId: string,
+  requestId: number,
   decision: "accept" | "decline",
 ) {
   return invoke("respond_to_server_request", {
-    workspace_id,
-    request_id,
+    workspaceId,
+    requestId,
     result: { decision },
   });
 }

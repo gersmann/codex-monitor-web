@@ -17,6 +17,11 @@ export type Message = {
   text: string;
 };
 
+export type ThreadSummary = {
+  id: string;
+  name: string;
+};
+
 export type ApprovalRequest = {
   workspace_id: string;
   request_id: number;
@@ -29,4 +34,12 @@ export type GitFileStatus = {
   status: string;
   additions: number;
   deletions: number;
+};
+
+export type DebugEntry = {
+  id: string;
+  timestamp: number;
+  source: "client" | "server" | "event" | "stderr" | "error";
+  label: string;
+  payload?: unknown;
 };

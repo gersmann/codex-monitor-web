@@ -3,12 +3,14 @@ import { listen } from "@tauri-apps/api/event";
 import type { AppServerEvent, ApprovalRequest } from "../types";
 
 type AgentDelta = {
+  workspaceId: string;
   threadId: string;
   itemId: string;
   delta: string;
 };
 
 type AgentCompleted = {
+  workspaceId: string;
   threadId: string;
   itemId: string;
   text: string;
@@ -19,12 +21,15 @@ type AppServerEventHandlers = {
   onApprovalRequest?: (request: ApprovalRequest) => void;
   onAgentMessageDelta?: (event: AgentDelta) => void;
   onAgentMessageCompleted?: (event: AgentCompleted) => void;
+  onAppServerEvent?: (event: AppServerEvent) => void;
 };
 
 export function useAppServerEvents(handlers: AppServerEventHandlers) {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     listen<AppServerEvent>("app-server-event", (event) => {
+      handlers.onAppServerEvent?.(event.payload);
+
       const { workspace_id, message } = event.payload;
       const method = String(message.method ?? "");
 
@@ -49,7 +54,12 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         const itemId = String(params.itemId ?? params.item_id ?? "");
         const delta = String(params.delta ?? "");
         if (threadId && itemId && delta) {
-          handlers.onAgentMessageDelta?.({ threadId, itemId, delta });
+          handlers.onAgentMessageDelta?.({
+            workspaceId: workspace_id,
+            threadId,
+            itemId,
+            delta,
+          });
         }
         return;
       }
@@ -62,7 +72,12 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
           const itemId = String(item.id ?? "");
           const text = String(item.text ?? "");
           if (itemId) {
-            handlers.onAgentMessageCompleted?.({ threadId, itemId, text });
+            handlers.onAgentMessageCompleted?.({
+              workspaceId: workspace_id,
+              threadId,
+              itemId,
+              text,
+            });
           }
         }
       }

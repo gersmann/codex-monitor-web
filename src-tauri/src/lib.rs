@@ -109,9 +109,13 @@ impl WorkspaceSession {
         rx.await.map_err(|_| "request canceled".to_string())
     }
 
-    async fn send_notification(&self, method: &str, params: Value) -> Result<(), String> {
-        self.write_message(json!({ "method": method, "params": params }))
-            .await
+    async fn send_notification(&self, method: &str, params: Option<Value>) -> Result<(), String> {
+        let value = if let Some(params) = params {
+            json!({ "method": method, "params": params })
+        } else {
+            json!({ "method": method })
+        };
+        self.write_message(value).await
     }
 
     async fn send_response(&self, id: u64, result: Value) -> Result<(), String> {
@@ -208,8 +212,14 @@ async fn spawn_workspace_session(
 
             let maybe_id = value.get("id").and_then(|id| id.as_u64());
             let has_method = value.get("method").is_some();
+            let has_result_or_error =
+                value.get("result").is_some() || value.get("error").is_some();
             if let Some(id) = maybe_id {
-                if has_method {
+                if has_result_or_error {
+                    if let Some(tx) = session_clone.pending.lock().await.remove(&id) {
+                        let _ = tx.send(value);
+                    }
+                } else if has_method {
                     let payload = AppServerEvent {
                         workspace_id: workspace_id.clone(),
                         message: value,
@@ -255,7 +265,7 @@ async fn spawn_workspace_session(
         }
     });
     session.send_request("initialize", init_params).await?;
-    session.send_notification("initialized", json!({})).await?;
+    session.send_notification("initialized", None).await?;
 
     let payload = AppServerEvent {
         workspace_id: entry.id.clone(),

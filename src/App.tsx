@@ -8,6 +8,7 @@ import "./styles/messages.css";
 import "./styles/approvals.css";
 import "./styles/composer.css";
 import "./styles/diff.css";
+import "./styles/debug.css";
 import { Sidebar } from "./components/Sidebar";
 import { Home } from "./components/Home";
 import { MainHeader } from "./components/MainHeader";
@@ -15,13 +16,22 @@ import { Messages } from "./components/Messages";
 import { Approvals } from "./components/Approvals";
 import { Composer } from "./components/Composer";
 import { GitDiffPanel } from "./components/GitDiffPanel";
+import { DebugPanel } from "./components/DebugPanel";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import { useThreads } from "./hooks/useThreads";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useGitStatus } from "./hooks/useGitStatus";
+import type { DebugEntry } from "./types";
 
 function App() {
   const [input, setInput] = useState("");
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [debugEntries, setDebugEntries] = useState<DebugEntry[]>([]);
+
+  const addDebugEntry = (entry: DebugEntry) => {
+    setDebugEntries((prev) => [...prev, entry].slice(-300));
+  };
+
   const {
     workspaces,
     activeWorkspace,
@@ -30,18 +40,22 @@ function App() {
     addWorkspace,
     connectWorkspace,
     markWorkspaceConnected,
-  } = useWorkspaces();
+  } = useWorkspaces({ onDebug: addDebugEntry });
 
   const {
     setActiveThreadId,
+    activeThreadId,
     activeMessages,
     approvals,
+    threadsByWorkspace,
     startThread,
+    startThreadForWorkspace,
     sendUserMessage,
     handleApprovalDecision,
   } = useThreads({
     activeWorkspace,
     onWorkspaceConnected: markWorkspaceConnected,
+    onDebug: addDebugEntry,
   });
 
   const gitStatus = useGitStatus(activeWorkspace);
@@ -51,24 +65,30 @@ function App() {
   async function handleOpenProject() {
     const workspace = await addWorkspace();
     if (workspace) {
-      setActiveThreadId(null);
+      setActiveThreadId(null, workspace.id);
     }
   }
 
   async function handleAddWorkspace() {
     const workspace = await addWorkspace();
     if (workspace) {
-      setActiveThreadId(null);
+      setActiveThreadId(null, workspace.id);
     }
   }
 
   async function handleNewThread() {
+    if (activeWorkspace && !activeWorkspace.connected) {
+      await connectWorkspace(activeWorkspace);
+    }
     await startThread();
   }
 
   async function handleSend() {
     if (!input.trim()) {
       return;
+    }
+    if (activeWorkspace && !activeWorkspace.connected) {
+      await connectWorkspace(activeWorkspace);
     }
     await sendUserMessage(input);
     setInput("");
@@ -79,11 +99,25 @@ function App() {
       <div className="drag-strip" id="titlebar" />
       <Sidebar
         workspaces={workspaces}
+        threadsByWorkspace={threadsByWorkspace}
         activeWorkspaceId={activeWorkspaceId}
+        activeThreadId={activeThreadId}
         onAddWorkspace={handleAddWorkspace}
         onSelectWorkspace={setActiveWorkspaceId}
         onConnectWorkspace={connectWorkspace}
-        onAddAgent={() => {}}
+        onAddAgent={(workspace) => {
+          setActiveWorkspaceId(workspace.id);
+          (async () => {
+            if (!workspace.connected) {
+              await connectWorkspace(workspace);
+            }
+            await startThreadForWorkspace(workspace.id);
+          })();
+        }}
+        onSelectThread={(workspaceId, threadId) => {
+          setActiveWorkspaceId(workspaceId);
+          setActiveThreadId(threadId, workspaceId);
+        }}
       />
 
       <section className="main">
@@ -102,12 +136,18 @@ function App() {
                 workspace={activeWorkspace}
                 branchName={gitStatus.branchName || "unknown"}
               />
-              <div className="actions">
-                <button className="secondary" onClick={handleNewThread}>
-                  New thread
-                </button>
-              </div>
+            <div className="actions">
+              <button className="secondary" onClick={handleNewThread}>
+                New thread
+              </button>
+              <button
+                className="ghost"
+                onClick={() => setDebugOpen((prev) => !prev)}
+              >
+                Debug
+              </button>
             </div>
+          </div>
 
             <div className="content">
               <Messages messages={activeMessages} />
@@ -125,6 +165,12 @@ function App() {
             </div>
 
             <Composer value={input} onChange={setInput} onSend={handleSend} />
+            <DebugPanel
+              entries={debugEntries}
+              isOpen={debugOpen}
+              onToggle={() => setDebugOpen((prev) => !prev)}
+              onClear={() => setDebugEntries([])}
+            />
           </>
         )}
       </section>

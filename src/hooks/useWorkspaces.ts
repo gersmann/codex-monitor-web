@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { DebugEntry } from "../types";
 import type { WorkspaceInfo } from "../types";
 import {
   addWorkspace as addWorkspaceService,
@@ -7,9 +8,14 @@ import {
   pickWorkspacePath,
 } from "../services/tauri";
 
-export function useWorkspaces() {
+type UseWorkspacesOptions = {
+  onDebug?: (entry: DebugEntry) => void;
+};
+
+export function useWorkspaces(options: UseWorkspacesOptions = {}) {
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const { onDebug } = options;
 
   useEffect(() => {
     listWorkspaces()
@@ -30,14 +36,50 @@ export function useWorkspaces() {
     if (!selection) {
       return null;
     }
-    const workspace = await addWorkspaceService(selection, null);
-    setWorkspaces((prev) => [...prev, workspace]);
-    setActiveWorkspaceId(workspace.id);
-    return workspace;
+    onDebug?.({
+      id: `${Date.now()}-client-add-workspace`,
+      timestamp: Date.now(),
+      source: "client",
+      label: "workspace/add",
+      payload: { path: selection },
+    });
+    try {
+      const workspace = await addWorkspaceService(selection, null);
+      setWorkspaces((prev) => [...prev, workspace]);
+      setActiveWorkspaceId(workspace.id);
+      return workspace;
+    } catch (error) {
+      onDebug?.({
+        id: `${Date.now()}-client-add-workspace-error`,
+        timestamp: Date.now(),
+        source: "error",
+        label: "workspace/add error",
+        payload: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   async function connectWorkspace(entry: WorkspaceInfo) {
-    await connectWorkspaceService(entry.id);
+    onDebug?.({
+      id: `${Date.now()}-client-connect-workspace`,
+      timestamp: Date.now(),
+      source: "client",
+      label: "workspace/connect",
+      payload: { workspaceId: entry.id, path: entry.path },
+    });
+    try {
+      await connectWorkspaceService(entry.id);
+    } catch (error) {
+      onDebug?.({
+        id: `${Date.now()}-client-connect-workspace-error`,
+        timestamp: Date.now(),
+        source: "error",
+        label: "workspace/connect error",
+        payload: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   function markWorkspaceConnected(id: string) {

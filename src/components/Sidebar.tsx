@@ -1,21 +1,27 @@
-import type { WorkspaceInfo } from "../types";
+import type { ThreadSummary, WorkspaceInfo } from "../types";
 
 type SidebarProps = {
   workspaces: WorkspaceInfo[];
+  threadsByWorkspace: Record<string, ThreadSummary[]>;
   activeWorkspaceId: string | null;
+  activeThreadId: string | null;
   onAddWorkspace: () => void;
   onSelectWorkspace: (id: string) => void;
   onConnectWorkspace: (workspace: WorkspaceInfo) => void;
   onAddAgent: (workspace: WorkspaceInfo) => void;
+  onSelectThread: (workspaceId: string, threadId: string) => void;
 };
 
 export function Sidebar({
   workspaces,
+  threadsByWorkspace,
   activeWorkspaceId,
+  activeThreadId,
   onAddWorkspace,
   onSelectWorkspace,
   onConnectWorkspace,
   onAddAgent,
+  onSelectThread,
 }: SidebarProps) {
   return (
     <aside className="sidebar">
@@ -56,6 +62,24 @@ export function Sidebar({
                 </span>
               )}
             </button>
+            {(threadsByWorkspace[entry.id] ?? []).length > 0 && (
+              <div className="thread-list">
+                {(threadsByWorkspace[entry.id] ?? []).map((thread) => (
+                  <button
+                    key={thread.id}
+                    className={`thread-row ${
+                      entry.id === activeWorkspaceId && thread.id === activeThreadId
+                        ? "active"
+                        : ""
+                    }`}
+                    onClick={() => onSelectThread(entry.id, thread.id)}
+                  >
+                    <span className="thread-dot" />
+                    <span className="thread-name">{thread.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <button
               className="agent-add"
               onClick={() => onAddAgent(entry)}

@@ -1,5 +1,11 @@
 import { useCallback, useMemo, useReducer } from "react";
-import type { ApprovalRequest, Message, WorkspaceInfo } from "../types";
+import type {
+  ApprovalRequest,
+  DebugEntry,
+  Message,
+  ThreadSummary,
+  WorkspaceInfo,
+} from "../types";
 import {
   respondToServerRequest,
   sendUserMessage as sendUserMessageService,
@@ -10,13 +16,15 @@ import { useAppServerEvents } from "./useAppServerEvents";
 const emptyMessages: Record<string, Message[]> = {};
 
 type ThreadState = {
-  activeThreadId: string | null;
+  activeThreadIdByWorkspace: Record<string, string | null>;
   messagesByThread: Record<string, Message[]>;
+  threadsByWorkspace: Record<string, ThreadSummary[]>;
   approvals: ApprovalRequest[];
 };
 
 type ThreadAction =
-  | { type: "setActiveThreadId"; threadId: string | null }
+  | { type: "setActiveThreadId"; workspaceId: string; threadId: string | null }
+  | { type: "ensureThread"; workspaceId: string; threadId: string }
   | { type: "addUserMessage"; threadId: string; message: Message }
   | { type: "appendAgentDelta"; threadId: string; itemId: string; delta: string }
   | { type: "completeAgentMessage"; threadId: string; itemId: string; text: string }
@@ -24,15 +32,44 @@ type ThreadAction =
   | { type: "removeApproval"; requestId: number };
 
 const initialState: ThreadState = {
-  activeThreadId: null,
+  activeThreadIdByWorkspace: {},
   messagesByThread: emptyMessages,
+  threadsByWorkspace: {},
   approvals: [],
 };
 
 function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
   switch (action.type) {
     case "setActiveThreadId":
-      return { ...state, activeThreadId: action.threadId };
+      return {
+        ...state,
+        activeThreadIdByWorkspace: {
+          ...state.activeThreadIdByWorkspace,
+          [action.workspaceId]: action.threadId,
+        },
+      };
+    case "ensureThread": {
+      const list = state.threadsByWorkspace[action.workspaceId] ?? [];
+      if (list.some((thread) => thread.id === action.threadId)) {
+        return state;
+      }
+      const thread: ThreadSummary = {
+        id: action.threadId,
+        name: `Agent ${list.length + 1}`,
+      };
+      return {
+        ...state,
+        threadsByWorkspace: {
+          ...state.threadsByWorkspace,
+          [action.workspaceId]: [...list, thread],
+        },
+        activeThreadIdByWorkspace: {
+          ...state.activeThreadIdByWorkspace,
+          [action.workspaceId]:
+            state.activeThreadIdByWorkspace[action.workspaceId] ?? action.threadId,
+        },
+      };
+    }
     case "addUserMessage": {
       const list = state.messagesByThread[action.threadId] ?? [];
       return {
@@ -86,14 +123,27 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
 type UseThreadsOptions = {
   activeWorkspace: WorkspaceInfo | null;
   onWorkspaceConnected: (id: string) => void;
+  onDebug?: (entry: DebugEntry) => void;
 };
 
-export function useThreads({ activeWorkspace, onWorkspaceConnected }: UseThreadsOptions) {
+export function useThreads({
+  activeWorkspace,
+  onWorkspaceConnected,
+  onDebug,
+}: UseThreadsOptions) {
   const [state, dispatch] = useReducer(threadReducer, initialState);
 
+  const activeWorkspaceId = activeWorkspace?.id ?? null;
+  const activeThreadId = useMemo(() => {
+    if (!activeWorkspaceId) {
+      return null;
+    }
+    return state.activeThreadIdByWorkspace[activeWorkspaceId] ?? null;
+  }, [activeWorkspaceId, state.activeThreadIdByWorkspace]);
+
   const activeMessages = useMemo(
-    () => (state.activeThreadId ? state.messagesByThread[state.activeThreadId] ?? [] : []),
-    [state.activeThreadId, state.messagesByThread],
+    () => (activeThreadId ? state.messagesByThread[activeThreadId] ?? [] : []),
+    [activeThreadId, state.messagesByThread],
   );
 
   const handleWorkspaceConnected = useCallback(
@@ -109,54 +159,105 @@ export function useThreads({ activeWorkspace, onWorkspaceConnected }: UseThreads
       onApprovalRequest: (approval: ApprovalRequest) => {
         dispatch({ type: "addApproval", approval });
       },
+      onAppServerEvent: (event) => {
+        const method = String(event.message?.method ?? "");
+        const inferredSource =
+          method === "codex/stderr" ? "stderr" : "event";
+        onDebug?.({
+          id: `${Date.now()}-server-event`,
+          timestamp: Date.now(),
+          source: inferredSource,
+          label: method || "event",
+          payload: event,
+        });
+      },
       onAgentMessageDelta: ({
+        workspaceId,
         threadId,
         itemId,
         delta,
       }: {
+        workspaceId: string;
         threadId: string;
         itemId: string;
         delta: string;
       }) => {
+        dispatch({ type: "ensureThread", workspaceId, threadId });
         dispatch({ type: "appendAgentDelta", threadId, itemId, delta });
       },
       onAgentMessageCompleted: ({
+        workspaceId,
         threadId,
         itemId,
         text,
       }: {
+        workspaceId: string;
         threadId: string;
         itemId: string;
         text: string;
       }) => {
+        dispatch({ type: "ensureThread", workspaceId, threadId });
         dispatch({ type: "completeAgentMessage", threadId, itemId, text });
       },
     }),
-    [handleWorkspaceConnected],
+    [handleWorkspaceConnected, onDebug],
   );
 
   useAppServerEvents(handlers);
 
+  const startThreadForWorkspace = useCallback(
+    async (workspaceId: string) => {
+      onDebug?.({
+        id: `${Date.now()}-client-thread-start`,
+        timestamp: Date.now(),
+        source: "client",
+        label: "thread/start",
+        payload: { workspaceId },
+      });
+      try {
+        const response = await startThreadService(workspaceId);
+        onDebug?.({
+          id: `${Date.now()}-server-thread-start`,
+          timestamp: Date.now(),
+          source: "server",
+          label: "thread/start response",
+          payload: response,
+        });
+        const thread = response.result?.thread ?? response.thread;
+        const threadId = String(thread?.id ?? "");
+        if (threadId) {
+          dispatch({ type: "ensureThread", workspaceId, threadId });
+          dispatch({ type: "setActiveThreadId", workspaceId, threadId });
+          return threadId;
+        }
+        return null;
+      } catch (error) {
+        onDebug?.({
+          id: `${Date.now()}-client-thread-start-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread/start error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    },
+    [onDebug],
+  );
+
   const startThread = useCallback(async () => {
-    if (!activeWorkspace) {
+    if (!activeWorkspaceId) {
       return null;
     }
-    const response = await startThreadService(activeWorkspace.id);
-    const thread = response.result?.thread ?? response.thread;
-    const threadId = String(thread?.id ?? "");
-    if (threadId) {
-      dispatch({ type: "setActiveThreadId", threadId });
-      return threadId;
-    }
-    return null;
-  }, [activeWorkspace]);
+    return startThreadForWorkspace(activeWorkspaceId);
+  }, [activeWorkspaceId, startThreadForWorkspace]);
 
   const sendUserMessage = useCallback(
     async (text: string) => {
       if (!activeWorkspace || !text.trim()) {
         return;
       }
-      let threadId = state.activeThreadId;
+      let threadId = activeThreadId;
       if (!threadId) {
         threadId = await startThread();
         if (!threadId) {
@@ -170,9 +271,38 @@ export function useThreads({ activeWorkspace, onWorkspaceConnected }: UseThreads
         text: text.trim(),
       };
       dispatch({ type: "addUserMessage", threadId, message });
-      await sendUserMessageService(activeWorkspace.id, threadId, message.text);
+      onDebug?.({
+        id: `${Date.now()}-client-turn-start`,
+        timestamp: Date.now(),
+        source: "client",
+        label: "turn/start",
+        payload: { workspaceId: activeWorkspace.id, threadId, text: message.text },
+      });
+      try {
+        const response = await sendUserMessageService(
+          activeWorkspace.id,
+          threadId,
+          message.text,
+        );
+        onDebug?.({
+          id: `${Date.now()}-server-turn-start`,
+          timestamp: Date.now(),
+          source: "server",
+          label: "turn/start response",
+          payload: response,
+        });
+      } catch (error) {
+        onDebug?.({
+          id: `${Date.now()}-client-turn-start-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "turn/start error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
     },
-    [activeWorkspace, startThread, state.activeThreadId],
+    [activeWorkspace, activeThreadId, onDebug, startThread],
   );
 
   const handleApprovalDecision = useCallback(
@@ -187,16 +317,25 @@ export function useThreads({ activeWorkspace, onWorkspaceConnected }: UseThreads
     [],
   );
 
-  const setActiveThreadId = useCallback((threadId: string | null) => {
-    dispatch({ type: "setActiveThreadId", threadId });
-  }, []);
+  const setActiveThreadId = useCallback(
+    (threadId: string | null, workspaceId?: string) => {
+      const targetId = workspaceId ?? activeWorkspaceId;
+      if (!targetId) {
+        return;
+      }
+      dispatch({ type: "setActiveThreadId", workspaceId: targetId, threadId });
+    },
+    [activeWorkspaceId],
+  );
 
   return {
-    activeThreadId: state.activeThreadId,
+    activeThreadId,
     setActiveThreadId,
     activeMessages,
     approvals: state.approvals,
+    threadsByWorkspace: state.threadsByWorkspace,
     startThread,
+    startThreadForWorkspace,
     sendUserMessage,
     handleApprovalDecision,
   };

@@ -116,3 +116,46 @@
   text-align: left;
   -webkit-app-region: no-drag;
 }
+
+.thread-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 18px;
+}
+
+.thread-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  -webkit-app-region: no-drag;
+}
+
+.thread-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.thread-row.active {
+  background: rgba(100, 200, 255, 0.14);
+  color: #fff;
+}
+
+.thread-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.thread-row.active .thread-dot {
+  background: rgba(100, 200, 255, 0.8);
+}
