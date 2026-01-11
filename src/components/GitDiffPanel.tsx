@@ -6,6 +6,8 @@ type GitDiffPanelProps = {
   totalDeletions: number;
   fileStatus: string;
   error?: string | null;
+  selectedPath?: string | null;
+  onSelectFile?: (path: string) => void;
   files: {
     path: string;
     status: string;
@@ -22,12 +24,15 @@ function splitPath(path: string) {
   return { name: parts[parts.length - 1], dir: parts.slice(0, -1).join("/") };
 }
 
-function extensionForPath(path: string) {
-  const parts = path.split(".");
-  if (parts.length <= 1) {
-    return "";
+function splitNameAndExtension(name: string) {
+  const lastDot = name.lastIndexOf(".");
+  if (lastDot <= 0 || lastDot === name.length - 1) {
+    return { base: name, extension: "" };
   }
-  return parts[parts.length - 1].toLowerCase();
+  return {
+    base: name.slice(0, lastDot),
+    extension: name.slice(lastDot + 1).toLowerCase(),
+  };
 }
 
 export function GitDiffPanel({
@@ -36,6 +41,8 @@ export function GitDiffPanel({
   totalDeletions,
   fileStatus,
   error,
+  selectedPath,
+  onSelectFile,
   files,
 }: GitDiffPanelProps) {
   return (
@@ -54,17 +61,35 @@ export function GitDiffPanel({
           <div className="diff-empty">No changes detected.</div>
         )}
         {files.map((file) => {
-          const { name, dir } = splitPath(file.path);
-          const extension = extensionForPath(file.path);
+          const { name } = splitPath(file.path);
+          const { base, extension } = splitNameAndExtension(name);
           const style = extension ? defaultStyles[extension] : undefined;
+          const isSelected = file.path === selectedPath;
           return (
-            <div key={file.path} className="diff-row">
+            <div
+              key={file.path}
+              className={`diff-row ${isSelected ? "active" : ""}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectFile?.(file.path)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelectFile?.(file.path);
+                }
+              }}
+            >
               <span className="diff-icon" aria-hidden>
                 <FileIcon extension={extension || "file"} {...style} />
               </span>
               <div className="diff-file">
                 <div className="diff-path">
-                  <span>{name}</span>
+                  <span className="diff-name">
+                    <span className="diff-name-base">{base}</span>
+                    {extension && (
+                      <span className="diff-name-ext">.{extension}</span>
+                    )}
+                  </span>
                   <span className="diff-counts-inline">
                     <span className="diff-add">+{file.additions}</span>
                     <span className="diff-sep">/</span>

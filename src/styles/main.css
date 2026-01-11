@@ -35,6 +35,16 @@
   grid-row: 1;
 }
 
+.main-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.main-topbar-left .icon-button {
+  padding: 6px 10px;
+}
+
 .branch-pill {
   font-size: 12px;
   padding: 6px 10px;

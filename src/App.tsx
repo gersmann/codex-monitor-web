@@ -8,6 +8,7 @@ import "./styles/messages.css";
 import "./styles/approvals.css";
 import "./styles/composer.css";
 import "./styles/diff.css";
+import "./styles/diff-viewer.css";
 import "./styles/debug.css";
 import { Sidebar } from "./components/Sidebar";
 import { Home } from "./components/Home";
@@ -16,11 +17,13 @@ import { Messages } from "./components/Messages";
 import { Approvals } from "./components/Approvals";
 import { Composer } from "./components/Composer";
 import { GitDiffPanel } from "./components/GitDiffPanel";
+import { GitDiffViewer } from "./components/GitDiffViewer";
 import { DebugPanel } from "./components/DebugPanel";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import { useThreads } from "./hooks/useThreads";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useGitStatus } from "./hooks/useGitStatus";
+import { useGitDiffs } from "./hooks/useGitDiffs";
 import { useModels } from "./hooks/useModels";
 import { useSkills } from "./hooks/useSkills";
 import { useDebugLog } from "./hooks/useDebugLog";
@@ -29,6 +32,8 @@ import { useWorkspaceRestore } from "./hooks/useWorkspaceRestore";
 
 function App() {
   const [input, setInput] = useState("");
+  const [centerMode, setCenterMode] = useState<"chat" | "diff">("chat");
+  const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
   const {
     debugOpen,
     setDebugOpen,
@@ -53,6 +58,11 @@ function App() {
 
   const { status: gitStatus, refresh: refreshGitStatus } =
     useGitStatus(activeWorkspace);
+  const {
+    diffs: gitDiffs,
+    isLoading: isDiffLoading,
+    error: diffError,
+  } = useGitDiffs(activeWorkspace, gitStatus.files, centerMode === "diff");
   const {
     models,
     selectedModel,
@@ -111,12 +121,23 @@ function App() {
     }
   }
 
+  function exitDiffView() {
+    setCenterMode("chat");
+    setSelectedDiffPath(null);
+  }
+
   async function handleAddAgent(workspace: (typeof workspaces)[number]) {
+    exitDiffView();
     setActiveWorkspaceId(workspace.id);
     if (!workspace.connected) {
       await connectWorkspace(workspace);
     }
     await startThreadForWorkspace(workspace.id);
+  }
+
+  function handleSelectDiff(path: string) {
+    setSelectedDiffPath(path);
+    setCenterMode("diff");
   }
 
   async function handleSend() {
@@ -154,10 +175,14 @@ function App() {
         activeWorkspaceId={activeWorkspaceId}
         activeThreadId={activeThreadId}
         onAddWorkspace={handleAddWorkspace}
-        onSelectWorkspace={setActiveWorkspaceId}
+        onSelectWorkspace={(workspaceId) => {
+          exitDiffView();
+          setActiveWorkspaceId(workspaceId);
+        }}
         onConnectWorkspace={connectWorkspace}
         onAddAgent={handleAddAgent}
         onSelectThread={(workspaceId, threadId) => {
+          exitDiffView();
           setActiveWorkspaceId(workspaceId);
           setActiveThreadId(threadId, workspaceId);
         }}
@@ -175,59 +200,82 @@ function App() {
           />
         )}
 
-      {activeWorkspace && (
+        {activeWorkspace && (
           <>
             <div className="main-topbar">
-              <MainHeader
-                workspace={activeWorkspace}
-                branchName={gitStatus.branchName || "unknown"}
-              />
-            <div className="actions">
-              {hasDebugAlerts && (
-                <button
-                  className="ghost icon-button"
-                  onClick={() => setDebugOpen((prev) => !prev)}
-                  aria-label="Debug"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <path
-                      d="M9 7.5V6.5a3 3 0 0 1 6 0v1"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                    />
-                    <rect
-                      x="7"
-                      y="7.5"
-                      width="10"
-                      height="9"
-                      rx="3"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                    />
-                    <path
-                      d="M4 12h3m10 0h3M6 8l2 2m8-2-2 2M6 16l2-2m8 2-2-2"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                    />
-                    <circle cx="10" cy="12" r="0.8" fill="currentColor" />
-                    <circle cx="14" cy="12" r="0.8" fill="currentColor" />
-                  </svg>
-                </button>
-              )}
+              <div className="main-topbar-left">
+                {centerMode === "diff" && (
+                  <button
+                    className="ghost icon-button"
+                    onClick={() => {
+                      setCenterMode("chat");
+                      setSelectedDiffPath(null);
+                    }}
+                    aria-label="Back to chat"
+                  >
+                    <span aria-hidden>‹</span>
+                  </button>
+                )}
+                <MainHeader
+                  workspace={activeWorkspace}
+                  branchName={gitStatus.branchName || "unknown"}
+                />
+              </div>
+              <div className="actions">
+                {hasDebugAlerts && (
+                  <button
+                    className="ghost icon-button"
+                    onClick={() => setDebugOpen((prev) => !prev)}
+                    aria-label="Debug"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <path
+                        d="M9 7.5V6.5a3 3 0 0 1 6 0v1"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                      />
+                      <rect
+                        x="7"
+                        y="7.5"
+                        width="10"
+                        height="9"
+                        rx="3"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                      />
+                      <path
+                        d="M4 12h3m10 0h3M6 8l2 2m8-2-2 2M6 16l2-2m8 2-2-2"
+                        stroke="currentColor"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                      />
+                      <circle cx="10" cy="12" r="0.8" fill="currentColor" />
+                      <circle cx="14" cy="12" r="0.8" fill="currentColor" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
 
             <div className="content">
-              <Messages
-                items={activeItems}
-                isThinking={
-                  activeThreadId
-                    ? threadStatusById[activeThreadId]?.isProcessing ?? false
-                    : false
-                }
-              />
+              {centerMode === "diff" ? (
+                <GitDiffViewer
+                  diffs={gitDiffs}
+                  selectedPath={selectedDiffPath}
+                  isLoading={isDiffLoading}
+                  error={diffError}
+                />
+              ) : (
+                <Messages
+                  items={activeItems}
+                  isThinking={
+                    activeThreadId
+                      ? threadStatusById[activeThreadId]?.isProcessing ?? false
+                      : false
+                  }
+                />
+              )}
             </div>
 
             <div className="right-panel">
@@ -238,23 +286,27 @@ function App() {
                 fileStatus={fileStatus}
                 error={gitStatus.error}
                 files={gitStatus.files}
+                selectedPath={selectedDiffPath}
+                onSelectFile={handleSelectDiff}
               />
               <Approvals approvals={approvals} onDecision={handleApprovalDecision} />
             </div>
 
-            <Composer
-              value={input}
-              onChange={setInput}
-              onSend={handleSend}
-              models={models}
-              selectedModelId={selectedModelId}
-              onSelectModel={setSelectedModelId}
-              reasoningOptions={reasoningOptions}
-              selectedEffort={selectedEffort}
-              onSelectEffort={setSelectedEffort}
-              skills={skills}
-              onSelectSkill={handleSelectSkill}
-            />
+            {centerMode === "chat" && (
+              <Composer
+                value={input}
+                onChange={setInput}
+                onSend={handleSend}
+                models={models}
+                selectedModelId={selectedModelId}
+                onSelectModel={setSelectedModelId}
+                reasoningOptions={reasoningOptions}
+                selectedEffort={selectedEffort}
+                onSelectEffort={setSelectedEffort}
+                skills={skills}
+                onSelectSkill={handleSelectSkill}
+              />
+            )}
             <DebugPanel
               entries={debugEntries}
               isOpen={debugOpen}

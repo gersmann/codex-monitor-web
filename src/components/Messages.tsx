@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { ConversationItem } from "../types";
 import { Markdown } from "./Markdown";
+import { DiffBlock } from "./DiffBlock";
+import { languageFromPath } from "../utils/syntax";
 
 type MessagesProps = {
   items: ConversationItem[];
@@ -78,11 +80,9 @@ export function Messages({ items, isThinking }: MessagesProps) {
                 {item.status && <span className="item-status">{item.status}</span>}
               </summary>
               <div className="item-body">
-                <Markdown
-                  value={item.diff}
-                  className="item-output markdown"
-                  codeBlock
-                />
+                <div className="diff-viewer-output">
+                  <DiffBlock diff={item.diff} />
+                </div>
               </div>
             </details>
           );
@@ -119,11 +119,12 @@ export function Messages({ items, isThinking }: MessagesProps) {
                         <span className="file-change-path">{change.path}</span>
                       </div>
                       {change.diff && (
-                        <Markdown
-                          value={change.diff}
-                          className="item-output markdown"
-                          codeBlock
-                        />
+                        <div className="diff-viewer-output">
+                          <DiffBlock
+                            diff={change.diff}
+                            language={languageFromPath(change.path)}
+                          />
+                        </div>
                       )}
                     </div>
                   ))}

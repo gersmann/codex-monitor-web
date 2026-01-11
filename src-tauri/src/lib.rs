@@ -19,6 +19,12 @@ struct GitFileStatus {
     deletions: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct GitFileDiff {
+    path: String,
+    diff: String,
+}
+
 fn normalize_git_path(path: &str) -> String {
     path.replace('\\', "/")
 }
@@ -56,6 +62,14 @@ fn diff_stats_for_path(
     }
 
     Ok((additions, deletions))
+}
+
+fn diff_patch_to_string(patch: &mut git2::Patch) -> Result<String, git2::Error> {
+    let buf = patch.to_buf()?;
+    Ok(buf
+        .as_str()
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| String::from_utf8_lossy(&buf).to_string()))
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -610,6 +624,70 @@ async fn get_git_status(
     }))
 }
 
+#[tauri::command]
+async fn get_git_diffs(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<GitFileDiff>, String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo = Repository::open(&entry.path).map_err(|e| e.to_string())?;
+    let head_tree = repo
+        .head()
+        .ok()
+        .and_then(|head| head.peel_to_tree().ok());
+
+    let mut options = DiffOptions::new();
+    options
+        .include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .show_untracked_content(true);
+
+    let diff = match head_tree.as_ref() {
+        Some(tree) => repo
+            .diff_tree_to_workdir_with_index(Some(tree), Some(&mut options))
+            .map_err(|e| e.to_string())?,
+        None => repo
+            .diff_tree_to_workdir_with_index(None, Some(&mut options))
+            .map_err(|e| e.to_string())?,
+    };
+
+    let mut results = Vec::new();
+    for (index, delta) in diff.deltas().enumerate() {
+        let path = delta
+            .new_file()
+            .path()
+            .or_else(|| delta.old_file().path());
+        let Some(path) = path else {
+            continue;
+        };
+        let patch = match git2::Patch::from_diff(&diff, index) {
+            Ok(patch) => patch,
+            Err(_) => continue,
+        };
+        let Some(mut patch) = patch else {
+            continue;
+        };
+        let content = match diff_patch_to_string(&mut patch) {
+            Ok(content) => content,
+            Err(_) => continue,
+        };
+        if content.trim().is_empty() {
+            continue;
+        }
+        results.push(GitFileDiff {
+            path: normalize_git_path(path.to_string_lossy().as_ref()),
+            diff: content,
+        });
+    }
+
+    Ok(results)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -633,6 +711,7 @@ pub fn run() {
             archive_thread,
             connect_workspace,
             get_git_status,
+            get_git_diffs,
             model_list,
             skills_list
         ])

@@ -51,6 +51,11 @@ export type GitFileStatus = {
   deletions: number;
 };
 
+export type GitFileDiff = {
+  path: string;
+  diff: string;
+};
+
 export type ModelOption = {
   id: string;
   model: string;
