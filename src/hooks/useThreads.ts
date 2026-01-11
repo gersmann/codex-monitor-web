@@ -411,6 +411,27 @@ function parseReviewTarget(input: string) {
   return { type: "custom", instructions: rest } as const;
 }
 
+function formatReviewLabel(target: ReturnType<typeof parseReviewTarget>) {
+  if (target.type === "uncommittedChanges") {
+    return "current changes";
+  }
+  if (target.type === "baseBranch") {
+    return `base branch ${target.branch}`;
+  }
+  if (target.type === "commit") {
+    return target.title
+      ? `commit ${target.sha}: ${target.title}`
+      : `commit ${target.sha}`;
+  }
+  const instructions = target.instructions.trim();
+  if (!instructions) {
+    return "custom review";
+  }
+  return instructions.length > 80
+    ? `${instructions.slice(0, 80)}…`
+    : instructions;
+}
+
 function buildConversationItem(item: Record<string, unknown>): ConversationItem | null {
   const type = asString(item.type);
   const id = asString(item.id);
@@ -1101,6 +1122,16 @@ export function useThreads({
       const target = parseReviewTarget(text);
       dispatch({ type: "markProcessing", threadId, isProcessing: true });
       dispatch({ type: "markReviewing", threadId, isReviewing: true });
+      dispatch({
+        type: "upsertItem",
+        threadId,
+        item: {
+          id: `review-start-${threadId}-${Date.now()}`,
+          kind: "review",
+          state: "started",
+          text: formatReviewLabel(target),
+        },
+      });
       try {
         void onMessageActivity?.();
       } catch {
