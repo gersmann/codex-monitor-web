@@ -16,10 +16,12 @@ html,
 body {
   margin: 0;
   background: transparent;
+  overflow: hidden;
 }
 
 #root {
   height: 100vh;
+  overflow: hidden;
 }
 
 .app {

@@ -1,10 +1,13 @@
 .messages {
-  background: rgba(12, 14, 20, 0.6);
-  border-radius: 18px;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
   overflow-y: auto;
   -webkit-app-region: no-drag;
+}
+
+.messages-full {
+  background: transparent;
+  border-radius: 0;
+  padding: 0 8px 16px 0;
+  border: none;
 }
 
 .messages-empty {

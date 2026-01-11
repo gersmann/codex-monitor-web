@@ -3,6 +3,11 @@
   gap: 12px;
   align-items: center;
   -webkit-app-region: no-drag;
+  padding: 12px 32px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 14, 20, 0.45);
+  grid-column: 1;
+  grid-row: 3;
 }
 
 .composer textarea {

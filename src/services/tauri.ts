@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { WorkspaceInfo } from "../types";
+import type { GitFileStatus } from "../types";
 
 export async function pickWorkspacePath(): Promise<string | null> {
   const selection = await open({ directory: true, multiple: false });
@@ -47,4 +48,13 @@ export async function respondToServerRequest(
     request_id,
     result: { decision },
   });
+}
+
+export async function getGitStatus(workspace_id: string): Promise<{
+  branchName: string;
+  files: GitFileStatus[];
+  totalAdditions: number;
+  totalDeletions: number;
+}> {
+  return invoke("get_git_status", { workspaceId: workspace_id });
 }

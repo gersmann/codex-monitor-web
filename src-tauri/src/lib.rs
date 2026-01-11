@@ -4,11 +4,59 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use git2::{DiffOptions, Repository, Status, StatusOptions, Tree};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{Mutex, oneshot};
 use uuid::Uuid;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct GitFileStatus {
+    path: String,
+    status: String,
+    additions: i64,
+    deletions: i64,
+}
+
+fn normalize_git_path(path: &str) -> String {
+    path.replace('\\', "/")
+}
+
+fn diff_stats_for_path(
+    repo: &Repository,
+    head_tree: Option<&Tree>,
+    path: &str,
+    include_index: bool,
+    include_workdir: bool,
+) -> Result<(i64, i64), git2::Error> {
+    let mut additions = 0i64;
+    let mut deletions = 0i64;
+
+    if include_index {
+        let mut options = DiffOptions::new();
+        options.pathspec(path).include_untracked(true);
+        let diff = repo.diff_tree_to_index(head_tree, None, Some(&mut options))?;
+        let stats = diff.stats()?;
+        additions += stats.insertions() as i64;
+        deletions += stats.deletions() as i64;
+    }
+
+    if include_workdir {
+        let mut options = DiffOptions::new();
+        options
+            .pathspec(path)
+            .include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .show_untracked_content(true);
+        let diff = repo.diff_index_to_workdir(None, Some(&mut options))?;
+        let stats = diff.stats()?;
+        additions += stats.insertions() as i64;
+        deletions += stats.deletions() as i64;
+    }
+
+    Ok((additions, deletions))
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct WorkspaceEntry {
@@ -374,6 +422,102 @@ async fn connect_workspace(
     Ok(())
 }
 
+#[tauri::command]
+async fn get_git_status(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo = Repository::open(&entry.path).map_err(|e| e.to_string())?;
+
+    let branch_name = repo
+        .head()
+        .ok()
+        .and_then(|head| head.shorthand().map(|s| s.to_string()))
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let mut status_options = StatusOptions::new();
+    status_options
+        .include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .renames_head_to_index(true)
+        .renames_index_to_workdir(true)
+        .include_ignored(false);
+
+    let statuses = repo
+        .statuses(Some(&mut status_options))
+        .map_err(|e| e.to_string())?;
+
+    let head_tree = repo.head().ok().and_then(|head| head.peel_to_tree().ok());
+
+    let mut files = Vec::new();
+    let mut total_additions = 0i64;
+    let mut total_deletions = 0i64;
+    for entry in statuses.iter() {
+        let path = entry.path().unwrap_or("");
+        if path.is_empty() {
+            continue;
+        }
+        let status = entry.status();
+        let status_str = if status.contains(Status::WT_NEW) || status.contains(Status::INDEX_NEW) {
+            "A"
+        } else if status.contains(Status::WT_MODIFIED) || status.contains(Status::INDEX_MODIFIED) {
+            "M"
+        } else if status.contains(Status::WT_DELETED) || status.contains(Status::INDEX_DELETED) {
+            "D"
+        } else if status.contains(Status::WT_RENAMED) || status.contains(Status::INDEX_RENAMED) {
+            "R"
+        } else if status.contains(Status::WT_TYPECHANGE) || status.contains(Status::INDEX_TYPECHANGE) {
+            "T"
+        } else {
+            "--"
+        };
+        let normalized_path = normalize_git_path(path);
+        let include_index = status.intersects(
+            Status::INDEX_NEW
+                | Status::INDEX_MODIFIED
+                | Status::INDEX_DELETED
+                | Status::INDEX_RENAMED
+                | Status::INDEX_TYPECHANGE,
+        );
+        let include_workdir = status.intersects(
+            Status::WT_NEW
+                | Status::WT_MODIFIED
+                | Status::WT_DELETED
+                | Status::WT_RENAMED
+                | Status::WT_TYPECHANGE,
+        );
+        let (additions, deletions) = diff_stats_for_path(
+            &repo,
+            head_tree.as_ref(),
+            path,
+            include_index,
+            include_workdir,
+        )
+        .map_err(|e| e.to_string())?;
+        total_additions += additions;
+        total_deletions += deletions;
+        files.push(GitFileStatus {
+            path: normalized_path,
+            status: status_str.to_string(),
+            additions,
+            deletions,
+        });
+    }
+
+    Ok(json!({
+        "branchName": branch_name,
+        "files": files,
+        "totalAdditions": total_additions,
+        "totalDeletions": total_deletions,
+    }))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -391,7 +535,8 @@ pub fn run() {
             start_thread,
             send_user_message,
             respond_to_server_request,
-            connect_workspace
+            connect_workspace,
+            get_git_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

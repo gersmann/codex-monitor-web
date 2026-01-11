@@ -23,3 +23,10 @@ export type ApprovalRequest = {
   method: string;
   params: Record<string, unknown>;
 };
+
+export type GitFileStatus = {
+  path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+};

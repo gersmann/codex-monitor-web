@@ -6,7 +6,7 @@ type MessagesProps = {
 
 export function Messages({ messages }: MessagesProps) {
   return (
-    <div className="messages">
+    <div className="messages messages-full">
       {messages.map((msg) => (
         <div key={msg.id} className={`message ${msg.role}`}>
           <div className="bubble">{msg.text}</div>

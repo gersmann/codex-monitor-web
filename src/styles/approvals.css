@@ -1,7 +1,8 @@
 .approvals {
   background: rgba(12, 16, 26, 0.6);
-  border-radius: 18px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 0 16px;
   padding: 12px;
   overflow-y: auto;
   -webkit-app-region: no-drag;

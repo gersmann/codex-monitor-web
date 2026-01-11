@@ -1,8 +1,9 @@
 .main {
   display: grid;
+  grid-template-columns: 1fr 220px;
   grid-template-rows: auto 1fr auto;
-  gap: 16px;
-  padding: 36px 32px 24px;
+  gap: 0;
+  padding: 0;
   position: relative;
   -webkit-app-region: no-drag;
 }
@@ -15,15 +16,41 @@
   -webkit-app-region: no-drag;
 }
 
+.workspace-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.main-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 32px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 14, 20, 0.45);
+  -webkit-app-region: no-drag;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.branch-pill {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
 .workspace-title {
-  font-size: 24px;
+  font-size: 16px;
   font-weight: 600;
 }
 
 .workspace-meta {
   color: rgba(255, 255, 255, 0.6);
-  font-size: 13px;
-  margin-top: 4px;
+  font-size: 11px;
+  margin-top: 2px;
 }
 
 .actions {
@@ -32,9 +59,26 @@
 }
 
 .content {
-  display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 16px;
+  display: block;
   min-height: 0;
   -webkit-app-region: no-drag;
+  padding: 12px 0 0 32px;
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-left: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(9, 12, 20, 0.4);
+  height: 100%;
+  padding-top: 0;
+  padding-bottom: 0;
+  grid-column: 2;
+  grid-row: 1 / 4;
+  min-height: 0;
+  overflow: hidden;
 }
