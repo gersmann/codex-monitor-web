@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -468,6 +468,28 @@ async fn send_user_message(
 }
 
 #[tauri::command]
+async fn start_review(
+    workspace_id: String,
+    thread_id: String,
+    target: Value,
+    delivery: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let sessions = state.sessions.lock().await;
+    let session = sessions
+        .get(&workspace_id)
+        .ok_or("workspace not connected")?;
+    let mut params = Map::new();
+    params.insert("threadId".to_string(), json!(thread_id));
+    params.insert("target".to_string(), target);
+    if let Some(delivery) = delivery {
+        params.insert("delivery".to_string(), json!(delivery));
+    }
+    session
+        .send_request("review/start", Value::Object(params))
+        .await
+}
+#[tauri::command]
 async fn model_list(
     workspace_id: String,
     state: State<'_, AppState>,
@@ -705,6 +727,7 @@ pub fn run() {
             remove_workspace,
             start_thread,
             send_user_message,
+            start_review,
             respond_to_server_request,
             resume_thread,
             list_threads,

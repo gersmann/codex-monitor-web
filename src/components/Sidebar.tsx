@@ -7,7 +7,10 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 type SidebarProps = {
   workspaces: WorkspaceInfo[];
   threadsByWorkspace: Record<string, ThreadSummary[]>;
-  threadStatusById: Record<string, { isProcessing: boolean; hasUnread: boolean }>;
+  threadStatusById: Record<
+    string,
+    { isProcessing: boolean; hasUnread: boolean; isReviewing: boolean }
+  >;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   onAddWorkspace: () => void;
@@ -147,11 +150,13 @@ export function Sidebar({
                   >
                     <span
                       className={`thread-status ${
-                        threadStatusById[thread.id]?.isProcessing
-                          ? "processing"
-                          : threadStatusById[thread.id]?.hasUnread
-                            ? "unread"
-                            : "ready"
+                        threadStatusById[thread.id]?.isReviewing
+                          ? "reviewing"
+                          : threadStatusById[thread.id]?.isProcessing
+                            ? "processing"
+                            : threadStatusById[thread.id]?.hasUnread
+                              ? "unread"
+                              : "ready"
                       }`}
                       aria-hidden
                     />

@@ -31,7 +31,6 @@ import { useWorkspaceRefreshOnFocus } from "./hooks/useWorkspaceRefreshOnFocus";
 import { useWorkspaceRestore } from "./hooks/useWorkspaceRestore";
 
 function App() {
-  const [input, setInput] = useState("");
   const [centerMode, setCenterMode] = useState<"chat" | "diff">("chat");
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
   const {
@@ -91,6 +90,7 @@ function App() {
     startThreadForWorkspace,
     listThreadsForWorkspace,
     sendUserMessage,
+    startReview,
     handleApprovalDecision,
   } = useThreads({
     activeWorkspace,
@@ -140,29 +140,22 @@ function App() {
     setCenterMode("diff");
   }
 
-  async function handleSend() {
-    if (!input.trim()) {
+  async function handleSend(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return;
+    }
+    if (activeThreadId && threadStatusById[activeThreadId]?.isReviewing) {
       return;
     }
     if (activeWorkspace && !activeWorkspace.connected) {
       await connectWorkspace(activeWorkspace);
     }
-    await sendUserMessage(input);
-    setInput("");
-  }
-
-  function handleSelectSkill(name: string) {
-    const snippet = `$${name}`;
-    setInput((prev) => {
-      const trimmed = prev.trim();
-      if (!trimmed) {
-        return snippet + " ";
-      }
-      if (trimmed.includes(snippet)) {
-        return prev;
-      }
-      return `${prev.trim()} ${snippet} `;
-    });
+    if (trimmed.startsWith("/review")) {
+      await startReview(trimmed);
+      return;
+    }
+    await sendUserMessage(trimmed);
   }
 
   return (
@@ -294,9 +287,12 @@ function App() {
 
             {centerMode === "chat" && (
               <Composer
-                value={input}
-                onChange={setInput}
                 onSend={handleSend}
+                disabled={
+                  activeThreadId
+                    ? threadStatusById[activeThreadId]?.isReviewing ?? false
+                    : false
+                }
                 models={models}
                 selectedModelId={selectedModelId}
                 onSelectModel={setSelectedModelId}
@@ -304,7 +300,6 @@ function App() {
                 selectedEffort={selectedEffort}
                 onSelectEffort={setSelectedEffort}
                 skills={skills}
-                onSelectSkill={handleSelectSkill}
               />
             )}
             <DebugPanel

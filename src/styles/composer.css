@@ -48,6 +48,29 @@
   color: #fff;
 }
 
+.composer.is-disabled {
+  opacity: 0.7;
+}
+
+.composer textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.composer-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.composer-select:disabled {
+  cursor: not-allowed;
+  color: rgba(255, 255, 255, 0.45);
+  background-image: none;
+}
+
 .composer-bar {
   display: flex;
   align-items: center;

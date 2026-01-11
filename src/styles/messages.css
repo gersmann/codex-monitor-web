@@ -57,6 +57,44 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
+.item-card.review {
+  border-color: rgba(255, 144, 200, 0.35);
+  background: rgba(255, 144, 200, 0.08);
+}
+
+.review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.review-title {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.review-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.review-badge.active {
+  background: rgba(255, 144, 200, 0.18);
+  color: rgba(255, 195, 226, 0.95);
+}
+
+.review-badge.done {
+  background: rgba(120, 255, 200, 0.18);
+  color: rgba(170, 255, 220, 0.95);
+}
+
 .item-card summary {
   cursor: pointer;
   list-style: none;

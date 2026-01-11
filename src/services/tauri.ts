@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { WorkspaceInfo } from "../types";
-import type { GitFileDiff, GitFileStatus } from "../types";
+import type { GitFileDiff, GitFileStatus, ReviewTarget } from "../types";
 
 export async function pickWorkspacePath(): Promise<string | null> {
   const selection = await open({ directory: true, multiple: false });
@@ -43,6 +43,19 @@ export async function sendUserMessage(
     model: options?.model ?? null,
     effort: options?.effort ?? null,
   });
+}
+
+export async function startReview(
+  workspaceId: string,
+  threadId: string,
+  target: ReviewTarget,
+  delivery?: "inline" | "detached",
+) {
+  const payload: Record<string, unknown> = { workspaceId, threadId, target };
+  if (delivery) {
+    payload.delivery = delivery;
+  }
+  return invoke("start_review", payload);
 }
 
 export async function respondToServerRequest(

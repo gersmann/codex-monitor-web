@@ -1,7 +1,8 @@
+import { useCallback, useState } from "react";
+
 type ComposerProps = {
-  value: string;
-  onChange: (value: string) => void;
-  onSend: () => void;
+  onSend: (text: string) => void;
+  disabled?: boolean;
   models: { id: string; displayName: string; model: string }[];
   selectedModelId: string | null;
   onSelectModel: (id: string) => void;
@@ -9,13 +10,11 @@ type ComposerProps = {
   selectedEffort: string | null;
   onSelectEffort: (effort: string) => void;
   skills: { name: string; description?: string }[];
-  onSelectSkill: (name: string) => void;
 };
 
 export function Composer({
-  value,
-  onChange,
   onSend,
+  disabled = false,
   models,
   selectedModelId,
   onSelectModel,
@@ -23,23 +22,62 @@ export function Composer({
   selectedEffort,
   onSelectEffort,
   skills,
-  onSelectSkill,
 }: ComposerProps) {
+  const [text, setText] = useState("");
+
+  const handleSend = useCallback(() => {
+    if (disabled) {
+      return;
+    }
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return;
+    }
+    onSend(trimmed);
+    setText("");
+  }, [disabled, onSend, text]);
+
+  const handleSelectSkill = useCallback((name: string) => {
+    const snippet = `$${name}`;
+    setText((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) {
+        return snippet + " ";
+      }
+      if (trimmed.includes(snippet)) {
+        return prev;
+      }
+      return `${prev.trim()} ${snippet} `;
+    });
+  }, []);
+
   return (
-    <footer className="composer">
+    <footer className={`composer${disabled ? " is-disabled" : ""}`}>
       <div className="composer-input">
         <textarea
-          placeholder="Ask Codex to do something..."
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
+          placeholder={
+            disabled
+              ? "Review in progress. Chat will re-enable when it completes."
+              : "Ask Codex to do something..."
+          }
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          disabled={disabled}
           onKeyDown={(event) => {
+            if (disabled) {
+              return;
+            }
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              onSend();
+              handleSend();
             }
           }}
         />
-        <button className="composer-send" onClick={onSend}>
+        <button
+          className="composer-send"
+          onClick={handleSend}
+          disabled={disabled}
+        >
           Send
         </button>
       </div>
@@ -78,6 +116,7 @@ export function Composer({
               aria-label="Model"
               value={selectedModelId ?? ""}
               onChange={(event) => onSelectModel(event.target.value)}
+              disabled={disabled}
             >
               {models.length === 0 && <option value="">No models</option>}
               {models.map((model) => (
@@ -121,6 +160,7 @@ export function Composer({
               aria-label="Thinking mode"
               value={selectedEffort ?? ""}
               onChange={(event) => onSelectEffort(event.target.value)}
+              disabled={disabled}
             >
               {reasoningOptions.length === 0 && (
                 <option value="">Default</option>
@@ -153,6 +193,7 @@ export function Composer({
             <select
               className="composer-select composer-select--approval"
               aria-label="Approval"
+              disabled={disabled}
             >
               <option>On request</option>
               <option>Never</option>
@@ -177,10 +218,11 @@ export function Composer({
               onChange={(event) => {
                 const value = event.target.value;
                 if (value) {
-                  onSelectSkill(value);
+                  handleSelectSkill(value);
                   event.target.value = "";
                 }
               }}
+              disabled={disabled}
             >
               <option value="">Skill</option>
               {skills.map((skill) => (

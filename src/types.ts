@@ -21,6 +21,7 @@ export type ConversationItem =
   | { id: string; kind: "message"; role: "user" | "assistant"; text: string }
   | { id: string; kind: "reasoning"; summary: string; content: string }
   | { id: string; kind: "diff"; title: string; diff: string; status?: string }
+  | { id: string; kind: "review"; state: "started" | "completed"; text: string }
   | {
       id: string;
       kind: "tool";
@@ -36,6 +37,12 @@ export type ThreadSummary = {
   id: string;
   name: string;
 };
+
+export type ReviewTarget =
+  | { type: "uncommittedChanges" }
+  | { type: "baseBranch"; branch: string }
+  | { type: "commit"; sha: string; title?: string }
+  | { type: "custom"; instructions: string };
 
 export type ApprovalRequest = {
   workspace_id: string;

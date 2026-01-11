@@ -157,6 +157,12 @@
   animation: pulse 1.2s ease-in-out infinite;
 }
 
+.thread-status.reviewing {
+  background: #2fd1c4;
+  box-shadow: 0 0 8px rgba(47, 209, 196, 0.75);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
 .thread-status.unread {
   background: #4da3ff;
   box-shadow: 0 0 8px rgba(77, 163, 255, 0.7);

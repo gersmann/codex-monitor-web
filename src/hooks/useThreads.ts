@@ -9,6 +9,7 @@ import type {
 import {
   respondToServerRequest,
   sendUserMessage as sendUserMessageService,
+  startReview as startReviewService,
   startThread as startThreadService,
   listThreads as listThreadsService,
   resumeThread as resumeThreadService,
@@ -382,6 +383,34 @@ function asString(value: unknown) {
   return typeof value === "string" ? value : value ? String(value) : "";
 }
 
+function parseReviewTarget(input: string) {
+  const trimmed = input.trim();
+  const rest = trimmed.replace(/^\/review\b/i, "").trim();
+  if (!rest) {
+    return { type: "uncommittedChanges" } as const;
+  }
+  const lower = rest.toLowerCase();
+  if (lower.startsWith("base ")) {
+    const branch = rest.slice(5).trim();
+    return { type: "baseBranch", branch } as const;
+  }
+  if (lower.startsWith("commit ")) {
+    const payload = rest.slice(7).trim();
+    const [sha, ...titleParts] = payload.split(/\s+/);
+    const title = titleParts.join(" ").trim();
+    return {
+      type: "commit",
+      sha,
+      ...(title ? { title } : {}),
+    } as const;
+  }
+  if (lower.startsWith("custom ")) {
+    const instructions = rest.slice(7).trim();
+    return { type: "custom", instructions } as const;
+  }
+  return { type: "custom", instructions: rest } as const;
+}
+
 function buildConversationItem(item: Record<string, unknown>): ConversationItem | null {
   const type = asString(item.type);
   const id = asString(item.id);
@@ -697,6 +726,7 @@ export function useThreads({
           dispatch({ type: "markReviewing", threadId, isReviewing: true });
         } else if (itemType === "exitedReviewMode") {
           dispatch({ type: "markReviewing", threadId, isReviewing: false });
+          dispatch({ type: "markProcessing", threadId, isProcessing: false });
         }
         const converted = buildConversationItem(item);
         if (converted) {
@@ -715,6 +745,7 @@ export function useThreads({
           dispatch({ type: "markReviewing", threadId, isReviewing: true });
         } else if (itemType === "exitedReviewMode") {
           dispatch({ type: "markReviewing", threadId, isReviewing: false });
+          dispatch({ type: "markProcessing", threadId, isProcessing: false });
         }
         const converted = buildConversationItem(item);
         if (converted) {
@@ -1052,6 +1083,77 @@ export function useThreads({
     ],
   );
 
+  const startReview = useCallback(
+    async (text: string) => {
+      if (!activeWorkspace || !text.trim()) {
+        return;
+      }
+      let threadId = activeThreadId;
+      if (!threadId) {
+        threadId = await startThread();
+        if (!threadId) {
+          return;
+        }
+      } else if (!loadedThreads.current[threadId]) {
+        await resumeThreadForWorkspace(activeWorkspace.id, threadId);
+      }
+
+      const target = parseReviewTarget(text);
+      dispatch({ type: "markProcessing", threadId, isProcessing: true });
+      dispatch({ type: "markReviewing", threadId, isReviewing: true });
+      try {
+        void onMessageActivity?.();
+      } catch {
+        // Ignore refresh errors to avoid breaking the UI.
+      }
+      onDebug?.({
+        id: `${Date.now()}-client-review-start`,
+        timestamp: Date.now(),
+        source: "client",
+        label: "review/start",
+        payload: {
+          workspaceId: activeWorkspace.id,
+          threadId,
+          target,
+        },
+      });
+      try {
+        const response = await startReviewService(
+          activeWorkspace.id,
+          threadId,
+          target,
+          "inline",
+        );
+        onDebug?.({
+          id: `${Date.now()}-server-review-start`,
+          timestamp: Date.now(),
+          source: "server",
+          label: "review/start response",
+          payload: response,
+        });
+      } catch (error) {
+        dispatch({ type: "markProcessing", threadId, isProcessing: false });
+        dispatch({ type: "markReviewing", threadId, isReviewing: false });
+        onDebug?.({
+          id: `${Date.now()}-client-review-start-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "review/start error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    },
+    [
+      activeWorkspace,
+      activeThreadId,
+      onDebug,
+      onMessageActivity,
+      startThread,
+      resumeThreadForWorkspace,
+    ],
+  );
+
   const handleApprovalDecision = useCallback(
     async (request: ApprovalRequest, decision: "accept" | "decline") => {
       await respondToServerRequest(
@@ -1107,6 +1209,7 @@ export function useThreads({
     startThreadForWorkspace,
     listThreadsForWorkspace,
     sendUserMessage,
+    startReview,
     handleApprovalDecision,
   };
 }
