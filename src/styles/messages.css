@@ -3,6 +3,7 @@
   -webkit-app-region: no-drag;
   flex: 1;
   min-height: 0;
+  min-width: 0;
 }
 
 .messages-full {
@@ -110,6 +111,7 @@
   gap: 8px;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.7);
+  min-width: 0;
 }
 
 .file-change-list {
@@ -144,6 +146,8 @@
   font-size: 11px;
   color: rgba(255, 255, 255, 0.75);
   margin: 0;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .markdown {
