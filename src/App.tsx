@@ -29,10 +29,33 @@ function App() {
   const [input, setInput] = useState("");
   const [debugOpen, setDebugOpen] = useState(false);
   const [debugEntries, setDebugEntries] = useState<DebugEntry[]>([]);
+  const [hasDebugAlerts, setHasDebugAlerts] = useState(false);
 
-  const addDebugEntry = useCallback((entry: DebugEntry) => {
-    setDebugEntries((prev) => [...prev, entry].slice(-300));
+  const shouldLogEntry = useCallback((entry: DebugEntry) => {
+    if (entry.source === "error" || entry.source === "stderr") {
+      return true;
+    }
+    const label = entry.label.toLowerCase();
+    if (label.includes("warn") || label.includes("warning")) {
+      return true;
+    }
+    if (typeof entry.payload === "string") {
+      const payload = entry.payload.toLowerCase();
+      return payload.includes("warn") || payload.includes("warning");
+    }
+    return false;
   }, []);
+
+  const addDebugEntry = useCallback(
+    (entry: DebugEntry) => {
+      if (!shouldLogEntry(entry)) {
+        return;
+      }
+      setHasDebugAlerts(true);
+      setDebugEntries((prev) => [...prev, entry].slice(-200));
+    },
+    [shouldLogEntry],
+  );
 
   const handleCopyDebug = async () => {
     const text = debugEntries
@@ -225,37 +248,39 @@ function App() {
                 branchName={gitStatus.branchName || "unknown"}
               />
             <div className="actions">
-              <button
-                className="ghost icon-button"
-                onClick={() => setDebugOpen((prev) => !prev)}
-                aria-label="Debug"
-              >
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path
-                    d="M9 7.5V6.5a3 3 0 0 1 6 0v1"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                  />
-                  <rect
-                    x="7"
-                    y="7.5"
-                    width="10"
-                    height="9"
-                    rx="3"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                  />
-                  <path
-                    d="M4 12h3m10 0h3M6 8l2 2m8-2-2 2M6 16l2-2m8 2-2-2"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                  />
-                  <circle cx="10" cy="12" r="0.8" fill="currentColor" />
-                  <circle cx="14" cy="12" r="0.8" fill="currentColor" />
-                </svg>
-              </button>
+              {hasDebugAlerts && (
+                <button
+                  className="ghost icon-button"
+                  onClick={() => setDebugOpen((prev) => !prev)}
+                  aria-label="Debug"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path
+                      d="M9 7.5V6.5a3 3 0 0 1 6 0v1"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                    />
+                    <rect
+                      x="7"
+                      y="7.5"
+                      width="10"
+                      height="9"
+                      rx="3"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                    />
+                    <path
+                      d="M4 12h3m10 0h3M6 8l2 2m8-2-2 2M6 16l2-2m8 2-2-2"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                    />
+                    <circle cx="10" cy="12" r="0.8" fill="currentColor" />
+                    <circle cx="14" cy="12" r="0.8" fill="currentColor" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
 
@@ -299,7 +324,10 @@ function App() {
               entries={debugEntries}
               isOpen={debugOpen}
               onToggle={() => setDebugOpen((prev) => !prev)}
-              onClear={() => setDebugEntries([])}
+              onClear={() => {
+                setDebugEntries([]);
+                setHasDebugAlerts(false);
+              }}
               onCopy={handleCopyDebug}
             />
           </>
