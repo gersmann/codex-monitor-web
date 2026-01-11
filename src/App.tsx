@@ -64,7 +64,8 @@ function App() {
     markWorkspaceConnected,
   } = useWorkspaces({ onDebug: addDebugEntry });
 
-  const gitStatus = useGitStatus(activeWorkspace);
+  const { status: gitStatus, refresh: refreshGitStatus } =
+    useGitStatus(activeWorkspace);
   const {
     models,
     selectedModel,
@@ -100,6 +101,7 @@ function App() {
     onDebug: addDebugEntry,
     model: resolvedModel,
     effort: selectedEffort,
+    onMessageActivity: refreshGitStatus,
   });
 
   useWindowDrag("titlebar");

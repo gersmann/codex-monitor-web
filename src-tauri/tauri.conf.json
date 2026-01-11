@@ -21,7 +21,7 @@
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "transparent": true,
-        "devtools": false,
+        "devtools": true,
         "windowEffects": {
           "effects": ["hudWindow"],
           "state": "active",

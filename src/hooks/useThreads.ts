@@ -312,6 +312,7 @@ type UseThreadsOptions = {
   onDebug?: (entry: DebugEntry) => void;
   model?: string | null;
   effort?: string | null;
+  onMessageActivity?: () => void;
 };
 
 function asString(value: unknown) {
@@ -420,6 +421,7 @@ export function useThreads({
   onDebug,
   model,
   effort,
+  onMessageActivity,
 }: UseThreadsOptions) {
   const [state, dispatch] = useReducer(threadReducer, initialState);
 
@@ -489,6 +491,11 @@ export function useThreads({
         dispatch({ type: "ensureThread", workspaceId, threadId });
         dispatch({ type: "completeAgentMessage", threadId, itemId, text });
         dispatch({ type: "markProcessing", threadId, isProcessing: false });
+        try {
+          void onMessageActivity?.();
+        } catch {
+          // Ignore refresh errors to avoid breaking the UI.
+        }
         if (threadId !== activeThreadId) {
           dispatch({ type: "markUnread", threadId, hasUnread: true });
         }
@@ -499,12 +506,22 @@ export function useThreads({
         if (converted) {
           dispatch({ type: "upsertItem", threadId, item: converted });
         }
+        try {
+          void onMessageActivity?.();
+        } catch {
+          // Ignore refresh errors to avoid breaking the UI.
+        }
       },
       onItemCompleted: (workspaceId: string, threadId: string, item) => {
         dispatch({ type: "ensureThread", workspaceId, threadId });
         const converted = buildConversationItem(item);
         if (converted) {
           dispatch({ type: "upsertItem", threadId, item: converted });
+        }
+        try {
+          void onMessageActivity?.();
+        } catch {
+          // Ignore refresh errors to avoid breaking the UI.
         }
       },
       onReasoningSummaryDelta: (
@@ -530,6 +547,11 @@ export function useThreads({
         delta: string,
       ) => {
         dispatch({ type: "appendToolOutput", threadId, itemId, delta });
+        try {
+          void onMessageActivity?.();
+        } catch {
+          // Ignore refresh errors to avoid breaking the UI.
+        }
       },
       onFileChangeOutputDelta: (
         _workspaceId: string,
@@ -538,6 +560,11 @@ export function useThreads({
         delta: string,
       ) => {
         dispatch({ type: "appendToolOutput", threadId, itemId, delta });
+        try {
+          void onMessageActivity?.();
+        } catch {
+          // Ignore refresh errors to avoid breaking the UI.
+        }
       },
       onTurnStarted: (workspaceId: string, threadId: string) => {
         dispatch({
@@ -551,7 +578,13 @@ export function useThreads({
         dispatch({ type: "markProcessing", threadId, isProcessing: false });
       },
     }),
-    [activeThreadId, activeWorkspaceId, handleWorkspaceConnected, onDebug],
+    [
+      activeThreadId,
+      activeWorkspaceId,
+      handleWorkspaceConnected,
+      onDebug,
+      onMessageActivity,
+    ],
   );
 
   useAppServerEvents(handlers);
@@ -619,6 +652,11 @@ export function useThreads({
       const messageText = text.trim();
       dispatch({ type: "addUserMessage", threadId, text: messageText });
       dispatch({ type: "markProcessing", threadId, isProcessing: true });
+      try {
+        void onMessageActivity?.();
+      } catch {
+        // Ignore refresh errors to avoid breaking the UI.
+      }
       onDebug?.({
         id: `${Date.now()}-client-turn-start`,
         timestamp: Date.now(),
@@ -657,7 +695,15 @@ export function useThreads({
         throw error;
       }
     },
-    [activeWorkspace, activeThreadId, effort, model, onDebug, startThread],
+    [
+      activeWorkspace,
+      activeThreadId,
+      effort,
+      model,
+      onDebug,
+      onMessageActivity,
+      startThread,
+    ],
   );
 
   const handleApprovalDecision = useCallback(

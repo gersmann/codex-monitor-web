@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { GitFileStatus, WorkspaceInfo } from "../types";
 import { getGitStatus } from "../services/tauri";
 
@@ -18,16 +18,17 @@ const emptyStatus: GitStatusState = {
   error: null,
 };
 
+const REFRESH_INTERVAL_MS = 3000;
+
 export function useGitStatus(activeWorkspace: WorkspaceInfo | null) {
   const [status, setStatus] = useState<GitStatusState>(emptyStatus);
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     if (!activeWorkspace) {
       setStatus(emptyStatus);
       return;
     }
-
-    getGitStatus(activeWorkspace.id)
+    return getGitStatus(activeWorkspace.id)
       .then((data) => setStatus({ ...data, error: null }))
       .catch((err) => {
         console.error("Failed to load git status", err);
@@ -39,5 +40,23 @@ export function useGitStatus(activeWorkspace: WorkspaceInfo | null) {
       });
   }, [activeWorkspace]);
 
-  return status;
+  useEffect(() => {
+    if (!activeWorkspace) {
+      setStatus(emptyStatus);
+      return;
+    }
+
+    const fetchStatus = () => {
+      refresh()?.catch(() => {});
+    };
+
+    fetchStatus();
+    const interval = window.setInterval(fetchStatus, REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [activeWorkspace, refresh]);
+
+  return { status, refresh };
 }
