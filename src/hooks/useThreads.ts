@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useReducer } from "react";
+import { useCallback, useMemo, useReducer, useRef } from "react";
 import type {
   ApprovalRequest,
   ConversationItem,
@@ -10,6 +10,9 @@ import {
   respondToServerRequest,
   sendUserMessage as sendUserMessageService,
   startThread as startThreadService,
+  listThreads as listThreadsService,
+  resumeThread as resumeThreadService,
+  archiveThread as archiveThreadService,
 } from "../services/tauri";
 import { useAppServerEvents } from "./useAppServerEvents";
 
@@ -30,9 +33,11 @@ type ThreadAction =
   | { type: "markProcessing"; threadId: string; isProcessing: boolean }
   | { type: "markUnread"; threadId: string; hasUnread: boolean }
   | { type: "addUserMessage"; threadId: string; text: string }
+  | { type: "setThreadName"; workspaceId: string; threadId: string; name: string }
   | { type: "appendAgentDelta"; threadId: string; itemId: string; delta: string }
   | { type: "completeAgentMessage"; threadId: string; itemId: string; text: string }
   | { type: "upsertItem"; threadId: string; item: ConversationItem }
+  | { type: "setThreadItems"; threadId: string; items: ConversationItem[] }
   | {
       type: "appendReasoningSummary";
       threadId: string;
@@ -41,6 +46,7 @@ type ThreadAction =
     }
   | { type: "appendReasoningContent"; threadId: string; itemId: string; delta: string }
   | { type: "appendToolOutput"; threadId: string; itemId: string; delta: string }
+  | { type: "setThreads"; workspaceId: string; threads: ThreadSummary[] }
   | { type: "addApproval"; approval: ApprovalRequest }
   | { type: "removeApproval"; requestId: number };
 
@@ -95,7 +101,7 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         ...state,
         threadsByWorkspace: {
           ...state.threadsByWorkspace,
-          [action.workspaceId]: [...list, thread],
+          [action.workspaceId]: [thread, ...list],
         },
         threadStatusById: {
           ...state.threadStatusById,
@@ -170,6 +176,19 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         },
       };
     }
+    case "setThreadName": {
+      const list = state.threadsByWorkspace[action.workspaceId] ?? [];
+      const next = list.map((thread) =>
+        thread.id === action.threadId ? { ...thread, name: action.name } : thread,
+      );
+      return {
+        ...state,
+        threadsByWorkspace: {
+          ...state.threadsByWorkspace,
+          [action.workspaceId]: next,
+        },
+      };
+    }
     case "appendAgentDelta": {
       const list = [...(state.itemsByThread[action.threadId] ?? [])];
       const index = list.findIndex((msg) => msg.id === action.itemId);
@@ -224,6 +243,14 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         },
       };
     }
+    case "setThreadItems":
+      return {
+        ...state,
+        itemsByThread: {
+          ...state.itemsByThread,
+          [action.threadId]: action.items,
+        },
+      };
     case "appendReasoningSummary": {
       const list = state.itemsByThread[action.threadId] ?? [];
       const index = list.findIndex((entry) => entry.id === action.itemId);
@@ -301,6 +328,15 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
           (item) => item.request_id !== action.requestId,
         ),
       };
+    case "setThreads": {
+      return {
+        ...state,
+        threadsByWorkspace: {
+          ...state.threadsByWorkspace,
+          [action.workspaceId]: action.threads,
+        },
+      };
+    }
     default:
       return state;
   }
@@ -415,6 +451,88 @@ function buildConversationItem(item: Record<string, unknown>): ConversationItem 
   return null;
 }
 
+function userInputsToText(inputs: Array<Record<string, unknown>>) {
+  return inputs
+    .map((input) => {
+      const type = asString(input.type);
+      if (type === "text") {
+        return asString(input.text);
+      }
+      if (type === "skill") {
+        const name = asString(input.name);
+        return name ? `$${name}` : "";
+      }
+      if (type === "image" || type === "localImage") {
+        return "[image]";
+      }
+      return "";
+    })
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
+
+function buildConversationItemFromThreadItem(
+  item: Record<string, unknown>,
+): ConversationItem | null {
+  const type = asString(item.type);
+  const id = asString(item.id);
+  if (!id || !type) {
+    return null;
+  }
+  if (type === "userMessage") {
+    const content = Array.isArray(item.content) ? item.content : [];
+    const text = userInputsToText(content);
+    return {
+      id,
+      kind: "message",
+      role: "user",
+      text: text || "[message]",
+    };
+  }
+  if (type === "agentMessage") {
+    return {
+      id,
+      kind: "message",
+      role: "assistant",
+      text: asString(item.text),
+    };
+  }
+  if (type === "reasoning") {
+    const summary = Array.isArray(item.summary)
+      ? item.summary.map((entry) => asString(entry)).join("\n")
+      : asString(item.summary ?? "");
+    const content = Array.isArray(item.content)
+      ? item.content.map((entry) => asString(entry)).join("\n")
+      : asString(item.content ?? "");
+    return { id, kind: "reasoning", summary, content };
+  }
+  return buildConversationItem(item);
+}
+
+function buildItemsFromThread(thread: Record<string, unknown>) {
+  const turns = Array.isArray(thread.turns) ? thread.turns : [];
+  const items: ConversationItem[] = [];
+  turns.forEach((turn) => {
+    const turnItems = Array.isArray((turn as any)?.items) ? (turn as any).items : [];
+    turnItems.forEach((item) => {
+      const converted = buildConversationItemFromThreadItem(item);
+      if (converted) {
+        items.push(converted);
+      }
+    });
+  });
+  return items;
+}
+
+function previewThreadName(text: string, fallback: string) {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  return trimmed.length > 38 ? `${trimmed.slice(0, 38)}…` : trimmed;
+}
+
 export function useThreads({
   activeWorkspace,
   onWorkspaceConnected,
@@ -424,6 +542,7 @@ export function useThreads({
   onMessageActivity,
 }: UseThreadsOptions) {
   const [state, dispatch] = useReducer(threadReducer, initialState);
+  const loadedThreads = useRef<Record<string, boolean>>({});
 
   const activeWorkspaceId = activeWorkspace?.id ?? null;
   const activeThreadId = useMemo(() => {
@@ -609,12 +728,13 @@ export function useThreads({
         });
         const thread = response.result?.thread ?? response.thread;
         const threadId = String(thread?.id ?? "");
-        if (threadId) {
-          dispatch({ type: "ensureThread", workspaceId, threadId });
-          dispatch({ type: "setActiveThreadId", workspaceId, threadId });
-          return threadId;
-        }
-        return null;
+      if (threadId) {
+        dispatch({ type: "ensureThread", workspaceId, threadId });
+        dispatch({ type: "setActiveThreadId", workspaceId, threadId });
+        loadedThreads.current[threadId] = true;
+        return threadId;
+      }
+      return null;
       } catch (error) {
         onDebug?.({
           id: `${Date.now()}-client-thread-start-error`,
@@ -636,6 +756,136 @@ export function useThreads({
     return startThreadForWorkspace(activeWorkspaceId);
   }, [activeWorkspaceId, startThreadForWorkspace]);
 
+  const resumeThreadForWorkspace = useCallback(
+    async (workspaceId: string, threadId: string, force = false) => {
+      if (!threadId) {
+        return null;
+      }
+      if (!force && loadedThreads.current[threadId]) {
+        return threadId;
+      }
+      onDebug?.({
+        id: `${Date.now()}-client-thread-resume`,
+        timestamp: Date.now(),
+        source: "client",
+        label: "thread/resume",
+        payload: { workspaceId, threadId },
+      });
+      try {
+        const response = await resumeThreadService(workspaceId, threadId);
+        onDebug?.({
+          id: `${Date.now()}-server-thread-resume`,
+          timestamp: Date.now(),
+          source: "server",
+          label: "thread/resume response",
+          payload: response,
+        });
+        const thread = response.result?.thread ?? response.thread;
+        if (thread) {
+          const items = buildItemsFromThread(thread);
+          if (items.length > 0) {
+            dispatch({ type: "setThreadItems", threadId, items });
+          }
+          const preview = asString(thread?.preview ?? "");
+          if (preview) {
+            dispatch({
+              type: "setThreadName",
+              workspaceId,
+              threadId,
+              name: previewThreadName(preview, `Agent ${threadId.slice(0, 4)}`),
+            });
+          }
+        }
+        loadedThreads.current[threadId] = true;
+        return threadId;
+      } catch (error) {
+        onDebug?.({
+          id: `${Date.now()}-client-thread-resume-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread/resume error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      }
+    },
+    [onDebug],
+  );
+
+  const listThreadsForWorkspace = useCallback(
+    async (workspace: WorkspaceInfo) => {
+      onDebug?.({
+        id: `${Date.now()}-client-thread-list`,
+        timestamp: Date.now(),
+        source: "client",
+        label: "thread/list",
+        payload: { workspaceId: workspace.id, path: workspace.path },
+      });
+      try {
+        const allThreads: any[] = [];
+        let cursor: string | null = null;
+        do {
+          const response = await listThreadsService(workspace.id, cursor, 50);
+          onDebug?.({
+            id: `${Date.now()}-server-thread-list`,
+            timestamp: Date.now(),
+            source: "server",
+            label: "thread/list response",
+            payload: response,
+          });
+          const result = response.result ?? response;
+          const data = Array.isArray(result?.data) ? result.data : [];
+          const nextCursor = result?.nextCursor ?? result?.next_cursor ?? null;
+          allThreads.push(...data);
+          cursor = nextCursor;
+        } while (cursor);
+
+        const matching = allThreads.filter(
+          (thread) => String(thread?.cwd ?? "") === workspace.path,
+        );
+        matching.sort((a, b) => {
+          const aCreated = Number(a?.createdAt ?? a?.created_at ?? 0);
+          const bCreated = Number(b?.createdAt ?? b?.created_at ?? 0);
+          return bCreated - aCreated;
+        });
+        const summaries = matching
+          .map((thread, index) => {
+            const preview = asString(thread?.preview ?? "").trim();
+            const fallbackName = `Agent ${index + 1}`;
+            const name =
+              preview.length > 0
+                ? preview.length > 38
+                  ? `${preview.slice(0, 38)}…`
+                  : preview
+                : fallbackName;
+            return { id: String(thread?.id ?? ""), name };
+          })
+          .filter((entry) => entry.id);
+
+        const unique = new Map<string, ThreadSummary>();
+        summaries.forEach((thread) => {
+          if (!unique.has(thread.id)) {
+            unique.set(thread.id, thread);
+          }
+        });
+        dispatch({
+          type: "setThreads",
+          workspaceId: workspace.id,
+          threads: Array.from(unique.values()),
+        });
+      } catch (error) {
+        onDebug?.({
+          id: `${Date.now()}-client-thread-list-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread/list error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [onDebug],
+  );
+
   const sendUserMessage = useCallback(
     async (text: string) => {
       if (!activeWorkspace || !text.trim()) {
@@ -647,10 +897,18 @@ export function useThreads({
         if (!threadId) {
           return;
         }
+      } else if (!loadedThreads.current[threadId]) {
+        await resumeThreadForWorkspace(activeWorkspace.id, threadId);
       }
 
       const messageText = text.trim();
       dispatch({ type: "addUserMessage", threadId, text: messageText });
+      dispatch({
+        type: "setThreadName",
+        workspaceId: activeWorkspace.id,
+        threadId,
+        name: previewThreadName(messageText, `Agent ${threadId.slice(0, 4)}`),
+      });
       dispatch({ type: "markProcessing", threadId, isProcessing: true });
       try {
         void onMessageActivity?.();
@@ -725,13 +983,29 @@ export function useThreads({
         return;
       }
       dispatch({ type: "setActiveThreadId", workspaceId: targetId, threadId });
+      if (threadId) {
+        void resumeThreadForWorkspace(targetId, threadId, true);
+      }
     },
-    [activeWorkspaceId],
+    [activeWorkspaceId, resumeThreadForWorkspace],
   );
 
   const removeThread = useCallback((workspaceId: string, threadId: string) => {
     dispatch({ type: "removeThread", workspaceId, threadId });
-  }, []);
+    (async () => {
+      try {
+        await archiveThreadService(workspaceId, threadId);
+      } catch (error) {
+        onDebug?.({
+          id: `${Date.now()}-client-thread-archive-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread/archive error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })();
+  }, [onDebug]);
 
   return {
     activeThreadId,
@@ -743,6 +1017,7 @@ export function useThreads({
     removeThread,
     startThread,
     startThreadForWorkspace,
+    listThreadsForWorkspace,
     sendUserMessage,
     handleApprovalDecision,
   };

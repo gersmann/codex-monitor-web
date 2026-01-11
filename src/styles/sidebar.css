@@ -9,6 +9,7 @@
   -webkit-app-region: no-drag;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .sidebar-header {
@@ -16,6 +17,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  padding: 0 4px;
   -webkit-app-region: no-drag;
 }
 
@@ -30,6 +32,7 @@
   flex-direction: column;
   gap: 10px;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-app-region: no-drag;
   min-height: 0;
   flex: 1;
@@ -39,6 +42,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  overflow-x: hidden;
 }
 
 .workspace-row {
@@ -54,6 +58,7 @@
   cursor: pointer;
   transition: all 0.2s ease;
   -webkit-app-region: no-drag;
+  overflow-x: hidden;
 }
 
 .workspace-row.active {
@@ -105,16 +110,31 @@
   -webkit-app-region: no-drag;
 }
 
-.agent-add {
-  width: 100%;
-  border-radius: 12px;
+.workspace-add {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.06);
-  border: 1px dashed rgba(255, 255, 255, 0.16);
   color: rgba(255, 255, 255, 0.7);
-  padding: 8px 12px;
-  font-size: 12px;
-  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
   -webkit-app-region: no-drag;
+}
+
+.workspace-add:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.workspace-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
 }
 
 .thread-list {
@@ -220,6 +240,21 @@
 .thread-menu-item:hover {
   background: rgba(255, 90, 90, 0.15);
   color: #ff7a7a;
+}
+
+.thread-more {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  text-align: left;
+  padding: 2px 6px 2px 16px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.thread-more:hover {
+  color: rgba(255, 255, 255, 0.8);
 }
 
 @keyframes pulse {

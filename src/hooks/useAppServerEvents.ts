@@ -170,7 +170,11 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
     }).then((handler) => {
       if (canceled) {
-        handler();
+        try {
+          handler();
+        } catch {
+          // Ignore unlisten errors when already removed.
+        }
       } else {
         unlisten = handler;
       }
@@ -179,7 +183,11 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
     return () => {
       canceled = true;
       if (unlisten) {
-        unlisten();
+        try {
+          unlisten();
+        } catch {
+          // Ignore unlisten errors when already removed.
+        }
       }
     };
   }, [handlers]);

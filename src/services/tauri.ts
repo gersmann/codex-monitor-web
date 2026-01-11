@@ -73,3 +73,19 @@ export async function getModelList(workspaceId: string) {
 export async function getSkillsList(workspaceId: string) {
   return invoke<any>("skills_list", { workspaceId });
 }
+
+export async function listThreads(
+  workspaceId: string,
+  cursor?: string | null,
+  limit?: number | null,
+) {
+  return invoke<any>("list_threads", { workspaceId, cursor, limit });
+}
+
+export async function resumeThread(workspaceId: string, threadId: string) {
+  return invoke<any>("resume_thread", { workspaceId, threadId });
+}
+
+export async function archiveThread(workspaceId: string, threadId: string) {
+  return invoke<any>("archive_thread", { workspaceId, threadId });
+}

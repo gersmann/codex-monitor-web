@@ -29,6 +29,9 @@ export function Sidebar({
   onDeleteThread,
 }: SidebarProps) {
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [expandedWorkspaces, setExpandedWorkspaces] = useState(
+    new Set<string>(),
+  );
 
   return (
     <aside className="sidebar">
@@ -37,11 +40,12 @@ export function Sidebar({
           <div className="subtitle">Workspaces</div>
         </div>
         <button
-          className="ghost"
+          className="ghost workspace-add"
           onClick={onAddWorkspace}
           data-tauri-drag-region="false"
+          aria-label="Add workspace"
         >
-          Add
+          +
         </button>
       </div>
       <div className="workspace-list">
@@ -55,7 +59,20 @@ export function Sidebar({
             >
               <span className={`status-dot ${entry.connected ? "on" : "off"}`} />
               <div>
-                <div className="workspace-name">{entry.name}</div>
+                <div className="workspace-name-row">
+                  <span className="workspace-name">{entry.name}</span>
+                  <button
+                    className="ghost workspace-add"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onAddAgent(entry);
+                    }}
+                    data-tauri-drag-region="false"
+                    aria-label="Add agent"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
               {!entry.connected && (
                 <span
@@ -71,7 +88,10 @@ export function Sidebar({
             </button>
             {(threadsByWorkspace[entry.id] ?? []).length > 0 && (
               <div className="thread-list">
-                {(threadsByWorkspace[entry.id] ?? []).map((thread) => (
+                {(expandedWorkspaces.has(entry.id)
+                  ? threadsByWorkspace[entry.id] ?? []
+                  : (threadsByWorkspace[entry.id] ?? []).slice(0, 3)
+                ).map((thread) => (
                   <div
                     key={thread.id}
                     className={`thread-row ${
@@ -124,22 +144,36 @@ export function Sidebar({
                               setMenuOpen(null);
                             }}
                           >
-                            Delete
+                            Archive
                           </button>
                         </div>
                       )}
                     </div>
                   </div>
                 ))}
+                {(threadsByWorkspace[entry.id] ?? []).length > 3 && (
+                  <button
+                    className="thread-more"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setExpandedWorkspaces((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(entry.id)) {
+                          next.delete(entry.id);
+                        } else {
+                          next.add(entry.id);
+                        }
+                        return next;
+                      });
+                    }}
+                  >
+                    {expandedWorkspaces.has(entry.id)
+                      ? "Show less"
+                      : `${(threadsByWorkspace[entry.id] ?? []).length - 3} more...`}
+                  </button>
+                )}
               </div>
             )}
-            <button
-              className="agent-add"
-              onClick={() => onAddAgent(entry)}
-              title="Add agent"
-            >
-              + Agent
-            </button>
           </div>
         ))}
         {!workspaces.length && (

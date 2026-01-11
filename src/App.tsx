@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./styles/base.css";
 import "./styles/buttons.css";
 import "./styles/sidebar.css";
@@ -62,6 +62,7 @@ function App() {
     addWorkspace,
     connectWorkspace,
     markWorkspaceConnected,
+    hasLoaded,
   } = useWorkspaces({ onDebug: addDebugEntry });
 
   const { status: gitStatus, refresh: refreshGitStatus } =
@@ -93,6 +94,7 @@ function App() {
     removeThread,
     startThread,
     startThreadForWorkspace,
+    listThreadsForWorkspace,
     sendUserMessage,
     handleApprovalDecision,
   } = useThreads({
@@ -105,6 +107,30 @@ function App() {
   });
 
   useWindowDrag("titlebar");
+
+  const restoredWorkspaces = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!hasLoaded) {
+      return;
+    }
+    workspaces.forEach((workspace) => {
+      if (restoredWorkspaces.current.has(workspace.id)) {
+        return;
+      }
+      restoredWorkspaces.current.add(workspace.id);
+      (async () => {
+        try {
+          if (!workspace.connected) {
+            await connectWorkspace(workspace);
+          }
+          await listThreadsForWorkspace(workspace);
+        } catch {
+          // Silent: connection errors show in debug panel.
+        }
+      })();
+    });
+  }, [connectWorkspace, hasLoaded, listThreadsForWorkspace, workspaces]);
 
   async function handleOpenProject() {
     const workspace = await addWorkspace();
@@ -199,14 +225,36 @@ function App() {
                 branchName={gitStatus.branchName || "unknown"}
               />
             <div className="actions">
-              <button className="secondary" onClick={handleNewThread}>
-                New thread
-              </button>
               <button
-                className="ghost"
+                className="ghost icon-button"
                 onClick={() => setDebugOpen((prev) => !prev)}
+                aria-label="Debug"
               >
-                Debug
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M9 7.5V6.5a3 3 0 0 1 6 0v1"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                  />
+                  <rect
+                    x="7"
+                    y="7.5"
+                    width="10"
+                    height="9"
+                    rx="3"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                  />
+                  <path
+                    d="M4 12h3m10 0h3M6 8l2 2m8-2-2 2M6 16l2-2m8 2-2-2"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                  />
+                  <circle cx="10" cy="12" r="0.8" fill="currentColor" />
+                  <circle cx="14" cy="12" r="0.8" fill="currentColor" />
+                </svg>
               </button>
             </div>
           </div>

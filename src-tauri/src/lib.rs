@@ -375,6 +375,56 @@ async fn start_thread(
 }
 
 #[tauri::command]
+async fn resume_thread(
+    workspace_id: String,
+    thread_id: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let sessions = state.sessions.lock().await;
+    let session = sessions
+        .get(&workspace_id)
+        .ok_or("workspace not connected")?;
+    let params = json!({
+        "threadId": thread_id
+    });
+    session.send_request("thread/resume", params).await
+}
+
+#[tauri::command]
+async fn list_threads(
+    workspace_id: String,
+    cursor: Option<String>,
+    limit: Option<u32>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let sessions = state.sessions.lock().await;
+    let session = sessions
+        .get(&workspace_id)
+        .ok_or("workspace not connected")?;
+    let params = json!({
+        "cursor": cursor,
+        "limit": limit,
+    });
+    session.send_request("thread/list", params).await
+}
+
+#[tauri::command]
+async fn archive_thread(
+    workspace_id: String,
+    thread_id: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let sessions = state.sessions.lock().await;
+    let session = sessions
+        .get(&workspace_id)
+        .ok_or("workspace not connected")?;
+    let params = json!({
+        "threadId": thread_id
+    });
+    session.send_request("thread/archive", params).await
+}
+
+#[tauri::command]
 async fn send_user_message(
     workspace_id: String,
     thread_id: String,
@@ -578,6 +628,9 @@ pub fn run() {
             start_thread,
             send_user_message,
             respond_to_server_request,
+            resume_thread,
+            list_threads,
+            archive_thread,
             connect_workspace,
             get_git_status,
             model_list,

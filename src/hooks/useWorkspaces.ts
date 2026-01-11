@@ -15,6 +15,7 @@ type UseWorkspacesOptions = {
 export function useWorkspaces(options: UseWorkspacesOptions = {}) {
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const { onDebug } = options;
 
   useEffect(() => {
@@ -22,8 +23,12 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
       .then((entries) => {
         setWorkspaces(entries);
         setActiveWorkspaceId(null);
+        setHasLoaded(true);
       })
-      .catch((err) => console.error("Failed to load workspaces", err));
+      .catch((err) => {
+        console.error("Failed to load workspaces", err);
+        setHasLoaded(true);
+      });
   }, []);
 
   const activeWorkspace = useMemo(
@@ -96,5 +101,6 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     addWorkspace,
     connectWorkspace,
     markWorkspaceConnected,
+    hasLoaded,
   };
 }
