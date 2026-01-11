@@ -1,5 +1,8 @@
 import type { ThreadSummary, WorkspaceInfo } from "../types";
 import { useState } from "react";
+import { Menu, MenuItem } from "@tauri-apps/api/menu";
+import { LogicalPosition } from "@tauri-apps/api/dpi";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type SidebarProps = {
   workspaces: WorkspaceInfo[];
@@ -28,10 +31,32 @@ export function Sidebar({
   onSelectThread,
   onDeleteThread,
 }: SidebarProps) {
-  const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [expandedWorkspaces, setExpandedWorkspaces] = useState(
     new Set<string>(),
   );
+
+  async function showThreadMenu(
+    event: React.MouseEvent,
+    workspaceId: string,
+    threadId: string,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    const archiveItem = await MenuItem.new({
+      text: "Archive",
+      action: () => onDeleteThread(workspaceId, threadId),
+    });
+    const copyItem = await MenuItem.new({
+      text: "Copy ID",
+      action: async () => {
+        await navigator.clipboard.writeText(threadId);
+      },
+    });
+    const menu = await Menu.new({ items: [copyItem, archiveItem] });
+    const window = getCurrentWindow();
+    const position = new LogicalPosition(event.clientX, event.clientY);
+    await menu.popup(position, window);
+  }
 
   return (
     <aside className="sidebar">
@@ -108,6 +133,9 @@ export function Sidebar({
                         : ""
                     }`}
                     onClick={() => onSelectThread(entry.id, thread.id)}
+                    onContextMenu={(event) =>
+                      showThreadMenu(event, entry.id, thread.id)
+                    }
                     role="button"
                     tabIndex={0}
                     onKeyDown={(event) => {
@@ -133,28 +161,10 @@ export function Sidebar({
                         className="thread-menu-trigger"
                         aria-label="Thread menu"
                         onMouseDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setMenuOpen((prev) =>
-                            prev === thread.id ? null : thread.id,
-                          );
-                        }}
+                        onClick={(event) => showThreadMenu(event, entry.id, thread.id)}
                       >
                         ...
                       </button>
-                      {menuOpen === thread.id && (
-                        <div className="thread-menu-popup">
-                          <button
-                            className="thread-menu-item"
-                            onClick={() => {
-                              onDeleteThread(entry.id, thread.id);
-                              setMenuOpen(null);
-                            }}
-                          >
-                            Archive
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 ))}
