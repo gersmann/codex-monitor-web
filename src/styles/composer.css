@@ -50,7 +50,6 @@
 
 .composer-bar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   padding-top: 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -59,6 +58,30 @@
 .composer-meta {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+
+.composer-select-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  width: max-content;
+}
+
+.composer-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.composer-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 .composer-select {
@@ -67,8 +90,39 @@
   background: transparent;
   color: rgba(255, 255, 255, 0.7);
   font-size: 11px;
-  padding: 2px 8px 2px 0;
+  padding: 2px 12px 2px 0;
   cursor: pointer;
+  width: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background-image: linear-gradient(45deg, transparent 50%, rgba(255, 255, 255, 0.6) 50%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.6) 50%, transparent 50%);
+  background-position: calc(100% - 6px) calc(50% + 1px),
+    calc(100% - 2px) calc(50% + 1px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.composer-select--model {
+  width: 110px;
+  max-width: 110px;
+}
+
+.composer-select--effort {
+  width: 60px;
+  max-width: 60px;
+}
+
+.composer-select--approval {
+  width: 90px;
+  max-width: 90px;
+}
+
+.composer-select--skill {
+  width: 60px;
+  max-width: 60px;
 }
 
 .composer-select:focus {

@@ -4,6 +4,7 @@ type GitDiffPanelProps = {
   branchName: string;
   totalAdditions: number;
   totalDeletions: number;
+  fileStatus: string;
   error?: string | null;
   files: {
     path: string;
@@ -33,6 +34,7 @@ export function GitDiffPanel({
   branchName,
   totalAdditions,
   totalDeletions,
+  fileStatus,
   error,
   files,
 }: GitDiffPanelProps) {
@@ -44,6 +46,7 @@ export function GitDiffPanel({
           +{totalAdditions} / -{totalDeletions}
         </span>
       </div>
+      <div className="diff-status">{fileStatus}</div>
       <div className="diff-branch">{branchName || "unknown"}</div>
       <div className="diff-list">
         {error && <div className="diff-error">{error}</div>}

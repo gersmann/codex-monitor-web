@@ -22,6 +22,7 @@ import { useThreads } from "./hooks/useThreads";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useGitStatus } from "./hooks/useGitStatus";
 import { useModels } from "./hooks/useModels";
+import { useSkills } from "./hooks/useSkills";
 import type { DebugEntry } from "./types";
 
 function App() {
@@ -73,8 +74,13 @@ function App() {
     selectedEffort,
     setSelectedEffort,
   } = useModels({ activeWorkspace, onDebug: addDebugEntry });
+  const { skills } = useSkills({ activeWorkspace, onDebug: addDebugEntry });
 
   const resolvedModel = selectedModel?.model ?? null;
+  const fileStatus =
+    gitStatus.files.length > 0
+      ? `${gitStatus.files.length} file${gitStatus.files.length === 1 ? "" : "s"} changed`
+      : "Working tree clean";
 
   const {
     setActiveThreadId,
@@ -128,6 +134,20 @@ function App() {
     }
     await sendUserMessage(input);
     setInput("");
+  }
+
+  function handleSelectSkill(name: string) {
+    const snippet = `$${name}`;
+    setInput((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) {
+        return snippet + " ";
+      }
+      if (trimmed.includes(snippet)) {
+        return prev;
+      }
+      return `${prev.trim()} ${snippet} `;
+    });
   }
 
   return (
@@ -205,6 +225,7 @@ function App() {
                 branchName={gitStatus.branchName || "unknown"}
                 totalAdditions={gitStatus.totalAdditions}
                 totalDeletions={gitStatus.totalDeletions}
+                fileStatus={fileStatus}
                 error={gitStatus.error}
                 files={gitStatus.files}
               />
@@ -221,6 +242,8 @@ function App() {
               reasoningOptions={reasoningOptions}
               selectedEffort={selectedEffort}
               onSelectEffort={setSelectedEffort}
+              skills={skills}
+              onSelectSkill={handleSelectSkill}
             />
             <DebugPanel
               entries={debugEntries}

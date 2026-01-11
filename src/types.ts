@@ -59,6 +59,12 @@ export type ModelOption = {
   isDefault: boolean;
 };
 
+export type SkillOption = {
+  name: string;
+  path: string;
+  description?: string;
+};
+
 export type DebugEntry = {
   id: string;
   timestamp: number;

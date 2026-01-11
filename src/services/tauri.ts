@@ -69,3 +69,7 @@ export async function getGitStatus(workspace_id: string): Promise<{
 export async function getModelList(workspaceId: string) {
   return invoke<any>("model_list", { workspaceId });
 }
+
+export async function getSkillsList(workspaceId: string) {
+  return invoke<any>("skills_list", { workspaceId });
+}

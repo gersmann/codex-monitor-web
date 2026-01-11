@@ -417,6 +417,21 @@ async fn model_list(
 }
 
 #[tauri::command]
+async fn skills_list(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let sessions = state.sessions.lock().await;
+    let session = sessions
+        .get(&workspace_id)
+        .ok_or("workspace not connected")?;
+    let params = json!({
+        "cwd": session.entry.path
+    });
+    session.send_request("skills/list", params).await
+}
+
+#[tauri::command]
 async fn respond_to_server_request(
     workspace_id: String,
     request_id: u64,
@@ -565,7 +580,8 @@ pub fn run() {
             respond_to_server_request,
             connect_workspace,
             get_git_status,
-            model_list
+            model_list,
+            skills_list
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
