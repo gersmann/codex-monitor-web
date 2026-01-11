@@ -47,7 +47,7 @@
 
 .workspace-row {
   display: grid;
-  grid-template-columns: 12px 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 12px;
   padding: 8px 4px;
   border-radius: 0;
@@ -75,24 +75,6 @@
   color: #ffffff;
 }
 
-
-.status-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  margin-top: 6px;
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.status-dot.on {
-  background: #3fe47e;
-  box-shadow: 0 0 10px rgba(63, 228, 126, 0.6);
-}
-
-.status-dot.off {
-  background: #f7b32b;
-  box-shadow: 0 0 10px rgba(247, 179, 43, 0.6);
-}
 
 .workspace-name {
   font-weight: 600;

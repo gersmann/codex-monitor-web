@@ -51,13 +51,20 @@ export function Sidebar({
       <div className="workspace-list">
         {workspaces.map((entry) => (
           <div key={entry.id} className="workspace-card">
-            <button
+            <div
               className={`workspace-row ${
                 entry.id === activeWorkspaceId ? "active" : ""
               }`}
+              role="button"
+              tabIndex={0}
               onClick={() => onSelectWorkspace(entry.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelectWorkspace(entry.id);
+                }
+              }}
             >
-              <span className={`status-dot ${entry.connected ? "on" : "off"}`} />
               <div>
                 <div className="workspace-name-row">
                   <span className="workspace-name">{entry.name}</span>
@@ -85,7 +92,7 @@ export function Sidebar({
                   connect
                 </span>
               )}
-            </button>
+            </div>
             {(threadsByWorkspace[entry.id] ?? []).length > 0 && (
               <div className="thread-list">
                 {(expandedWorkspaces.has(entry.id)

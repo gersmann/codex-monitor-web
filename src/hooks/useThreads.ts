@@ -38,6 +38,7 @@ type ThreadAction =
   | { type: "completeAgentMessage"; threadId: string; itemId: string; text: string }
   | { type: "upsertItem"; threadId: string; item: ConversationItem }
   | { type: "setThreadItems"; threadId: string; items: ConversationItem[] }
+  | { type: "setTurnDiff"; threadId: string; diff: string }
   | {
       type: "appendReasoningSummary";
       threadId: string;
@@ -251,6 +252,36 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
           [action.threadId]: action.items,
         },
       };
+    case "setTurnDiff": {
+      const list = state.itemsByThread[action.threadId] ?? [];
+      const existingIndex = list.findIndex(
+        (item) => item.kind === "diff" && item.id === `${action.threadId}-diff`,
+      );
+      const nextItem: ConversationItem = {
+        id: `${action.threadId}-diff`,
+        kind: "diff",
+        title: "Turn diff",
+        diff: action.diff,
+      };
+      if (existingIndex === -1) {
+        return {
+          ...state,
+          itemsByThread: {
+            ...state.itemsByThread,
+            [action.threadId]: [...list, nextItem],
+          },
+        };
+      }
+      const next = [...list];
+      next[existingIndex] = nextItem;
+      return {
+        ...state,
+        itemsByThread: {
+          ...state.itemsByThread,
+          [action.threadId]: next,
+        },
+      };
+    }
     case "appendReasoningSummary": {
       const list = state.itemsByThread[action.threadId] ?? [];
       const index = list.findIndex((entry) => entry.id === action.itemId);
@@ -387,10 +418,39 @@ function buildConversationItem(item: Record<string, unknown>): ConversationItem 
   }
   if (type === "fileChange") {
     const changes = Array.isArray(item.changes) ? item.changes : [];
-    const paths = changes
-      .map((change) => asString(change?.path ?? ""))
+    const normalizedChanges = changes
+      .map((change) => {
+        const path = asString(change?.path ?? "");
+        const kind = change?.kind as Record<string, unknown> | string | undefined;
+        const kindType =
+          typeof kind === "string"
+            ? kind
+            : typeof kind === "object" && kind
+              ? asString((kind as Record<string, unknown>).type ?? "")
+              : "";
+        const normalizedKind = kindType ? kindType.toLowerCase() : "";
+        const diff = asString(change?.diff ?? "");
+        return { path, kind: normalizedKind || undefined, diff: diff || undefined };
+      })
+      .filter((change) => change.path);
+    const formattedChanges = normalizedChanges
+      .map((change) => {
+        const prefix =
+          change.kind === "add"
+            ? "A"
+            : change.kind === "delete"
+              ? "D"
+              : change.kind
+                ? "M"
+                : "";
+        return [prefix, change.path].filter(Boolean).join(" ");
+      })
+      .filter(Boolean);
+    const paths = formattedChanges.join(", ");
+    const diffOutput = normalizedChanges
+      .map((change) => change.diff ?? "")
       .filter(Boolean)
-      .join(", ");
+      .join("\n\n");
     return {
       id,
       kind: "tool",
@@ -398,7 +458,8 @@ function buildConversationItem(item: Record<string, unknown>): ConversationItem 
       title: "File changes",
       detail: paths || "Pending changes",
       status: asString(item.status ?? ""),
-      output: "",
+      output: diffOutput,
+      changes: normalizedChanges,
     };
   }
   if (type === "mcpToolCall") {
@@ -695,6 +756,9 @@ export function useThreads({
       },
       onTurnCompleted: (_workspaceId: string, threadId: string) => {
         dispatch({ type: "markProcessing", threadId, isProcessing: false });
+      },
+      onTurnDiffUpdated: (_workspaceId: string, threadId: string, diff: string) => {
+        dispatch({ type: "setTurnDiff", threadId, diff });
       },
     }),
     [

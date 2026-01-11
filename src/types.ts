@@ -20,6 +20,7 @@ export type Message = {
 export type ConversationItem =
   | { id: string; kind: "message"; role: "user" | "assistant"; text: string }
   | { id: string; kind: "reasoning"; summary: string; content: string }
+  | { id: string; kind: "diff"; title: string; diff: string; status?: string }
   | {
       id: string;
       kind: "tool";
@@ -28,6 +29,7 @@ export type ConversationItem =
       detail: string;
       status?: string;
       output?: string;
+      changes?: { path: string; kind?: string; diff?: string }[];
     };
 
 export type ThreadSummary = {

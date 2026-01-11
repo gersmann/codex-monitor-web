@@ -30,6 +30,7 @@ type AppServerEventHandlers = {
   onReasoningTextDelta?: (workspaceId: string, threadId: string, itemId: string, delta: string) => void;
   onCommandOutputDelta?: (workspaceId: string, threadId: string, itemId: string, delta: string) => void;
   onFileChangeOutputDelta?: (workspaceId: string, threadId: string, itemId: string, delta: string) => void;
+  onTurnDiffUpdated?: (workspaceId: string, threadId: string, diff: string) => void;
 };
 
 export function useAppServerEvents(handlers: AppServerEventHandlers) {
@@ -89,6 +90,16 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         const threadId = String(turn?.threadId ?? turn?.thread_id ?? "");
         if (threadId) {
           handlers.onTurnCompleted?.(workspace_id, threadId);
+        }
+        return;
+      }
+
+      if (method === "turn/diff/updated") {
+        const params = message.params as Record<string, unknown>;
+        const threadId = String(params.threadId ?? params.thread_id ?? "");
+        const diff = String(params.diff ?? "");
+        if (threadId && diff) {
+          handlers.onTurnDiffUpdated?.(workspace_id, threadId, diff);
         }
         return;
       }
