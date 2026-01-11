@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import "./styles/base.css";
 import "./styles/buttons.css";
 import "./styles/sidebar.css";
@@ -23,59 +23,21 @@ import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useGitStatus } from "./hooks/useGitStatus";
 import { useModels } from "./hooks/useModels";
 import { useSkills } from "./hooks/useSkills";
-import type { DebugEntry } from "./types";
+import { useDebugLog } from "./hooks/useDebugLog";
+import { useWorkspaceRefreshOnFocus } from "./hooks/useWorkspaceRefreshOnFocus";
+import { useWorkspaceRestore } from "./hooks/useWorkspaceRestore";
 
 function App() {
   const [input, setInput] = useState("");
-  const [debugOpen, setDebugOpen] = useState(false);
-  const [debugEntries, setDebugEntries] = useState<DebugEntry[]>([]);
-  const [hasDebugAlerts, setHasDebugAlerts] = useState(false);
-
-  const shouldLogEntry = useCallback((entry: DebugEntry) => {
-    if (entry.source === "error" || entry.source === "stderr") {
-      return true;
-    }
-    const label = entry.label.toLowerCase();
-    if (label.includes("warn") || label.includes("warning")) {
-      return true;
-    }
-    if (typeof entry.payload === "string") {
-      const payload = entry.payload.toLowerCase();
-      return payload.includes("warn") || payload.includes("warning");
-    }
-    return false;
-  }, []);
-
-  const addDebugEntry = useCallback(
-    (entry: DebugEntry) => {
-      if (!shouldLogEntry(entry)) {
-        return;
-      }
-      setHasDebugAlerts(true);
-      setDebugEntries((prev) => [...prev, entry].slice(-200));
-    },
-    [shouldLogEntry],
-  );
-
-  const handleCopyDebug = async () => {
-    const text = debugEntries
-      .map((entry) => {
-        const timestamp = new Date(entry.timestamp).toLocaleTimeString();
-        const payload =
-          entry.payload !== undefined
-            ? typeof entry.payload === "string"
-              ? entry.payload
-              : JSON.stringify(entry.payload, null, 2)
-            : "";
-        return [entry.source.toUpperCase(), timestamp, entry.label, payload]
-          .filter(Boolean)
-          .join("\n");
-      })
-      .join("\n\n");
-    if (text) {
-      await navigator.clipboard.writeText(text);
-    }
-  };
+  const {
+    debugOpen,
+    setDebugOpen,
+    debugEntries,
+    hasDebugAlerts,
+    addDebugEntry,
+    handleCopyDebug,
+    clearDebugEntries,
+  } = useDebugLog();
 
   const {
     workspaces,
@@ -86,6 +48,7 @@ function App() {
     connectWorkspace,
     markWorkspaceConnected,
     hasLoaded,
+    refreshWorkspaces,
   } = useWorkspaces({ onDebug: addDebugEntry });
 
   const { status: gitStatus, refresh: refreshGitStatus } =
@@ -115,7 +78,6 @@ function App() {
     threadsByWorkspace,
     threadStatusById,
     removeThread,
-    startThread,
     startThreadForWorkspace,
     listThreadsForWorkspace,
     sendUserMessage,
@@ -130,37 +92,17 @@ function App() {
   });
 
   useWindowDrag("titlebar");
-
-  const restoredWorkspaces = useRef(new Set<string>());
-
-  useEffect(() => {
-    if (!hasLoaded) {
-      return;
-    }
-    workspaces.forEach((workspace) => {
-      if (restoredWorkspaces.current.has(workspace.id)) {
-        return;
-      }
-      restoredWorkspaces.current.add(workspace.id);
-      (async () => {
-        try {
-          if (!workspace.connected) {
-            await connectWorkspace(workspace);
-          }
-          await listThreadsForWorkspace(workspace);
-        } catch {
-          // Silent: connection errors show in debug panel.
-        }
-      })();
-    });
-  }, [connectWorkspace, hasLoaded, listThreadsForWorkspace, workspaces]);
-
-  async function handleOpenProject() {
-    const workspace = await addWorkspace();
-    if (workspace) {
-      setActiveThreadId(null, workspace.id);
-    }
-  }
+  useWorkspaceRestore({
+    workspaces,
+    hasLoaded,
+    connectWorkspace,
+    listThreadsForWorkspace,
+  });
+  useWorkspaceRefreshOnFocus({
+    workspaces,
+    refreshWorkspaces,
+    listThreadsForWorkspace,
+  });
 
   async function handleAddWorkspace() {
     const workspace = await addWorkspace();
@@ -169,11 +111,12 @@ function App() {
     }
   }
 
-  async function handleNewThread() {
-    if (activeWorkspace && !activeWorkspace.connected) {
-      await connectWorkspace(activeWorkspace);
+  async function handleAddAgent(workspace: (typeof workspaces)[number]) {
+    setActiveWorkspaceId(workspace.id);
+    if (!workspace.connected) {
+      await connectWorkspace(workspace);
     }
-    await startThread();
+    await startThreadForWorkspace(workspace.id);
   }
 
   async function handleSend() {
@@ -213,15 +156,7 @@ function App() {
         onAddWorkspace={handleAddWorkspace}
         onSelectWorkspace={setActiveWorkspaceId}
         onConnectWorkspace={connectWorkspace}
-        onAddAgent={(workspace) => {
-          setActiveWorkspaceId(workspace.id);
-          (async () => {
-            if (!workspace.connected) {
-              await connectWorkspace(workspace);
-            }
-            await startThreadForWorkspace(workspace.id);
-          })();
-        }}
+        onAddAgent={handleAddAgent}
         onSelectThread={(workspaceId, threadId) => {
           setActiveWorkspaceId(workspaceId);
           setActiveThreadId(threadId, workspaceId);
@@ -234,7 +169,7 @@ function App() {
       <section className="main">
         {!activeWorkspace && (
           <Home
-            onOpenProject={handleOpenProject}
+            onOpenProject={handleAddWorkspace}
             onAddWorkspace={handleAddWorkspace}
             onCloneRepository={() => {}}
           />
@@ -324,10 +259,7 @@ function App() {
               entries={debugEntries}
               isOpen={debugOpen}
               onToggle={() => setDebugOpen((prev) => !prev)}
-              onClear={() => {
-                setDebugEntries([]);
-                setHasDebugAlerts(false);
-              }}
+              onClear={clearDebugEntries}
               onCopy={handleCopyDebug}
             />
           </>

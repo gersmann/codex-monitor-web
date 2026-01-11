@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DebugEntry } from "../types";
 import type { WorkspaceInfo } from "../types";
 import {
@@ -18,18 +18,28 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
   const [hasLoaded, setHasLoaded] = useState(false);
   const { onDebug } = options;
 
-  useEffect(() => {
-    listWorkspaces()
-      .then((entries) => {
-        setWorkspaces(entries);
-        setActiveWorkspaceId(null);
-        setHasLoaded(true);
-      })
-      .catch((err) => {
-        console.error("Failed to load workspaces", err);
-        setHasLoaded(true);
+  const refreshWorkspaces = useCallback(async () => {
+    try {
+      const entries = await listWorkspaces();
+      setWorkspaces(entries);
+      setActiveWorkspaceId((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        return entries.some((entry) => entry.id === prev) ? prev : null;
       });
+      setHasLoaded(true);
+      return entries;
+    } catch (err) {
+      console.error("Failed to load workspaces", err);
+      setHasLoaded(true);
+      throw err;
+    }
   }, []);
+
+  useEffect(() => {
+    void refreshWorkspaces();
+  }, [refreshWorkspaces]);
 
   const activeWorkspace = useMemo(
     () => workspaces.find((entry) => entry.id === activeWorkspaceId) ?? null,
@@ -102,5 +112,6 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     connectWorkspace,
     markWorkspaceConnected,
     hasLoaded,
+    refreshWorkspaces,
   };
 }
