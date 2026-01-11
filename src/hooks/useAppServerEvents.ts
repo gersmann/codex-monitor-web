@@ -24,6 +24,12 @@ type AppServerEventHandlers = {
   onAppServerEvent?: (event: AppServerEvent) => void;
   onTurnStarted?: (workspaceId: string, threadId: string) => void;
   onTurnCompleted?: (workspaceId: string, threadId: string) => void;
+  onItemStarted?: (workspaceId: string, threadId: string, item: Record<string, unknown>) => void;
+  onItemCompleted?: (workspaceId: string, threadId: string, item: Record<string, unknown>) => void;
+  onReasoningSummaryDelta?: (workspaceId: string, threadId: string, itemId: string, delta: string) => void;
+  onReasoningTextDelta?: (workspaceId: string, threadId: string, itemId: string, delta: string) => void;
+  onCommandOutputDelta?: (workspaceId: string, threadId: string, itemId: string, delta: string) => void;
+  onFileChangeOutputDelta?: (workspaceId: string, threadId: string, itemId: string, delta: string) => void;
 };
 
 export function useAppServerEvents(handlers: AppServerEventHandlers) {
@@ -91,6 +97,9 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const item = params.item as Record<string, unknown> | undefined;
+        if (threadId && item) {
+          handlers.onItemCompleted?.(workspace_id, threadId, item);
+        }
         if (threadId && item?.type === "agentMessage") {
           const itemId = String(item.id ?? "");
           const text = String(item.text ?? "");
@@ -103,6 +112,61 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
             });
           }
         }
+        return;
+      }
+
+      if (method === "item/started") {
+        const params = message.params as Record<string, unknown>;
+        const threadId = String(params.threadId ?? params.thread_id ?? "");
+        const item = params.item as Record<string, unknown> | undefined;
+        if (threadId && item) {
+          handlers.onItemStarted?.(workspace_id, threadId, item);
+        }
+        return;
+      }
+
+      if (method === "item/reasoning/summaryTextDelta") {
+        const params = message.params as Record<string, unknown>;
+        const threadId = String(params.threadId ?? params.thread_id ?? "");
+        const itemId = String(params.itemId ?? params.item_id ?? "");
+        const delta = String(params.delta ?? "");
+        if (threadId && itemId && delta) {
+          handlers.onReasoningSummaryDelta?.(workspace_id, threadId, itemId, delta);
+        }
+        return;
+      }
+
+      if (method === "item/reasoning/textDelta") {
+        const params = message.params as Record<string, unknown>;
+        const threadId = String(params.threadId ?? params.thread_id ?? "");
+        const itemId = String(params.itemId ?? params.item_id ?? "");
+        const delta = String(params.delta ?? "");
+        if (threadId && itemId && delta) {
+          handlers.onReasoningTextDelta?.(workspace_id, threadId, itemId, delta);
+        }
+        return;
+      }
+
+      if (method === "item/commandExecution/outputDelta") {
+        const params = message.params as Record<string, unknown>;
+        const threadId = String(params.threadId ?? params.thread_id ?? "");
+        const itemId = String(params.itemId ?? params.item_id ?? "");
+        const delta = String(params.delta ?? "");
+        if (threadId && itemId && delta) {
+          handlers.onCommandOutputDelta?.(workspace_id, threadId, itemId, delta);
+        }
+        return;
+      }
+
+      if (method === "item/fileChange/outputDelta") {
+        const params = message.params as Record<string, unknown>;
+        const threadId = String(params.threadId ?? params.thread_id ?? "");
+        const itemId = String(params.itemId ?? params.item_id ?? "");
+        const delta = String(params.delta ?? "");
+        if (threadId && itemId && delta) {
+          handlers.onFileChangeOutputDelta?.(workspace_id, threadId, itemId, delta);
+        }
+        return;
       }
     }).then((handler) => {
       if (canceled) {

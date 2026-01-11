@@ -1,11 +1,12 @@
 .main {
   display: grid;
-  grid-template-columns: 1fr 220px;
+  grid-template-columns: 1fr 230px;
   grid-template-rows: auto 1fr auto auto;
   gap: 0;
   padding: 0;
   position: relative;
   -webkit-app-region: no-drag;
+  min-height: 0;
 }
 
 .main-header {
@@ -59,7 +60,7 @@
 }
 
 .content {
-  display: block;
+  display: flex;
   min-height: 0;
   -webkit-app-region: no-drag;
   padding: 12px 0 0 32px;

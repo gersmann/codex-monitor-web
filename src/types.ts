@@ -17,6 +17,19 @@ export type Message = {
   text: string;
 };
 
+export type ConversationItem =
+  | { id: string; kind: "message"; role: "user" | "assistant"; text: string }
+  | { id: string; kind: "reasoning"; summary: string; content: string }
+  | {
+      id: string;
+      kind: "tool";
+      toolType: string;
+      title: string;
+      detail: string;
+      status?: string;
+      output?: string;
+    };
+
 export type ThreadSummary = {
   id: string;
   name: string;

@@ -79,7 +79,7 @@ function App() {
   const {
     setActiveThreadId,
     activeThreadId,
-    activeMessages,
+    activeItems,
     approvals,
     threadsByWorkspace,
     threadStatusById,
@@ -190,7 +190,14 @@ function App() {
           </div>
 
             <div className="content">
-              <Messages messages={activeMessages} />
+              <Messages
+                items={activeItems}
+                isThinking={
+                  activeThreadId
+                    ? threadStatusById[activeThreadId]?.isProcessing ?? false
+                    : false
+                }
+              />
             </div>
 
             <div className="right-panel">

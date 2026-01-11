@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useReducer } from "react";
 import type {
   ApprovalRequest,
+  ConversationItem,
   DebugEntry,
-  Message,
   ThreadSummary,
   WorkspaceInfo,
 } from "../types";
@@ -13,11 +13,11 @@ import {
 } from "../services/tauri";
 import { useAppServerEvents } from "./useAppServerEvents";
 
-const emptyMessages: Record<string, Message[]> = {};
+const emptyItems: Record<string, ConversationItem[]> = {};
 
 type ThreadState = {
   activeThreadIdByWorkspace: Record<string, string | null>;
-  messagesByThread: Record<string, Message[]>;
+  itemsByThread: Record<string, ConversationItem[]>;
   threadsByWorkspace: Record<string, ThreadSummary[]>;
   threadStatusById: Record<string, { isProcessing: boolean; hasUnread: boolean }>;
   approvals: ApprovalRequest[];
@@ -29,19 +29,38 @@ type ThreadAction =
   | { type: "removeThread"; workspaceId: string; threadId: string }
   | { type: "markProcessing"; threadId: string; isProcessing: boolean }
   | { type: "markUnread"; threadId: string; hasUnread: boolean }
-  | { type: "addUserMessage"; threadId: string; message: Message }
+  | { type: "addUserMessage"; threadId: string; text: string }
   | { type: "appendAgentDelta"; threadId: string; itemId: string; delta: string }
   | { type: "completeAgentMessage"; threadId: string; itemId: string; text: string }
+  | { type: "upsertItem"; threadId: string; item: ConversationItem }
+  | {
+      type: "appendReasoningSummary";
+      threadId: string;
+      itemId: string;
+      delta: string;
+    }
+  | { type: "appendReasoningContent"; threadId: string; itemId: string; delta: string }
+  | { type: "appendToolOutput"; threadId: string; itemId: string; delta: string }
   | { type: "addApproval"; approval: ApprovalRequest }
   | { type: "removeApproval"; requestId: number };
 
 const initialState: ThreadState = {
   activeThreadIdByWorkspace: {},
-  messagesByThread: emptyMessages,
+  itemsByThread: emptyItems,
   threadsByWorkspace: {},
   threadStatusById: {},
   approvals: [],
 };
+
+function upsertItem(list: ConversationItem[], item: ConversationItem) {
+  const index = list.findIndex((entry) => entry.id === item.id);
+  if (index === -1) {
+    return [...list, item];
+  }
+  const next = [...list];
+  next[index] = { ...next[index], ...item };
+  return next;
+}
 
 function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
   switch (action.type) {
@@ -96,7 +115,7 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         state.activeThreadIdByWorkspace[action.workspaceId] === action.threadId
           ? filtered[0]?.id ?? null
           : state.activeThreadIdByWorkspace[action.workspaceId] ?? null;
-      const { [action.threadId]: _, ...restMessages } = state.messagesByThread;
+      const { [action.threadId]: _, ...restItems } = state.itemsByThread;
       const { [action.threadId]: __, ...restStatus } = state.threadStatusById;
       return {
         ...state,
@@ -104,7 +123,7 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
           ...state.threadsByWorkspace,
           [action.workspaceId]: filtered,
         },
-        messagesByThread: restMessages,
+        itemsByThread: restItems,
         threadStatusById: restStatus,
         activeThreadIdByWorkspace: {
           ...state.activeThreadIdByWorkspace,
@@ -136,39 +155,141 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         },
       };
     case "addUserMessage": {
-      const list = state.messagesByThread[action.threadId] ?? [];
+      const list = state.itemsByThread[action.threadId] ?? [];
+      const message: ConversationItem = {
+        id: `${Date.now()}-user`,
+        kind: "message",
+        role: "user",
+        text: action.text,
+      };
       return {
         ...state,
-        messagesByThread: {
-          ...state.messagesByThread,
-          [action.threadId]: [...list, action.message],
+        itemsByThread: {
+          ...state.itemsByThread,
+          [action.threadId]: [...list, message],
         },
       };
     }
     case "appendAgentDelta": {
-      const list = [...(state.messagesByThread[action.threadId] ?? [])];
-      const existing = list.find((msg) => msg.id === action.itemId);
-      if (existing) {
-        existing.text += action.delta;
+      const list = [...(state.itemsByThread[action.threadId] ?? [])];
+      const index = list.findIndex((msg) => msg.id === action.itemId);
+      if (index >= 0 && list[index].kind === "message") {
+        const existing = list[index] as ConversationItem;
+        list[index] = {
+          ...existing,
+          text: `${existing.text}${action.delta}`,
+        } as ConversationItem;
       } else {
-        list.push({ id: action.itemId, role: "assistant", text: action.delta });
+        list.push({
+          id: action.itemId,
+          kind: "message",
+          role: "assistant",
+          text: action.delta,
+        });
       }
       return {
         ...state,
-        messagesByThread: { ...state.messagesByThread, [action.threadId]: list },
+        itemsByThread: { ...state.itemsByThread, [action.threadId]: list },
       };
     }
     case "completeAgentMessage": {
-      const list = [...(state.messagesByThread[action.threadId] ?? [])];
-      const existing = list.find((msg) => msg.id === action.itemId);
-      if (existing) {
-        existing.text = action.text || existing.text;
+      const list = [...(state.itemsByThread[action.threadId] ?? [])];
+      const index = list.findIndex((msg) => msg.id === action.itemId);
+      if (index >= 0 && list[index].kind === "message") {
+        const existing = list[index] as ConversationItem;
+        list[index] = {
+          ...existing,
+          text: action.text || existing.text,
+        } as ConversationItem;
       } else {
-        list.push({ id: action.itemId, role: "assistant", text: action.text });
+        list.push({
+          id: action.itemId,
+          kind: "message",
+          role: "assistant",
+          text: action.text,
+        });
       }
       return {
         ...state,
-        messagesByThread: { ...state.messagesByThread, [action.threadId]: list },
+        itemsByThread: { ...state.itemsByThread, [action.threadId]: list },
+      };
+    }
+    case "upsertItem": {
+      const list = state.itemsByThread[action.threadId] ?? [];
+      return {
+        ...state,
+        itemsByThread: {
+          ...state.itemsByThread,
+          [action.threadId]: upsertItem(list, action.item),
+        },
+      };
+    }
+    case "appendReasoningSummary": {
+      const list = state.itemsByThread[action.threadId] ?? [];
+      const index = list.findIndex((entry) => entry.id === action.itemId);
+      const base =
+        index >= 0 && list[index].kind === "reasoning"
+          ? (list[index] as ConversationItem)
+          : {
+              id: action.itemId,
+              kind: "reasoning",
+              summary: "",
+              content: "",
+            };
+      const updated: ConversationItem = {
+        ...base,
+        summary: `${"summary" in base ? base.summary : ""}${action.delta}`,
+      } as ConversationItem;
+      const next = index >= 0 ? [...list] : [...list, updated];
+      if (index >= 0) {
+        next[index] = updated;
+      }
+      return {
+        ...state,
+        itemsByThread: { ...state.itemsByThread, [action.threadId]: next },
+      };
+    }
+    case "appendReasoningContent": {
+      const list = state.itemsByThread[action.threadId] ?? [];
+      const index = list.findIndex((entry) => entry.id === action.itemId);
+      const base =
+        index >= 0 && list[index].kind === "reasoning"
+          ? (list[index] as ConversationItem)
+          : {
+              id: action.itemId,
+              kind: "reasoning",
+              summary: "",
+              content: "",
+            };
+      const updated: ConversationItem = {
+        ...base,
+        content: `${"content" in base ? base.content : ""}${action.delta}`,
+      } as ConversationItem;
+      const next = index >= 0 ? [...list] : [...list, updated];
+      if (index >= 0) {
+        next[index] = updated;
+      }
+      return {
+        ...state,
+        itemsByThread: { ...state.itemsByThread, [action.threadId]: next },
+      };
+    }
+    case "appendToolOutput": {
+      const list = state.itemsByThread[action.threadId] ?? [];
+      const index = list.findIndex((entry) => entry.id === action.itemId);
+      if (index < 0 || list[index].kind !== "tool") {
+        return state;
+      }
+      const existing = list[index] as ConversationItem;
+      const updated: ConversationItem = {
+        ...existing,
+        output: `${existing.output ?? ""}${action.delta}`,
+      } as ConversationItem;
+      const next = [...list];
+      next[index] = updated;
+      return {
+        ...state,
+        itemsByThread: { ...state.itemsByThread, [action.threadId]: next },
       };
     }
     case "addApproval":
@@ -193,6 +314,106 @@ type UseThreadsOptions = {
   effort?: string | null;
 };
 
+function asString(value: unknown) {
+  return typeof value === "string" ? value : value ? String(value) : "";
+}
+
+function buildConversationItem(item: Record<string, unknown>): ConversationItem | null {
+  const type = asString(item.type);
+  const id = asString(item.id);
+  if (!id || !type) {
+    return null;
+  }
+  if (type === "agentMessage" || type === "userMessage") {
+    return null;
+  }
+  if (type === "reasoning") {
+    const summary = asString(item.summary ?? "");
+    const content = Array.isArray(item.content)
+      ? item.content.map((entry) => asString(entry)).join("\n")
+      : asString(item.content ?? "");
+    return { id, kind: "reasoning", summary, content };
+  }
+  if (type === "commandExecution") {
+    const command = Array.isArray(item.command)
+      ? item.command.map((part) => asString(part)).join(" ")
+      : asString(item.command ?? "");
+    return {
+      id,
+      kind: "tool",
+      toolType: type,
+      title: command ? `Command: ${command}` : "Command",
+      detail: asString(item.cwd ?? ""),
+      status: asString(item.status ?? ""),
+      output: asString(item.aggregatedOutput ?? ""),
+    };
+  }
+  if (type === "fileChange") {
+    const changes = Array.isArray(item.changes) ? item.changes : [];
+    const paths = changes
+      .map((change) => asString(change?.path ?? ""))
+      .filter(Boolean)
+      .join(", ");
+    return {
+      id,
+      kind: "tool",
+      toolType: type,
+      title: "File changes",
+      detail: paths || "Pending changes",
+      status: asString(item.status ?? ""),
+      output: "",
+    };
+  }
+  if (type === "mcpToolCall") {
+    const server = asString(item.server ?? "");
+    const tool = asString(item.tool ?? "");
+    const args = item.arguments ? JSON.stringify(item.arguments, null, 2) : "";
+    return {
+      id,
+      kind: "tool",
+      toolType: type,
+      title: `Tool: ${server}${tool ? ` / ${tool}` : ""}`,
+      detail: args,
+      status: asString(item.status ?? ""),
+      output: asString(item.result ?? item.error ?? ""),
+    };
+  }
+  if (type === "webSearch") {
+    return {
+      id,
+      kind: "tool",
+      toolType: type,
+      title: "Web search",
+      detail: asString(item.query ?? ""),
+      status: "",
+      output: "",
+    };
+  }
+  if (type === "imageView") {
+    return {
+      id,
+      kind: "tool",
+      toolType: type,
+      title: "Image view",
+      detail: asString(item.path ?? ""),
+      status: "",
+      output: "",
+    };
+  }
+  if (type === "enteredReviewMode" || type === "exitedReviewMode") {
+    return {
+      id,
+      kind: "tool",
+      toolType: type,
+      title: type === "enteredReviewMode" ? "Review started" : "Review completed",
+      detail: asString(item.review ?? ""),
+      status: "",
+      output: "",
+    };
+  }
+  return null;
+}
+
 export function useThreads({
   activeWorkspace,
   onWorkspaceConnected,
@@ -210,9 +431,9 @@ export function useThreads({
     return state.activeThreadIdByWorkspace[activeWorkspaceId] ?? null;
   }, [activeWorkspaceId, state.activeThreadIdByWorkspace]);
 
-  const activeMessages = useMemo(
-    () => (activeThreadId ? state.messagesByThread[activeThreadId] ?? [] : []),
-    [activeThreadId, state.messagesByThread],
+  const activeItems = useMemo(
+    () => (activeThreadId ? state.itemsByThread[activeThreadId] ?? [] : []),
+    [activeThreadId, state.itemsByThread],
   );
 
   const handleWorkspaceConnected = useCallback(
@@ -270,6 +491,52 @@ export function useThreads({
         if (threadId !== activeThreadId) {
           dispatch({ type: "markUnread", threadId, hasUnread: true });
         }
+      },
+      onItemStarted: (workspaceId: string, threadId: string, item) => {
+        dispatch({ type: "ensureThread", workspaceId, threadId });
+        const converted = buildConversationItem(item);
+        if (converted) {
+          dispatch({ type: "upsertItem", threadId, item: converted });
+        }
+      },
+      onItemCompleted: (workspaceId: string, threadId: string, item) => {
+        dispatch({ type: "ensureThread", workspaceId, threadId });
+        const converted = buildConversationItem(item);
+        if (converted) {
+          dispatch({ type: "upsertItem", threadId, item: converted });
+        }
+      },
+      onReasoningSummaryDelta: (
+        _workspaceId: string,
+        threadId: string,
+        itemId: string,
+        delta: string,
+      ) => {
+        dispatch({ type: "appendReasoningSummary", threadId, itemId, delta });
+      },
+      onReasoningTextDelta: (
+        _workspaceId: string,
+        threadId: string,
+        itemId: string,
+        delta: string,
+      ) => {
+        dispatch({ type: "appendReasoningContent", threadId, itemId, delta });
+      },
+      onCommandOutputDelta: (
+        _workspaceId: string,
+        threadId: string,
+        itemId: string,
+        delta: string,
+      ) => {
+        dispatch({ type: "appendToolOutput", threadId, itemId, delta });
+      },
+      onFileChangeOutputDelta: (
+        _workspaceId: string,
+        threadId: string,
+        itemId: string,
+        delta: string,
+      ) => {
+        dispatch({ type: "appendToolOutput", threadId, itemId, delta });
       },
       onTurnStarted: (workspaceId: string, threadId: string) => {
         dispatch({
@@ -348,12 +615,8 @@ export function useThreads({
         }
       }
 
-      const message: Message = {
-        id: `${Date.now()}-user`,
-        role: "user",
-        text: text.trim(),
-      };
-      dispatch({ type: "addUserMessage", threadId, message });
+      const messageText = text.trim();
+      dispatch({ type: "addUserMessage", threadId, text: messageText });
       onDebug?.({
         id: `${Date.now()}-client-turn-start`,
         timestamp: Date.now(),
@@ -362,7 +625,7 @@ export function useThreads({
         payload: {
           workspaceId: activeWorkspace.id,
           threadId,
-          text: message.text,
+          text: messageText,
           model,
           effort,
         },
@@ -371,7 +634,7 @@ export function useThreads({
         const response = await sendUserMessageService(
           activeWorkspace.id,
           threadId,
-          message.text,
+          messageText,
           { model, effort },
         );
         onDebug?.({
@@ -425,7 +688,7 @@ export function useThreads({
   return {
     activeThreadId,
     setActiveThreadId,
-    activeMessages,
+    activeItems,
     approvals: state.approvals,
     threadsByWorkspace: state.threadsByWorkspace,
     threadStatusById: state.threadStatusById,
