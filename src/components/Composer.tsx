@@ -9,6 +9,8 @@ type ComposerProps = {
   reasoningOptions: string[];
   selectedEffort: string | null;
   onSelectEffort: (effort: string) => void;
+  approvalPolicy: "on-request" | "never" | "unless-trusted";
+  onSelectApproval: (policy: "on-request" | "never" | "unless-trusted") => void;
   skills: { name: string; description?: string }[];
 };
 
@@ -21,6 +23,8 @@ export function Composer({
   reasoningOptions,
   selectedEffort,
   onSelectEffort,
+  approvalPolicy,
+  onSelectApproval,
   skills,
 }: ComposerProps) {
   const [text, setText] = useState("");
@@ -194,10 +198,16 @@ export function Composer({
               className="composer-select composer-select--approval"
               aria-label="Approval"
               disabled={disabled}
+              value={approvalPolicy}
+              onChange={(event) =>
+                onSelectApproval(
+                  event.target.value as "on-request" | "never" | "unless-trusted",
+                )
+              }
             >
-              <option>On request</option>
-              <option>Never</option>
-              <option>Unless trusted</option>
+              <option value="on-request">On request</option>
+              <option value="never">Never</option>
+              <option value="unless-trusted">Unless trusted</option>
             </select>
           </div>
           <div className="composer-select-wrap">

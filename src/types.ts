@@ -44,6 +44,8 @@ export type ReviewTarget =
   | { type: "commit"; sha: string; title?: string }
   | { type: "custom"; instructions: string };
 
+export type ApprovalPolicy = "on-request" | "never" | "unless-trusted";
+
 export type ApprovalRequest = {
   workspace_id: string;
   request_id: number;

@@ -34,7 +34,11 @@ export async function sendUserMessage(
   workspaceId: string,
   threadId: string,
   text: string,
-  options?: { model?: string | null; effort?: string | null },
+  options?: {
+    model?: string | null;
+    effort?: string | null;
+    approvalPolicy?: "on-request" | "never" | "unless-trusted";
+  },
 ) {
   return invoke("send_user_message", {
     workspaceId,
@@ -42,6 +46,7 @@ export async function sendUserMessage(
     text,
     model: options?.model ?? null,
     effort: options?.effort ?? null,
+    approvalPolicy: options?.approvalPolicy ?? null,
   });
 }
 

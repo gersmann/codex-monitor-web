@@ -445,6 +445,7 @@ async fn send_user_message(
     text: String,
     model: Option<String>,
     effort: Option<String>,
+    approval_policy: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     let sessions = state.sessions.lock().await;
@@ -455,7 +456,7 @@ async fn send_user_message(
         "threadId": thread_id,
         "input": [{ "type": "text", "text": text }],
         "cwd": session.entry.path,
-        "approvalPolicy": "on-request",
+        "approvalPolicy": approval_policy.unwrap_or_else(|| "on-request".to_string()),
         "sandboxPolicy": {
             "type": "workspaceWrite",
             "writableRoots": [session.entry.path],
