@@ -1,4 +1,3 @@
-import { FileIcon, defaultStyles } from "react-file-icon";
 import type { GitLogEntry } from "../types";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
@@ -46,6 +45,40 @@ function splitNameAndExtension(name: string) {
     base: name.slice(0, lastDot),
     extension: name.slice(lastDot + 1).toLowerCase(),
   };
+}
+
+function getStatusSymbol(status: string) {
+  switch (status) {
+    case "A":
+      return "+";
+    case "M":
+      return "M";
+    case "D":
+      return "-";
+    case "R":
+      return "R";
+    case "T":
+      return "T";
+    default:
+      return "?";
+  }
+}
+
+function getStatusClass(status: string) {
+  switch (status) {
+    case "A":
+      return "diff-icon-added";
+    case "M":
+      return "diff-icon-modified";
+    case "D":
+      return "diff-icon-deleted";
+    case "R":
+      return "diff-icon-renamed";
+    case "T":
+      return "diff-icon-typechange";
+    default:
+      return "diff-icon-unknown";
+  }
 }
 
 export function GitDiffPanel({
@@ -153,8 +186,9 @@ export function GitDiffPanel({
           {files.map((file) => {
             const { name } = splitPath(file.path);
             const { base, extension } = splitNameAndExtension(name);
-            const style = extension ? defaultStyles[extension] : undefined;
             const isSelected = file.path === selectedPath;
+            const statusSymbol = getStatusSymbol(file.status);
+            const statusClass = getStatusClass(file.status);
             return (
               <div
                 key={file.path}
@@ -169,8 +203,8 @@ export function GitDiffPanel({
                   }
                 }}
               >
-                <span className="diff-icon" aria-hidden>
-                  <FileIcon extension={extension || "file"} {...style} />
+                <span className={`diff-icon ${statusClass}`} aria-hidden>
+                  {statusSymbol}
                 </span>
                 <div className="diff-file">
                   <div className="diff-path">

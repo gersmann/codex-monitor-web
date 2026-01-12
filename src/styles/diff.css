@@ -72,7 +72,7 @@
 .diff-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
   overflow-y: auto;
   flex: 1;
   padding-right: 2px;
@@ -93,8 +93,8 @@
 .diff-row {
   display: flex;
   gap: 8px;
-  align-items: flex-start;
-  padding: 6px 6px;
+  align-items: center;
+  padding: 4px 6px;
   border-radius: 8px;
   cursor: pointer;
 }
@@ -109,15 +109,41 @@
 }
 
 .diff-icon {
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-}
-
-.diff-icon svg {
   width: 16px;
   height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+
+.diff-icon-added {
+  color: #47d488;
+  border-color: rgba(71, 212, 136, 0.4);
+  background: rgba(71, 212, 136, 0.12);
+}
+
+.diff-icon-modified {
+  color: #f5c363;
+  border-color: rgba(245, 195, 99, 0.4);
+  background: rgba(245, 195, 99, 0.12);
+}
+
+.diff-icon-deleted {
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.45);
+  background: rgba(255, 107, 107, 0.12);
+}
+
+.diff-icon-renamed,
+.diff-icon-typechange,
+.diff-icon-unknown {
+  color: var(--text-faint);
+  border-color: var(--border-subtle);
+  background: var(--surface-control);
 }
 
 .diff-file {
