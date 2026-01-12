@@ -48,6 +48,18 @@ npm install
 npm run tauri dev
 ```
 
+## Release Build
+
+```bash
+npm run tauri build
+```
+
+## Type Checking
+
+```bash
+npm run typecheck
+```
+
 ## Common Changes
 
 - UI layout or styling: update `src/components/*` and `src/styles/*`.

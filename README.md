@@ -52,7 +52,7 @@ The macOS app bundle will be in `src-tauri/target/release/bundle/macos/`.
 Run the TypeScript checker (no emit):
 
 ```bash
-npx tsc --noEmit
+npm run typecheck
 ```
 
 Note: `npm run build` also runs `tsc` before bundling the frontend.
