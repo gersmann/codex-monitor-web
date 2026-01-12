@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./styles/base.css";
 import "./styles/buttons.css";
 import "./styles/sidebar.css";
@@ -11,6 +12,7 @@ import "./styles/diff.css";
 import "./styles/diff-viewer.css";
 import "./styles/debug.css";
 import "./styles/plan.css";
+import "./styles/about.css";
 import { Sidebar } from "./components/Sidebar";
 import { Home } from "./components/Home";
 import { MainHeader } from "./components/MainHeader";
@@ -21,6 +23,7 @@ import { GitDiffPanel } from "./components/GitDiffPanel";
 import { GitDiffViewer } from "./components/GitDiffViewer";
 import { DebugPanel } from "./components/DebugPanel";
 import { PlanPanel } from "./components/PlanPanel";
+import { AboutView } from "./components/AboutView";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import { useThreads } from "./hooks/useThreads";
 import { useWindowDrag } from "./hooks/useWindowDrag";
@@ -36,7 +39,20 @@ import { useWorkspaceRestore } from "./hooks/useWorkspaceRestore";
 import { useResizablePanels } from "./hooks/useResizablePanels";
 import type { AccessMode, QueuedMessage } from "./types";
 
-function App() {
+function useWindowLabel() {
+  const [label, setLabel] = useState("main");
+  useEffect(() => {
+    try {
+      const window = getCurrentWindow();
+      setLabel(window.label ?? "main");
+    } catch {
+      setLabel("main");
+    }
+  }, []);
+  return label;
+}
+
+function MainApp() {
   const {
     sidebarWidth,
     rightPanelWidth,
@@ -538,6 +554,14 @@ function App() {
       </section>
     </div>
   );
+}
+
+function App() {
+  const windowLabel = useWindowLabel();
+  if (windowLabel === "about") {
+    return <AboutView />;
+  }
+  return <MainApp />;
 }
 
 export default App;

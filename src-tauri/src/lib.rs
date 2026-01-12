@@ -6,6 +6,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use git2::{DiffOptions, Repository, Sort, Status, StatusOptions, Tree};
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, Submenu};
+use tauri::{WebviewUrl, WebviewWindowBuilder};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{Mutex, oneshot};
@@ -901,7 +903,105 @@ async fn get_git_remote(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .enable_macos_default_menu(true)
+        .enable_macos_default_menu(false)
+        .menu(|handle| {
+            let app_name = handle.package_info().name.clone();
+            let about_item = MenuItemBuilder::with_id("about", format!("About {app_name}"))
+                .build(handle)?;
+            let app_menu = Submenu::with_items(
+                handle,
+                app_name,
+                true,
+                &[
+                    &about_item,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &PredefinedMenuItem::services(handle, None)?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &PredefinedMenuItem::hide(handle, None)?,
+                    &PredefinedMenuItem::hide_others(handle, None)?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &PredefinedMenuItem::quit(handle, None)?,
+                ],
+            )?;
+
+            let file_menu = Submenu::with_items(
+                handle,
+                "File",
+                true,
+                &[
+                    &PredefinedMenuItem::close_window(handle, None)?,
+                    #[cfg(not(target_os = "macos"))]
+                    &PredefinedMenuItem::quit(handle, None)?,
+                ],
+            )?;
+
+            let edit_menu = Submenu::with_items(
+                handle,
+                "Edit",
+                true,
+                &[
+                    &PredefinedMenuItem::undo(handle, None)?,
+                    &PredefinedMenuItem::redo(handle, None)?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &PredefinedMenuItem::cut(handle, None)?,
+                    &PredefinedMenuItem::copy(handle, None)?,
+                    &PredefinedMenuItem::paste(handle, None)?,
+                    &PredefinedMenuItem::select_all(handle, None)?,
+                ],
+            )?;
+
+            let view_menu = Submenu::with_items(
+                handle,
+                "View",
+                true,
+                &[&PredefinedMenuItem::fullscreen(handle, None)?],
+            )?;
+
+            let window_menu = Submenu::with_items(
+                handle,
+                "Window",
+                true,
+                &[
+                    &PredefinedMenuItem::minimize(handle, None)?,
+                    &PredefinedMenuItem::maximize(handle, None)?,
+                    &PredefinedMenuItem::separator(handle)?,
+                    &PredefinedMenuItem::close_window(handle, None)?,
+                ],
+            )?;
+
+            let help_menu = Submenu::with_items(handle, "Help", true, &[])?;
+
+            Menu::with_items(
+                handle,
+                &[
+                    &app_menu,
+                    &file_menu,
+                    &edit_menu,
+                    &view_menu,
+                    &window_menu,
+                    &help_menu,
+                ],
+            )
+        })
+        .on_menu_event(|app, event| {
+            if event.id() == "about" {
+                if let Some(window) = app.get_webview_window("about") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                    return;
+                }
+                let _ = WebviewWindowBuilder::new(
+                    app,
+                    "about",
+                    WebviewUrl::App("index.html".into()),
+                )
+                .title("About Codex Monitor")
+                .resizable(false)
+                .inner_size(360.0, 240.0)
+                .center()
+                .build();
+            }
+        })
         .setup(|app| {
             let state = AppState::load(&app.handle());
             app.manage(state);
