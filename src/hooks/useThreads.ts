@@ -22,6 +22,8 @@ import {
 import { useAppServerEvents } from "./useAppServerEvents";
 
 const emptyItems: Record<string, ConversationItem[]> = {};
+const MAX_ITEMS_PER_THREAD = 400;
+const MAX_ITEM_TEXT = 20000;
 
 type ThreadState = {
   activeThreadIdByWorkspace: Record<string, string | null>;
@@ -89,6 +91,52 @@ function upsertItem(list: ConversationItem[], item: ConversationItem) {
   const next = [...list];
   next[index] = { ...next[index], ...item };
   return next;
+}
+
+function truncateText(text: string, maxLength = MAX_ITEM_TEXT) {
+  if (text.length <= maxLength) {
+    return text;
+  }
+  const sliceLength = Math.max(0, maxLength - 3);
+  return `${text.slice(0, sliceLength)}...`;
+}
+
+function normalizeItem(item: ConversationItem): ConversationItem {
+  if (item.kind === "message") {
+    return { ...item, text: truncateText(item.text) };
+  }
+  if (item.kind === "reasoning") {
+    return {
+      ...item,
+      summary: truncateText(item.summary),
+      content: truncateText(item.content),
+    };
+  }
+  if (item.kind === "diff") {
+    return { ...item, diff: truncateText(item.diff) };
+  }
+  if (item.kind === "tool") {
+    return {
+      ...item,
+      title: truncateText(item.title, 200),
+      detail: truncateText(item.detail, 2000),
+      output: item.output ? truncateText(item.output) : item.output,
+      changes: item.changes
+        ? item.changes.map((change) => ({
+            ...change,
+            diff: change.diff ? truncateText(change.diff) : change.diff,
+          }))
+        : item.changes,
+    };
+  }
+  return item;
+}
+
+function prepareThreadItems(items: ConversationItem[]) {
+  const normalized = items.map((item) => normalizeItem(item));
+  return normalized.length > MAX_ITEMS_PER_THREAD
+    ? normalized.slice(-MAX_ITEMS_PER_THREAD)
+    : normalized;
 }
 
 function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
@@ -228,7 +276,7 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: [...list, message],
+          [action.threadId]: prepareThreadItems([...list, message]),
         },
       };
     }
@@ -244,7 +292,7 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: [...list, message],
+          [action.threadId]: prepareThreadItems([...list, message]),
         },
       };
     }
@@ -280,7 +328,10 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
       }
       return {
         ...state,
-        itemsByThread: { ...state.itemsByThread, [action.threadId]: list },
+        itemsByThread: {
+          ...state.itemsByThread,
+          [action.threadId]: prepareThreadItems(list),
+        },
       };
     }
     case "completeAgentMessage": {
@@ -302,16 +353,20 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
       }
       return {
         ...state,
-        itemsByThread: { ...state.itemsByThread, [action.threadId]: list },
+        itemsByThread: {
+          ...state.itemsByThread,
+          [action.threadId]: prepareThreadItems(list),
+        },
       };
     }
     case "upsertItem": {
       const list = state.itemsByThread[action.threadId] ?? [];
+      const item = normalizeItem(action.item);
       return {
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: upsertItem(list, action.item),
+          [action.threadId]: prepareThreadItems(upsertItem(list, item)),
         },
       };
     }
@@ -320,7 +375,7 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
-          [action.threadId]: action.items,
+          [action.threadId]: prepareThreadItems(action.items),
         },
       };
     case "appendReasoningSummary": {
@@ -345,7 +400,10 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
       }
       return {
         ...state,
-        itemsByThread: { ...state.itemsByThread, [action.threadId]: next },
+        itemsByThread: {
+          ...state.itemsByThread,
+          [action.threadId]: prepareThreadItems(next),
+        },
       };
     }
     case "appendReasoningContent": {
@@ -370,7 +428,10 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
       }
       return {
         ...state,
-        itemsByThread: { ...state.itemsByThread, [action.threadId]: next },
+        itemsByThread: {
+          ...state.itemsByThread,
+          [action.threadId]: prepareThreadItems(next),
+        },
       };
     }
     case "appendToolOutput": {
@@ -388,7 +449,10 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
       next[index] = updated;
       return {
         ...state,
-        itemsByThread: { ...state.itemsByThread, [action.threadId]: next },
+        itemsByThread: {
+          ...state.itemsByThread,
+          [action.threadId]: prepareThreadItems(next),
+        },
       };
     }
     case "addApproval":
