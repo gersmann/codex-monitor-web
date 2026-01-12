@@ -731,7 +731,7 @@ async fn get_git_diffs(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .enable_macos_default_menu(false)
+        .enable_macos_default_menu(true)
         .setup(|app| {
             let state = AppState::load(&app.handle());
             app.manage(state);
