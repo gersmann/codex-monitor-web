@@ -26,6 +26,8 @@ import { useThreads } from "./hooks/useThreads";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useGitStatus } from "./hooks/useGitStatus";
 import { useGitDiffs } from "./hooks/useGitDiffs";
+import { useGitLog } from "./hooks/useGitLog";
+import { useGitRemote } from "./hooks/useGitRemote";
 import { useModels } from "./hooks/useModels";
 import { useSkills } from "./hooks/useSkills";
 import { useDebugLog } from "./hooks/useDebugLog";
@@ -45,6 +47,7 @@ function App() {
   } = useResizablePanels();
   const [centerMode, setCenterMode] = useState<"chat" | "diff">("chat");
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
+  const [gitPanelMode, setGitPanelMode] = useState<"diff" | "log">("diff");
   const [accessMode, setAccessMode] = useState<AccessMode>("current");
   const [queuedByThread, setQueuedByThread] = useState<
     Record<string, QueuedMessage[]>
@@ -83,6 +86,13 @@ function App() {
     isLoading: isDiffLoading,
     error: diffError,
   } = useGitDiffs(activeWorkspace, gitStatus.files, centerMode === "diff");
+  const {
+    entries: gitLogEntries,
+    total: gitLogTotal,
+    isLoading: gitLogLoading,
+    error: gitLogError,
+  } = useGitLog(activeWorkspace, gitPanelMode === "log");
+  const { remote: gitRemoteUrl } = useGitRemote(activeWorkspace);
   const {
     models,
     selectedModel,
@@ -203,6 +213,7 @@ function App() {
   function handleSelectDiff(path: string) {
     setSelectedDiffPath(path);
     setCenterMode("diff");
+    setGitPanelMode("diff");
   }
 
   async function handleSend(text: string) {
@@ -431,16 +442,23 @@ function App() {
             />
             <div className={`right-panel ${hasActivePlan ? "" : "plan-collapsed"}`}>
               <div className="right-panel-top">
-                <GitDiffPanel
-                  branchName={gitStatus.branchName || "unknown"}
-                  totalAdditions={gitStatus.totalAdditions}
-                  totalDeletions={gitStatus.totalDeletions}
-                  fileStatus={fileStatus}
-                  error={gitStatus.error}
-                  files={gitStatus.files}
-                  selectedPath={selectedDiffPath}
-                  onSelectFile={handleSelectDiff}
-                />
+              <GitDiffPanel
+                mode={gitPanelMode}
+                onModeChange={setGitPanelMode}
+                branchName={gitStatus.branchName || "unknown"}
+                totalAdditions={gitStatus.totalAdditions}
+                totalDeletions={gitStatus.totalDeletions}
+                fileStatus={fileStatus}
+                error={gitStatus.error}
+                logError={gitLogError}
+                logLoading={gitLogLoading}
+                files={gitStatus.files}
+                selectedPath={selectedDiffPath}
+                onSelectFile={handleSelectDiff}
+                logEntries={gitLogEntries}
+                logTotal={gitLogTotal}
+                gitRemoteUrl={gitRemoteUrl}
+              />
                 <Approvals approvals={approvals} onDecision={handleApprovalDecision} />
               </div>
               <div

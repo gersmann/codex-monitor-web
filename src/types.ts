@@ -70,6 +70,18 @@ export type GitFileDiff = {
   diff: string;
 };
 
+export type GitLogEntry = {
+  sha: string;
+  summary: string;
+  author: string;
+  timestamp: number;
+};
+
+export type GitLogResponse = {
+  total: number;
+  entries: GitLogEntry[];
+};
+
 export type TokenUsageBreakdown = {
   totalTokens: number;
   inputTokens: number;

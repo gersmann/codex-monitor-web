@@ -9,7 +9,8 @@
   min-height: 0;
 }
 
-.diff-header {
+.diff-header,
+.git-panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -17,6 +18,38 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-subtle);
+}
+
+.git-panel-title {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.git-panel-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--surface-control);
+  border: 1px solid var(--border-subtle);
+}
+
+.git-panel-toggle button {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.git-panel-toggle button.active {
+  background: var(--surface-control-hover);
+  color: var(--text-emphasis);
 }
 
 .diff-branch {
@@ -140,5 +173,50 @@
 }
 
 .diff-sep {
+  color: var(--text-dim);
+}
+
+.git-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 2px;
+  min-height: 0;
+}
+
+.git-log-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: context-menu;
+}
+
+.git-log-entry:last-child {
+  border-bottom: none;
+}
+
+.git-log-summary {
+  font-size: 12px;
+  color: var(--text-emphasis);
+}
+
+.git-log-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.git-log-sha {
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 10px;
+}
+
+.git-log-sep {
   color: var(--text-dim);
 }

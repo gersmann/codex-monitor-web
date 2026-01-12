@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use git2::{DiffOptions, Repository, Status, StatusOptions, Tree};
+use git2::{DiffOptions, Repository, Sort, Status, StatusOptions, Tree};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
@@ -23,6 +23,20 @@ struct GitFileStatus {
 struct GitFileDiff {
     path: String,
     diff: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct GitLogEntry {
+    sha: String,
+    summary: String,
+    author: String,
+    timestamp: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct GitLogResponse {
+    total: usize,
+    entries: Vec<GitLogEntry>,
 }
 
 fn normalize_git_path(path: &str) -> String {
@@ -804,6 +818,86 @@ async fn get_git_diffs(
     Ok(results)
 }
 
+#[tauri::command]
+async fn get_git_log(
+    workspace_id: String,
+    limit: Option<usize>,
+    state: State<'_, AppState>,
+) -> Result<GitLogResponse, String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo = Repository::open(&entry.path).map_err(|e| e.to_string())?;
+    let max_items = limit.unwrap_or(40);
+    let mut revwalk = repo.revwalk().map_err(|e| e.to_string())?;
+    revwalk.push_head().map_err(|e| e.to_string())?;
+    revwalk
+        .set_sorting(Sort::TIME)
+        .map_err(|e| e.to_string())?;
+
+    let mut total = 0usize;
+    for oid_result in revwalk {
+        oid_result.map_err(|e| e.to_string())?;
+        total += 1;
+    }
+
+    let mut revwalk = repo.revwalk().map_err(|e| e.to_string())?;
+    revwalk.push_head().map_err(|e| e.to_string())?;
+    revwalk
+        .set_sorting(Sort::TIME)
+        .map_err(|e| e.to_string())?;
+
+    let mut entries = Vec::new();
+    for oid_result in revwalk.take(max_items) {
+        let oid = oid_result.map_err(|e| e.to_string())?;
+        let commit = repo.find_commit(oid).map_err(|e| e.to_string())?;
+        let summary = commit.summary().unwrap_or("").to_string();
+        let author = commit.author().name().unwrap_or("").to_string();
+        let timestamp = commit.time().seconds();
+        entries.push(GitLogEntry {
+            sha: commit.id().to_string(),
+            summary,
+            author,
+            timestamp,
+        });
+    }
+
+    Ok(GitLogResponse { total, entries })
+}
+
+#[tauri::command]
+async fn get_git_remote(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo = Repository::open(&entry.path).map_err(|e| e.to_string())?;
+    let remotes = repo.remotes().map_err(|e| e.to_string())?;
+    let name = if remotes.iter().any(|remote| remote == Some("origin")) {
+        "origin".to_string()
+    } else {
+        remotes
+            .iter()
+            .flatten()
+            .next()
+            .unwrap_or("")
+            .to_string()
+    };
+    if name.is_empty() {
+        return Ok(None);
+    }
+    let remote = repo.find_remote(&name).map_err(|e| e.to_string())?;
+    Ok(remote.url().map(|url| url.to_string()))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -831,6 +925,8 @@ pub fn run() {
             connect_workspace,
             get_git_status,
             get_git_diffs,
+            get_git_log,
+            get_git_remote,
             model_list,
             account_rate_limits,
             skills_list

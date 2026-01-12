@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { WorkspaceInfo, WorkspaceSettings } from "../types";
-import type { GitFileDiff, GitFileStatus, ReviewTarget } from "../types";
+import type { GitFileDiff, GitFileStatus, GitLogResponse, ReviewTarget } from "../types";
 
 export async function pickWorkspacePath(): Promise<string | null> {
   const selection = await open({ directory: true, multiple: false });
@@ -103,6 +103,17 @@ export async function getGitDiffs(
   workspace_id: string,
 ): Promise<GitFileDiff[]> {
   return invoke("get_git_diffs", { workspaceId: workspace_id });
+}
+
+export async function getGitLog(
+  workspace_id: string,
+  limit = 40,
+): Promise<GitLogResponse> {
+  return invoke("get_git_log", { workspaceId: workspace_id, limit });
+}
+
+export async function getGitRemote(workspace_id: string): Promise<string | null> {
+  return invoke("get_git_remote", { workspaceId: workspace_id });
 }
 
 export async function getModelList(workspaceId: string) {
