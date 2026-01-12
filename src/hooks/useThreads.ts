@@ -29,6 +29,9 @@ const emptyItems: Record<string, ConversationItem[]> = {};
 const MAX_ITEMS_PER_THREAD = 400;
 const MAX_ITEM_TEXT = 20000;
 const NO_TRUNCATE_TOOL_TYPES = new Set(["fileChange", "commandExecution"]);
+const STORAGE_KEY_THREAD_ACTIVITY = "codexmonitor.threadLastUserActivity";
+
+type ThreadActivityMap = Record<string, Record<string, number>>;
 
 type ThreadState = {
   activeThreadIdByWorkspace: Record<string, string | null>;
@@ -53,7 +56,12 @@ type ThreadAction =
   | { type: "markProcessing"; threadId: string; isProcessing: boolean }
   | { type: "markReviewing"; threadId: string; isReviewing: boolean }
   | { type: "markUnread"; threadId: string; hasUnread: boolean }
-  | { type: "addUserMessage"; threadId: string; text: string }
+  | {
+      type: "addUserMessage";
+      workspaceId: string;
+      threadId: string;
+      text: string;
+    }
   | { type: "addAssistantMessage"; threadId: string; text: string }
   | { type: "setThreadName"; workspaceId: string; threadId: string; name: string }
   | { type: "appendAgentDelta"; threadId: string; itemId: string; delta: string }
@@ -98,6 +106,39 @@ const initialState: ThreadState = {
   rateLimitsByWorkspace: {},
   planByThread: {},
 };
+
+function loadThreadActivity(): ThreadActivityMap {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY_THREAD_ACTIVITY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as ThreadActivityMap;
+    if (!parsed || typeof parsed !== "object") {
+      return {};
+    }
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function saveThreadActivity(activity: ThreadActivityMap) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEY_THREAD_ACTIVITY,
+      JSON.stringify(activity),
+    );
+  } catch {
+    // Best-effort persistence; ignore write failures.
+  }
+}
 
 function upsertItem(list: ConversationItem[], item: ConversationItem) {
   const index = list.findIndex((entry) => entry.id === item.id);
@@ -298,11 +339,22 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         role: "user",
         text: action.text,
       };
+      const threads = state.threadsByWorkspace[action.workspaceId] ?? [];
+      const bumpedThreads = threads.length
+        ? [
+            ...threads.filter((thread) => thread.id === action.threadId),
+            ...threads.filter((thread) => thread.id !== action.threadId),
+          ]
+        : threads;
       return {
         ...state,
         itemsByThread: {
           ...state.itemsByThread,
           [action.threadId]: prepareThreadItems([...list, message]),
+        },
+        threadsByWorkspace: {
+          ...state.threadsByWorkspace,
+          [action.workspaceId]: bumpedThreads,
         },
       };
     }
@@ -1069,6 +1121,23 @@ export function useThreads({
 }: UseThreadsOptions) {
   const [state, dispatch] = useReducer(threadReducer, initialState);
   const loadedThreads = useRef<Record<string, boolean>>({});
+  const threadActivityRef = useRef<ThreadActivityMap>(loadThreadActivity());
+
+  const recordThreadActivity = useCallback(
+    (workspaceId: string, threadId: string, timestamp = Date.now()) => {
+      const nextForWorkspace = {
+        ...(threadActivityRef.current[workspaceId] ?? {}),
+        [threadId]: timestamp,
+      };
+      const next = {
+        ...threadActivityRef.current,
+        [workspaceId]: nextForWorkspace,
+      };
+      threadActivityRef.current = next;
+      saveThreadActivity(next);
+    },
+    [],
+  );
 
   const activeWorkspaceId = activeWorkspace?.id ?? null;
   const activeThreadId = useMemo(() => {
@@ -1524,10 +1593,15 @@ export function useThreads({
           }
         });
         const uniqueThreads = Array.from(uniqueById.values());
+        const activityByThread = threadActivityRef.current[workspace.id] ?? {};
         uniqueThreads.sort((a, b) => {
+          const aId = String(a?.id ?? "");
+          const bId = String(b?.id ?? "");
           const aCreated = Number(a?.createdAt ?? a?.created_at ?? 0);
           const bCreated = Number(b?.createdAt ?? b?.created_at ?? 0);
-          return bCreated - aCreated;
+          const aActivity = Math.max(activityByThread[aId] ?? 0, aCreated);
+          const bActivity = Math.max(activityByThread[bId] ?? 0, bCreated);
+          return bActivity - aActivity;
         });
         const summaries = uniqueThreads
           .slice(0, targetCount)
@@ -1583,7 +1657,13 @@ export function useThreads({
       }
 
       const messageText = text.trim();
-      dispatch({ type: "addUserMessage", threadId, text: messageText });
+      recordThreadActivity(activeWorkspace.id, threadId);
+      dispatch({
+        type: "addUserMessage",
+        workspaceId: activeWorkspace.id,
+        threadId,
+        text: messageText,
+      });
       dispatch({
         type: "setThreadName",
         workspaceId: activeWorkspace.id,
@@ -1651,6 +1731,7 @@ export function useThreads({
       model,
       onDebug,
       onMessageActivity,
+      recordThreadActivity,
       startThread,
       resumeThreadForWorkspace,
     ],
