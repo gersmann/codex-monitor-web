@@ -545,7 +545,6 @@ function MainApp() {
             <DebugPanel
               entries={debugEntries}
               isOpen={debugOpen}
-              onToggle={() => setDebugOpen((prev) => !prev)}
               onClear={clearDebugEntries}
               onCopy={handleCopyDebug}
             />

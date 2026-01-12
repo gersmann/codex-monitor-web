@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type {
   ApprovalRequest,
+  AppServerEvent,
   ConversationItem,
   DebugEntry,
   RateLimitSnapshot,
@@ -322,11 +323,11 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
       const list = [...(state.itemsByThread[action.threadId] ?? [])];
       const index = list.findIndex((msg) => msg.id === action.itemId);
       if (index >= 0 && list[index].kind === "message") {
-        const existing = list[index] as ConversationItem;
+        const existing = list[index];
         list[index] = {
           ...existing,
           text: `${existing.text}${action.delta}`,
-        } as ConversationItem;
+        };
       } else {
         list.push({
           id: action.itemId,
@@ -347,11 +348,11 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
       const list = [...(state.itemsByThread[action.threadId] ?? [])];
       const index = list.findIndex((msg) => msg.id === action.itemId);
       if (index >= 0 && list[index].kind === "message") {
-        const existing = list[index] as ConversationItem;
+        const existing = list[index];
         list[index] = {
           ...existing,
           text: action.text || existing.text,
-        } as ConversationItem;
+        };
       } else {
         list.push({
           id: action.itemId,
@@ -449,7 +450,7 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
       if (index < 0 || list[index].kind !== "tool") {
         return state;
       }
-      const existing = list[index] as ConversationItem;
+      const existing = list[index];
       const updated: ConversationItem = {
         ...existing,
         output: `${existing.output ?? ""}${action.delta}`,
@@ -937,7 +938,10 @@ function buildItemsFromThread(thread: Record<string, unknown>) {
   const turns = Array.isArray(thread.turns) ? thread.turns : [];
   const items: ConversationItem[] = [];
   turns.forEach((turn) => {
-    const turnItems = Array.isArray((turn as any)?.items) ? (turn as any).items : [];
+    const turnRecord = turn as Record<string, unknown>;
+    const turnItems = Array.isArray(turnRecord.items)
+      ? (turnRecord.items as Record<string, unknown>[])
+      : [];
     turnItems.forEach((item) => {
       const converted = buildConversationItemFromThreadItem(item);
       if (converted) {
@@ -952,9 +956,12 @@ function isReviewingFromThread(thread: Record<string, unknown>) {
   const turns = Array.isArray(thread.turns) ? thread.turns : [];
   let reviewing = false;
   turns.forEach((turn) => {
-    const turnItems = Array.isArray((turn as any)?.items) ? (turn as any).items : [];
+    const turnRecord = turn as Record<string, unknown>;
+    const turnItems = Array.isArray(turnRecord.items)
+      ? (turnRecord.items as Record<string, unknown>[])
+      : [];
     turnItems.forEach((item) => {
-      const type = asString((item as Record<string, unknown>)?.type ?? "");
+      const type = asString(item?.type ?? "");
       if (type === "enteredReviewMode") {
         reviewing = true;
       } else if (type === "exitedReviewMode") {
@@ -1113,7 +1120,7 @@ export function useThreads({
       onApprovalRequest: (approval: ApprovalRequest) => {
         dispatch({ type: "addApproval", approval });
       },
-      onAppServerEvent: (event) => {
+      onAppServerEvent: (event: AppServerEvent) => {
         const method = String(event.message?.method ?? "");
         const inferredSource =
           method === "codex/stderr" ? "stderr" : "event";
@@ -1163,10 +1170,14 @@ export function useThreads({
           dispatch({ type: "markUnread", threadId, hasUnread: true });
         }
       },
-      onItemStarted: (workspaceId: string, threadId: string, item) => {
+      onItemStarted: (
+        workspaceId: string,
+        threadId: string,
+        item: Record<string, unknown>,
+      ) => {
         dispatch({ type: "ensureThread", workspaceId, threadId });
         dispatch({ type: "markProcessing", threadId, isProcessing: true });
-        const itemType = asString((item as Record<string, unknown>)?.type ?? "");
+        const itemType = asString(item?.type ?? "");
         if (itemType === "enteredReviewMode") {
           dispatch({ type: "markReviewing", threadId, isReviewing: true });
         } else if (itemType === "exitedReviewMode") {
@@ -1183,9 +1194,13 @@ export function useThreads({
           // Ignore refresh errors to avoid breaking the UI.
         }
       },
-      onItemCompleted: (workspaceId: string, threadId: string, item) => {
+      onItemCompleted: (
+        workspaceId: string,
+        threadId: string,
+        item: Record<string, unknown>,
+      ) => {
         dispatch({ type: "ensureThread", workspaceId, threadId });
-        const itemType = asString((item as Record<string, unknown>)?.type ?? "");
+        const itemType = asString(item?.type ?? "");
         if (itemType === "enteredReviewMode") {
           dispatch({ type: "markReviewing", threadId, isReviewing: true });
         } else if (itemType === "exitedReviewMode") {
@@ -1374,7 +1389,10 @@ export function useThreads({
         payload: { workspaceId, threadId },
       });
       try {
-        const response = await resumeThreadService(workspaceId, threadId);
+        const response =
+          (await resumeThreadService(workspaceId, threadId)) as
+            | Record<string, unknown>
+            | null;
         onDebug?.({
           id: `${Date.now()}-server-thread-resume`,
           timestamp: Date.now(),
@@ -1382,7 +1400,12 @@ export function useThreads({
           label: "thread/resume response",
           payload: response,
         });
-        const thread = response.result?.thread ?? response.thread;
+        const result = (response?.result ?? response) as
+          | Record<string, unknown>
+          | null;
+        const thread = (result?.thread ?? response?.thread ?? null) as
+          | Record<string, unknown>
+          | null;
         if (thread) {
           const items = buildItemsFromThread(thread);
           const localItems = state.itemsByThread[threadId] ?? [];
@@ -1432,16 +1455,17 @@ export function useThreads({
         payload: { workspaceId: workspace.id, path: workspace.path },
       });
       try {
-        const matchingThreads: any[] = [];
+        const matchingThreads: Record<string, unknown>[] = [];
         const targetCount = 20;
         const pageSize = 20;
         let cursor: string | null = null;
         do {
-          const response = await listThreadsService(
+          const response =
+            (await listThreadsService(
             workspace.id,
             cursor,
             pageSize,
-          );
+            )) as Record<string, unknown>;
           onDebug?.({
             id: `${Date.now()}-server-thread-list`,
             timestamp: Date.now(),
@@ -1449,9 +1473,12 @@ export function useThreads({
             label: "thread/list response",
             payload: response,
           });
-          const result = response.result ?? response;
-          const data = Array.isArray(result?.data) ? result.data : [];
-          const nextCursor = result?.nextCursor ?? result?.next_cursor ?? null;
+          const result = (response.result ?? response) as Record<string, unknown>;
+          const data = Array.isArray(result?.data)
+            ? (result.data as Record<string, unknown>[])
+            : [];
+          const nextCursor =
+            (result?.nextCursor ?? result?.next_cursor ?? null) as string | null;
           matchingThreads.push(
             ...data.filter(
               (thread) => String(thread?.cwd ?? "") === workspace.path,
@@ -1460,7 +1487,7 @@ export function useThreads({
           cursor = nextCursor;
         } while (cursor && matchingThreads.length < targetCount);
 
-        const uniqueById = new Map<string, any>();
+        const uniqueById = new Map<string, Record<string, unknown>>();
         matchingThreads.forEach((thread) => {
           const id = String(thread?.id ?? "");
           if (id && !uniqueById.has(id)) {
@@ -1548,12 +1575,13 @@ export function useThreads({
         },
       });
       try {
-        const response = await sendUserMessageService(
+        const response =
+          (await sendUserMessageService(
           activeWorkspace.id,
           threadId,
           messageText,
           { model, effort, accessMode },
-        );
+          )) as Record<string, unknown>;
         onDebug?.({
           id: `${Date.now()}-server-turn-start`,
           timestamp: Date.now(),
@@ -1561,7 +1589,10 @@ export function useThreads({
           label: "turn/start response",
           payload: response,
         });
-        const turn = response?.result?.turn ?? response?.turn ?? null;
+        const result = (response?.result ?? response) as Record<string, unknown>;
+        const turn = (result?.turn ?? response?.turn ?? null) as
+          | Record<string, unknown>
+          | null;
         const turnId = asString(turn?.id ?? "");
         if (turnId) {
           dispatch({ type: "setActiveTurnId", threadId, turnId });

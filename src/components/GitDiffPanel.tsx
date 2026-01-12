@@ -52,8 +52,6 @@ export function GitDiffPanel({
   mode,
   onModeChange,
   branchName,
-  totalAdditions,
-  totalDeletions,
   fileStatus,
   error,
   logError,

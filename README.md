@@ -37,6 +37,26 @@ Run in dev mode:
 npm run tauri dev
 ```
 
+## Release Build
+
+Build the production Tauri bundle (app + dmg):
+
+```bash
+npm run tauri build
+```
+
+The macOS app bundle will be in `src-tauri/target/release/bundle/macos/`.
+
+## Type Checking
+
+Run the TypeScript checker (no emit):
+
+```bash
+npx tsc --noEmit
+```
+
+Note: `npm run build` also runs `tsc` before bundling the frontend.
+
 ## Project Structure
 
 ```

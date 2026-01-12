@@ -133,8 +133,9 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
       return updated;
     } catch (error) {
       if (previous) {
+        const restore = previous;
         setWorkspaces((prev) =>
-          prev.map((entry) => (entry.id === workspaceId ? previous : entry)),
+          prev.map((entry) => (entry.id === workspaceId ? restore : entry)),
         );
       }
       onDebug?.({

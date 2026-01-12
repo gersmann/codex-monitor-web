@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
+use std::env;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -203,11 +204,57 @@ fn write_workspaces(path: &PathBuf, entries: &[WorkspaceEntry]) -> Result<(), St
     std::fs::write(path, data).map_err(|e| e.to_string())
 }
 
+fn build_codex_command(entry: &WorkspaceEntry) -> Command {
+    let default_bin = entry
+        .codex_bin
+        .as_ref()
+        .map(|value| value.trim().is_empty())
+        .unwrap_or(true);
+    let bin = entry
+        .codex_bin
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "codex".into());
+    let mut command = Command::new(bin);
+    if default_bin {
+        let mut paths: Vec<String> = env::var("PATH")
+            .unwrap_or_default()
+            .split(':')
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_string())
+            .collect();
+        let mut extras = vec![
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin",
+        ]
+        .into_iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<String>>();
+        if let Ok(home) = env::var("HOME") {
+            extras.push(format!("{home}/.local/bin"));
+            extras.push(format!("{home}/.cargo/bin"));
+        }
+        for extra in extras {
+            if !paths.contains(&extra) {
+                paths.push(extra);
+            }
+        }
+        if !paths.is_empty() {
+            command.env("PATH", paths.join(":"));
+        }
+    }
+    command
+}
+
 async fn spawn_workspace_session(
     entry: WorkspaceEntry,
     app_handle: AppHandle,
 ) -> Result<Arc<WorkspaceSession>, String> {
-    let mut command = Command::new(entry.codex_bin.clone().unwrap_or_else(|| "codex".into()));
+    let mut command = build_codex_command(&entry);
     command.arg("app-server");
     command.stdin(std::process::Stdio::piped());
     command.stdout(std::process::Stdio::piped());

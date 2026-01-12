@@ -3,7 +3,6 @@ import type { DebugEntry } from "../types";
 type DebugPanelProps = {
   entries: DebugEntry[];
   isOpen: boolean;
-  onToggle: () => void;
   onClear: () => void;
   onCopy: () => void;
 };
@@ -25,7 +24,6 @@ function formatPayload(payload: unknown) {
 export function DebugPanel({
   entries,
   isOpen,
-  onToggle,
   onClear,
   onCopy,
 }: DebugPanelProps) {

@@ -1,4 +1,4 @@
-import Prism from "prismjs";
+import Prism, { type Grammar } from "prismjs";
 import "prismjs/components/prism-bash";
 import "prismjs/components/prism-c";
 import "prismjs/components/prism-cpp";
@@ -76,7 +76,7 @@ export function highlightLine(text: string, language?: string | null) {
   }
   return Prism.highlight(
     text,
-    Prism.languages[language] as Prism.Grammar,
+    Prism.languages[language] as Grammar,
     language,
   );
 }

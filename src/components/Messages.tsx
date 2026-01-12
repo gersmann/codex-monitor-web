@@ -167,102 +167,120 @@ export function Messages({ items, isThinking }: MessagesProps) {
             </div>
           );
         }
-        const isFileChange = item.toolType === "fileChange";
-        const isCommand = item.toolType === "commandExecution";
-        const commandText = isCommand
-          ? item.title.replace(/^Command:\s*/i, "").trim()
-          : "";
-        const summaryTitle = isCommand ? "Command" : item.title;
-        return (
-          <details
-            key={item.id}
-            className="item-card tool"
-            open={isFileChange ? openItems.has(item.id) : undefined}
-            onToggle={
-              isFileChange
-                ? (event) => {
-                    const isOpen = event.currentTarget.open;
-                    setOpenItems((prev) => {
-                      const next = new Set(prev);
-                      if (isOpen) {
-                        next.add(item.id);
-                      } else {
-                        next.delete(item.id);
-                      }
-                      return next;
-                    });
-                  }
-                : undefined
-            }
-          >
-            <summary>
-              <span className="item-summary-left">
-                <span className="item-chevron" aria-hidden>
-                  ▸
-                </span>
-                <span className="item-title">{summaryTitle}</span>
-                {isCommand && commandText && (
-                  <span className="item-subtitle">{commandText}</span>
-                )}
-              </span>
-              {item.status && <span className="item-status">{item.status}</span>}
-            </summary>
-            <div className="item-body">
-              {!isFileChange && isCommand && commandText && (
-                <div className="tool-command">
-                  <span className="tool-label">Command</span>
-                  <pre className="tool-command-text">{commandText}</pre>
-                </div>
-              )}
-              {!isFileChange && isCommand && item.detail && (
-                <div className="tool-meta">
-                  <span className="tool-label">CWD</span>
-                  <span className="tool-cwd">{item.detail}</span>
-                </div>
-              )}
-              {!isFileChange && !isCommand && item.detail && (
-                <Markdown value={item.detail} className="item-text markdown" />
-              )}
-              {isFileChange && item.changes?.length ? (
-                <div className="file-change-list">
-                  {item.changes.map((change, index) => (
-                    <div
-                      key={`${change.path}-${index}`}
-                      className="file-change"
-                    >
-                      <div className="file-change-header">
-                        {change.kind && (
-                          <span className="file-change-kind">
-                            {change.kind.toUpperCase()}
-                          </span>
-                        )}
-                        <span className="file-change-path">{change.path}</span>
-                      </div>
-                      {change.diff && (
-                        <div className="diff-viewer-output">
-                          <DiffBlock
-                            diff={change.diff}
-                            language={languageFromPath(change.path)}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              {isFileChange && !item.changes?.length && item.detail && (
-                <Markdown value={item.detail} className="item-text markdown" />
-              )}
-              {item.output && (!isFileChange || !item.changes?.length) && (
-                <Markdown
-                  value={item.output}
-                  className="item-output markdown"
-                  codeBlock
-                />
-              )}
+        if (item.kind === "diff") {
+          return (
+            <div key={item.id} className="item-card diff">
+              <div className="diff-header">
+                <span className="diff-title">{item.title}</span>
+                {item.status && <span className="item-status">{item.status}</span>}
+              </div>
+              <div className="diff-viewer-output">
+                <DiffBlock diff={item.diff} language={languageFromPath(item.title)} />
+              </div>
             </div>
-          </details>
-        );
+          );
+        }
+        if (item.kind === "tool") {
+          const isFileChange = item.toolType === "fileChange";
+          const isCommand = item.toolType === "commandExecution";
+          const commandText = isCommand
+            ? item.title.replace(/^Command:\s*/i, "").trim()
+            : "";
+          const summaryTitle = isCommand ? "Command" : item.title;
+          return (
+            <details
+              key={item.id}
+              className="item-card tool"
+              open={isFileChange ? openItems.has(item.id) : undefined}
+              onToggle={
+                isFileChange
+                  ? (event) => {
+                      const isOpen = event.currentTarget.open;
+                      setOpenItems((prev) => {
+                        const next = new Set(prev);
+                        if (isOpen) {
+                          next.add(item.id);
+                        } else {
+                          next.delete(item.id);
+                        }
+                        return next;
+                      });
+                    }
+                  : undefined
+              }
+            >
+              <summary>
+                <span className="item-summary-left">
+                  <span className="item-chevron" aria-hidden>
+                    ▸
+                  </span>
+                  <span className="item-title">{summaryTitle}</span>
+                  {isCommand && commandText && (
+                    <span className="item-subtitle">{commandText}</span>
+                  )}
+                </span>
+                {item.status && (
+                  <span className="item-status">{item.status}</span>
+                )}
+              </summary>
+              <div className="item-body">
+                {!isFileChange && isCommand && commandText && (
+                  <div className="tool-command">
+                    <span className="tool-label">Command</span>
+                    <pre className="tool-command-text">{commandText}</pre>
+                  </div>
+                )}
+                {!isFileChange && isCommand && item.detail && (
+                  <div className="tool-meta">
+                    <span className="tool-label">CWD</span>
+                    <span className="tool-cwd">{item.detail}</span>
+                  </div>
+                )}
+                {!isFileChange && !isCommand && item.detail && (
+                  <Markdown value={item.detail} className="item-text markdown" />
+                )}
+                {isFileChange && item.changes?.length ? (
+                  <div className="file-change-list">
+                    {item.changes.map((change, index) => (
+                      <div
+                        key={`${change.path}-${index}`}
+                        className="file-change"
+                      >
+                        <div className="file-change-header">
+                          {change.kind && (
+                            <span className="file-change-kind">
+                              {change.kind.toUpperCase()}
+                            </span>
+                          )}
+                          <span className="file-change-path">{change.path}</span>
+                        </div>
+                        {change.diff && (
+                          <div className="diff-viewer-output">
+                            <DiffBlock
+                              diff={change.diff}
+                              language={languageFromPath(change.path)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {isFileChange && !item.changes?.length && item.detail && (
+                  <Markdown value={item.detail} className="item-text markdown" />
+                )}
+                {item.output && (!isFileChange || !item.changes?.length) && (
+                  <Markdown
+                    value={item.output}
+                    className="item-output markdown"
+                    codeBlock
+                  />
+                )}
+              </div>
+            </details>
+          );
+        }
+        return null;
       })}
       {isThinking && (
         <div className="thinking">Codex is thinking...</div>
