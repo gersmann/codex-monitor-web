@@ -28,6 +28,7 @@ import { useAppServerEvents } from "./useAppServerEvents";
 const emptyItems: Record<string, ConversationItem[]> = {};
 const MAX_ITEMS_PER_THREAD = 400;
 const MAX_ITEM_TEXT = 20000;
+const NO_TRUNCATE_TOOL_TYPES = new Set(["fileChange"]);
 
 type ThreadState = {
   activeThreadIdByWorkspace: Record<string, string | null>;
@@ -131,15 +132,23 @@ function normalizeItem(item: ConversationItem): ConversationItem {
     return { ...item, diff: truncateText(item.diff) };
   }
   if (item.kind === "tool") {
+    const isNoTruncateTool = NO_TRUNCATE_TOOL_TYPES.has(item.toolType);
     return {
       ...item,
       title: truncateText(item.title, 200),
       detail: truncateText(item.detail, 2000),
-      output: item.output ? truncateText(item.output) : item.output,
+      output: isNoTruncateTool
+        ? item.output
+        : item.output
+          ? truncateText(item.output)
+          : item.output,
       changes: item.changes
         ? item.changes.map((change) => ({
             ...change,
-            diff: change.diff ? truncateText(change.diff) : change.diff,
+            diff:
+              isNoTruncateTool || !change.diff
+                ? change.diff
+                : truncateText(change.diff),
           }))
         : item.changes,
     };
