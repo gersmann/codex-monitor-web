@@ -5,6 +5,7 @@ type DebugPanelProps = {
   isOpen: boolean;
   onClear: () => void;
   onCopy: () => void;
+  variant?: "dock" | "full";
 };
 
 function formatPayload(payload: unknown) {
@@ -26,13 +27,17 @@ export function DebugPanel({
   isOpen,
   onClear,
   onCopy,
+  variant = "dock",
 }: DebugPanelProps) {
-  if (!isOpen) {
+  const isVisible = variant === "full" || isOpen;
+  if (!isVisible) {
     return null;
   }
 
   return (
-    <section className="debug-panel open">
+    <section
+      className={`debug-panel ${variant === "full" ? "full" : isOpen ? "open" : ""}`}
+    >
       <div className="debug-header">
         <div className="debug-title">Debug</div>
         <div className="debug-actions">

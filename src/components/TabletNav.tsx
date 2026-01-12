@@ -1,0 +1,35 @@
+import { IconCodex, IconGit, IconLog } from "./icons";
+
+type TabletNavTab = "codex" | "git" | "log";
+
+type TabletNavProps = {
+  activeTab: TabletNavTab;
+  onSelect: (tab: TabletNavTab) => void;
+};
+
+const tabs: { id: TabletNavTab; label: string; icon: JSX.Element }[] = [
+  { id: "codex", label: "Codex", icon: <IconCodex className="tablet-nav-icon" /> },
+  { id: "git", label: "Git", icon: <IconGit className="tablet-nav-icon" /> },
+  { id: "log", label: "Log", icon: <IconLog className="tablet-nav-icon" /> },
+];
+
+export function TabletNav({ activeTab, onSelect }: TabletNavProps) {
+  return (
+    <nav className="tablet-nav" aria-label="Workspace">
+      <div className="tablet-nav-group">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`tablet-nav-item ${activeTab === tab.id ? "active" : ""}`}
+            onClick={() => onSelect(tab.id)}
+            aria-current={activeTab === tab.id ? "page" : undefined}
+          >
+            {tab.icon}
+            <span className="tablet-nav-label">{tab.label}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
