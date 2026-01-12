@@ -22,8 +22,8 @@ type AppServerEventHandlers = {
   onAgentMessageDelta?: (event: AgentDelta) => void;
   onAgentMessageCompleted?: (event: AgentCompleted) => void;
   onAppServerEvent?: (event: AppServerEvent) => void;
-  onTurnStarted?: (workspaceId: string, threadId: string) => void;
-  onTurnCompleted?: (workspaceId: string, threadId: string) => void;
+  onTurnStarted?: (workspaceId: string, threadId: string, turnId: string) => void;
+  onTurnCompleted?: (workspaceId: string, threadId: string, turnId: string) => void;
   onItemStarted?: (workspaceId: string, threadId: string, item: Record<string, unknown>) => void;
   onItemCompleted?: (workspaceId: string, threadId: string, item: Record<string, unknown>) => void;
   onReasoningSummaryDelta?: (workspaceId: string, threadId: string, itemId: string, delta: string) => void;
@@ -87,8 +87,9 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         const params = message.params as Record<string, unknown>;
         const turn = params.turn as Record<string, unknown> | undefined;
         const threadId = String(turn?.threadId ?? turn?.thread_id ?? "");
+        const turnId = String(turn?.id ?? "");
         if (threadId) {
-          handlers.onTurnStarted?.(workspace_id, threadId);
+          handlers.onTurnStarted?.(workspace_id, threadId, turnId);
         }
         return;
       }
@@ -97,8 +98,9 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         const params = message.params as Record<string, unknown>;
         const turn = params.turn as Record<string, unknown> | undefined;
         const threadId = String(turn?.threadId ?? turn?.thread_id ?? "");
+        const turnId = String(turn?.id ?? "");
         if (threadId) {
-          handlers.onTurnCompleted?.(workspace_id, threadId);
+          handlers.onTurnCompleted?.(workspace_id, threadId, turnId);
         }
         return;
       }

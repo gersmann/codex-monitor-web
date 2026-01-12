@@ -486,6 +486,24 @@ async fn send_user_message(
 }
 
 #[tauri::command]
+async fn turn_interrupt(
+    workspace_id: String,
+    thread_id: String,
+    turn_id: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let sessions = state.sessions.lock().await;
+    let session = sessions
+        .get(&workspace_id)
+        .ok_or("workspace not connected")?;
+    let params = json!({
+        "threadId": thread_id,
+        "turnId": turn_id,
+    });
+    session.send_request("turn/interrupt", params).await
+}
+
+#[tauri::command]
 async fn start_review(
     workspace_id: String,
     thread_id: String,
@@ -759,6 +777,7 @@ pub fn run() {
             remove_workspace,
             start_thread,
             send_user_message,
+            turn_interrupt,
             start_review,
             respond_to_server_request,
             resume_thread,

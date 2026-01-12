@@ -3,6 +3,8 @@ import type { ThreadTokenUsage } from "../types";
 
 type ComposerProps = {
   onSend: (text: string) => void;
+  onStop: () => void;
+  canStop: boolean;
   disabled?: boolean;
   models: { id: string; displayName: string; model: string }[];
   selectedModelId: string | null;
@@ -18,6 +20,8 @@ type ComposerProps = {
 
 export function Composer({
   onSend,
+  onStop,
+  canStop,
   disabled = false,
   models,
   selectedModelId,
@@ -98,6 +102,14 @@ export function Composer({
             }
           }}
         />
+        <button
+          className="composer-stop"
+          onClick={onStop}
+          disabled={disabled || !canStop}
+          aria-label="Stop"
+        >
+          Stop
+        </button>
         <button
           className="composer-send"
           onClick={handleSend}

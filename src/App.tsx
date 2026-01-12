@@ -88,8 +88,10 @@ function App() {
     approvals,
     threadsByWorkspace,
     threadStatusById,
+    activeTurnIdByThread,
     tokenUsageByThread,
     rateLimitsByWorkspace,
+    interruptTurn,
     removeThread,
     startThreadForWorkspace,
     listThreadsForWorkspace,
@@ -112,6 +114,12 @@ function App() {
   const activeTokenUsage = activeThreadId
     ? tokenUsageByThread[activeThreadId] ?? null
     : null;
+  const canInterrupt = activeThreadId
+    ? Boolean(
+        threadStatusById[activeThreadId]?.isProcessing &&
+          activeTurnIdByThread[activeThreadId],
+      )
+    : false;
 
   useWindowDrag("titlebar");
   useWorkspaceRestore({
@@ -301,6 +309,8 @@ function App() {
             {centerMode === "chat" && (
               <Composer
                 onSend={handleSend}
+                onStop={interruptTurn}
+                canStop={canInterrupt}
                 disabled={
                   activeThreadId
                     ? threadStatusById[activeThreadId]?.isReviewing ?? false

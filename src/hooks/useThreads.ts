@@ -17,6 +17,7 @@ import {
   resumeThread as resumeThreadService,
   archiveThread as archiveThreadService,
   getAccountRateLimits,
+  interruptTurn as interruptTurnService,
 } from "../services/tauri";
 import { useAppServerEvents } from "./useAppServerEvents";
 
@@ -30,6 +31,7 @@ type ThreadState = {
     string,
     { isProcessing: boolean; hasUnread: boolean; isReviewing: boolean }
   >;
+  activeTurnIdByThread: Record<string, string | null>;
   approvals: ApprovalRequest[];
   tokenUsageByThread: Record<string, ThreadTokenUsage>;
   rateLimitsByWorkspace: Record<string, RateLimitSnapshot | null>;
@@ -43,6 +45,7 @@ type ThreadAction =
   | { type: "markReviewing"; threadId: string; isReviewing: boolean }
   | { type: "markUnread"; threadId: string; hasUnread: boolean }
   | { type: "addUserMessage"; threadId: string; text: string }
+  | { type: "addAssistantMessage"; threadId: string; text: string }
   | { type: "setThreadName"; workspaceId: string; threadId: string; name: string }
   | { type: "appendAgentDelta"; threadId: string; itemId: string; delta: string }
   | { type: "completeAgentMessage"; threadId: string; itemId: string; text: string }
@@ -64,13 +67,15 @@ type ThreadAction =
       type: "setRateLimits";
       workspaceId: string;
       rateLimits: RateLimitSnapshot | null;
-    };
+    }
+  | { type: "setActiveTurnId"; threadId: string; turnId: string | null };
 
 const initialState: ThreadState = {
   activeThreadIdByWorkspace: {},
   itemsByThread: emptyItems,
   threadsByWorkspace: {},
   threadStatusById: {},
+  activeTurnIdByThread: {},
   approvals: [],
   tokenUsageByThread: {},
   rateLimitsByWorkspace: {},
@@ -147,6 +152,7 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
           : state.activeThreadIdByWorkspace[action.workspaceId] ?? null;
       const { [action.threadId]: _, ...restItems } = state.itemsByThread;
       const { [action.threadId]: __, ...restStatus } = state.threadStatusById;
+      const { [action.threadId]: ___, ...restTurns } = state.activeTurnIdByThread;
       return {
         ...state,
         threadsByWorkspace: {
@@ -155,6 +161,7 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         },
         itemsByThread: restItems,
         threadStatusById: restStatus,
+        activeTurnIdByThread: restTurns,
         activeThreadIdByWorkspace: {
           ...state.activeThreadIdByWorkspace,
           [action.workspaceId]: nextActive,
@@ -172,6 +179,14 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
             isReviewing:
               state.threadStatusById[action.threadId]?.isReviewing ?? false,
           },
+        },
+      };
+    case "setActiveTurnId":
+      return {
+        ...state,
+        activeTurnIdByThread: {
+          ...state.activeTurnIdByThread,
+          [action.threadId]: action.turnId,
         },
       };
     case "markReviewing":
@@ -207,6 +222,22 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         id: `${Date.now()}-user`,
         kind: "message",
         role: "user",
+        text: action.text,
+      };
+      return {
+        ...state,
+        itemsByThread: {
+          ...state.itemsByThread,
+          [action.threadId]: [...list, message],
+        },
+      };
+    }
+    case "addAssistantMessage": {
+      const list = state.itemsByThread[action.threadId] ?? [];
+      const message: ConversationItem = {
+        id: `${Date.now()}-assistant`,
+        kind: "message",
+        role: "assistant",
         text: action.text,
       };
       return {
@@ -1024,16 +1055,20 @@ export function useThreads({
           // Ignore refresh errors to avoid breaking the UI.
         }
       },
-      onTurnStarted: (workspaceId: string, threadId: string) => {
+      onTurnStarted: (workspaceId: string, threadId: string, turnId: string) => {
         dispatch({
           type: "ensureThread",
           workspaceId,
           threadId,
         });
         dispatch({ type: "markProcessing", threadId, isProcessing: true });
+        if (turnId) {
+          dispatch({ type: "setActiveTurnId", threadId, turnId });
+        }
       },
-      onTurnCompleted: (_workspaceId: string, threadId: string) => {
+      onTurnCompleted: (_workspaceId: string, threadId: string, _turnId: string) => {
         dispatch({ type: "markProcessing", threadId, isProcessing: false });
+        dispatch({ type: "setActiveTurnId", threadId, turnId: null });
       },
       onThreadTokenUsageUpdated: (
         workspaceId: string,
@@ -1308,6 +1343,11 @@ export function useThreads({
           label: "turn/start response",
           payload: response,
         });
+        const turn = response?.result?.turn ?? response?.turn ?? null;
+        const turnId = asString(turn?.id ?? "");
+        if (turnId) {
+          dispatch({ type: "setActiveTurnId", threadId, turnId });
+        }
       } catch (error) {
         onDebug?.({
           id: `${Date.now()}-client-turn-start-error`,
@@ -1328,8 +1368,59 @@ export function useThreads({
       onDebug,
       onMessageActivity,
       startThread,
+      resumeThreadForWorkspace,
     ],
   );
+
+  const interruptTurn = useCallback(async () => {
+    if (!activeWorkspace || !activeThreadId) {
+      return;
+    }
+    const activeTurnId = state.activeTurnIdByThread[activeThreadId] ?? null;
+    if (!activeTurnId) {
+      return;
+    }
+    dispatch({ type: "markProcessing", threadId: activeThreadId, isProcessing: false });
+    dispatch({ type: "setActiveTurnId", threadId: activeThreadId, turnId: null });
+    dispatch({
+      type: "addAssistantMessage",
+      threadId: activeThreadId,
+      text: "Session stopped.",
+    });
+    onDebug?.({
+      id: `${Date.now()}-client-turn-interrupt`,
+      timestamp: Date.now(),
+      source: "client",
+      label: "turn/interrupt",
+      payload: {
+        workspaceId: activeWorkspace.id,
+        threadId: activeThreadId,
+        turnId: activeTurnId,
+      },
+    });
+    try {
+      const response = await interruptTurnService(
+        activeWorkspace.id,
+        activeThreadId,
+        activeTurnId,
+      );
+      onDebug?.({
+        id: `${Date.now()}-server-turn-interrupt`,
+        timestamp: Date.now(),
+        source: "server",
+        label: "turn/interrupt response",
+        payload: response,
+      });
+    } catch (error) {
+      onDebug?.({
+        id: `${Date.now()}-client-turn-interrupt-error`,
+        timestamp: Date.now(),
+        source: "error",
+        label: "turn/interrupt error",
+        payload: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [activeThreadId, activeWorkspace, onDebug, state.activeTurnIdByThread]);
 
   const startReview = useCallback(
     async (text: string) => {
@@ -1468,9 +1559,11 @@ export function useThreads({
     approvals: state.approvals,
     threadsByWorkspace: state.threadsByWorkspace,
     threadStatusById: state.threadStatusById,
+    activeTurnIdByThread: state.activeTurnIdByThread,
     tokenUsageByThread: state.tokenUsageByThread,
     rateLimitsByWorkspace: state.rateLimitsByWorkspace,
     refreshAccountRateLimits,
+    interruptTurn,
     removeThread,
     startThread,
     startThreadForWorkspace,

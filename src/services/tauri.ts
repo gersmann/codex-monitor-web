@@ -50,6 +50,14 @@ export async function sendUserMessage(
   });
 }
 
+export async function interruptTurn(
+  workspaceId: string,
+  threadId: string,
+  turnId: string,
+) {
+  return invoke("turn_interrupt", { workspaceId, threadId, turnId });
+}
+
 export async function startReview(
   workspaceId: string,
   threadId: string,

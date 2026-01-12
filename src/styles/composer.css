@@ -12,7 +12,7 @@
 
 .composer-input {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 12px;
   align-items: center;
 }
@@ -48,6 +48,21 @@
   color: #fff;
 }
 
+.composer-stop {
+  border: 1px solid rgba(255, 107, 107, 0.6);
+  background: rgba(255, 107, 107, 0.12);
+  color: rgba(255, 196, 196, 0.9);
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.composer-stop:hover {
+  background: rgba(255, 107, 107, 0.2);
+  color: #fff;
+}
+
 .composer.is-disabled {
   opacity: 0.7;
 }
@@ -63,6 +78,13 @@
   cursor: not-allowed;
   background: rgba(255, 255, 255, 0.05);
   color: rgba(255, 255, 255, 0.45);
+}
+
+.composer-stop:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(255, 107, 107, 0.08);
+  color: rgba(255, 196, 196, 0.4);
 }
 
 .composer-select:disabled {
