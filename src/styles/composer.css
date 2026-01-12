@@ -71,8 +71,14 @@
   align-items: center;
 }
 
+.composer-input-area {
+  position: relative;
+  min-width: 0;
+}
+
 .composer textarea {
   height: 60px;
+  width: 100%;
   resize: none;
   border-radius: 0;
   border: none;
@@ -166,6 +172,65 @@
   cursor: not-allowed;
   color: var(--text-fainter);
   background-image: none;
+}
+
+.composer-suggestions {
+  position: absolute;
+  left: 0;
+  right: auto;
+  bottom: calc(100% + 6px);
+  top: auto;
+  z-index: 10;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--surface-context-core);
+  border: 1px solid var(--border-muted);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  width: min(100%, 420px);
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.composer-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--text-strong);
+  cursor: pointer;
+  width: 100%;
+  min-width: 0;
+}
+
+.composer-suggestion:hover,
+.composer-suggestion.is-active {
+  background: var(--surface-item);
+  border-color: var(--border-muted);
+}
+
+.composer-suggestion-title {
+  font-size: 12px;
+  font-weight: 600;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composer-suggestion-description {
+  font-size: 10px;
+  color: var(--text-muted);
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .composer-bar {
@@ -297,11 +362,6 @@
 .composer-select--approval {
   width: 90px;
   max-width: 90px;
-}
-
-.composer-select--skill {
-  width: 60px;
-  max-width: 60px;
 }
 
 .composer-select:focus {
