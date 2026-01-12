@@ -950,6 +950,7 @@ export function useThreads({
         delta: string;
       }) => {
         dispatch({ type: "ensureThread", workspaceId, threadId });
+        dispatch({ type: "markProcessing", threadId, isProcessing: true });
         dispatch({ type: "appendAgentDelta", threadId, itemId, delta });
       },
       onAgentMessageCompleted: ({
@@ -977,6 +978,7 @@ export function useThreads({
       },
       onItemStarted: (workspaceId: string, threadId: string, item) => {
         dispatch({ type: "ensureThread", workspaceId, threadId });
+        dispatch({ type: "markProcessing", threadId, isProcessing: true });
         const itemType = asString((item as Record<string, unknown>)?.type ?? "");
         if (itemType === "enteredReviewMode") {
           dispatch({ type: "markReviewing", threadId, isReviewing: true });
@@ -1035,6 +1037,7 @@ export function useThreads({
         itemId: string,
         delta: string,
       ) => {
+        dispatch({ type: "markProcessing", threadId, isProcessing: true });
         dispatch({ type: "appendToolOutput", threadId, itemId, delta });
         try {
           void onMessageActivity?.();
@@ -1048,6 +1051,7 @@ export function useThreads({
         itemId: string,
         delta: string,
       ) => {
+        dispatch({ type: "markProcessing", threadId, isProcessing: true });
         dispatch({ type: "appendToolOutput", threadId, itemId, delta });
         try {
           void onMessageActivity?.();
