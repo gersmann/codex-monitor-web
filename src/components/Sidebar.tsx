@@ -15,6 +15,7 @@ type SidebarProps = {
   activeThreadId: string | null;
   accountRateLimits: RateLimitSnapshot | null;
   onAddWorkspace: () => void;
+  onSelectHome: () => void;
   onSelectWorkspace: (id: string) => void;
   onConnectWorkspace: (workspace: WorkspaceInfo) => void;
   onAddAgent: (workspace: WorkspaceInfo) => void;
@@ -31,6 +32,7 @@ export function Sidebar({
   activeThreadId,
   accountRateLimits,
   onAddWorkspace,
+  onSelectHome,
   onSelectWorkspace,
   onConnectWorkspace,
   onAddAgent,
@@ -108,7 +110,14 @@ export function Sidebar({
     <aside className="sidebar">
       <div className="sidebar-header">
         <div>
-          <div className="subtitle">Projects</div>
+          <button
+            className="subtitle subtitle-button"
+            onClick={onSelectHome}
+            data-tauri-drag-region="false"
+            aria-label="Open home"
+          >
+            Projects
+          </button>
         </div>
         <button
           className="ghost workspace-add"

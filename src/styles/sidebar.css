@@ -26,6 +26,16 @@
   margin-top: 6px;
 }
 
+.subtitle-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
 .sidebar-body {
   flex: 1;
   min-height: 0;

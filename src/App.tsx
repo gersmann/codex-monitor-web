@@ -122,7 +122,7 @@ function App() {
   const activeTokenUsage = activeThreadId
     ? tokenUsageByThread[activeThreadId] ?? null
     : null;
-  const showHome = !activeWorkspace || !activeThreadId;
+  const showHome = !activeWorkspace;
   const canInterrupt = activeThreadId
     ? Boolean(
         threadStatusById[activeThreadId]?.isProcessing &&
@@ -273,10 +273,13 @@ function App() {
         activeThreadId={activeThreadId}
         accountRateLimits={activeRateLimits}
         onAddWorkspace={handleAddWorkspace}
+        onSelectHome={() => {
+          exitDiffView();
+          setActiveWorkspaceId(null);
+        }}
         onSelectWorkspace={(workspaceId) => {
           exitDiffView();
           selectWorkspace(workspaceId);
-          setActiveThreadId(null, workspaceId);
         }}
         onConnectWorkspace={connectWorkspace}
         onAddAgent={handleAddAgent}
