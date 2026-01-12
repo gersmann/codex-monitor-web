@@ -311,7 +311,7 @@ export function Composer({
               }
             >
               <option value="read-only">Read only</option>
-              <option value="current">Current</option>
+              <option value="current">On-Request</option>
               <option value="full-access">Full access</option>
             </select>
           </div>
