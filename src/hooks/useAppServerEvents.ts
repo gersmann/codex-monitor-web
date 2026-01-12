@@ -24,6 +24,12 @@ type AppServerEventHandlers = {
   onAppServerEvent?: (event: AppServerEvent) => void;
   onTurnStarted?: (workspaceId: string, threadId: string, turnId: string) => void;
   onTurnCompleted?: (workspaceId: string, threadId: string, turnId: string) => void;
+  onTurnPlanUpdated?: (
+    workspaceId: string,
+    threadId: string,
+    turnId: string,
+    payload: { explanation: unknown; plan: unknown },
+  ) => void;
   onItemStarted?: (workspaceId: string, threadId: string, item: Record<string, unknown>) => void;
   onItemCompleted?: (workspaceId: string, threadId: string, item: Record<string, unknown>) => void;
   onReasoningSummaryDelta?: (workspaceId: string, threadId: string, itemId: string, delta: string) => void;
@@ -101,6 +107,19 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         const turnId = String(turn?.id ?? "");
         if (threadId) {
           handlers.onTurnCompleted?.(workspace_id, threadId, turnId);
+        }
+        return;
+      }
+
+      if (method === "turn/plan/updated") {
+        const params = message.params as Record<string, unknown>;
+        const threadId = String(params.threadId ?? params.thread_id ?? "");
+        const turnId = String(params.turnId ?? params.turn_id ?? "");
+        if (threadId) {
+          handlers.onTurnPlanUpdated?.(workspace_id, threadId, turnId, {
+            explanation: params.explanation,
+            plan: params.plan,
+          });
         }
         return;
       }

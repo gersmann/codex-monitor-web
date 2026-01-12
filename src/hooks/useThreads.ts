@@ -6,6 +6,9 @@ import type {
   RateLimitSnapshot,
   ThreadSummary,
   ThreadTokenUsage,
+  TurnPlan,
+  TurnPlanStep,
+  TurnPlanStepStatus,
   WorkspaceInfo,
 } from "../types";
 import {
@@ -37,6 +40,7 @@ type ThreadState = {
   approvals: ApprovalRequest[];
   tokenUsageByThread: Record<string, ThreadTokenUsage>;
   rateLimitsByWorkspace: Record<string, RateLimitSnapshot | null>;
+  planByThread: Record<string, TurnPlan | null>;
 };
 
 type ThreadAction =
@@ -70,7 +74,9 @@ type ThreadAction =
       workspaceId: string;
       rateLimits: RateLimitSnapshot | null;
     }
-  | { type: "setActiveTurnId"; threadId: string; turnId: string | null };
+  | { type: "setActiveTurnId"; threadId: string; turnId: string | null }
+  | { type: "setThreadPlan"; threadId: string; plan: TurnPlan | null }
+  | { type: "clearThreadPlan"; threadId: string };
 
 const initialState: ThreadState = {
   activeThreadIdByWorkspace: {},
@@ -81,6 +87,7 @@ const initialState: ThreadState = {
   approvals: [],
   tokenUsageByThread: {},
   rateLimitsByWorkspace: {},
+  planByThread: {},
 };
 
 function upsertItem(list: ConversationItem[], item: ConversationItem) {
@@ -201,6 +208,7 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
       const { [action.threadId]: _, ...restItems } = state.itemsByThread;
       const { [action.threadId]: __, ...restStatus } = state.threadStatusById;
       const { [action.threadId]: ___, ...restTurns } = state.activeTurnIdByThread;
+      const { [action.threadId]: ____, ...restPlans } = state.planByThread;
       return {
         ...state,
         threadsByWorkspace: {
@@ -210,6 +218,7 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         itemsByThread: restItems,
         threadStatusById: restStatus,
         activeTurnIdByThread: restTurns,
+        planByThread: restPlans,
         activeThreadIdByWorkspace: {
           ...state.activeThreadIdByWorkspace,
           [action.workspaceId]: nextActive,
@@ -489,6 +498,22 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
           [action.workspaceId]: action.rateLimits,
         },
       };
+    case "setThreadPlan":
+      return {
+        ...state,
+        planByThread: {
+          ...state.planByThread,
+          [action.threadId]: action.plan,
+        },
+      };
+    case "clearThreadPlan":
+      return {
+        ...state,
+        planByThread: {
+          ...state.planByThread,
+          [action.threadId]: null,
+        },
+      };
     default:
       return state;
   }
@@ -658,6 +683,50 @@ function normalizeRateLimits(raw: Record<string, unknown>): RateLimitSnapshot {
       : typeof raw.plan_type === "string"
         ? raw.plan_type
         : null,
+  };
+}
+
+function normalizePlanStepStatus(value: unknown): TurnPlanStepStatus {
+  const raw = typeof value === "string" ? value : "";
+  const normalized = raw.replace(/[_\s-]/g, "").toLowerCase();
+  if (normalized === "inprogress") {
+    return "inProgress";
+  }
+  if (normalized === "completed") {
+    return "completed";
+  }
+  return "pending";
+}
+
+function normalizePlanUpdate(
+  turnId: string,
+  explanation: unknown,
+  plan: unknown,
+): TurnPlan | null {
+  const steps = Array.isArray(plan)
+    ? plan
+        .map((entry) => {
+          const step = asString((entry as Record<string, unknown>)?.step ?? "");
+          if (!step) {
+            return null;
+          }
+          return {
+            step,
+            status: normalizePlanStepStatus(
+              (entry as Record<string, unknown>)?.status,
+            ),
+          } satisfies TurnPlanStep;
+        })
+        .filter((entry): entry is TurnPlanStep => Boolean(entry))
+    : [];
+  const note = asString(explanation).trim();
+  if (!steps.length && !note) {
+    return null;
+  }
+  return {
+    turnId,
+    explanation: note ? note : null,
+    steps,
   };
 }
 
@@ -1184,6 +1253,7 @@ export function useThreads({
           threadId,
         });
         dispatch({ type: "markProcessing", threadId, isProcessing: true });
+        dispatch({ type: "clearThreadPlan", threadId });
         if (turnId) {
           dispatch({ type: "setActiveTurnId", threadId, turnId });
         }
@@ -1191,6 +1261,20 @@ export function useThreads({
       onTurnCompleted: (_workspaceId: string, threadId: string, _turnId: string) => {
         dispatch({ type: "markProcessing", threadId, isProcessing: false });
         dispatch({ type: "setActiveTurnId", threadId, turnId: null });
+      },
+      onTurnPlanUpdated: (
+        workspaceId: string,
+        threadId: string,
+        turnId: string,
+        payload: { explanation: unknown; plan: unknown },
+      ) => {
+        dispatch({ type: "ensureThread", workspaceId, threadId });
+        const normalized = normalizePlanUpdate(
+          turnId,
+          payload.explanation,
+          payload.plan,
+        );
+        dispatch({ type: "setThreadPlan", threadId, plan: normalized });
       },
       onThreadTokenUsageUpdated: (
         workspaceId: string,
@@ -1696,6 +1780,7 @@ export function useThreads({
     activeTurnIdByThread: state.activeTurnIdByThread,
     tokenUsageByThread: state.tokenUsageByThread,
     rateLimitsByWorkspace: state.rateLimitsByWorkspace,
+    planByThread: state.planByThread,
     refreshAccountRateLimits,
     interruptTurn,
     removeThread,

@@ -84,6 +84,19 @@ export type ThreadTokenUsage = {
   modelContextWindow: number | null;
 };
 
+export type TurnPlanStepStatus = "pending" | "inProgress" | "completed";
+
+export type TurnPlanStep = {
+  step: string;
+  status: TurnPlanStepStatus;
+};
+
+export type TurnPlan = {
+  turnId: string;
+  explanation: string | null;
+  steps: TurnPlanStep[];
+};
+
 export type RateLimitWindow = {
   usedPercent: number;
   windowDurationMins: number | null;

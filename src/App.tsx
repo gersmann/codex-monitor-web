@@ -10,6 +10,7 @@ import "./styles/composer.css";
 import "./styles/diff.css";
 import "./styles/diff-viewer.css";
 import "./styles/debug.css";
+import "./styles/plan.css";
 import { Sidebar } from "./components/Sidebar";
 import { Home } from "./components/Home";
 import { MainHeader } from "./components/MainHeader";
@@ -19,6 +20,7 @@ import { Composer } from "./components/Composer";
 import { GitDiffPanel } from "./components/GitDiffPanel";
 import { GitDiffViewer } from "./components/GitDiffViewer";
 import { DebugPanel } from "./components/DebugPanel";
+import { PlanPanel } from "./components/PlanPanel";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import { useThreads } from "./hooks/useThreads";
 import { useWindowDrag } from "./hooks/useWindowDrag";
@@ -38,6 +40,8 @@ function App() {
     rightPanelWidth,
     onSidebarResizeStart,
     onRightPanelResizeStart,
+    planPanelHeight,
+    onPlanPanelResizeStart,
   } = useResizablePanels();
   const [centerMode, setCenterMode] = useState<"chat" | "diff">("chat");
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
@@ -106,6 +110,7 @@ function App() {
     activeTurnIdByThread,
     tokenUsageByThread,
     rateLimitsByWorkspace,
+    planByThread,
     interruptTurn,
     removeThread,
     startThreadForWorkspace,
@@ -129,6 +134,10 @@ function App() {
   const activeTokenUsage = activeThreadId
     ? tokenUsageByThread[activeThreadId] ?? null
     : null;
+  const activePlan = activeThreadId ? planByThread[activeThreadId] ?? null : null;
+  const hasActivePlan = Boolean(
+    activePlan && (activePlan.steps.length > 0 || activePlan.explanation),
+  );
   const showHome = !activeWorkspace;
   const canInterrupt = activeThreadId
     ? Boolean(
@@ -276,6 +285,7 @@ function App() {
         {
           "--sidebar-width": `${sidebarWidth}px`,
           "--right-panel-width": `${rightPanelWidth}px`,
+          "--plan-panel-height": `${planPanelHeight}px`,
         } as React.CSSProperties
       }
     >
@@ -419,18 +429,30 @@ function App() {
               aria-label="Resize right panel"
               onMouseDown={onRightPanelResizeStart}
             />
-            <div className="right-panel">
-              <GitDiffPanel
-                branchName={gitStatus.branchName || "unknown"}
-                totalAdditions={gitStatus.totalAdditions}
-                totalDeletions={gitStatus.totalDeletions}
-                fileStatus={fileStatus}
-                error={gitStatus.error}
-                files={gitStatus.files}
-                selectedPath={selectedDiffPath}
-                onSelectFile={handleSelectDiff}
+            <div className={`right-panel ${hasActivePlan ? "" : "plan-collapsed"}`}>
+              <div className="right-panel-top">
+                <GitDiffPanel
+                  branchName={gitStatus.branchName || "unknown"}
+                  totalAdditions={gitStatus.totalAdditions}
+                  totalDeletions={gitStatus.totalDeletions}
+                  fileStatus={fileStatus}
+                  error={gitStatus.error}
+                  files={gitStatus.files}
+                  selectedPath={selectedDiffPath}
+                  onSelectFile={handleSelectDiff}
+                />
+                <Approvals approvals={approvals} onDecision={handleApprovalDecision} />
+              </div>
+              <div
+                className="right-panel-divider"
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label="Resize plan panel"
+                onMouseDown={onPlanPanelResizeStart}
               />
-              <Approvals approvals={approvals} onDecision={handleApprovalDecision} />
+              <div className="right-panel-bottom">
+                <PlanPanel plan={activePlan} isProcessing={isProcessing} />
+              </div>
             </div>
 
             {centerMode === "chat" && (
