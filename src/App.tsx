@@ -264,7 +264,7 @@ function App() {
 
   return (
     <div className="app">
-      <div className="drag-strip" id="titlebar" />
+      <div className="drag-strip" id="titlebar" data-tauri-drag-region />
       <Sidebar
         workspaces={workspaces}
         threadsByWorkspace={threadsByWorkspace}
@@ -314,7 +314,7 @@ function App() {
 
         {activeWorkspace && !showHome && (
           <>
-            <div className="main-topbar">
+            <div className="main-topbar" data-tauri-drag-region>
               <div className="main-topbar-left">
                 {centerMode === "diff" && (
                   <button
