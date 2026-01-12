@@ -199,6 +199,7 @@
   font-size: 12px;
   cursor: pointer;
   -webkit-app-region: no-drag;
+  min-width: 0;
 }
 
 .thread-status {
@@ -243,6 +244,12 @@
 
 .thread-name {
   flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 

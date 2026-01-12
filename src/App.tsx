@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import "./styles/base.css";
 import "./styles/buttons.css";
 import "./styles/sidebar.css";
@@ -29,9 +29,16 @@ import { useSkills } from "./hooks/useSkills";
 import { useDebugLog } from "./hooks/useDebugLog";
 import { useWorkspaceRefreshOnFocus } from "./hooks/useWorkspaceRefreshOnFocus";
 import { useWorkspaceRestore } from "./hooks/useWorkspaceRestore";
+import { useResizablePanels } from "./hooks/useResizablePanels";
 import type { AccessMode, QueuedMessage } from "./types";
 
 function App() {
+  const {
+    sidebarWidth,
+    rightPanelWidth,
+    onSidebarResizeStart,
+    onRightPanelResizeStart,
+  } = useResizablePanels();
   const [centerMode, setCenterMode] = useState<"chat" | "diff">("chat");
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
   const [accessMode, setAccessMode] = useState<AccessMode>("current");
@@ -263,7 +270,15 @@ function App() {
   ]);
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      style={
+        {
+          "--sidebar-width": `${sidebarWidth}px`,
+          "--right-panel-width": `${rightPanelWidth}px`,
+        } as React.CSSProperties
+      }
+    >
       <div className="drag-strip" id="titlebar" data-tauri-drag-region />
       <Sidebar
         workspaces={workspaces}
@@ -301,6 +316,13 @@ function App() {
         onDeleteThread={(workspaceId, threadId) => {
           removeThread(workspaceId, threadId);
         }}
+      />
+      <div
+        className="sidebar-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        onMouseDown={onSidebarResizeStart}
       />
 
       <section className="main">
@@ -390,6 +412,13 @@ function App() {
               )}
             </div>
 
+            <div
+              className="right-panel-resizer"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize right panel"
+              onMouseDown={onRightPanelResizeStart}
+            />
             <div className="right-panel">
               <GitDiffPanel
                 branchName={gitStatus.branchName || "unknown"}

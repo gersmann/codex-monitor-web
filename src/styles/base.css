@@ -27,7 +27,7 @@ body {
 .app {
   height: 100vh;
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: var(--sidebar-width, 280px) 1fr;
   background: transparent;
   border-radius: 0;
   overflow: hidden;
@@ -41,6 +41,32 @@ body {
   right: 0;
   height: 24px;
   z-index: 2;
+}
+
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--sidebar-width, 280px) - 4px);
+  width: 8px;
+  cursor: col-resize;
+  z-index: 3;
+}
+
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.sidebar-resizer:hover::after {
+  opacity: 1;
 }
 
 
@@ -57,5 +83,9 @@ body {
 
   .content {
     grid-template-columns: 1fr;
+  }
+
+  .sidebar-resizer {
+    display: none;
   }
 }

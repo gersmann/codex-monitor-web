@@ -901,7 +901,7 @@ function previewThreadName(text: string, fallback: string) {
   if (!trimmed) {
     return fallback;
   }
-  return trimmed.length > 38 ? `${trimmed.slice(0, 38)}…` : trimmed;
+  return trimmed;
 }
 
 function chooseRicherItem(remote: ConversationItem, local: ConversationItem) {
