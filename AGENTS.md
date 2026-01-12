@@ -60,6 +60,12 @@ npm run tauri build
 npm run typecheck
 ```
 
+## Releasing
+
+See `RELEASING.md` for the full release flow (versioning, signing,
+notarization, packaging, and GitHub release). After publishing, bump the app
+to the next minor version.
+
 ## Common Changes
 
 - UI layout or styling: update `src/components/*` and `src/styles/*`.
