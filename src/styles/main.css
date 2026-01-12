@@ -30,8 +30,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 10px 32px 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 14, 20, 0.45);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-topbar);
   -webkit-app-region: no-drag;
   grid-column: 1;
   grid-row: 1;
@@ -66,12 +66,12 @@
 }
 
 .workspace-separator {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-faint);
   font-size: 12px;
 }
 
 .workspace-branch {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-subtle);
   font-size: 12px;
   font-weight: 500;
   min-width: 0;
@@ -101,8 +101,8 @@
   flex-direction: column;
   gap: 12px;
   padding-left: 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(9, 12, 20, 0.4);
+  border-left: 1px solid var(--border-subtle);
+  background: var(--surface-right-panel);
   height: 100%;
   padding-top: 0;
   padding-bottom: 0;
@@ -129,7 +129,7 @@
   bottom: 0;
   left: 3px;
   width: 1px;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--border-strong);
   opacity: 0;
   transition: opacity 0.15s ease;
 }

@@ -1,5 +1,5 @@
 .empty {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-faint);
   font-size: 13px;
 }
 
@@ -22,18 +22,18 @@ button:disabled {
 .primary {
   background: linear-gradient(135deg, #62b7ff, #4fe3a3);
   color: #0b0f1a;
-  box-shadow: 0 12px 22px rgba(92, 168, 255, 0.28);
+  box-shadow: 0 12px 22px var(--shadow-accent);
 }
 
 .secondary {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--surface-card-strong);
   color: inherit;
 }
 
 .ghost {
   background: transparent;
-  color: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
 }
 
 .icon-button {

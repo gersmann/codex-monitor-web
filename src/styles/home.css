@@ -24,7 +24,7 @@
 
 .home-subtitle {
   font-size: 16px;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--text-muted);
 }
 
 .home-actions {
@@ -54,9 +54,9 @@
 }
 
 .home-actions .home-button {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--surface-card-strong);
   color: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--border-strong);
   box-shadow: none;
 }
 

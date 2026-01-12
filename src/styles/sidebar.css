@@ -1,8 +1,8 @@
 .sidebar {
   padding: 36px 20px 20px;
-  background: rgba(18, 18, 18, 0.35);
+  background: var(--surface-sidebar);
   backdrop-filter: blur(32px) saturate(1.35);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -76,16 +76,16 @@
 
 .workspace-row.active {
   background: transparent;
-  border-left: 3px solid rgba(100, 200, 255, 0.8);
+  border-left: 3px solid var(--border-accent);
   padding-left: 9px;
 }
 
 .workspace-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-card);
 }
 
 .workspace-row.active .workspace-name {
-  color: #ffffff;
+  color: var(--text-strong);
 }
 
 
@@ -97,11 +97,11 @@
 
 .connect {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-muted);
   align-self: center;
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-quiet);
   -webkit-app-region: no-drag;
 }
 
@@ -109,9 +109,9 @@
   width: 22px;
   height: 22px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--border-stronger);
+  background: var(--surface-card-muted);
+  color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -124,8 +124,8 @@
 }
 
 .workspace-add:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-strong);
+  background: var(--surface-card-strong);
 }
 
 .sidebar-header:hover .workspace-add,
@@ -150,7 +150,7 @@
 .workspace-toggle {
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -164,7 +164,7 @@
 }
 
 .workspace-toggle:hover {
-  color: #fff;
+  color: var(--text-strong);
 }
 
 .workspace-toggle-icon {
@@ -195,7 +195,7 @@
   gap: 6px;
   padding: 4px 6px;
   border-radius: 6px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--text-quiet);
   font-size: 12px;
   cursor: pointer;
   -webkit-app-region: no-drag;
@@ -233,13 +233,13 @@
 }
 
 .thread-row:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  background: var(--surface-hover);
+  color: var(--text-strong);
 }
 
 .thread-row.active {
-  background: rgba(100, 200, 255, 0.14);
-  color: #fff;
+  background: var(--surface-active);
+  color: var(--text-strong);
 }
 
 .thread-name {
@@ -260,7 +260,7 @@
 .thread-menu-trigger {
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-faint);
   font-size: 11px;
   padding: 2px 4px;
   cursor: pointer;
@@ -271,7 +271,7 @@
 }
 
 .thread-menu-trigger:hover {
-  color: #fff;
+  color: var(--text-strong);
 }
 
 .thread-row:hover .thread-menu-trigger {
@@ -282,7 +282,7 @@
 .thread-more {
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-faint);
   font-size: 11px;
   text-align: left;
   padding: 2px 6px 2px 16px;
@@ -291,7 +291,7 @@
 }
 
 .thread-more:hover {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-stronger);
 }
 
 .sidebar-footer {
@@ -300,9 +300,9 @@
   gap: 4px;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+  color: var(--text-muted);
   font-size: 11px;
   -webkit-app-region: no-drag;
 }
@@ -311,7 +311,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-stronger);
   font-weight: 600;
   letter-spacing: 0.01em;
 }
@@ -321,7 +321,7 @@
 }
 
 .usage-meta {
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--text-subtle);
 }
 
 @keyframes pulse {
