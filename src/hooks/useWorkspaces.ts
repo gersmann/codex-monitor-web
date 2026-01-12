@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DebugEntry } from "../types";
-import type { WorkspaceInfo } from "../types";
+import type { WorkspaceInfo, WorkspaceSettings } from "../types";
 import {
   addWorkspace as addWorkspaceService,
   connectWorkspace as connectWorkspaceService,
   listWorkspaces,
   pickWorkspacePath,
+  updateWorkspaceSettings as updateWorkspaceSettingsService,
 } from "../services/tauri";
 
 type UseWorkspacesOptions = {
@@ -103,6 +104,50 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     );
   }
 
+  async function updateWorkspaceSettings(
+    workspaceId: string,
+    settings: WorkspaceSettings,
+  ) {
+    onDebug?.({
+      id: `${Date.now()}-client-update-workspace-settings`,
+      timestamp: Date.now(),
+      source: "client",
+      label: "workspace/settings",
+      payload: { workspaceId, settings },
+    });
+    let previous: WorkspaceInfo | null = null;
+    setWorkspaces((prev) =>
+      prev.map((entry) => {
+        if (entry.id !== workspaceId) {
+          return entry;
+        }
+        previous = entry;
+        return { ...entry, settings };
+      }),
+    );
+    try {
+      const updated = await updateWorkspaceSettingsService(workspaceId, settings);
+      setWorkspaces((prev) =>
+        prev.map((entry) => (entry.id === workspaceId ? updated : entry)),
+      );
+      return updated;
+    } catch (error) {
+      if (previous) {
+        setWorkspaces((prev) =>
+          prev.map((entry) => (entry.id === workspaceId ? previous : entry)),
+        );
+      }
+      onDebug?.({
+        id: `${Date.now()}-client-update-workspace-settings-error`,
+        timestamp: Date.now(),
+        source: "error",
+        label: "workspace/settings error",
+        payload: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
   return {
     workspaces,
     activeWorkspace,
@@ -111,6 +156,7 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     addWorkspace,
     connectWorkspace,
     markWorkspaceConnected,
+    updateWorkspaceSettings,
     hasLoaded,
     refreshWorkspaces,
   };

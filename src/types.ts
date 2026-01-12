@@ -1,9 +1,14 @@
+export type WorkspaceSettings = {
+  sidebarCollapsed: boolean;
+};
+
 export type WorkspaceInfo = {
   id: string;
   name: string;
   path: string;
   connected: boolean;
   codex_bin?: string | null;
+  settings: WorkspaceSettings;
 };
 
 export type AppServerEvent = {

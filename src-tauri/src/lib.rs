@@ -78,6 +78,8 @@ struct WorkspaceEntry {
     name: String,
     path: String,
     codex_bin: Option<String>,
+    #[serde(default)]
+    settings: WorkspaceSettings,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -87,6 +89,14 @@ struct WorkspaceInfo {
     path: String,
     connected: bool,
     codex_bin: Option<String>,
+    #[serde(default)]
+    settings: WorkspaceSettings,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+struct WorkspaceSettings {
+    #[serde(default, rename = "sidebarCollapsed")]
+    sidebar_collapsed: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -305,6 +315,7 @@ async fn list_workspaces(state: State<'_, AppState>) -> Result<Vec<WorkspaceInfo
             path: entry.path.clone(),
             codex_bin: entry.codex_bin.clone(),
             connected: sessions.contains_key(&entry.id),
+            settings: entry.settings.clone(),
         });
     }
     result.sort_by(|a, b| a.name.cmp(&b.name));
@@ -328,6 +339,7 @@ async fn add_workspace(
         name: name.clone(),
         path: path.clone(),
         codex_bin,
+        settings: WorkspaceSettings::default(),
     };
 
     let session = spawn_workspace_session(entry.clone(), app).await?;
@@ -349,6 +361,7 @@ async fn add_workspace(
         path: entry.path,
         codex_bin: entry.codex_bin,
         connected: true,
+        settings: entry.settings,
     })
 }
 
@@ -370,6 +383,37 @@ async fn remove_workspace(
     }
 
     Ok(())
+}
+
+#[tauri::command]
+async fn update_workspace_settings(
+    id: String,
+    settings: WorkspaceSettings,
+    state: State<'_, AppState>,
+) -> Result<WorkspaceInfo, String> {
+    let (entry_snapshot, list) = {
+        let mut workspaces = state.workspaces.lock().await;
+        let entry_snapshot = match workspaces.get_mut(&id) {
+            Some(entry) => {
+                entry.settings = settings.clone();
+                entry.clone()
+            }
+            None => return Err("workspace not found".to_string()),
+        };
+        let list: Vec<_> = workspaces.values().cloned().collect();
+        (entry_snapshot, list)
+    };
+    write_workspaces(&state.storage_path, &list)?;
+
+    let connected = state.sessions.lock().await.contains_key(&id);
+    Ok(WorkspaceInfo {
+        id: entry_snapshot.id,
+        name: entry_snapshot.name,
+        path: entry_snapshot.path,
+        codex_bin: entry_snapshot.codex_bin,
+        connected,
+        settings: entry_snapshot.settings,
+    })
 }
 
 #[tauri::command]
@@ -775,6 +819,7 @@ pub fn run() {
             list_workspaces,
             add_workspace,
             remove_workspace,
+            update_workspace_settings,
             start_thread,
             send_user_message,
             turn_interrupt,

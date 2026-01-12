@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { WorkspaceInfo } from "../types";
+import type { WorkspaceInfo, WorkspaceSettings } from "../types";
 import type { GitFileDiff, GitFileStatus, ReviewTarget } from "../types";
 
 export async function pickWorkspacePath(): Promise<string | null> {
@@ -20,6 +20,13 @@ export async function addWorkspace(
   codex_bin: string | null,
 ): Promise<WorkspaceInfo> {
   return invoke<WorkspaceInfo>("add_workspace", { path, codex_bin });
+}
+
+export async function updateWorkspaceSettings(
+  id: string,
+  settings: WorkspaceSettings,
+): Promise<WorkspaceInfo> {
+  return invoke<WorkspaceInfo>("update_workspace_settings", { id, settings });
 }
 
 export async function connectWorkspace(id: string): Promise<void> {
