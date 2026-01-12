@@ -521,6 +521,20 @@ async fn model_list(
 }
 
 #[tauri::command]
+async fn account_rate_limits(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let sessions = state.sessions.lock().await;
+    let session = sessions
+        .get(&workspace_id)
+        .ok_or("workspace not connected")?;
+    session
+        .send_request("account/rateLimits/read", Value::Null)
+        .await
+}
+
+#[tauri::command]
 async fn skills_list(
     workspace_id: String,
     state: State<'_, AppState>,
@@ -754,6 +768,7 @@ pub fn run() {
             get_git_status,
             get_git_diffs,
             model_list,
+            account_rate_limits,
             skills_list
         ])
         .run(tauri::generate_context!())

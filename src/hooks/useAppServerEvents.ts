@@ -31,6 +31,15 @@ type AppServerEventHandlers = {
   onCommandOutputDelta?: (workspaceId: string, threadId: string, itemId: string, delta: string) => void;
   onFileChangeOutputDelta?: (workspaceId: string, threadId: string, itemId: string, delta: string) => void;
   onTurnDiffUpdated?: (workspaceId: string, threadId: string, diff: string) => void;
+  onThreadTokenUsageUpdated?: (
+    workspaceId: string,
+    threadId: string,
+    tokenUsage: Record<string, unknown>,
+  ) => void;
+  onAccountRateLimitsUpdated?: (
+    workspaceId: string,
+    rateLimits: Record<string, unknown>,
+  ) => void;
 };
 
 export function useAppServerEvents(handlers: AppServerEventHandlers) {
@@ -100,6 +109,29 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         const diff = String(params.diff ?? "");
         if (threadId && diff) {
           handlers.onTurnDiffUpdated?.(workspace_id, threadId, diff);
+        }
+        return;
+      }
+
+      if (method === "thread/tokenUsage/updated") {
+        const params = message.params as Record<string, unknown>;
+        const threadId = String(params.threadId ?? params.thread_id ?? "");
+        const tokenUsage =
+          (params.tokenUsage as Record<string, unknown> | undefined) ??
+          (params.token_usage as Record<string, unknown> | undefined);
+        if (threadId && tokenUsage) {
+          handlers.onThreadTokenUsageUpdated?.(workspace_id, threadId, tokenUsage);
+        }
+        return;
+      }
+
+      if (method === "account/rateLimits/updated") {
+        const params = message.params as Record<string, unknown>;
+        const rateLimits =
+          (params.rateLimits as Record<string, unknown> | undefined) ??
+          (params.rate_limits as Record<string, unknown> | undefined);
+        if (rateLimits) {
+          handlers.onAccountRateLimitsUpdated?.(workspace_id, rateLimits);
         }
         return;
       }

@@ -94,6 +94,10 @@ export async function getModelList(workspaceId: string) {
   return invoke<any>("model_list", { workspaceId });
 }
 
+export async function getAccountRateLimits(workspaceId: string) {
+  return invoke<any>("account_rate_limits", { workspaceId });
+}
+
 export async function getSkillsList(workspaceId: string) {
   return invoke<any>("skills_list", { workspaceId });
 }

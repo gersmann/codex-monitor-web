@@ -65,6 +65,39 @@ export type GitFileDiff = {
   diff: string;
 };
 
+export type TokenUsageBreakdown = {
+  totalTokens: number;
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+};
+
+export type ThreadTokenUsage = {
+  total: TokenUsageBreakdown;
+  last: TokenUsageBreakdown;
+  modelContextWindow: number | null;
+};
+
+export type RateLimitWindow = {
+  usedPercent: number;
+  windowDurationMins: number | null;
+  resetsAt: number | null;
+};
+
+export type CreditsSnapshot = {
+  hasCredits: boolean;
+  unlimited: boolean;
+  balance: string | null;
+};
+
+export type RateLimitSnapshot = {
+  primary: RateLimitWindow | null;
+  secondary: RateLimitWindow | null;
+  credits: CreditsSnapshot | null;
+  planType: string | null;
+};
+
 export type ModelOption = {
   id: string;
   model: string;

@@ -1,9 +1,11 @@
-import { useCallback, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type {
   ApprovalRequest,
   ConversationItem,
   DebugEntry,
+  RateLimitSnapshot,
   ThreadSummary,
+  ThreadTokenUsage,
   WorkspaceInfo,
 } from "../types";
 import {
@@ -14,6 +16,7 @@ import {
   listThreads as listThreadsService,
   resumeThread as resumeThreadService,
   archiveThread as archiveThreadService,
+  getAccountRateLimits,
 } from "../services/tauri";
 import { useAppServerEvents } from "./useAppServerEvents";
 
@@ -28,6 +31,8 @@ type ThreadState = {
     { isProcessing: boolean; hasUnread: boolean; isReviewing: boolean }
   >;
   approvals: ApprovalRequest[];
+  tokenUsageByThread: Record<string, ThreadTokenUsage>;
+  rateLimitsByWorkspace: Record<string, RateLimitSnapshot | null>;
 };
 
 type ThreadAction =
@@ -53,7 +58,13 @@ type ThreadAction =
   | { type: "appendToolOutput"; threadId: string; itemId: string; delta: string }
   | { type: "setThreads"; workspaceId: string; threads: ThreadSummary[] }
   | { type: "addApproval"; approval: ApprovalRequest }
-  | { type: "removeApproval"; requestId: number };
+  | { type: "removeApproval"; requestId: number }
+  | { type: "setThreadTokenUsage"; threadId: string; tokenUsage: ThreadTokenUsage }
+  | {
+      type: "setRateLimits";
+      workspaceId: string;
+      rateLimits: RateLimitSnapshot | null;
+    };
 
 const initialState: ThreadState = {
   activeThreadIdByWorkspace: {},
@@ -61,6 +72,8 @@ const initialState: ThreadState = {
   threadsByWorkspace: {},
   threadStatusById: {},
   approvals: [],
+  tokenUsageByThread: {},
+  rateLimitsByWorkspace: {},
 };
 
 function upsertItem(list: ConversationItem[], item: ConversationItem) {
@@ -365,6 +378,22 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         },
       };
     }
+    case "setThreadTokenUsage":
+      return {
+        ...state,
+        tokenUsageByThread: {
+          ...state.tokenUsageByThread,
+          [action.threadId]: action.tokenUsage,
+        },
+      };
+    case "setRateLimits":
+      return {
+        ...state,
+        rateLimitsByWorkspace: {
+          ...state.rateLimitsByWorkspace,
+          [action.workspaceId]: action.rateLimits,
+        },
+      };
     default:
       return state;
   }
@@ -410,6 +439,131 @@ function parseReviewTarget(input: string) {
     return { type: "custom", instructions } as const;
   }
   return { type: "custom", instructions: rest } as const;
+}
+
+function asNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return 0;
+}
+
+function normalizeTokenUsage(raw: Record<string, unknown>): ThreadTokenUsage {
+  const total = (raw.total as Record<string, unknown>) ?? {};
+  const last = (raw.last as Record<string, unknown>) ?? {};
+  return {
+    total: {
+      totalTokens: asNumber(total.totalTokens ?? total.total_tokens),
+      inputTokens: asNumber(total.inputTokens ?? total.input_tokens),
+      cachedInputTokens: asNumber(
+        total.cachedInputTokens ?? total.cached_input_tokens,
+      ),
+      outputTokens: asNumber(total.outputTokens ?? total.output_tokens),
+      reasoningOutputTokens: asNumber(
+        total.reasoningOutputTokens ?? total.reasoning_output_tokens,
+      ),
+    },
+    last: {
+      totalTokens: asNumber(last.totalTokens ?? last.total_tokens),
+      inputTokens: asNumber(last.inputTokens ?? last.input_tokens),
+      cachedInputTokens: asNumber(last.cachedInputTokens ?? last.cached_input_tokens),
+      outputTokens: asNumber(last.outputTokens ?? last.output_tokens),
+      reasoningOutputTokens: asNumber(
+        last.reasoningOutputTokens ?? last.reasoning_output_tokens,
+      ),
+    },
+    modelContextWindow: (() => {
+      const value = raw.modelContextWindow ?? raw.model_context_window;
+      if (typeof value === "number") {
+        return value;
+      }
+      if (typeof value === "string") {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return null;
+    })(),
+  };
+}
+
+function normalizeRateLimits(raw: Record<string, unknown>): RateLimitSnapshot {
+  const primary = (raw.primary as Record<string, unknown>) ?? null;
+  const secondary = (raw.secondary as Record<string, unknown>) ?? null;
+  const credits = (raw.credits as Record<string, unknown>) ?? null;
+  return {
+    primary: primary
+      ? {
+          usedPercent: asNumber(primary.usedPercent ?? primary.used_percent),
+          windowDurationMins: (() => {
+            const value = primary.windowDurationMins ?? primary.window_duration_mins;
+            if (typeof value === "number") {
+              return value;
+            }
+            if (typeof value === "string") {
+              const parsed = Number(value);
+              return Number.isFinite(parsed) ? parsed : null;
+            }
+            return null;
+          })(),
+          resetsAt: (() => {
+            const value = primary.resetsAt ?? primary.resets_at;
+            if (typeof value === "number") {
+              return value;
+            }
+            if (typeof value === "string") {
+              const parsed = Number(value);
+              return Number.isFinite(parsed) ? parsed : null;
+            }
+            return null;
+          })(),
+        }
+      : null,
+    secondary: secondary
+      ? {
+          usedPercent: asNumber(secondary.usedPercent ?? secondary.used_percent),
+          windowDurationMins: (() => {
+            const value = secondary.windowDurationMins ?? secondary.window_duration_mins;
+            if (typeof value === "number") {
+              return value;
+            }
+            if (typeof value === "string") {
+              const parsed = Number(value);
+              return Number.isFinite(parsed) ? parsed : null;
+            }
+            return null;
+          })(),
+          resetsAt: (() => {
+            const value = secondary.resetsAt ?? secondary.resets_at;
+            if (typeof value === "number") {
+              return value;
+            }
+            if (typeof value === "string") {
+              const parsed = Number(value);
+              return Number.isFinite(parsed) ? parsed : null;
+            }
+            return null;
+          })(),
+        }
+      : null,
+    credits: credits
+      ? {
+          hasCredits: Boolean(credits.hasCredits ?? credits.has_credits),
+          unlimited: Boolean(credits.unlimited),
+          balance: typeof credits.balance === "string" ? credits.balance : null,
+        }
+      : null,
+    planType: typeof raw.planType === "string"
+      ? raw.planType
+      : typeof raw.plan_type === "string"
+        ? raw.plan_type
+        : null,
+  };
 }
 
 function formatReviewLabel(target: ReturnType<typeof parseReviewTarget>) {
@@ -680,11 +834,59 @@ export function useThreads({
     [activeThreadId, state.itemsByThread],
   );
 
+  const refreshAccountRateLimits = useCallback(
+    async (workspaceId?: string) => {
+      const targetId = workspaceId ?? activeWorkspaceId;
+      if (!targetId) {
+        return;
+      }
+      onDebug?.({
+        id: `${Date.now()}-client-account-rate-limits`,
+        timestamp: Date.now(),
+        source: "client",
+        label: "account/rateLimits/read",
+        payload: { workspaceId: targetId },
+      });
+      try {
+        const response = await getAccountRateLimits(targetId);
+        onDebug?.({
+          id: `${Date.now()}-server-account-rate-limits`,
+          timestamp: Date.now(),
+          source: "server",
+          label: "account/rateLimits/read response",
+          payload: response,
+        });
+        const rateLimits =
+          (response?.result?.rateLimits as Record<string, unknown> | undefined) ??
+          (response?.result?.rate_limits as Record<string, unknown> | undefined) ??
+          (response?.rateLimits as Record<string, unknown> | undefined) ??
+          (response?.rate_limits as Record<string, unknown> | undefined);
+        if (rateLimits) {
+          dispatch({
+            type: "setRateLimits",
+            workspaceId: targetId,
+            rateLimits: normalizeRateLimits(rateLimits),
+          });
+        }
+      } catch (error) {
+        onDebug?.({
+          id: `${Date.now()}-client-account-rate-limits-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "account/rateLimits/read error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [activeWorkspaceId, onDebug],
+  );
+
   const handleWorkspaceConnected = useCallback(
     (workspaceId: string) => {
       onWorkspaceConnected(workspaceId);
+      void refreshAccountRateLimits(workspaceId);
     },
-    [onWorkspaceConnected],
+    [onWorkspaceConnected, refreshAccountRateLimits],
   );
 
   const handlers = useMemo(
@@ -832,6 +1034,28 @@ export function useThreads({
       },
       onTurnCompleted: (_workspaceId: string, threadId: string) => {
         dispatch({ type: "markProcessing", threadId, isProcessing: false });
+      },
+      onThreadTokenUsageUpdated: (
+        workspaceId: string,
+        threadId: string,
+        tokenUsage: Record<string, unknown>,
+      ) => {
+        dispatch({ type: "ensureThread", workspaceId, threadId });
+        dispatch({
+          type: "setThreadTokenUsage",
+          threadId,
+          tokenUsage: normalizeTokenUsage(tokenUsage),
+        });
+      },
+      onAccountRateLimitsUpdated: (
+        workspaceId: string,
+        rateLimits: Record<string, unknown>,
+      ) => {
+        dispatch({
+          type: "setRateLimits",
+          workspaceId,
+          rateLimits: normalizeRateLimits(rateLimits),
+        });
       },
     }),
     [
@@ -1231,6 +1455,12 @@ export function useThreads({
     })();
   }, [onDebug]);
 
+  useEffect(() => {
+    if (activeWorkspace?.connected) {
+      void refreshAccountRateLimits(activeWorkspace.id);
+    }
+  }, [activeWorkspace?.connected, activeWorkspace?.id, refreshAccountRateLimits]);
+
   return {
     activeThreadId,
     setActiveThreadId,
@@ -1238,6 +1468,9 @@ export function useThreads({
     approvals: state.approvals,
     threadsByWorkspace: state.threadsByWorkspace,
     threadStatusById: state.threadStatusById,
+    tokenUsageByThread: state.tokenUsageByThread,
+    rateLimitsByWorkspace: state.rateLimitsByWorkspace,
+    refreshAccountRateLimits,
     removeThread,
     startThread,
     startThreadForWorkspace,

@@ -76,12 +76,71 @@
   align-items: center;
   padding-top: 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 12px;
 }
 
 .composer-meta {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.composer-context {
+  margin-left: auto;
+  display: grid;
+  grid-template-columns: auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.composer-context-ring {
+  --context-free: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  background:
+    radial-gradient(circle, rgba(10, 14, 20, 0.9) 54%, transparent 56%),
+    conic-gradient(
+      from 180deg,
+      hsl(calc(120deg * var(--context-free) / 100), 80%, 55%)
+        calc(var(--context-free) * 1%),
+      rgba(255, 255, 255, 0.12) 0
+    );
+  transition: background 0.2s ease;
+}
+
+.composer-context-ring::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%) translateY(4px);
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.95);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 10px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.composer-context-ring:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.composer-context-value {
+  font-weight: 600;
+  font-size: 6px;
+  color: rgba(255, 255, 255, 0.75);
 }
 
 

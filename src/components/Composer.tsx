@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import type { ThreadTokenUsage } from "../types";
 
 type ComposerProps = {
   onSend: (text: string) => void;
@@ -12,6 +13,7 @@ type ComposerProps = {
   accessMode: "read-only" | "current" | "full-access";
   onSelectAccessMode: (mode: "read-only" | "current" | "full-access") => void;
   skills: { name: string; description?: string }[];
+  contextUsage?: ThreadTokenUsage | null;
 };
 
 export function Composer({
@@ -26,8 +28,27 @@ export function Composer({
   accessMode,
   onSelectAccessMode,
   skills,
+  contextUsage = null,
 }: ComposerProps) {
   const [text, setText] = useState("");
+
+  const contextFreePercent = useMemo(() => {
+    const contextWindow = contextUsage?.modelContextWindow ?? null;
+    if (!contextWindow || contextWindow <= 0) {
+      return null;
+    }
+    const lastTokens = contextUsage?.last.totalTokens ?? 0;
+    const totalTokens = contextUsage?.total.totalTokens ?? 0;
+    const usedTokens = lastTokens > 0 ? lastTokens : totalTokens;
+    if (usedTokens <= 0) {
+      return null;
+    }
+    const usedPercent = Math.min(
+      Math.max((usedTokens / contextWindow) * 100, 0),
+      100,
+    );
+    return Math.max(0, 100 - usedPercent);
+  }, [contextUsage]);
 
   const handleSend = useCallback(() => {
     if (disabled) {
@@ -241,6 +262,28 @@ export function Composer({
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+        <div className="composer-context">
+          <div
+            className="composer-context-ring"
+            data-tooltip={
+              contextFreePercent === null
+                ? "Context free --"
+                : `Context free ${Math.round(contextFreePercent)}%`
+            }
+            aria-label={
+              contextFreePercent === null
+                ? "Context free --"
+                : `Context free ${Math.round(contextFreePercent)}%`
+            }
+            style={
+              {
+                "--context-free": contextFreePercent ?? 0,
+              } as React.CSSProperties
+            }
+          >
+            <span className="composer-context-value">●</span>
           </div>
         </div>
       </div>

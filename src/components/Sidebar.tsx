@@ -1,4 +1,4 @@
-import type { ThreadSummary, WorkspaceInfo } from "../types";
+import type { RateLimitSnapshot, ThreadSummary, WorkspaceInfo } from "../types";
 import { useState } from "react";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
@@ -13,6 +13,7 @@ type SidebarProps = {
   >;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
+  accountRateLimits: RateLimitSnapshot | null;
   onAddWorkspace: () => void;
   onSelectWorkspace: (id: string) => void;
   onConnectWorkspace: (workspace: WorkspaceInfo) => void;
@@ -27,6 +28,7 @@ export function Sidebar({
   threadStatusById,
   activeWorkspaceId,
   activeThreadId,
+  accountRateLimits,
   onAddWorkspace,
   onSelectWorkspace,
   onConnectWorkspace,
@@ -61,6 +63,45 @@ export function Sidebar({
     await menu.popup(position, window);
   }
 
+  const usagePercent = accountRateLimits?.primary?.usedPercent;
+  const globalUsagePercent = accountRateLimits?.secondary?.usedPercent;
+  const credits = accountRateLimits?.credits ?? null;
+  const creditsLabel = credits?.hasCredits
+    ? credits.unlimited
+      ? "Credits: unlimited"
+      : credits.balance
+        ? `Credits: ${credits.balance}`
+        : "Credits"
+    : null;
+
+  const primaryWindowLabel = (() => {
+    const minutes = accountRateLimits?.primary?.windowDurationMins ?? null;
+    if (!minutes || minutes <= 0) {
+      return "Session";
+    }
+    if (minutes % 60 === 0) {
+      return `${minutes / 60}H session`;
+    }
+    return `${minutes}m session`;
+  })();
+
+  const secondaryWindowLabel = (() => {
+    const minutes = accountRateLimits?.secondary?.windowDurationMins ?? null;
+    if (!minutes || minutes <= 0) {
+      return "Global session";
+    }
+    return "Global session";
+  })();
+
+  const primaryUsageLabel =
+    typeof usagePercent === "number"
+      ? `${primaryWindowLabel}: ${Math.min(Math.max(Math.round(usagePercent), 0), 100)}%`
+      : `${primaryWindowLabel}: --`;
+  const secondaryUsageLabel =
+    typeof globalUsagePercent === "number"
+      ? `${secondaryWindowLabel}: ${Math.min(Math.max(Math.round(globalUsagePercent), 0), 100)}%`
+      : `${secondaryWindowLabel}: --`;
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -76,131 +117,144 @@ export function Sidebar({
           +
         </button>
       </div>
-      <div className="workspace-list">
-        {workspaces.map((entry) => (
-          <div key={entry.id} className="workspace-card">
-            <div
-              className={`workspace-row ${
-                entry.id === activeWorkspaceId ? "active" : ""
-              }`}
-              role="button"
-              tabIndex={0}
-              onClick={() => onSelectWorkspace(entry.id)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onSelectWorkspace(entry.id);
-                }
-              }}
-            >
-              <div>
-                <div className="workspace-name-row">
-                  <span className="workspace-name">{entry.name}</span>
-                  <button
-                    className="ghost workspace-add"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onAddAgent(entry);
-                    }}
-                    data-tauri-drag-region="false"
-                    aria-label="Add agent"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-              {!entry.connected && (
-                <span
-                  className="connect"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onConnectWorkspace(entry);
-                  }}
-                >
-                  connect
-                </span>
-              )}
-            </div>
-            {(threadsByWorkspace[entry.id] ?? []).length > 0 && (
-              <div className="thread-list">
-                {(expandedWorkspaces.has(entry.id)
-                  ? threadsByWorkspace[entry.id] ?? []
-                  : (threadsByWorkspace[entry.id] ?? []).slice(0, 3)
-                ).map((thread) => (
-                  <div
-                    key={thread.id}
-                    className={`thread-row ${
-                      entry.id === activeWorkspaceId &&
-                      thread.id === activeThreadId
-                        ? "active"
-                        : ""
-                    }`}
-                    onClick={() => onSelectThread(entry.id, thread.id)}
-                    onContextMenu={(event) =>
-                      showThreadMenu(event, entry.id, thread.id)
-                    }
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        onSelectThread(entry.id, thread.id);
-                      }
-                    }}
-                  >
-                    <span
-                      className={`thread-status ${
-                        threadStatusById[thread.id]?.isReviewing
-                          ? "reviewing"
-                          : threadStatusById[thread.id]?.isProcessing
-                            ? "processing"
-                            : threadStatusById[thread.id]?.hasUnread
-                              ? "unread"
-                              : "ready"
-                      }`}
-                      aria-hidden
-                    />
-                    <span className="thread-name">{thread.name}</span>
-                    <div className="thread-menu">
-                      <button
-                        className="thread-menu-trigger"
-                        aria-label="Thread menu"
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onClick={(event) => showThreadMenu(event, entry.id, thread.id)}
-                      >
-                        ...
-                      </button>
-                    </div>
+      <div className="sidebar-body">
+        <div className="workspace-list">
+          {workspaces.map((entry) => (
+            <div key={entry.id} className="workspace-card">
+              <div
+                className={`workspace-row ${
+                  entry.id === activeWorkspaceId ? "active" : ""
+                }`}
+                role="button"
+                tabIndex={0}
+                onClick={() => onSelectWorkspace(entry.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelectWorkspace(entry.id);
+                  }
+                }}
+              >
+                <div>
+                  <div className="workspace-name-row">
+                    <span className="workspace-name">{entry.name}</span>
+                    <button
+                      className="ghost workspace-add"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onAddAgent(entry);
+                      }}
+                      data-tauri-drag-region="false"
+                      aria-label="Add agent"
+                    >
+                      +
+                    </button>
                   </div>
-                ))}
-                {(threadsByWorkspace[entry.id] ?? []).length > 3 && (
-                  <button
-                    className="thread-more"
+                </div>
+                {!entry.connected && (
+                  <span
+                    className="connect"
                     onClick={(event) => {
                       event.stopPropagation();
-                      setExpandedWorkspaces((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(entry.id)) {
-                          next.delete(entry.id);
-                        } else {
-                          next.add(entry.id);
-                        }
-                        return next;
-                      });
+                      onConnectWorkspace(entry);
                     }}
                   >
-                    {expandedWorkspaces.has(entry.id)
-                      ? "Show less"
-                      : `${(threadsByWorkspace[entry.id] ?? []).length - 3} more...`}
-                  </button>
+                    connect
+                  </span>
                 )}
               </div>
-            )}
-          </div>
-        ))}
-        {!workspaces.length && (
-          <div className="empty">Add a workspace to start.</div>
-        )}
+              {(threadsByWorkspace[entry.id] ?? []).length > 0 && (
+                <div className="thread-list">
+                  {(expandedWorkspaces.has(entry.id)
+                    ? threadsByWorkspace[entry.id] ?? []
+                    : (threadsByWorkspace[entry.id] ?? []).slice(0, 3)
+                  ).map((thread) => (
+                    <div
+                      key={thread.id}
+                      className={`thread-row ${
+                        entry.id === activeWorkspaceId &&
+                        thread.id === activeThreadId
+                          ? "active"
+                          : ""
+                      }`}
+                      onClick={() => onSelectThread(entry.id, thread.id)}
+                      onContextMenu={(event) =>
+                        showThreadMenu(event, entry.id, thread.id)
+                      }
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          onSelectThread(entry.id, thread.id);
+                        }
+                      }}
+                    >
+                      <span
+                        className={`thread-status ${
+                          threadStatusById[thread.id]?.isReviewing
+                            ? "reviewing"
+                            : threadStatusById[thread.id]?.isProcessing
+                              ? "processing"
+                              : threadStatusById[thread.id]?.hasUnread
+                                ? "unread"
+                                : "ready"
+                        }`}
+                        aria-hidden
+                      />
+                      <span className="thread-name">{thread.name}</span>
+                      <div className="thread-menu">
+                        <button
+                          className="thread-menu-trigger"
+                          aria-label="Thread menu"
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) =>
+                            showThreadMenu(event, entry.id, thread.id)
+                          }
+                        >
+                          ...
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {(threadsByWorkspace[entry.id] ?? []).length > 3 && (
+                    <button
+                      className="thread-more"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setExpandedWorkspaces((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(entry.id)) {
+                            next.delete(entry.id);
+                          } else {
+                            next.add(entry.id);
+                          }
+                          return next;
+                        });
+                      }}
+                    >
+                      {expandedWorkspaces.has(entry.id)
+                        ? "Show less"
+                        : `${(threadsByWorkspace[entry.id] ?? []).length - 3} more...`}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+          {!workspaces.length && (
+            <div className="empty">Add a workspace to start.</div>
+          )}
+        </div>
+      </div>
+      <div className="sidebar-footer">
+        <div className="usage-stack">
+          <span className="usage-row">{primaryUsageLabel}</span>
+          {accountRateLimits?.secondary && (
+            <span className="usage-row">{secondaryUsageLabel}</span>
+          )}
+        </div>
+        {creditsLabel && <div className="usage-meta">{creditsLabel}</div>}
       </div>
     </aside>
   );

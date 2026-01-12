@@ -88,6 +88,8 @@ function App() {
     approvals,
     threadsByWorkspace,
     threadStatusById,
+    tokenUsageByThread,
+    rateLimitsByWorkspace,
     removeThread,
     startThreadForWorkspace,
     listThreadsForWorkspace,
@@ -103,6 +105,13 @@ function App() {
     accessMode,
     onMessageActivity: refreshGitStatus,
   });
+
+  const activeRateLimits = activeWorkspaceId
+    ? rateLimitsByWorkspace[activeWorkspaceId] ?? null
+    : null;
+  const activeTokenUsage = activeThreadId
+    ? tokenUsageByThread[activeThreadId] ?? null
+    : null;
 
   useWindowDrag("titlebar");
   useWorkspaceRestore({
@@ -170,6 +179,7 @@ function App() {
         threadStatusById={threadStatusById}
         activeWorkspaceId={activeWorkspaceId}
         activeThreadId={activeThreadId}
+        accountRateLimits={activeRateLimits}
         onAddWorkspace={handleAddWorkspace}
         onSelectWorkspace={(workspaceId) => {
           exitDiffView();
@@ -296,6 +306,7 @@ function App() {
                     ? threadStatusById[activeThreadId]?.isReviewing ?? false
                     : false
                 }
+                contextUsage={activeTokenUsage}
                 models={models}
                 selectedModelId={selectedModelId}
                 onSelectModel={setSelectedModelId}
