@@ -840,6 +840,60 @@ function previewThreadName(text: string, fallback: string) {
   return trimmed.length > 38 ? `${trimmed.slice(0, 38)}…` : trimmed;
 }
 
+function chooseRicherItem(remote: ConversationItem, local: ConversationItem) {
+  if (remote.kind !== local.kind) {
+    return remote;
+  }
+  if (remote.kind === "message" && local.kind === "message") {
+    return local.text.length > remote.text.length ? local : remote;
+  }
+  if (remote.kind === "reasoning" && local.kind === "reasoning") {
+    const remoteLength = remote.summary.length + remote.content.length;
+    const localLength = local.summary.length + local.content.length;
+    return localLength > remoteLength ? local : remote;
+  }
+  if (remote.kind === "tool" && local.kind === "tool") {
+    const remoteLength = (remote.output ?? "").length;
+    const localLength = (local.output ?? "").length;
+    const base = localLength > remoteLength ? local : remote;
+    return {
+      ...base,
+      status: remote.status ?? local.status,
+      output: localLength > remoteLength ? local.output : remote.output,
+      changes: remote.changes ?? local.changes,
+    };
+  }
+  if (remote.kind === "diff" && local.kind === "diff") {
+    const useLocal = local.diff.length > remote.diff.length;
+    return {
+      ...remote,
+      diff: useLocal ? local.diff : remote.diff,
+      status: remote.status ?? local.status,
+    };
+  }
+  return remote;
+}
+
+function mergeThreadItems(
+  remoteItems: ConversationItem[],
+  localItems: ConversationItem[],
+) {
+  if (!localItems.length) {
+    return remoteItems;
+  }
+  const byId = new Map(remoteItems.map((item) => [item.id, item]));
+  const merged = remoteItems.map((item) => {
+    const local = localItems.find((entry) => entry.id === item.id);
+    return local ? chooseRicherItem(item, local) : item;
+  });
+  localItems.forEach((item) => {
+    if (!byId.has(item.id)) {
+      merged.push(item);
+    }
+  });
+  return merged;
+}
+
 export function useThreads({
   activeWorkspace,
   onWorkspaceConnected,
@@ -1183,8 +1237,11 @@ export function useThreads({
         const thread = response.result?.thread ?? response.thread;
         if (thread) {
           const items = buildItemsFromThread(thread);
-          if (items.length > 0) {
-            dispatch({ type: "setThreadItems", threadId, items });
+          const localItems = state.itemsByThread[threadId] ?? [];
+          const mergedItems =
+            items.length > 0 ? mergeThreadItems(items, localItems) : localItems;
+          if (mergedItems.length > 0) {
+            dispatch({ type: "setThreadItems", threadId, items: mergedItems });
           }
           dispatch({
             type: "markReviewing",
@@ -1214,7 +1271,7 @@ export function useThreads({
         return null;
       }
     },
-    [onDebug],
+    [onDebug, state.itemsByThread],
   );
 
   const listThreadsForWorkspace = useCallback(
