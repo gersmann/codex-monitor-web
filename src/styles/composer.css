@@ -10,6 +10,60 @@
   grid-row: 3;
 }
 
+.composer-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.composer-queue-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.composer-queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.composer-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 11px;
+}
+
+.composer-queue-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-queue-menu {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.composer-queue-menu:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
 .composer-input {
   display: grid;
   grid-template-columns: 1fr auto auto;

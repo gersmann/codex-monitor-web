@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./styles/base.css";
 import "./styles/buttons.css";
 import "./styles/sidebar.css";
@@ -29,12 +29,19 @@ import { useSkills } from "./hooks/useSkills";
 import { useDebugLog } from "./hooks/useDebugLog";
 import { useWorkspaceRefreshOnFocus } from "./hooks/useWorkspaceRefreshOnFocus";
 import { useWorkspaceRestore } from "./hooks/useWorkspaceRestore";
-import type { AccessMode } from "./types";
+import type { AccessMode, QueuedMessage } from "./types";
 
 function App() {
   const [centerMode, setCenterMode] = useState<"chat" | "diff">("chat");
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
   const [accessMode, setAccessMode] = useState<AccessMode>("current");
+  const [queuedByThread, setQueuedByThread] = useState<
+    Record<string, QueuedMessage[]>
+  >({});
+  const [prefillDraft, setPrefillDraft] = useState<QueuedMessage | null>(null);
+  const [flushingByThread, setFlushingByThread] = useState<Record<string, boolean>>(
+    {},
+  );
   const {
     debugOpen,
     setDebugOpen,
@@ -120,6 +127,15 @@ function App() {
           activeTurnIdByThread[activeThreadId],
       )
     : false;
+  const isProcessing = activeThreadId
+    ? threadStatusById[activeThreadId]?.isProcessing ?? false
+    : false;
+  const isReviewing = activeThreadId
+    ? threadStatusById[activeThreadId]?.isReviewing ?? false
+    : false;
+  const activeQueue = activeThreadId
+    ? queuedByThread[activeThreadId] ?? []
+    : [];
 
   useWindowDrag("titlebar");
   useWorkspaceRestore({
@@ -168,6 +184,18 @@ function App() {
     if (activeThreadId && threadStatusById[activeThreadId]?.isReviewing) {
       return;
     }
+    if (isProcessing && activeThreadId) {
+      const item: QueuedMessage = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text: trimmed,
+        createdAt: Date.now(),
+      };
+      setQueuedByThread((prev) => ({
+        ...prev,
+        [activeThreadId]: [...(prev[activeThreadId] ?? []), item],
+      }));
+      return;
+    }
     if (activeWorkspace && !activeWorkspace.connected) {
       await connectWorkspace(activeWorkspace);
     }
@@ -177,6 +205,49 @@ function App() {
     }
     await sendUserMessage(trimmed);
   }
+
+  useEffect(() => {
+    if (!activeThreadId || isProcessing || isReviewing) {
+      return;
+    }
+    if (flushingByThread[activeThreadId]) {
+      return;
+    }
+    const queue = queuedByThread[activeThreadId] ?? [];
+    if (queue.length === 0) {
+      return;
+    }
+    const threadId = activeThreadId;
+    const nextItem = queue[0];
+    setFlushingByThread((prev) => ({ ...prev, [threadId]: true }));
+    setQueuedByThread((prev) => ({
+      ...prev,
+      [threadId]: (prev[threadId] ?? []).slice(1),
+    }));
+    (async () => {
+      try {
+        if (nextItem.text.trim().startsWith("/review")) {
+          await startReview(nextItem.text);
+        } else {
+          await sendUserMessage(nextItem.text);
+        }
+      } catch {
+        setQueuedByThread((prev) => ({
+          ...prev,
+          [threadId]: [nextItem, ...(prev[threadId] ?? [])],
+        }));
+      } finally {
+        setFlushingByThread((prev) => ({ ...prev, [threadId]: false }));
+      }
+    })();
+  }, [
+    activeThreadId,
+    flushingByThread,
+    isProcessing,
+    isReviewing,
+    queuedByThread,
+    sendUserMessage,
+  ]);
 
   return (
     <div className="app">
@@ -317,6 +388,37 @@ function App() {
                     : false
                 }
                 contextUsage={activeTokenUsage}
+                queuedMessages={activeQueue}
+                sendLabel={isProcessing ? "Queue" : "Send"}
+                prefillDraft={prefillDraft}
+                onPrefillHandled={(id) => {
+                  if (prefillDraft?.id === id) {
+                    setPrefillDraft(null);
+                  }
+                }}
+                onEditQueued={(item) => {
+                  if (!activeThreadId) {
+                    return;
+                  }
+                  setQueuedByThread((prev) => ({
+                    ...prev,
+                    [activeThreadId]: (prev[activeThreadId] ?? []).filter(
+                      (entry) => entry.id !== item.id,
+                    ),
+                  }));
+                  setPrefillDraft(item);
+                }}
+                onDeleteQueued={(id) => {
+                  if (!activeThreadId) {
+                    return;
+                  }
+                  setQueuedByThread((prev) => ({
+                    ...prev,
+                    [activeThreadId]: (prev[activeThreadId] ?? []).filter(
+                      (entry) => entry.id !== id,
+                    ),
+                  }));
+                }}
                 models={models}
                 selectedModelId={selectedModelId}
                 onSelectModel={setSelectedModelId}

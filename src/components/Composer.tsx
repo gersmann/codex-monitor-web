@@ -1,5 +1,8 @@
-import { useCallback, useMemo, useState } from "react";
-import type { ThreadTokenUsage } from "../types";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { LogicalPosition } from "@tauri-apps/api/dpi";
+import { Menu, MenuItem } from "@tauri-apps/api/menu";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { QueuedMessage, ThreadTokenUsage } from "../types";
 
 type ComposerProps = {
   onSend: (text: string) => void;
@@ -16,6 +19,12 @@ type ComposerProps = {
   onSelectAccessMode: (mode: "read-only" | "current" | "full-access") => void;
   skills: { name: string; description?: string }[];
   contextUsage?: ThreadTokenUsage | null;
+  queuedMessages?: QueuedMessage[];
+  onEditQueued?: (item: QueuedMessage) => void;
+  onDeleteQueued?: (id: string) => void;
+  sendLabel?: string;
+  prefillDraft?: QueuedMessage | null;
+  onPrefillHandled?: (id: string) => void;
 };
 
 export function Composer({
@@ -33,6 +42,12 @@ export function Composer({
   onSelectAccessMode,
   skills,
   contextUsage = null,
+  queuedMessages = [],
+  onEditQueued,
+  onDeleteQueued,
+  sendLabel = "Send",
+  prefillDraft = null,
+  onPrefillHandled,
 }: ComposerProps) {
   const [text, setText] = useState("");
 
@@ -66,6 +81,27 @@ export function Composer({
     setText("");
   }, [disabled, onSend, text]);
 
+  const handleQueueMenu = useCallback(
+    async (event: React.MouseEvent, item: QueuedMessage) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const { clientX, clientY } = event;
+      const editItem = await MenuItem.new({
+        text: "Edit",
+        action: () => onEditQueued?.(item),
+      });
+      const deleteItem = await MenuItem.new({
+        text: "Delete",
+        action: () => onDeleteQueued?.(item.id),
+      });
+      const menu = await Menu.new({ items: [editItem, deleteItem] });
+      const window = getCurrentWindow();
+      const position = new LogicalPosition(clientX, clientY);
+      await menu.popup(position, window);
+    },
+    [onDeleteQueued, onEditQueued],
+  );
+
   const handleSelectSkill = useCallback((name: string) => {
     const snippet = `$${name}`;
     setText((prev) => {
@@ -80,8 +116,35 @@ export function Composer({
     });
   }, []);
 
+  useEffect(() => {
+    if (!prefillDraft) {
+      return;
+    }
+    setText(prefillDraft.text);
+    onPrefillHandled?.(prefillDraft.id);
+  }, [prefillDraft, onPrefillHandled]);
+
   return (
     <footer className={`composer${disabled ? " is-disabled" : ""}`}>
+      {queuedMessages.length > 0 && (
+        <div className="composer-queue">
+          <div className="composer-queue-title">Queued</div>
+          <div className="composer-queue-list">
+            {queuedMessages.map((item) => (
+              <div key={item.id} className="composer-queue-item">
+                <span className="composer-queue-text">{item.text}</span>
+                <button
+                  className="composer-queue-menu"
+                  onClick={(event) => handleQueueMenu(event, item)}
+                  aria-label="Queue item menu"
+                >
+                  ...
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="composer-input">
         <textarea
           placeholder={
@@ -115,7 +178,7 @@ export function Composer({
           onClick={handleSend}
           disabled={disabled}
         >
-          Send
+          {sendLabel}
         </button>
       </div>
       <div className="composer-bar">

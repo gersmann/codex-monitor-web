@@ -98,6 +98,12 @@ export type RateLimitSnapshot = {
   planType: string | null;
 };
 
+export type QueuedMessage = {
+  id: string;
+  text: string;
+  createdAt: number;
+};
+
 export type ModelOption = {
   id: string;
   model: string;
