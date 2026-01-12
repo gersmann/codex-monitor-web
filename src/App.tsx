@@ -122,6 +122,7 @@ function App() {
   const activeTokenUsage = activeThreadId
     ? tokenUsageByThread[activeThreadId] ?? null
     : null;
+  const showHome = !activeWorkspace || !activeThreadId;
   const canInterrupt = activeThreadId
     ? Boolean(
         threadStatusById[activeThreadId]?.isProcessing &&
@@ -275,6 +276,7 @@ function App() {
         onSelectWorkspace={(workspaceId) => {
           exitDiffView();
           selectWorkspace(workspaceId);
+          setActiveThreadId(null, workspaceId);
         }}
         onConnectWorkspace={connectWorkspace}
         onAddAgent={handleAddAgent}
@@ -299,7 +301,7 @@ function App() {
       />
 
       <section className="main">
-        {!activeWorkspace && (
+        {showHome && (
           <Home
             onOpenProject={handleAddWorkspace}
             onAddWorkspace={handleAddWorkspace}
@@ -307,7 +309,7 @@ function App() {
           />
         )}
 
-        {activeWorkspace && (
+        {activeWorkspace && !showHome && (
           <>
             <div className="main-topbar">
               <div className="main-topbar-left">
