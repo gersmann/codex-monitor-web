@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GitFileDiff, GitFileStatus, WorkspaceInfo } from "../types";
 import { getGitDiffs } from "../services/tauri";
 
@@ -20,6 +20,8 @@ export function useGitDiffs(
   enabled: boolean,
 ) {
   const [state, setState] = useState<GitDiffState>(emptyState);
+  const requestIdRef = useRef(0);
+  const workspaceIdRef = useRef<string | null>(activeWorkspace?.id ?? null);
 
   const fileKey = useMemo(
     () =>
@@ -38,12 +40,27 @@ export function useGitDiffs(
       setState(emptyState);
       return;
     }
+    const workspaceId = activeWorkspace.id;
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
-      const diffs = await getGitDiffs(activeWorkspace.id);
+      const diffs = await getGitDiffs(workspaceId);
+      if (
+        requestIdRef.current !== requestId ||
+        workspaceIdRef.current !== workspaceId
+      ) {
+        return;
+      }
       setState({ diffs, isLoading: false, error: null });
     } catch (error) {
       console.error("Failed to load git diffs", error);
+      if (
+        requestIdRef.current !== requestId ||
+        workspaceIdRef.current !== workspaceId
+      ) {
+        return;
+      }
       setState({
         diffs: [],
         isLoading: false,
@@ -51,6 +68,15 @@ export function useGitDiffs(
       });
     }
   }, [activeWorkspace]);
+
+  useEffect(() => {
+    const workspaceId = activeWorkspace?.id ?? null;
+    if (workspaceIdRef.current !== workspaceId) {
+      workspaceIdRef.current = workspaceId;
+      requestIdRef.current += 1;
+      setState(emptyState);
+    }
+  }, [activeWorkspace?.id]);
 
   useEffect(() => {
     if (!enabled) {
