@@ -28,7 +28,7 @@ import { useAppServerEvents } from "./useAppServerEvents";
 const emptyItems: Record<string, ConversationItem[]> = {};
 const MAX_ITEMS_PER_THREAD = 400;
 const MAX_ITEM_TEXT = 20000;
-const NO_TRUNCATE_TOOL_TYPES = new Set(["fileChange"]);
+const NO_TRUNCATE_TOOL_TYPES = new Set(["fileChange", "commandExecution"]);
 
 type ThreadState = {
   activeThreadIdByWorkspace: Record<string, string | null>;
