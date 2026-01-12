@@ -168,6 +168,11 @@ export function Messages({ items, isThinking }: MessagesProps) {
           );
         }
         const isFileChange = item.toolType === "fileChange";
+        const isCommand = item.toolType === "commandExecution";
+        const commandText = isCommand
+          ? item.title.replace(/^Command:\s*/i, "").trim()
+          : "";
+        const summaryTitle = isCommand ? "Command" : item.title;
         return (
           <details
             key={item.id}
@@ -195,12 +200,27 @@ export function Messages({ items, isThinking }: MessagesProps) {
                 <span className="item-chevron" aria-hidden>
                   ▸
                 </span>
-                <span className="item-title">{item.title}</span>
+                <span className="item-title">{summaryTitle}</span>
+                {isCommand && commandText && (
+                  <span className="item-subtitle">{commandText}</span>
+                )}
               </span>
               {item.status && <span className="item-status">{item.status}</span>}
             </summary>
             <div className="item-body">
-              {!isFileChange && item.detail && (
+              {!isFileChange && isCommand && commandText && (
+                <div className="tool-command">
+                  <span className="tool-label">Command</span>
+                  <pre className="tool-command-text">{commandText}</pre>
+                </div>
+              )}
+              {!isFileChange && isCommand && item.detail && (
+                <div className="tool-meta">
+                  <span className="tool-label">CWD</span>
+                  <span className="tool-cwd">{item.detail}</span>
+                </div>
+              )}
+              {!isFileChange && !isCommand && item.detail && (
                 <Markdown value={item.detail} className="item-text markdown" />
               )}
               {isFileChange && item.changes?.length ? (
