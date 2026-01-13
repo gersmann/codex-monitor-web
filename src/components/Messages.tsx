@@ -248,6 +248,11 @@ export function Messages({ items, isThinking }: MessagesProps) {
               : cleanTitle || "Reasoning";
           const reasoningTone: StatusTone = summaryText ? "completed" : "processing";
           const isExpanded = expandedItems.has(item.id);
+          const normalizedSummaryText = summaryText.trim();
+          const shouldHideReasoningBody =
+            !normalizedSummaryText ||
+            normalizedSummaryText === summaryTitle ||
+            summaryLines.length <= 1;
           return (
             <div key={item.id} className="tool-inline reasoning-inline">
               <button
@@ -270,7 +275,7 @@ export function Messages({ items, isThinking }: MessagesProps) {
                   />
                   <span className="tool-inline-value">{summaryTitle}</span>
                 </button>
-                {summaryText && (
+                {!shouldHideReasoningBody && summaryText && (
                   <Markdown
                     value={summaryText}
                     className={`reasoning-inline-detail markdown ${
