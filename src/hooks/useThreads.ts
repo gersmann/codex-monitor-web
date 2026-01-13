@@ -1090,6 +1090,25 @@ function chooseRicherItem(remote: ConversationItem, local: ConversationItem) {
   return remote;
 }
 
+function itemSignature(item: ConversationItem) {
+  if (item.kind === "message") {
+    return `message:${item.role}:${item.text}`;
+  }
+  if (item.kind === "reasoning") {
+    return `reasoning:${item.summary}:${item.content}`;
+  }
+  if (item.kind === "tool") {
+    return `tool:${item.toolType}:${item.title}:${item.detail}`;
+  }
+  if (item.kind === "diff") {
+    return `diff:${item.title}:${item.diff}`;
+  }
+  if (item.kind === "review") {
+    return `review:${item.state}:${item.text}`;
+  }
+  return null;
+}
+
 function mergeThreadItems(
   remoteItems: ConversationItem[],
   localItems: ConversationItem[],
@@ -1097,16 +1116,40 @@ function mergeThreadItems(
   if (!localItems.length) {
     return remoteItems;
   }
-  const byId = new Map(remoteItems.map((item) => [item.id, item]));
-  const merged = remoteItems.map((item) => {
-    const local = localItems.find((entry) => entry.id === item.id);
-    return local ? chooseRicherItem(item, local) : item;
-  });
-  localItems.forEach((item) => {
-    if (!byId.has(item.id)) {
-      merged.push(item);
+  const merged = [...remoteItems];
+  const byId = new Map(remoteItems.map((item, index) => [item.id, index]));
+  const bySignature = new Map<string, number[]>();
+  remoteItems.forEach((item, index) => {
+    const signature = itemSignature(item);
+    if (!signature) {
+      return;
+    }
+    const entries = bySignature.get(signature);
+    if (entries) {
+      entries.push(index);
+    } else {
+      bySignature.set(signature, [index]);
     }
   });
+
+  localItems.forEach((item) => {
+    const byIdIndex = byId.get(item.id);
+    if (byIdIndex !== undefined) {
+      merged[byIdIndex] = chooseRicherItem(merged[byIdIndex], item);
+      return;
+    }
+    const signature = itemSignature(item);
+    if (signature) {
+      const matches = bySignature.get(signature);
+      if (matches && matches.length > 0) {
+        const matchIndex = matches.shift() as number;
+        merged[matchIndex] = chooseRicherItem(merged[matchIndex], item);
+        return;
+      }
+    }
+    merged.push(item);
+  });
+
   return merged;
 }
 
