@@ -64,10 +64,6 @@ function resolveAutocompleteState(
   };
 }
 
-function isFileLabel(label: string) {
-  return label.includes("/") || label.includes("\\");
-}
-
 function basename(label: string) {
   const normalized = label.replace(/\\/g, "/");
   const parts = normalized.split("/").filter(Boolean);
