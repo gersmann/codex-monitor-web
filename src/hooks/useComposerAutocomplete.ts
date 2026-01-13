@@ -64,39 +64,113 @@ function resolveAutocompleteState(
   };
 }
 
-function filterItems(items: AutocompleteItem[], query: string) {
+function isFileLabel(label: string) {
+  return label.includes("/") || label.includes("\\");
+}
+
+function basename(label: string) {
+  const normalized = label.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : label;
+}
+
+function fileParts(label: string) {
+  const normalized = label.replace(/\\/g, "/").toLowerCase();
+  const base = basename(normalized);
+  const dotIndex = base.lastIndexOf(".");
+  const name =
+    dotIndex > 0 && dotIndex < base.length - 1 ? base.slice(0, dotIndex) : base;
+  const ext =
+    dotIndex > 0 && dotIndex < base.length - 1 ? base.slice(dotIndex + 1) : "";
+  return { normalized, base, name, ext };
+}
+
+function isSubsequence(query: string, target: string) {
+  let q = 0;
+  let t = 0;
+  while (q < query.length && t < target.length) {
+    if (query[q] === target[t]) {
+      q += 1;
+    }
+    t += 1;
+  }
+  return q === query.length;
+}
+
+function scoreMatch(query: string, label: string) {
+  if (!query) {
+    return 0;
+  }
+  const normalizedQuery = query.toLowerCase();
+  const { normalized, base, name, ext } = fileParts(label);
+  const queryParts = normalizedQuery.split(".");
+  const queryName = queryParts[0] ?? "";
+  const queryExt = queryParts.length > 1 ? queryParts.slice(1).join(".") : "";
+  const matchExt =
+    !queryExt || ext.startsWith(queryExt) || ext.includes(queryExt);
+  if (!matchExt) {
+    return 0;
+  }
+
+  if (!queryName) {
+    if (queryExt && ext === queryExt) {
+      return 60;
+    }
+    if (queryExt) {
+      return 40;
+    }
+    return 0;
+  }
+
+  if (normalized === normalizedQuery || name === queryName) {
+    return 110;
+  }
+  if (name.startsWith(queryName)) {
+    return 95 + (queryExt ? 10 : 0);
+  }
+  if (base.startsWith(queryName)) {
+    return 90 + (queryExt ? 10 : 0);
+  }
+  if (normalized.startsWith(queryName)) {
+    return 80 + (queryExt ? 5 : 0);
+  }
+  if (name.includes(queryName)) {
+    return 70 + (queryExt ? 5 : 0);
+  }
+  if (normalized.includes(queryName)) {
+    return 60 + (queryExt ? 5 : 0);
+  }
+  if (isSubsequence(queryName, name)) {
+    return 50 + (queryExt ? 5 : 0);
+  }
+  return 0;
+}
+
+function rankItems(items: AutocompleteItem[], query: string) {
   const normalized = query.trim().toLowerCase();
   if (!normalized) {
     return items.slice();
   }
-  return items.filter((item) => {
-    const label = item.label.toLowerCase();
-    return label.includes(normalized);
-  });
-}
-
-function sortItems(items: AutocompleteItem[], query: string) {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) {
-    return items;
-  }
-  return items.slice().sort((a, b) => {
-    const aLabel = a.label.toLowerCase();
-    const bLabel = b.label.toLowerCase();
-    const aStarts = aLabel.startsWith(normalized);
-    const bStarts = bLabel.startsWith(normalized);
-    if (aStarts !== bStarts) {
-      return aStarts ? -1 : 1;
-    }
-    return aLabel.localeCompare(bLabel);
-  });
+  const ranked = items
+    .map((item) => ({
+      item,
+      score: scoreMatch(normalized, item.label),
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => {
+      if (a.score !== b.score) {
+        return b.score - a.score;
+      }
+      return a.item.label.localeCompare(b.item.label);
+    });
+  return ranked.map((entry) => entry.item);
 }
 
 export function useComposerAutocomplete({
   text,
   selectionStart,
   triggers,
-  maxResults = 8,
+  maxResults = 50,
 }: UseComposerAutocompleteArgs) {
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
@@ -116,9 +190,8 @@ export function useComposerAutocomplete({
     if (!source) {
       return [];
     }
-    const filtered = filterItems(source.items, state.query);
-    const sorted = sortItems(filtered, state.query);
-    return sorted.slice(0, Math.max(0, maxResults));
+    const ranked = rankItems(source.items, state.query);
+    return ranked.slice(0, Math.max(0, maxResults));
   }, [state.active, state.query, state.trigger, triggers, maxResults]);
 
   useEffect(() => {
