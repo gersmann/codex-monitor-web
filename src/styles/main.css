@@ -8,6 +8,7 @@
   -webkit-app-region: no-drag;
   min-height: 0;
   min-width: 0;
+  --main-topbar-height: 44px;
 }
 
 .main-header {
@@ -39,6 +40,7 @@
   top: 0;
   z-index: 3;
   backdrop-filter: blur(18px) saturate(1.2);
+  min-height: var(--main-topbar-height);
 }
 
 .main-topbar-left {
@@ -104,7 +106,7 @@
   min-height: 0;
   min-width: 0;
   -webkit-app-region: no-drag;
-  padding: 0;
+  padding: var(--main-topbar-height) 0 0;
   grid-column: 1;
   grid-row: 1 / 3;
 }
@@ -117,7 +119,7 @@
   border-left: 1px solid var(--border-subtle);
   background: var(--surface-right-panel);
   height: 100%;
-  padding-top: 0;
+  padding-top: var(--main-topbar-height);
   padding-bottom: 0;
   grid-column: 2;
   grid-row: 1 / 5;
