@@ -24,7 +24,16 @@ cat package.json
 
 Bump both to the release version before building. After the release is published, bump both to the next minor.
 
-## Build
+## Build (Signed for Updater)
+
+The updater requires signing artifacts during the build. Export the private key
+before `tauri build`:
+
+```bash
+export TAURI_SIGNING_PRIVATE_KEY=~/.tauri/codexmonitor.key
+# optional if you set a password
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+```
 
 ```bash
 npm install
@@ -98,17 +107,6 @@ xcrun stapler staple \
   src-tauri/target/release/bundle/macos/CodexMonitor.app
 ```
 
-## Build With Updater Signing
-
-The updater requires signing artifacts during the build. Export the private key
-before `tauri build`:
-
-```bash
-export TAURI_SIGNING_PRIVATE_KEY=~/.tauri/codexmonitor.key
-# optional if you set a password
-export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
-```
-
 ## Package Release Artifacts
 
 Note: Tauri's DMG bundling can fail if the generated `bundle_dmg.sh` script
@@ -129,6 +127,21 @@ hdiutil create -volname "CodexMonitor" \
   -srcfolder release-artifacts/dmg-root \
   -ov -format UDZO \
   release-artifacts/CodexMonitor_<RELEASE_VERSION>_aarch64.dmg
+```
+
+## Rebuild Updater Bundle (After Stapling)
+
+After stapling, rebuild the updater tarball and re-sign it so the signature
+matches the stapled app:
+
+```bash
+tar -czf src-tauri/target/release/bundle/macos/CodexMonitor.app.tar.gz \
+  -C src-tauri/target/release/bundle/macos CodexMonitor.app
+
+npm run tauri signer sign -- \
+  -f ~/.tauri/codexmonitor.key \
+  -p "<PASSWORD_IF_SET>" \
+  src-tauri/target/release/bundle/macos/CodexMonitor.app.tar.gz
 ```
 
 ## Generate Changelog (from git log)
@@ -171,7 +184,7 @@ the released artifacts + signatures.
   "pub_date": "2025-01-01T12:00:00Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://github.com/Dimillian/CodexMonitor/releases/download/v<RELEASE_VERSION>/CodexMonitor_<RELEASE_VERSION>_aarch64.dmg",
+      "url": "https://github.com/Dimillian/CodexMonitor/releases/download/v<RELEASE_VERSION>/CodexMonitor.app.tar.gz",
       "signature": "<BASE64_SIGNATURE>"
     }
   }
@@ -183,7 +196,10 @@ the bundles. Upload both the `.sig` files and `latest.json` to the same release:
 
 ```bash
 gh release upload v<RELEASE_VERSION> \
-  src-tauri/target/release/bundle/macos/*.sig \
+  release-artifacts/CodexMonitor.zip \
+  release-artifacts/CodexMonitor_<RELEASE_VERSION>_aarch64.dmg \
+  src-tauri/target/release/bundle/macos/CodexMonitor.app.tar.gz \
+  src-tauri/target/release/bundle/macos/CodexMonitor.app.tar.gz.sig \
   latest.json \
   --clobber
 ```
