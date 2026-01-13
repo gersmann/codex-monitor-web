@@ -15,6 +15,7 @@ import "./styles/plan.css";
 import "./styles/about.css";
 import "./styles/tabbar.css";
 import "./styles/worktree-modal.css";
+import "./styles/settings.css";
 import "./styles/compact-base.css";
 import "./styles/compact-phone.css";
 import "./styles/compact-tablet.css";
@@ -32,6 +33,7 @@ import { PlanPanel } from "./components/PlanPanel";
 import { AboutView } from "./components/AboutView";
 import { TabBar } from "./components/TabBar";
 import { TabletNav } from "./components/TabletNav";
+import { SettingsView } from "./components/SettingsView";
 import { ArrowLeft } from "lucide-react";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import { useThreads } from "./hooks/useThreads";
@@ -89,6 +91,11 @@ function MainApp() {
     Record<string, QueuedMessage[]>
   >({});
   const [prefillDraft, setPrefillDraft] = useState<QueuedMessage | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [reduceTransparency, setReduceTransparency] = useState(() => {
+    const stored = localStorage.getItem("reduceTransparency");
+    return stored === "true";
+  });
   const [flushingByThread, setFlushingByThread] = useState<Record<string, boolean>>(
     {},
   );
@@ -123,6 +130,11 @@ function MainApp() {
     hasLoaded,
     refreshWorkspaces,
   } = useWorkspaces({ onDebug: addDebugEntry });
+
+  useEffect(() => {
+    localStorage.setItem("reduceTransparency", String(reduceTransparency));
+  }, [reduceTransparency]);
+
 
   const { status: gitStatus, refresh: refreshGitStatus } =
     useGitStatus(activeWorkspace);
@@ -458,7 +470,45 @@ function MainApp() {
     }
     setDebugOpen((prev) => !prev);
   };
-  const handleOpenSettings = () => {};
+  const handleOpenSettings = () => setSettingsOpen(true);
+
+  const orderValue = (entry: WorkspaceInfo) =>
+    typeof entry.settings.sortOrder === "number"
+      ? entry.settings.sortOrder
+      : Number.MAX_SAFE_INTEGER;
+
+  const handleMoveWorkspace = async (workspaceId: string, direction: "up" | "down") => {
+    const ordered = workspaces
+      .filter((entry) => (entry.kind ?? "main") !== "worktree")
+      .slice()
+      .sort((a, b) => {
+        const orderDiff = orderValue(a) - orderValue(b);
+        if (orderDiff !== 0) {
+          return orderDiff;
+        }
+        return a.name.localeCompare(b.name);
+      });
+    const index = ordered.findIndex((entry) => entry.id === workspaceId);
+    if (index === -1) {
+      return;
+    }
+    const nextIndex = direction === "up" ? index - 1 : index + 1;
+    if (nextIndex < 0 || nextIndex >= ordered.length) {
+      return;
+    }
+    const next = ordered.slice();
+    const temp = next[index];
+    next[index] = next[nextIndex];
+    next[nextIndex] = temp;
+    await Promise.all(
+      next.map((entry, idx) =>
+        updateWorkspaceSettings(entry.id, {
+          ...entry.settings,
+          sortOrder: idx,
+        }),
+      ),
+    );
+  };
 
   const showComposer = !isCompact
     ? centerMode === "chat"
@@ -466,21 +516,21 @@ function MainApp() {
   const showGitDetail = Boolean(selectedDiffPath) && isPhone;
   const appClassName = `app ${isCompact ? "layout-compact" : "layout-desktop"}${
     isPhone ? " layout-phone" : ""
-  }${isTablet ? " layout-tablet" : ""}`;
+  }${isTablet ? " layout-tablet" : ""}${reduceTransparency ? " reduced-transparency" : ""}`;
 
   const sidebarNode = (
-    <Sidebar
-      workspaces={workspaces}
-      threadsByWorkspace={threadsByWorkspace}
-      threadStatusById={threadStatusById}
-      threadListLoadingByWorkspace={threadListLoadingByWorkspace}
-      activeWorkspaceId={activeWorkspaceId}
-      activeThreadId={activeThreadId}
-      accountRateLimits={activeRateLimits}
-      onOpenSettings={handleOpenSettings}
-      onOpenDebug={handleDebugClick}
-      hasDebugAlerts={hasDebugAlerts}
-      onAddWorkspace={handleAddWorkspace}
+      <Sidebar
+        workspaces={workspaces}
+        threadsByWorkspace={threadsByWorkspace}
+        threadStatusById={threadStatusById}
+        threadListLoadingByWorkspace={threadListLoadingByWorkspace}
+        activeWorkspaceId={activeWorkspaceId}
+        activeThreadId={activeThreadId}
+        accountRateLimits={activeRateLimits}
+        onOpenSettings={handleOpenSettings}
+        onOpenDebug={handleDebugClick}
+        hasDebugAlerts={hasDebugAlerts}
+        onAddWorkspace={handleAddWorkspace}
       onSelectHome={() => {
         exitDiffView();
         setActiveWorkspaceId(null);
@@ -981,6 +1031,18 @@ function MainApp() {
           }
           onCancel={() => setWorktreePrompt(null)}
           onConfirm={handleConfirmWorktreePrompt}
+        />
+      )}
+      {settingsOpen && (
+        <SettingsView
+          workspaces={workspaces}
+          onClose={() => setSettingsOpen(false)}
+          onMoveWorkspace={handleMoveWorkspace}
+          onDeleteWorkspace={(workspaceId) => {
+            void removeWorkspace(workspaceId);
+          }}
+          reduceTransparency={reduceTransparency}
+          onToggleTransparency={setReduceTransparency}
         />
       )}
     </div>

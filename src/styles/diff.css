@@ -9,6 +9,12 @@
   min-height: 0;
 }
 
+.app.reduced-transparency .diff-panel {
+  background: var(--surface-right-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+}
+
 .diff-header,
 .git-panel-header {
   display: flex;

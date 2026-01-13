@@ -584,3 +584,6 @@
     background-position: -200% 0;
   }
 }
+.app.reduced-transparency .sidebar {
+  backdrop-filter: none;
+}

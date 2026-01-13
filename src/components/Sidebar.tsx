@@ -161,9 +161,23 @@ export function Sidebar({
   const sessionLabel = "Session";
   const weeklyLabel = "Weekly";
 
-  const rootWorkspaces = workspaces.filter(
-    (entry) => (entry.kind ?? "main") !== "worktree" && !entry.parentId,
-  );
+  const rootWorkspaces = workspaces
+    .filter((entry) => (entry.kind ?? "main") !== "worktree" && !entry.parentId)
+    .slice()
+    .sort((a, b) => {
+      const aOrder =
+        typeof a.settings.sortOrder === "number"
+          ? a.settings.sortOrder
+          : Number.MAX_SAFE_INTEGER;
+      const bOrder =
+        typeof b.settings.sortOrder === "number"
+          ? b.settings.sortOrder
+          : Number.MAX_SAFE_INTEGER;
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+      return a.name.localeCompare(b.name);
+    });
   const worktreesByParent = new Map<string, WorkspaceInfo[]>();
   workspaces
     .filter((entry) => (entry.kind ?? "main") === "worktree" && entry.parentId)

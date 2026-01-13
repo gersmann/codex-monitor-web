@@ -20,6 +20,10 @@
   min-height: 0;
 }
 
+.app.reduced-transparency .compact-panel {
+  background: var(--surface-messages);
+}
+
 .compact-panel .sidebar {
   border-right: none;
   padding: 32px 16px 16px;

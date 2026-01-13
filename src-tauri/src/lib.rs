@@ -304,6 +304,8 @@ struct WorktreeInfo {
 struct WorkspaceSettings {
     #[serde(default, rename = "sidebarCollapsed")]
     sidebar_collapsed: bool,
+    #[serde(default, rename = "sortOrder")]
+    sort_order: Option<u32>,
 }
 
 #[derive(Serialize, Clone)]
@@ -638,7 +640,11 @@ async fn list_workspaces(state: State<'_, AppState>) -> Result<Vec<WorkspaceInfo
             settings: entry.settings.clone(),
         });
     }
-    result.sort_by(|a, b| a.name.cmp(&b.name));
+    result.sort_by(|a, b| {
+        let a_order = a.settings.sort_order.unwrap_or(u32::MAX);
+        let b_order = b.settings.sort_order.unwrap_or(u32::MAX);
+        a_order.cmp(&b_order).then_with(|| a.name.cmp(&b.name))
+    });
     Ok(result)
 }
 
