@@ -32,7 +32,7 @@ import { PlanPanel } from "./components/PlanPanel";
 import { AboutView } from "./components/AboutView";
 import { TabBar } from "./components/TabBar";
 import { TabletNav } from "./components/TabletNav";
-import { ArrowLeft, TerminalSquare } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import { useThreads } from "./hooks/useThreads";
 import { useWindowDrag } from "./hooks/useWindowDrag";
@@ -458,6 +458,7 @@ function MainApp() {
     }
     setDebugOpen((prev) => !prev);
   };
+  const handleOpenSettings = () => {};
 
   const showComposer = !isCompact
     ? centerMode === "chat"
@@ -476,6 +477,9 @@ function MainApp() {
       activeWorkspaceId={activeWorkspaceId}
       activeThreadId={activeThreadId}
       accountRateLimits={activeRateLimits}
+      onOpenSettings={handleOpenSettings}
+      onOpenDebug={handleDebugClick}
+      hasDebugAlerts={hasDebugAlerts}
       onAddWorkspace={handleAddWorkspace}
       onSelectHome={() => {
         exitDiffView();
@@ -585,12 +589,6 @@ function MainApp() {
     />
   ) : null;
 
-  const debugButton = hasDebugAlerts ? (
-    <button className="ghost icon-button" onClick={handleDebugClick} aria-label="Log">
-      <TerminalSquare aria-hidden />
-    </button>
-  ) : null;
-
   const desktopLayout = (
     <>
       {sidebarNode}
@@ -641,7 +639,7 @@ function MainApp() {
                 />
               </div>
               <div className="actions">
-                {debugButton}
+                {null}
               </div>
             </div>
             <ApprovalToasts
@@ -756,9 +754,7 @@ function MainApp() {
                   onCreateBranch={handleCreateBranch}
                 />
               </div>
-              <div className="actions">
-                {debugButton}
-              </div>
+              <div className="actions" />
             </div>
             {tabletTab === "codex" && (
               <>
@@ -839,9 +835,7 @@ function MainApp() {
                   onCreateBranch={handleCreateBranch}
                 />
                 </div>
-                <div className="actions">
-                  {debugButton}
-                </div>
+                <div className="actions" />
               </div>
               <div className="content compact-content">
                 {messagesNode}

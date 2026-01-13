@@ -1,5 +1,5 @@
 import type { RateLimitSnapshot, ThreadSummary, WorkspaceInfo } from "../types";
-import { FolderKanban, Layers } from "lucide-react";
+import { FolderKanban, Layers, Settings, TerminalSquare } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
@@ -17,6 +17,9 @@ type SidebarProps = {
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   accountRateLimits: RateLimitSnapshot | null;
+  onOpenSettings: () => void;
+  onOpenDebug: () => void;
+  hasDebugAlerts: boolean;
   onAddWorkspace: () => void;
   onSelectHome: () => void;
   onSelectWorkspace: (id: string) => void;
@@ -38,6 +41,9 @@ export function Sidebar({
   activeWorkspaceId,
   activeThreadId,
   accountRateLimits,
+  onOpenSettings,
+  onOpenDebug,
+  hasDebugAlerts,
   onAddWorkspace,
   onSelectHome,
   onSelectWorkspace,
@@ -146,33 +152,14 @@ export function Sidebar({
         : "Credits"
     : null;
 
-  const primaryWindowLabel = (() => {
-    const minutes = accountRateLimits?.primary?.windowDurationMins ?? null;
-    if (!minutes || minutes <= 0) {
-      return "Session";
-    }
-    if (minutes % 60 === 0) {
-      return `${minutes / 60}H session`;
-    }
-    return `${minutes}m session`;
-  })();
-
-  const secondaryWindowLabel = (() => {
-    const minutes = accountRateLimits?.secondary?.windowDurationMins ?? null;
-    if (!minutes || minutes <= 0) {
-      return "Global session";
-    }
-    return "Global session";
-  })();
-
-  const primaryUsageLabel =
-    typeof usagePercent === "number"
-      ? `${primaryWindowLabel}: ${Math.min(Math.max(Math.round(usagePercent), 0), 100)}%`
-      : `${primaryWindowLabel}: --`;
-  const secondaryUsageLabel =
-    typeof globalUsagePercent === "number"
-      ? `${secondaryWindowLabel}: ${Math.min(Math.max(Math.round(globalUsagePercent), 0), 100)}%`
-      : `${secondaryWindowLabel}: --`;
+  const clampPercent = (value: number) =>
+    Math.min(Math.max(Math.round(value), 0), 100);
+  const sessionPercent =
+    typeof usagePercent === "number" ? clampPercent(usagePercent) : null;
+  const weeklyPercent =
+    typeof globalUsagePercent === "number" ? clampPercent(globalUsagePercent) : null;
+  const sessionLabel = "Session";
+  const weeklyLabel = "Weekly";
 
   const rootWorkspaces = workspaces.filter(
     (entry) => (entry.kind ?? "main") !== "worktree" && !entry.parentId,
@@ -615,13 +602,61 @@ export function Sidebar({
         </div>
       </div>
       <div className="sidebar-footer">
-        <div className="usage-stack">
-          <span className="usage-row">{primaryUsageLabel}</span>
+        <div className="usage-bars">
+          <div className="usage-block">
+            <div className="usage-label">
+              <span>{sessionLabel}</span>
+              <span className="usage-value">
+                {sessionPercent === null ? "--" : `${sessionPercent}%`}
+              </span>
+            </div>
+            <div className="usage-bar">
+              <span
+                className="usage-bar-fill"
+                style={{ width: `${sessionPercent ?? 0}%` }}
+              />
+            </div>
+          </div>
           {accountRateLimits?.secondary && (
-            <span className="usage-row">{secondaryUsageLabel}</span>
+            <div className="usage-block">
+              <div className="usage-label">
+                <span>{weeklyLabel}</span>
+                <span className="usage-value">
+                  {weeklyPercent === null ? "--" : `${weeklyPercent}%`}
+                </span>
+              </div>
+              <div className="usage-bar">
+                <span
+                  className="usage-bar-fill"
+                  style={{ width: `${weeklyPercent ?? 0}%` }}
+                />
+              </div>
+            </div>
           )}
         </div>
         {creditsLabel && <div className="usage-meta">{creditsLabel}</div>}
+      </div>
+      <div className="sidebar-corner-actions">
+        <button
+          className="ghost sidebar-corner-button"
+          type="button"
+          onClick={onOpenSettings}
+          aria-label="Open settings"
+          title="Settings"
+        >
+          <Settings size={14} aria-hidden />
+        </button>
+        {hasDebugAlerts && (
+          <button
+            className="ghost sidebar-corner-button"
+            type="button"
+            onClick={onOpenDebug}
+            aria-label="Open debug log"
+            title="Debug log"
+          >
+            <TerminalSquare size={14} aria-hidden />
+          </button>
+        )}
       </div>
     </aside>
   );

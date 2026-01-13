@@ -1,5 +1,6 @@
 .sidebar {
-  padding: 36px 20px 20px;
+  --sidebar-padding: 20px;
+  padding: 36px var(--sidebar-padding) 56px;
   background: var(--surface-sidebar);
   backdrop-filter: blur(32px) saturate(1.35);
   border-right: 1px solid var(--border-subtle);
@@ -9,6 +10,7 @@
   -webkit-app-region: no-drag;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .sidebar-header {
@@ -485,7 +487,7 @@
 .sidebar-footer {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 10px;
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid var(--border-subtle);
@@ -495,21 +497,68 @@
   -webkit-app-region: no-drag;
 }
 
-.usage-stack {
+.usage-bars {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 10px;
   color: var(--text-stronger);
-  font-weight: 600;
-  letter-spacing: 0.01em;
 }
 
-.usage-row {
-  white-space: nowrap;
+.usage-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.usage-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-stronger);
+}
+
+.usage-value {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.usage-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-card-muted);
+  overflow: hidden;
+}
+
+.usage-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(120, 235, 190, 0.9), rgba(100, 200, 255, 0.9));
+  box-shadow: 0 0 10px rgba(92, 168, 255, 0.25);
 }
 
 .usage-meta {
   color: var(--text-subtle);
+}
+
+.sidebar-corner-actions {
+  position: absolute;
+  left: var(--sidebar-padding);
+  bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-corner-button {
+  padding: 6px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @keyframes pulse {
