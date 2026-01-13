@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::env;
+use std::io::ErrorKind;
 use std::path::PathBuf;
+use std::time::Duration;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use git2::{DiffOptions, Repository, Sort, Status, StatusOptions, Tree};
@@ -12,6 +14,7 @@ use tauri::{WebviewUrl, WebviewWindowBuilder};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{Mutex, oneshot};
+use tokio::time::timeout;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -250,10 +253,58 @@ fn build_codex_command(entry: &WorkspaceEntry) -> Command {
     command
 }
 
+async fn check_codex_installation(entry: &WorkspaceEntry) -> Result<Option<String>, String> {
+    let mut command = build_codex_command(entry);
+    command.arg("--version");
+    command.stdout(std::process::Stdio::piped());
+    command.stderr(std::process::Stdio::piped());
+
+    let output = match timeout(Duration::from_secs(5), command.output()).await {
+        Ok(result) => result.map_err(|e| {
+            if e.kind() == ErrorKind::NotFound {
+                "Codex CLI not found. Install Codex and ensure `codex` is on your PATH."
+                    .to_string()
+            } else {
+                e.to_string()
+            }
+        })?,
+        Err(_) => {
+            return Err(
+                "Timed out while checking Codex CLI. Make sure `codex --version` runs in Terminal."
+                    .to_string(),
+            );
+        }
+    };
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let detail = if stderr.trim().is_empty() {
+            stdout.trim()
+        } else {
+            stderr.trim()
+        };
+        if detail.is_empty() {
+            return Err(
+                "Codex CLI failed to start. Try running `codex --version` in Terminal."
+                    .to_string(),
+            );
+        }
+        return Err(format!(
+            "Codex CLI failed to start: {detail}. Try running `codex --version` in Terminal."
+        ));
+    }
+
+    let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Ok(if version.is_empty() { None } else { Some(version) })
+}
+
 async fn spawn_workspace_session(
     entry: WorkspaceEntry,
     app_handle: AppHandle,
 ) -> Result<Arc<WorkspaceSession>, String> {
+    let _ = check_codex_installation(&entry).await?;
+
     let mut command = build_codex_command(&entry);
     command.arg("app-server");
     command.stdin(std::process::Stdio::piped());
@@ -351,7 +402,23 @@ async fn spawn_workspace_session(
             "version": "0.1.0"
         }
     });
-    session.send_request("initialize", init_params).await?;
+    let init_result = timeout(
+        Duration::from_secs(15),
+        session.send_request("initialize", init_params),
+    )
+    .await;
+    let init_response = match init_result {
+        Ok(response) => response,
+        Err(_) => {
+            let mut child = session.child.lock().await;
+            let _ = child.kill().await;
+            return Err(
+                "Codex app-server did not respond to initialize. Check that `codex app-server` works in Terminal."
+                    .to_string(),
+            );
+        }
+    };
+    init_response?;
     session.send_notification("initialized", None).await?;
 
     let payload = AppServerEvent {
