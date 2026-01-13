@@ -1,4 +1,5 @@
-import { IconCodex, IconGit, IconLog } from "./icons";
+import type { ReactNode } from "react";
+import { GitBranch, MessagesSquare, TerminalSquare } from "lucide-react";
 
 type TabletNavTab = "codex" | "git" | "log";
 
@@ -7,10 +8,10 @@ type TabletNavProps = {
   onSelect: (tab: TabletNavTab) => void;
 };
 
-const tabs: { id: TabletNavTab; label: string; icon: JSX.Element }[] = [
-  { id: "codex", label: "Codex", icon: <IconCodex className="tablet-nav-icon" /> },
-  { id: "git", label: "Git", icon: <IconGit className="tablet-nav-icon" /> },
-  { id: "log", label: "Log", icon: <IconLog className="tablet-nav-icon" /> },
+const tabs: { id: TabletNavTab; label: string; icon: ReactNode }[] = [
+  { id: "codex", label: "Codex", icon: <MessagesSquare className="tablet-nav-icon" /> },
+  { id: "git", label: "Git", icon: <GitBranch className="tablet-nav-icon" /> },
+  { id: "log", label: "Log", icon: <TerminalSquare className="tablet-nav-icon" /> },
 ];
 
 export function TabletNav({ activeTab, onSelect }: TabletNavProps) {

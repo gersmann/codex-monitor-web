@@ -14,7 +14,9 @@ import "./styles/debug.css";
 import "./styles/plan.css";
 import "./styles/about.css";
 import "./styles/tabbar.css";
-import "./styles/compact.css";
+import "./styles/compact-base.css";
+import "./styles/compact-phone.css";
+import "./styles/compact-tablet.css";
 import { Sidebar } from "./components/Sidebar";
 import { Home } from "./components/Home";
 import { MainHeader } from "./components/MainHeader";
@@ -28,6 +30,7 @@ import { PlanPanel } from "./components/PlanPanel";
 import { AboutView } from "./components/AboutView";
 import { TabBar } from "./components/TabBar";
 import { TabletNav } from "./components/TabletNav";
+import { TerminalSquare } from "lucide-react";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import { useThreads } from "./hooks/useThreads";
 import { useWindowDrag } from "./hooks/useWindowDrag";
@@ -433,6 +436,73 @@ function MainApp() {
     />
   );
 
+  const messagesNode = (
+    <Messages
+      items={activeItems}
+      isThinking={
+        activeThreadId ? threadStatusById[activeThreadId]?.isProcessing ?? false : false
+      }
+    />
+  );
+
+  const composerNode = showComposer ? (
+    <Composer
+      onSend={handleSend}
+      onStop={interruptTurn}
+      canStop={canInterrupt}
+      disabled={
+        activeThreadId ? threadStatusById[activeThreadId]?.isReviewing ?? false : false
+      }
+      contextUsage={activeTokenUsage}
+      queuedMessages={activeQueue}
+      sendLabel={isProcessing ? "Queue" : "Send"}
+      prefillDraft={prefillDraft}
+      onPrefillHandled={(id) => {
+        if (prefillDraft?.id === id) {
+          setPrefillDraft(null);
+        }
+      }}
+      onEditQueued={(item) => {
+        if (!activeThreadId) {
+          return;
+        }
+        setQueuedByThread((prev) => ({
+          ...prev,
+          [activeThreadId]: (prev[activeThreadId] ?? []).filter(
+            (entry) => entry.id !== item.id,
+          ),
+        }));
+        setPrefillDraft(item);
+      }}
+      onDeleteQueued={(id) => {
+        if (!activeThreadId) {
+          return;
+        }
+        setQueuedByThread((prev) => ({
+          ...prev,
+          [activeThreadId]: (prev[activeThreadId] ?? []).filter(
+            (entry) => entry.id !== id,
+          ),
+        }));
+      }}
+      models={models}
+      selectedModelId={selectedModelId}
+      onSelectModel={setSelectedModelId}
+      reasoningOptions={reasoningOptions}
+      selectedEffort={selectedEffort}
+      onSelectEffort={setSelectedEffort}
+      accessMode={accessMode}
+      onSelectAccessMode={setAccessMode}
+      skills={skills}
+    />
+  ) : null;
+
+  const debugButton = hasDebugAlerts ? (
+    <button className="ghost icon-button" onClick={handleDebugClick} aria-label="Log">
+      <TerminalSquare aria-hidden />
+    </button>
+  ) : null;
+
   const desktopLayout = (
     <>
       {sidebarNode}
@@ -475,39 +545,7 @@ function MainApp() {
                 />
               </div>
               <div className="actions">
-                {hasDebugAlerts && (
-                  <button
-                    className="ghost icon-button"
-                    onClick={handleDebugClick}
-                    aria-label="Debug"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                      <path
-                        d="M9 7.5V6.5a3 3 0 0 1 6 0v1"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                      />
-                      <rect
-                        x="7"
-                        y="7.5"
-                        width="10"
-                        height="9"
-                        rx="3"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                      />
-                      <path
-                        d="M4 12h3m10 0h3M6 8l2 2m8-2-2 2M6 16l2-2m8 2-2-2"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                      />
-                      <circle cx="10" cy="12" r="0.8" fill="currentColor" />
-                      <circle cx="14" cy="12" r="0.8" fill="currentColor" />
-                    </svg>
-                  </button>
-                )}
+                {debugButton}
               </div>
             </div>
             <ApprovalToasts
@@ -525,14 +563,7 @@ function MainApp() {
                   error={diffError}
                 />
               ) : (
-                <Messages
-                  items={activeItems}
-                  isThinking={
-                    activeThreadId
-                      ? threadStatusById[activeThreadId]?.isProcessing ?? false
-                      : false
-                  }
-                />
+                messagesNode
               )}
             </div>
 
@@ -575,59 +606,7 @@ function MainApp() {
               </div>
             </div>
 
-            {showComposer && (
-              <Composer
-                onSend={handleSend}
-                onStop={interruptTurn}
-                canStop={canInterrupt}
-                disabled={
-                  activeThreadId
-                    ? threadStatusById[activeThreadId]?.isReviewing ?? false
-                    : false
-                }
-                contextUsage={activeTokenUsage}
-                queuedMessages={activeQueue}
-                sendLabel={isProcessing ? "Queue" : "Send"}
-                prefillDraft={prefillDraft}
-                onPrefillHandled={(id) => {
-                  if (prefillDraft?.id === id) {
-                    setPrefillDraft(null);
-                  }
-                }}
-                onEditQueued={(item) => {
-                  if (!activeThreadId) {
-                    return;
-                  }
-                  setQueuedByThread((prev) => ({
-                    ...prev,
-                    [activeThreadId]: (prev[activeThreadId] ?? []).filter(
-                      (entry) => entry.id !== item.id,
-                    ),
-                  }));
-                  setPrefillDraft(item);
-                }}
-                onDeleteQueued={(id) => {
-                  if (!activeThreadId) {
-                    return;
-                  }
-                  setQueuedByThread((prev) => ({
-                    ...prev,
-                    [activeThreadId]: (prev[activeThreadId] ?? []).filter(
-                      (entry) => entry.id !== id,
-                    ),
-                  }));
-                }}
-                models={models}
-                selectedModelId={selectedModelId}
-                onSelectModel={setSelectedModelId}
-                reasoningOptions={reasoningOptions}
-                selectedEffort={selectedEffort}
-                onSelectEffort={setSelectedEffort}
-                accessMode={accessMode}
-                onSelectAccessMode={setAccessMode}
-                skills={skills}
-              />
-            )}
+            {composerNode}
             <DebugPanel
               entries={debugEntries}
               isOpen={debugOpen}
@@ -674,106 +653,15 @@ function MainApp() {
                 />
               </div>
               <div className="actions">
-                {hasDebugAlerts && (
-                  <button
-                    className="ghost icon-button"
-                    onClick={handleDebugClick}
-                    aria-label="Debug"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                      <path
-                        d="M9 7.5V6.5a3 3 0 0 1 6 0v1"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                      />
-                      <rect
-                        x="7"
-                        y="7.5"
-                        width="10"
-                        height="9"
-                        rx="3"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                      />
-                      <path
-                        d="M4 12h3m10 0h3M6 8l2 2m8-2-2 2M6 16l2-2m8 2-2-2"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                      />
-                      <circle cx="10" cy="12" r="0.8" fill="currentColor" />
-                      <circle cx="14" cy="12" r="0.8" fill="currentColor" />
-                    </svg>
-                  </button>
-                )}
+                {debugButton}
               </div>
             </div>
             {tabletTab === "codex" && (
               <>
                 <div className="content tablet-content">
-                  <Messages
-                    items={activeItems}
-                    isThinking={
-                      activeThreadId
-                        ? threadStatusById[activeThreadId]?.isProcessing ?? false
-                        : false
-                    }
-                  />
+                  {messagesNode}
                 </div>
-                {showComposer && (
-                  <Composer
-                    onSend={handleSend}
-                    onStop={interruptTurn}
-                    canStop={canInterrupt}
-                    disabled={
-                      activeThreadId
-                        ? threadStatusById[activeThreadId]?.isReviewing ?? false
-                        : false
-                    }
-                    contextUsage={activeTokenUsage}
-                    queuedMessages={activeQueue}
-                    sendLabel={isProcessing ? "Queue" : "Send"}
-                    prefillDraft={prefillDraft}
-                    onPrefillHandled={(id) => {
-                      if (prefillDraft?.id === id) {
-                        setPrefillDraft(null);
-                      }
-                    }}
-                    onEditQueued={(item) => {
-                      if (!activeThreadId) {
-                        return;
-                      }
-                      setQueuedByThread((prev) => ({
-                        ...prev,
-                        [activeThreadId]: (prev[activeThreadId] ?? []).filter(
-                          (entry) => entry.id !== item.id,
-                        ),
-                      }));
-                      setPrefillDraft(item);
-                    }}
-                    onDeleteQueued={(id) => {
-                      if (!activeThreadId) {
-                        return;
-                      }
-                      setQueuedByThread((prev) => ({
-                        ...prev,
-                        [activeThreadId]: (prev[activeThreadId] ?? []).filter(
-                          (entry) => entry.id !== id,
-                        ),
-                      }));
-                    }}
-                    models={models}
-                    selectedModelId={selectedModelId}
-                    onSelectModel={setSelectedModelId}
-                    reasoningOptions={reasoningOptions}
-                    selectedEffort={selectedEffort}
-                    onSelectEffort={setSelectedEffort}
-                    accessMode={accessMode}
-                    onSelectAccessMode={setAccessMode}
-                    skills={skills}
-                  />
-                )}
+                {composerNode}
               </>
             )}
             {tabletTab === "git" && (
@@ -840,104 +728,13 @@ function MainApp() {
                   />
                 </div>
                 <div className="actions">
-                  {hasDebugAlerts && (
-                    <button
-                      className="ghost icon-button"
-                      onClick={handleDebugClick}
-                      aria-label="Debug"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                        <path
-                          d="M9 7.5V6.5a3 3 0 0 1 6 0v1"
-                          stroke="currentColor"
-                          strokeWidth="1.4"
-                          strokeLinecap="round"
-                        />
-                        <rect
-                          x="7"
-                          y="7.5"
-                          width="10"
-                          height="9"
-                          rx="3"
-                          stroke="currentColor"
-                          strokeWidth="1.4"
-                        />
-                        <path
-                          d="M4 12h3m10 0h3M6 8l2 2m8-2-2 2M6 16l2-2m8 2-2-2"
-                          stroke="currentColor"
-                          strokeWidth="1.4"
-                          strokeLinecap="round"
-                        />
-                        <circle cx="10" cy="12" r="0.8" fill="currentColor" />
-                        <circle cx="14" cy="12" r="0.8" fill="currentColor" />
-                      </svg>
-                    </button>
-                  )}
+                  {debugButton}
                 </div>
               </div>
               <div className="content compact-content">
-                <Messages
-                  items={activeItems}
-                  isThinking={
-                    activeThreadId
-                      ? threadStatusById[activeThreadId]?.isProcessing ?? false
-                      : false
-                  }
-                />
+                {messagesNode}
               </div>
-              {showComposer && (
-                <Composer
-                  onSend={handleSend}
-                  onStop={interruptTurn}
-                  canStop={canInterrupt}
-                  disabled={
-                    activeThreadId
-                      ? threadStatusById[activeThreadId]?.isReviewing ?? false
-                      : false
-                  }
-                  contextUsage={activeTokenUsage}
-                  queuedMessages={activeQueue}
-                  sendLabel={isProcessing ? "Queue" : "Send"}
-                  prefillDraft={prefillDraft}
-                  onPrefillHandled={(id) => {
-                    if (prefillDraft?.id === id) {
-                      setPrefillDraft(null);
-                    }
-                  }}
-                  onEditQueued={(item) => {
-                    if (!activeThreadId) {
-                      return;
-                    }
-                    setQueuedByThread((prev) => ({
-                      ...prev,
-                      [activeThreadId]: (prev[activeThreadId] ?? []).filter(
-                        (entry) => entry.id !== item.id,
-                      ),
-                    }));
-                    setPrefillDraft(item);
-                  }}
-                  onDeleteQueued={(id) => {
-                    if (!activeThreadId) {
-                      return;
-                    }
-                    setQueuedByThread((prev) => ({
-                      ...prev,
-                      [activeThreadId]: (prev[activeThreadId] ?? []).filter(
-                        (entry) => entry.id !== id,
-                      ),
-                    }));
-                  }}
-                  models={models}
-                  selectedModelId={selectedModelId}
-                  onSelectModel={setSelectedModelId}
-                  reasoningOptions={reasoningOptions}
-                  selectedEffort={selectedEffort}
-                  onSelectEffort={setSelectedEffort}
-                  accessMode={accessMode}
-                  onSelectAccessMode={setAccessMode}
-                  skills={skills}
-                />
-              )}
+              {composerNode}
             </>
           ) : (
             <div className="compact-empty">
