@@ -13,6 +13,10 @@ import "./styles/diff-viewer.css";
 import "./styles/debug.css";
 import "./styles/plan.css";
 import "./styles/about.css";
+import "./styles/tabbar.css";
+import "./styles/compact-base.css";
+import "./styles/compact-phone.css";
+import "./styles/compact-tablet.css";
 import { Sidebar } from "./components/Sidebar";
 import { Home } from "./components/Home";
 import { MainHeader } from "./components/MainHeader";
@@ -24,6 +28,9 @@ import { GitDiffViewer } from "./components/GitDiffViewer";
 import { DebugPanel } from "./components/DebugPanel";
 import { PlanPanel } from "./components/PlanPanel";
 import { AboutView } from "./components/AboutView";
+import { TabBar } from "./components/TabBar";
+import { TabletNav } from "./components/TabletNav";
+import { ArrowLeft, TerminalSquare } from "lucide-react";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import { useThreads } from "./hooks/useThreads";
 import { useWindowDrag } from "./hooks/useWindowDrag";
@@ -37,6 +44,7 @@ import { useDebugLog } from "./hooks/useDebugLog";
 import { useWorkspaceRefreshOnFocus } from "./hooks/useWorkspaceRefreshOnFocus";
 import { useWorkspaceRestore } from "./hooks/useWorkspaceRestore";
 import { useResizablePanels } from "./hooks/useResizablePanels";
+import { useLayoutMode } from "./hooks/useLayoutMode";
 import type { AccessMode, QueuedMessage } from "./types";
 
 function useWindowLabel() {
@@ -61,10 +69,18 @@ function MainApp() {
     planPanelHeight,
     onPlanPanelResizeStart,
   } = useResizablePanels();
+  const layoutMode = useLayoutMode();
+  const isCompact = layoutMode !== "desktop";
+  const isTablet = layoutMode === "tablet";
+  const isPhone = layoutMode === "phone";
   const [centerMode, setCenterMode] = useState<"chat" | "diff">("chat");
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
   const [gitPanelMode, setGitPanelMode] = useState<"diff" | "log">("diff");
   const [accessMode, setAccessMode] = useState<AccessMode>("current");
+  const [activeTab, setActiveTab] = useState<
+    "projects" | "codex" | "git" | "log"
+  >("codex");
+  const tabletTab = activeTab === "projects" ? "codex" : activeTab;
   const [queuedByThread, setQueuedByThread] = useState<
     Record<string, QueuedMessage[]>
   >({});
@@ -98,11 +114,14 @@ function MainApp() {
 
   const { status: gitStatus, refresh: refreshGitStatus } =
     useGitStatus(activeWorkspace);
+  const compactTab = isTablet ? tabletTab : activeTab;
+  const shouldLoadDiffs =
+    centerMode === "diff" || (isCompact && compactTab === "git");
   const {
     diffs: gitDiffs,
     isLoading: isDiffLoading,
     error: diffError,
-  } = useGitDiffs(activeWorkspace, gitStatus.files, centerMode === "diff");
+  } = useGitDiffs(activeWorkspace, gitStatus.files, shouldLoadDiffs);
   const {
     entries: gitLogEntries,
     total: gitLogTotal,
@@ -183,6 +202,24 @@ function MainApp() {
     ? queuedByThread[activeThreadId] ?? []
     : [];
 
+  useEffect(() => {
+    if (!isPhone) {
+      return;
+    }
+    if (!activeWorkspace && activeTab !== "projects") {
+      setActiveTab("projects");
+    }
+  }, [activeTab, activeWorkspace, isPhone]);
+
+  useEffect(() => {
+    if (!isTablet) {
+      return;
+    }
+    if (activeTab === "projects") {
+      setActiveTab("codex");
+    }
+  }, [activeTab, isTablet]);
+
   useWindowDrag("titlebar");
   useWorkspaceRestore({
     workspaces,
@@ -197,9 +234,24 @@ function MainApp() {
   });
 
   async function handleAddWorkspace() {
-    const workspace = await addWorkspace();
-    if (workspace) {
-      setActiveThreadId(null, workspace.id);
+    try {
+      const workspace = await addWorkspace();
+      if (workspace) {
+        setActiveThreadId(null, workspace.id);
+        if (isCompact) {
+          setActiveTab("codex");
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      addDebugEntry({
+        id: `${Date.now()}-client-add-workspace-error`,
+        timestamp: Date.now(),
+        source: "error",
+        label: "workspace/add error",
+        payload: message,
+      });
+      alert(`Failed to add workspace.\n\n${message}`);
     }
   }
 
@@ -212,6 +264,9 @@ function MainApp() {
       });
     }
     setActiveWorkspaceId(workspaceId);
+    if (isCompact) {
+      setActiveTab("codex");
+    }
   }
 
   function exitDiffView() {
@@ -226,12 +281,18 @@ function MainApp() {
       await connectWorkspace(workspace);
     }
     await startThreadForWorkspace(workspace.id);
+    if (isCompact) {
+      setActiveTab("codex");
+    }
   }
 
   function handleSelectDiff(path: string) {
     setSelectedDiffPath(path);
     setCenterMode("diff");
     setGitPanelMode("diff");
+    if (isCompact) {
+      setActiveTab("git");
+    }
   }
 
   async function handleSend(text: string) {
@@ -307,59 +368,144 @@ function MainApp() {
     sendUserMessage,
   ]);
 
-  return (
-    <div
-      className="app"
-      style={
-        {
-          "--sidebar-width": `${sidebarWidth}px`,
-          "--right-panel-width": `${rightPanelWidth}px`,
-          "--plan-panel-height": `${planPanelHeight}px`,
-        } as React.CSSProperties
+  const handleDebugClick = () => {
+    if (isCompact) {
+      setActiveTab("log");
+      return;
+    }
+    setDebugOpen((prev) => !prev);
+  };
+
+  const showComposer = !isCompact
+    ? centerMode === "chat"
+    : (isTablet ? tabletTab : activeTab) === "codex";
+  const showGitDetail = Boolean(selectedDiffPath) && isPhone;
+  const appClassName = `app ${isCompact ? "layout-compact" : "layout-desktop"}${
+    isPhone ? " layout-phone" : ""
+  }${isTablet ? " layout-tablet" : ""}`;
+
+  const sidebarNode = (
+    <Sidebar
+      workspaces={workspaces}
+      threadsByWorkspace={threadsByWorkspace}
+      threadStatusById={threadStatusById}
+      threadListLoadingByWorkspace={threadListLoadingByWorkspace}
+      activeWorkspaceId={activeWorkspaceId}
+      activeThreadId={activeThreadId}
+      accountRateLimits={activeRateLimits}
+      onAddWorkspace={handleAddWorkspace}
+      onSelectHome={() => {
+        exitDiffView();
+        setActiveWorkspaceId(null);
+        if (isCompact) {
+          setActiveTab("projects");
+        }
+      }}
+      onSelectWorkspace={(workspaceId) => {
+        exitDiffView();
+        selectWorkspace(workspaceId);
+      }}
+      onConnectWorkspace={async (workspace) => {
+        await connectWorkspace(workspace);
+        if (isCompact) {
+          setActiveTab("codex");
+        }
+      }}
+      onAddAgent={handleAddAgent}
+      onToggleWorkspaceCollapse={(workspaceId, collapsed) => {
+        const target = workspaces.find((entry) => entry.id === workspaceId);
+        if (!target) {
+          return;
+        }
+        void updateWorkspaceSettings(workspaceId, {
+          ...target.settings,
+          sidebarCollapsed: collapsed,
+        });
+      }}
+      onSelectThread={(workspaceId, threadId) => {
+        exitDiffView();
+        selectWorkspace(workspaceId);
+        setActiveThreadId(threadId, workspaceId);
+      }}
+      onDeleteThread={(workspaceId, threadId) => {
+        removeThread(workspaceId, threadId);
+      }}
+      onDeleteWorkspace={(workspaceId) => {
+        void removeWorkspace(workspaceId);
+      }}
+    />
+  );
+
+  const messagesNode = (
+    <Messages
+      items={activeItems}
+      isThinking={
+        activeThreadId ? threadStatusById[activeThreadId]?.isProcessing ?? false : false
       }
-    >
-      <div className="drag-strip" id="titlebar" data-tauri-drag-region />
-      <Sidebar
-        workspaces={workspaces}
-        threadsByWorkspace={threadsByWorkspace}
-        threadStatusById={threadStatusById}
-        threadListLoadingByWorkspace={threadListLoadingByWorkspace}
-        activeWorkspaceId={activeWorkspaceId}
-        activeThreadId={activeThreadId}
-        accountRateLimits={activeRateLimits}
-        onAddWorkspace={handleAddWorkspace}
-        onSelectHome={() => {
-          exitDiffView();
-          setActiveWorkspaceId(null);
-        }}
-        onSelectWorkspace={(workspaceId) => {
-          exitDiffView();
-          selectWorkspace(workspaceId);
-        }}
-        onConnectWorkspace={connectWorkspace}
-        onAddAgent={handleAddAgent}
-        onToggleWorkspaceCollapse={(workspaceId, collapsed) => {
-          const target = workspaces.find((entry) => entry.id === workspaceId);
-          if (!target) {
-            return;
-          }
-          void updateWorkspaceSettings(workspaceId, {
-            ...target.settings,
-            sidebarCollapsed: collapsed,
-          });
-        }}
-        onSelectThread={(workspaceId, threadId) => {
-          exitDiffView();
-          selectWorkspace(workspaceId);
-          setActiveThreadId(threadId, workspaceId);
-        }}
-        onDeleteThread={(workspaceId, threadId) => {
-          removeThread(workspaceId, threadId);
-        }}
-        onDeleteWorkspace={(workspaceId) => {
-          void removeWorkspace(workspaceId);
-        }}
-      />
+    />
+  );
+
+  const composerNode = showComposer ? (
+    <Composer
+      onSend={handleSend}
+      onStop={interruptTurn}
+      canStop={canInterrupt}
+      disabled={
+        activeThreadId ? threadStatusById[activeThreadId]?.isReviewing ?? false : false
+      }
+      contextUsage={activeTokenUsage}
+      queuedMessages={activeQueue}
+      sendLabel={isProcessing ? "Queue" : "Send"}
+      prefillDraft={prefillDraft}
+      onPrefillHandled={(id) => {
+        if (prefillDraft?.id === id) {
+          setPrefillDraft(null);
+        }
+      }}
+      onEditQueued={(item) => {
+        if (!activeThreadId) {
+          return;
+        }
+        setQueuedByThread((prev) => ({
+          ...prev,
+          [activeThreadId]: (prev[activeThreadId] ?? []).filter(
+            (entry) => entry.id !== item.id,
+          ),
+        }));
+        setPrefillDraft(item);
+      }}
+      onDeleteQueued={(id) => {
+        if (!activeThreadId) {
+          return;
+        }
+        setQueuedByThread((prev) => ({
+          ...prev,
+          [activeThreadId]: (prev[activeThreadId] ?? []).filter(
+            (entry) => entry.id !== id,
+          ),
+        }));
+      }}
+      models={models}
+      selectedModelId={selectedModelId}
+      onSelectModel={setSelectedModelId}
+      reasoningOptions={reasoningOptions}
+      selectedEffort={selectedEffort}
+      onSelectEffort={setSelectedEffort}
+      accessMode={accessMode}
+      onSelectAccessMode={setAccessMode}
+      skills={skills}
+    />
+  ) : null;
+
+  const debugButton = hasDebugAlerts ? (
+    <button className="ghost icon-button" onClick={handleDebugClick} aria-label="Log">
+      <TerminalSquare aria-hidden />
+    </button>
+  ) : null;
+
+  const desktopLayout = (
+    <>
+      {sidebarNode}
       <div
         className="sidebar-resizer"
         role="separator"
@@ -383,14 +529,14 @@ function MainApp() {
               <div className="main-topbar-left">
                 {centerMode === "diff" && (
                   <button
-                    className="ghost icon-button"
+                    className="icon-button back-button"
                     onClick={() => {
                       setCenterMode("chat");
                       setSelectedDiffPath(null);
                     }}
                     aria-label="Back to chat"
                   >
-                    <span aria-hidden>‹</span>
+                    <ArrowLeft aria-hidden />
                   </button>
                 )}
                 <MainHeader
@@ -399,39 +545,7 @@ function MainApp() {
                 />
               </div>
               <div className="actions">
-                {hasDebugAlerts && (
-                  <button
-                    className="ghost icon-button"
-                    onClick={() => setDebugOpen((prev) => !prev)}
-                    aria-label="Debug"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                      <path
-                        d="M9 7.5V6.5a3 3 0 0 1 6 0v1"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                      />
-                      <rect
-                        x="7"
-                        y="7.5"
-                        width="10"
-                        height="9"
-                        rx="3"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                      />
-                      <path
-                        d="M4 12h3m10 0h3M6 8l2 2m8-2-2 2M6 16l2-2m8 2-2-2"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                      />
-                      <circle cx="10" cy="12" r="0.8" fill="currentColor" />
-                      <circle cx="14" cy="12" r="0.8" fill="currentColor" />
-                    </svg>
-                  </button>
-                )}
+                {debugButton}
               </div>
             </div>
             <ApprovalToasts
@@ -449,14 +563,7 @@ function MainApp() {
                   error={diffError}
                 />
               ) : (
-                <Messages
-                  items={activeItems}
-                  isThinking={
-                    activeThreadId
-                      ? threadStatusById[activeThreadId]?.isProcessing ?? false
-                      : false
-                  }
-                />
+                messagesNode
               )}
             </div>
 
@@ -499,59 +606,7 @@ function MainApp() {
               </div>
             </div>
 
-            {centerMode === "chat" && (
-              <Composer
-                onSend={handleSend}
-                onStop={interruptTurn}
-                canStop={canInterrupt}
-                disabled={
-                  activeThreadId
-                    ? threadStatusById[activeThreadId]?.isReviewing ?? false
-                    : false
-                }
-                contextUsage={activeTokenUsage}
-                queuedMessages={activeQueue}
-                sendLabel={isProcessing ? "Queue" : "Send"}
-                prefillDraft={prefillDraft}
-                onPrefillHandled={(id) => {
-                  if (prefillDraft?.id === id) {
-                    setPrefillDraft(null);
-                  }
-                }}
-                onEditQueued={(item) => {
-                  if (!activeThreadId) {
-                    return;
-                  }
-                  setQueuedByThread((prev) => ({
-                    ...prev,
-                    [activeThreadId]: (prev[activeThreadId] ?? []).filter(
-                      (entry) => entry.id !== item.id,
-                    ),
-                  }));
-                  setPrefillDraft(item);
-                }}
-                onDeleteQueued={(id) => {
-                  if (!activeThreadId) {
-                    return;
-                  }
-                  setQueuedByThread((prev) => ({
-                    ...prev,
-                    [activeThreadId]: (prev[activeThreadId] ?? []).filter(
-                      (entry) => entry.id !== id,
-                    ),
-                  }));
-                }}
-                models={models}
-                selectedModelId={selectedModelId}
-                onSelectModel={setSelectedModelId}
-                reasoningOptions={reasoningOptions}
-                selectedEffort={selectedEffort}
-                onSelectEffort={setSelectedEffort}
-                accessMode={accessMode}
-                onSelectAccessMode={setAccessMode}
-                skills={skills}
-              />
-            )}
+            {composerNode}
             <DebugPanel
               entries={debugEntries}
               isOpen={debugOpen}
@@ -561,6 +616,244 @@ function MainApp() {
           </>
         )}
       </section>
+    </>
+  );
+
+  const tabletLayout = (
+    <>
+      <TabletNav activeTab={tabletTab} onSelect={setActiveTab} />
+      <div className="tablet-projects">{sidebarNode}</div>
+      <div
+        className="projects-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize projects"
+        onMouseDown={onSidebarResizeStart}
+      />
+      <section className="tablet-main">
+        <ApprovalToasts
+          approvals={approvals}
+          workspaces={workspaces}
+          onDecision={handleApprovalDecision}
+        />
+        {showHome && (
+          <Home
+            onOpenProject={handleAddWorkspace}
+            onAddWorkspace={handleAddWorkspace}
+            onCloneRepository={() => {}}
+          />
+        )}
+        {activeWorkspace && !showHome && (
+          <>
+            <div className="main-topbar tablet-topbar" data-tauri-drag-region>
+              <div className="main-topbar-left">
+                <MainHeader
+                  workspace={activeWorkspace}
+                  branchName={gitStatus.branchName || "unknown"}
+                />
+              </div>
+              <div className="actions">
+                {debugButton}
+              </div>
+            </div>
+            {tabletTab === "codex" && (
+              <>
+                <div className="content tablet-content">
+                  {messagesNode}
+                </div>
+                {composerNode}
+              </>
+            )}
+            {tabletTab === "git" && (
+              <div className="tablet-git">
+                <GitDiffPanel
+                  mode={gitPanelMode}
+                  onModeChange={setGitPanelMode}
+                  branchName={gitStatus.branchName || "unknown"}
+                  totalAdditions={gitStatus.totalAdditions}
+                  totalDeletions={gitStatus.totalDeletions}
+                  fileStatus={fileStatus}
+                  error={gitStatus.error}
+                  logError={gitLogError}
+                  logLoading={gitLogLoading}
+                  files={gitStatus.files}
+                  selectedPath={selectedDiffPath}
+                  onSelectFile={handleSelectDiff}
+                  logEntries={gitLogEntries}
+                  logTotal={gitLogTotal}
+                  gitRemoteUrl={gitRemoteUrl}
+                />
+                <div className="tablet-git-viewer">
+                  <GitDiffViewer
+                    diffs={gitDiffs}
+                    selectedPath={selectedDiffPath}
+                    isLoading={isDiffLoading}
+                    error={diffError}
+                  />
+                </div>
+              </div>
+            )}
+            {tabletTab === "log" && (
+              <DebugPanel
+                entries={debugEntries}
+                isOpen
+                onClear={clearDebugEntries}
+                onCopy={handleCopyDebug}
+                variant="full"
+              />
+            )}
+          </>
+        )}
+      </section>
+    </>
+  );
+
+  const phoneLayout = (
+    <div className="compact-shell">
+      <ApprovalToasts
+        approvals={approvals}
+        workspaces={workspaces}
+        onDecision={handleApprovalDecision}
+      />
+      {activeTab === "projects" && <div className="compact-panel">{sidebarNode}</div>}
+      {activeTab === "codex" && (
+        <div className="compact-panel">
+          {activeWorkspace ? (
+            <>
+              <div className="main-topbar compact-topbar" data-tauri-drag-region>
+                <div className="main-topbar-left">
+                  <MainHeader
+                    workspace={activeWorkspace}
+                    branchName={gitStatus.branchName || "unknown"}
+                  />
+                </div>
+                <div className="actions">
+                  {debugButton}
+                </div>
+              </div>
+              <div className="content compact-content">
+                {messagesNode}
+              </div>
+              {composerNode}
+            </>
+          ) : (
+            <div className="compact-empty">
+              <h3>No workspace selected</h3>
+              <p>Choose a project to start chatting.</p>
+              <button className="ghost" onClick={() => setActiveTab("projects")}>
+                Go to Projects
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {activeTab === "git" && (
+        <div className="compact-panel">
+          {!activeWorkspace && (
+            <div className="compact-empty">
+              <h3>No workspace selected</h3>
+              <p>Select a project to inspect diffs.</p>
+              <button className="ghost" onClick={() => setActiveTab("projects")}>
+                Go to Projects
+              </button>
+            </div>
+          )}
+          {activeWorkspace && showGitDetail && (
+            <>
+              <div className="compact-git-back">
+                <button
+                  onClick={() => {
+                    setSelectedDiffPath(null);
+                    setCenterMode("chat");
+                  }}
+                >
+                  ‹ Back
+                </button>
+                <span className="workspace-title">Diff</span>
+              </div>
+              <div className="compact-git-viewer">
+                <GitDiffViewer
+                  diffs={gitDiffs}
+                  selectedPath={selectedDiffPath}
+                  isLoading={isDiffLoading}
+                  error={diffError}
+                />
+              </div>
+            </>
+          )}
+          {activeWorkspace && !showGitDetail && (
+            <>
+              <div className="main-topbar compact-topbar" data-tauri-drag-region>
+                <div className="main-topbar-left">
+                  <MainHeader
+                    workspace={activeWorkspace}
+                    branchName={gitStatus.branchName || "unknown"}
+                  />
+                </div>
+              </div>
+              <div className="compact-git">
+                <div className="compact-git-list">
+                  <GitDiffPanel
+                    mode={gitPanelMode}
+                    onModeChange={setGitPanelMode}
+                    branchName={gitStatus.branchName || "unknown"}
+                    totalAdditions={gitStatus.totalAdditions}
+                    totalDeletions={gitStatus.totalDeletions}
+                    fileStatus={fileStatus}
+                    error={gitStatus.error}
+                    logError={gitLogError}
+                    logLoading={gitLogLoading}
+                    files={gitStatus.files}
+                    selectedPath={selectedDiffPath}
+                    onSelectFile={handleSelectDiff}
+                    logEntries={gitLogEntries}
+                    logTotal={gitLogTotal}
+                    gitRemoteUrl={gitRemoteUrl}
+                  />
+                </div>
+                {!isPhone && (
+                  <div className="compact-git-viewer">
+                    <GitDiffViewer
+                      diffs={gitDiffs}
+                      selectedPath={selectedDiffPath}
+                      isLoading={isDiffLoading}
+                      error={diffError}
+                    />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      {activeTab === "log" && (
+        <div className="compact-panel">
+          <DebugPanel
+            entries={debugEntries}
+            isOpen
+            onClear={clearDebugEntries}
+            onCopy={handleCopyDebug}
+            variant="full"
+          />
+        </div>
+      )}
+      <TabBar activeTab={activeTab} onSelect={setActiveTab} />
+    </div>
+  );
+
+  return (
+    <div
+      className={appClassName}
+      style={
+        {
+          "--sidebar-width": `${sidebarWidth}px`,
+          "--right-panel-width": `${rightPanelWidth}px`,
+          "--plan-panel-height": `${planPanelHeight}px`,
+        } as React.CSSProperties
+      }
+    >
+      <div className="drag-strip" id="titlebar" data-tauri-drag-region />
+      {isPhone ? phoneLayout : isTablet ? tabletLayout : desktopLayout}
     </div>
   );
 }

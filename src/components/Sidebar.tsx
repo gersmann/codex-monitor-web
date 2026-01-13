@@ -1,4 +1,5 @@
 import type { RateLimitSnapshot, ThreadSummary, WorkspaceInfo } from "../types";
+import { FolderKanban } from "lucide-react";
 import { useState } from "react";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
@@ -136,6 +137,7 @@ export function Sidebar({
             data-tauri-drag-region="false"
             aria-label="Open home"
           >
+            <FolderKanban className="sidebar-nav-icon" />
             Projects
           </button>
         </div>

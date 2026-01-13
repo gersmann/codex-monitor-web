@@ -24,6 +24,9 @@
   font-size: 20px;
   font-weight: 600;
   margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .subtitle-button {
@@ -34,6 +37,11 @@
   font: inherit;
   cursor: pointer;
   -webkit-app-region: no-drag;
+}
+
+.sidebar-nav-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .sidebar-body {

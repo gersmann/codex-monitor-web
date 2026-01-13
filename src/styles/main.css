@@ -49,6 +49,14 @@
   padding: 6px 10px;
 }
 
+.main-topbar-left .back-button {
+  margin-left: -16px;
+  padding: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+}
+
 
 .workspace-title-line {
   display: flex;

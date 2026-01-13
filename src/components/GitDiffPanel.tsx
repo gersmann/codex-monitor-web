@@ -4,6 +4,7 @@ import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { GitBranch } from "lucide-react";
 
 type GitDiffPanelProps = {
   mode: "diff" | "log";
@@ -151,7 +152,10 @@ export function GitDiffPanel({
   return (
     <aside className="diff-panel">
       <div className="git-panel-header">
-        <div className="git-panel-title">Git</div>
+        <div className="git-panel-title">
+          <GitBranch className="git-panel-icon" />
+          Git
+        </div>
         <div className="git-panel-toggle" role="tablist" aria-label="Git panel">
           <button
             type="button"

@@ -21,9 +21,17 @@
 }
 
 .git-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.git-panel-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .git-panel-toggle {

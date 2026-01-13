@@ -54,6 +54,7 @@
   --text-accent: rgba(164, 195, 255, 0.7);
   --shadow-accent: rgba(92, 168, 255, 0.28);
   --select-caret: rgba(255, 255, 255, 0.6);
+  --tabbar-height: 56px;
 }
 
 @media (prefers-color-scheme: light) {
