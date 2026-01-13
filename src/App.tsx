@@ -40,6 +40,7 @@ import { useGitLog } from "./hooks/useGitLog";
 import { useGitRemote } from "./hooks/useGitRemote";
 import { useModels } from "./hooks/useModels";
 import { useSkills } from "./hooks/useSkills";
+import { useWorkspaceFiles } from "./hooks/useWorkspaceFiles";
 import { useDebugLog } from "./hooks/useDebugLog";
 import { useWorkspaceRefreshOnFocus } from "./hooks/useWorkspaceRefreshOnFocus";
 import { useWorkspaceRestore } from "./hooks/useWorkspaceRestore";
@@ -139,6 +140,7 @@ function MainApp() {
     setSelectedEffort,
   } = useModels({ activeWorkspace, onDebug: addDebugEntry });
   const { skills } = useSkills({ activeWorkspace, onDebug: addDebugEntry });
+  const { files } = useWorkspaceFiles({ activeWorkspace, onDebug: addDebugEntry });
 
   const resolvedModel = selectedModel?.model ?? null;
   const fileStatus =
@@ -494,6 +496,7 @@ function MainApp() {
       accessMode={accessMode}
       onSelectAccessMode={setAccessMode}
       skills={skills}
+      files={files}
     />
   ) : null;
 

@@ -132,6 +132,10 @@ export async function getSkillsList(workspaceId: string) {
   return invoke<any>("skills_list", { workspaceId });
 }
 
+export async function getWorkspaceFiles(workspaceId: string) {
+  return invoke<string[]>("list_workspace_files", { workspaceId });
+}
+
 export async function listThreads(
   workspaceId: string,
   cursor?: string | null,

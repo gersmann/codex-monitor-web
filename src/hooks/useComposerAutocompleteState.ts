@@ -9,6 +9,7 @@ type UseComposerAutocompleteStateArgs = {
   selectionStart: number | null;
   disabled: boolean;
   skills: Skill[];
+  files: string[];
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   setText: (next: string) => void;
   setSelectionStart: (next: number | null) => void;
@@ -19,6 +20,7 @@ export function useComposerAutocompleteState({
   selectionStart,
   disabled,
   skills,
+  files,
   textareaRef,
   setText,
   setSelectionStart,
@@ -34,9 +36,22 @@ export function useComposerAutocompleteState({
     [skills],
   );
 
+  const fileItems = useMemo<AutocompleteItem[]>(
+    () =>
+      files.map((path) => ({
+        id: path,
+        label: path,
+        insertText: path,
+      })),
+    [files],
+  );
+
   const triggers = useMemo(
-    () => [{ trigger: "$", items: skillItems }],
-    [skillItems],
+    () => [
+      { trigger: "$", items: skillItems },
+      { trigger: "@", items: fileItems },
+    ],
+    [fileItems, skillItems],
   );
 
   const {
@@ -58,11 +73,19 @@ export function useComposerAutocompleteState({
       if (!autocompleteRange) {
         return;
       }
-      const before = text.slice(0, autocompleteRange.start);
+      const triggerIndex = Math.max(0, autocompleteRange.start - 1);
+      const triggerChar = text[triggerIndex] ?? "";
+      const before =
+        triggerChar === "@"
+          ? text.slice(0, triggerIndex)
+          : text.slice(0, autocompleteRange.start);
       const after = text.slice(autocompleteRange.end);
       const insert = item.insertText ?? item.label;
+      const actualInsert = triggerChar === "@"
+        ? insert.replace(/^@+/, "")
+        : insert;
       const needsSpace = after.length === 0 ? true : !/^\s/.test(after);
-      const nextText = `${before}${insert}${needsSpace ? " " : ""}${after}`;
+      const nextText = `${before}${actualInsert}${needsSpace ? " " : ""}${after}`;
       setText(nextText);
       closeAutocomplete();
       requestAnimationFrame(() => {
@@ -70,7 +93,8 @@ export function useComposerAutocompleteState({
         if (!textarea) {
           return;
         }
-        const cursor = before.length + insert.length + (needsSpace ? 1 : 0);
+        const cursor =
+          before.length + actualInsert.length + (needsSpace ? 1 : 0);
         textarea.focus();
         textarea.setSelectionRange(cursor, cursor);
         setSelectionStart(cursor);

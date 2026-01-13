@@ -39,6 +39,13 @@ export function ComposerInput({
 }: ComposerInputProps) {
   const suggestionListRef = useRef<HTMLDivElement | null>(null);
   const suggestionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const isFileSuggestion = (item: AutocompleteItem) =>
+    item.label.includes("/") || item.label.includes("\\");
+  const fileTitle = (path: string) => {
+    const normalized = path.replace(/\\/g, "/");
+    const parts = normalized.split("/").filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : path;
+  };
 
   useEffect(() => {
     if (!suggestionsOpen) {
@@ -100,11 +107,24 @@ export function ComposerInput({
                 onClick={() => onSelectSuggestion(item)}
                 onMouseEnter={() => onHighlightIndex(index)}
               >
-                <span className="composer-suggestion-title">{item.label}</span>
-                {item.description && (
-                  <span className="composer-suggestion-description">
-                    {item.description}
-                  </span>
+                {isFileSuggestion(item) ? (
+                  <>
+                    <span className="composer-suggestion-title">
+                      {fileTitle(item.label)}
+                    </span>
+                    <span className="composer-suggestion-description">
+                      {item.label}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="composer-suggestion-title">{item.label}</span>
+                    {item.description && (
+                      <span className="composer-suggestion-description">
+                        {item.description}
+                      </span>
+                    )}
+                  </>
                 )}
               </button>
             ))}

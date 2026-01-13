@@ -49,6 +49,53 @@ fn normalize_git_path(path: &str) -> String {
     path.replace('\\', "/")
 }
 
+fn should_skip_dir(name: &str) -> bool {
+    matches!(
+        name,
+        ".git" | "node_modules" | "dist" | "target" | "release-artifacts"
+    )
+}
+
+fn list_workspace_files_inner(root: &PathBuf, max_files: usize) -> Vec<String> {
+    let mut results = Vec::new();
+    let mut stack = vec![root.clone()];
+
+    while let Some(dir) = stack.pop() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let file_name = entry
+                .file_name()
+                .to_string_lossy()
+                .to_string();
+            if path.is_dir() {
+                if should_skip_dir(&file_name) {
+                    continue;
+                }
+                stack.push(path);
+                continue;
+            }
+            if path.is_file() {
+                if let Ok(rel_path) = path.strip_prefix(root) {
+                    let normalized = normalize_git_path(&rel_path.to_string_lossy());
+                    if !normalized.is_empty() {
+                        results.push(normalized);
+                    }
+                }
+            }
+            if results.len() >= max_files {
+                return results;
+            }
+        }
+    }
+
+    results.sort();
+    results
+}
+
 fn diff_stats_for_path(
     repo: &Repository,
     head_tree: Option<&Tree>,
@@ -1014,6 +1061,19 @@ async fn get_git_remote(
     Ok(remote.url().map(|url| url.to_string()))
 }
 
+#[tauri::command]
+async fn list_workspace_files(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?;
+    let root = PathBuf::from(&entry.path);
+    Ok(list_workspace_files_inner(&root, 20000))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1141,6 +1201,7 @@ pub fn run() {
             get_git_diffs,
             get_git_log,
             get_git_remote,
+            list_workspace_files,
             model_list,
             account_rate_limits,
             skills_list

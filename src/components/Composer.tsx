@@ -19,6 +19,7 @@ type ComposerProps = {
   accessMode: "read-only" | "current" | "full-access";
   onSelectAccessMode: (mode: "read-only" | "current" | "full-access") => void;
   skills: { name: string; description?: string }[];
+  files: string[];
   contextUsage?: ThreadTokenUsage | null;
   queuedMessages?: QueuedMessage[];
   onEditQueued?: (item: QueuedMessage) => void;
@@ -42,6 +43,7 @@ export function Composer({
   accessMode,
   onSelectAccessMode,
   skills,
+  files,
   contextUsage = null,
   queuedMessages = [],
   onEditQueued,
@@ -80,6 +82,7 @@ export function Composer({
     selectionStart,
     disabled,
     skills,
+    files,
     textareaRef,
     setText,
     setSelectionStart,
