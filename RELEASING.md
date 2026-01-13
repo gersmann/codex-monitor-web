@@ -98,6 +98,17 @@ xcrun stapler staple \
   src-tauri/target/release/bundle/macos/CodexMonitor.app
 ```
 
+## Build With Updater Signing
+
+The updater requires signing artifacts during the build. Export the private key
+before `tauri build`:
+
+```bash
+export TAURI_SIGNING_PRIVATE_KEY=~/.tauri/codexmonitor.key
+# optional if you set a password
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+```
+
 ## Package Release Artifacts
 
 Note: Tauri's DMG bundling can fail if the generated `bundle_dmg.sh` script
@@ -130,18 +141,54 @@ git log --name-only --pretty=format:"%h %s" v<PREV_VERSION>..v<RELEASE_VERSION>
 
 Summarize user-facing changes into short bullet points and use them in the GitHub release notes.
 
-## GitHub Release (with gh)
+## Tag, Release, and Updater Manifest (with gh)
+
+Tag first so the changelog is tied to the release tag:
 
 ```bash
 git tag v<RELEASE_VERSION>
 git push origin v<RELEASE_VERSION>
+```
 
+Create the GitHub release with artifacts:
+
+```bash
 gh release create v<RELEASE_VERSION> \
   --title "v<RELEASE_VERSION>" \
   --notes "Signed + notarized macOS release." \
   release-artifacts/CodexMonitor.zip \
   release-artifacts/CodexMonitor_<RELEASE_VERSION>_aarch64.dmg
 ```
+
+Generate `latest.json` for the Tauri updater and upload it alongside the
+signed artifacts. The updater manifest should include short notes and point at
+the released artifacts + signatures.
+
+```json
+{
+  "version": "<RELEASE_VERSION>",
+  "notes": "- Short update notes\n- Keep it brief",
+  "pub_date": "2025-01-01T12:00:00Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "url": "https://github.com/Dimillian/CodexMonitor/releases/download/v<RELEASE_VERSION>/CodexMonitor_<RELEASE_VERSION>_aarch64.dmg",
+      "signature": "<BASE64_SIGNATURE>"
+    }
+  }
+}
+```
+
+Signatures are generated during the build and emitted as `.sig` files next to
+the bundles. Upload both the `.sig` files and `latest.json` to the same release:
+
+```bash
+gh release upload v<RELEASE_VERSION> \
+  src-tauri/target/release/bundle/macos/*.sig \
+  latest.json \
+  --clobber
+```
+
+After uploading, edit the GitHub release notes to use the changelog summary.
 
 ## Notes
 

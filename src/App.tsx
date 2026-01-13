@@ -52,6 +52,7 @@ import { useWorkspaceRestore } from "./hooks/useWorkspaceRestore";
 import { useResizablePanels } from "./hooks/useResizablePanels";
 import { useLayoutMode } from "./hooks/useLayoutMode";
 import { useAppSettings } from "./hooks/useAppSettings";
+import { useUpdater } from "./hooks/useUpdater";
 import type { AccessMode, QueuedMessage, WorkspaceInfo } from "./types";
 
 function useWindowLabel() {
@@ -115,6 +116,8 @@ function MainApp() {
     handleCopyDebug,
     clearDebugEntries,
   } = useDebugLog();
+
+  useUpdater({ onDebug: addDebugEntry });
 
   const { settings: appSettings, saveSettings, doctor } = useAppSettings();
 
