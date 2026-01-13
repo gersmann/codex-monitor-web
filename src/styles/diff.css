@@ -126,6 +126,7 @@
   font-weight: 700;
   border: 1px solid transparent;
   line-height: 1;
+  padding-bottom: 2px;
 }
 
 .diff-icon-added {

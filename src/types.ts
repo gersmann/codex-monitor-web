@@ -150,6 +150,11 @@ export type SkillOption = {
   description?: string;
 };
 
+export type BranchInfo = {
+  name: string;
+  lastCommit: number;
+};
+
 export type DebugEntry = {
   id: string;
   timestamp: number;

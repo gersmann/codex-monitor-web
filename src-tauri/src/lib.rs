@@ -7,7 +7,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use git2::{DiffOptions, Repository, Sort, Status, StatusOptions, Tree};
+use git2::{BranchType, DiffOptions, Repository, Sort, Status, StatusOptions, Tree};
+use git2::build::CheckoutBuilder;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, Submenu};
 use tauri::{WebviewUrl, WebviewWindowBuilder};
@@ -43,6 +44,12 @@ struct GitLogEntry {
 struct GitLogResponse {
     total: usize,
     entries: Vec<GitLogEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct BranchInfo {
+    name: String,
+    last_commit: i64,
 }
 
 fn normalize_git_path(path: &str) -> String {
@@ -94,6 +101,15 @@ fn list_workspace_files_inner(root: &PathBuf, max_files: usize) -> Vec<String> {
 
     results.sort();
     results
+}
+
+fn checkout_branch(repo: &Repository, name: &str) -> Result<(), git2::Error> {
+    let refname = format!("refs/heads/{name}");
+    repo.set_head(&refname)?;
+    let mut options = CheckoutBuilder::new();
+    options.safe();
+    repo.checkout_head(Some(&mut options))?;
+    Ok(())
 }
 
 fn diff_stats_for_path(
@@ -1074,6 +1090,76 @@ async fn list_workspace_files(
     Ok(list_workspace_files_inner(&root, 20000))
 }
 
+#[tauri::command]
+async fn list_git_branches(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+    let repo = Repository::open(&entry.path).map_err(|e| e.to_string())?;
+    let mut branches = Vec::new();
+    let refs = repo.branches(Some(BranchType::Local)).map_err(|e| e.to_string())?;
+    for branch_result in refs {
+        let (branch, _) = branch_result.map_err(|e| e.to_string())?;
+        let name = branch
+            .name()
+            .ok()
+            .flatten()
+            .unwrap_or("")
+            .to_string();
+        if name.is_empty() {
+            continue;
+        }
+        let last_commit = branch
+            .get()
+            .target()
+            .and_then(|oid| repo.find_commit(oid).ok())
+            .map(|commit| commit.time().seconds())
+            .unwrap_or(0);
+        branches.push(BranchInfo { name, last_commit });
+    }
+    branches.sort_by(|a, b| b.last_commit.cmp(&a.last_commit));
+    Ok(json!({ "branches": branches }))
+}
+
+#[tauri::command]
+async fn checkout_git_branch(
+    workspace_id: String,
+    name: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+    let repo = Repository::open(&entry.path).map_err(|e| e.to_string())?;
+    checkout_branch(&repo, &name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn create_git_branch(
+    workspace_id: String,
+    name: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+    let repo = Repository::open(&entry.path).map_err(|e| e.to_string())?;
+    let head = repo.head().map_err(|e| e.to_string())?;
+    let target = head.peel_to_commit().map_err(|e| e.to_string())?;
+    repo.branch(&name, &target, false)
+        .map_err(|e| e.to_string())?;
+    checkout_branch(&repo, &name).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1202,6 +1288,9 @@ pub fn run() {
             get_git_log,
             get_git_remote,
             list_workspace_files,
+            list_git_branches,
+            checkout_git_branch,
+            create_git_branch,
             model_list,
             account_rate_limits,
             skills_list

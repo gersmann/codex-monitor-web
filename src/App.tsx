@@ -41,6 +41,7 @@ import { useGitRemote } from "./hooks/useGitRemote";
 import { useModels } from "./hooks/useModels";
 import { useSkills } from "./hooks/useSkills";
 import { useWorkspaceFiles } from "./hooks/useWorkspaceFiles";
+import { useGitBranches } from "./hooks/useGitBranches";
 import { useDebugLog } from "./hooks/useDebugLog";
 import { useWorkspaceRefreshOnFocus } from "./hooks/useWorkspaceRefreshOnFocus";
 import { useWorkspaceRestore } from "./hooks/useWorkspaceRestore";
@@ -141,6 +142,19 @@ function MainApp() {
   } = useModels({ activeWorkspace, onDebug: addDebugEntry });
   const { skills } = useSkills({ activeWorkspace, onDebug: addDebugEntry });
   const { files } = useWorkspaceFiles({ activeWorkspace, onDebug: addDebugEntry });
+  const {
+    branches,
+    checkoutBranch,
+    createBranch,
+  } = useGitBranches({ activeWorkspace, onDebug: addDebugEntry });
+  const handleCheckoutBranch = async (name: string) => {
+    await checkoutBranch(name);
+    refreshGitStatus();
+  };
+  const handleCreateBranch = async (name: string) => {
+    await createBranch(name);
+    refreshGitStatus();
+  };
 
   const resolvedModel = selectedModel?.model ?? null;
   const fileStatus =
@@ -545,6 +559,9 @@ function MainApp() {
                 <MainHeader
                   workspace={activeWorkspace}
                   branchName={gitStatus.branchName || "unknown"}
+                  branches={branches}
+                  onCheckoutBranch={handleCheckoutBranch}
+                  onCreateBranch={handleCreateBranch}
                 />
               </div>
               <div className="actions">
@@ -653,6 +670,9 @@ function MainApp() {
                 <MainHeader
                   workspace={activeWorkspace}
                   branchName={gitStatus.branchName || "unknown"}
+                  branches={branches}
+                  onCheckoutBranch={handleCheckoutBranch}
+                  onCreateBranch={handleCreateBranch}
                 />
               </div>
               <div className="actions">
@@ -728,6 +748,9 @@ function MainApp() {
                   <MainHeader
                     workspace={activeWorkspace}
                     branchName={gitStatus.branchName || "unknown"}
+                    branches={branches}
+                    onCheckoutBranch={handleCheckoutBranch}
+                    onCreateBranch={handleCreateBranch}
                   />
                 </div>
                 <div className="actions">
@@ -791,6 +814,9 @@ function MainApp() {
                   <MainHeader
                     workspace={activeWorkspace}
                     branchName={gitStatus.branchName || "unknown"}
+                    branches={branches}
+                    onCheckoutBranch={handleCheckoutBranch}
+                    onCreateBranch={handleCreateBranch}
                   />
                 </div>
               </div>

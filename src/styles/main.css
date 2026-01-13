@@ -69,8 +69,6 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -93,6 +91,163 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.workspace-branch-menu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.workspace-branch-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-subtle);
+}
+
+.workspace-branch-button:hover {
+  background: var(--surface-control-hover);
+  color: var(--text-stronger);
+}
+
+.workspace-branch-caret {
+  font-size: 11px;
+  color: var(--text-faint);
+  display: inline-flex;
+  transform: rotate(90deg);
+  align-items: center;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.workspace-branch-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 220px;
+  max-width: 320px;
+  z-index: 10;
+  background: rgba(12, 16, 26, 0.94);
+  border: 1px solid var(--border-muted);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.branch-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.branch-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px dashed var(--border-muted);
+  background: transparent;
+  color: var(--text-quiet);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.branch-action:hover {
+  border-color: var(--border-strong);
+  color: var(--text-stronger);
+}
+
+.branch-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 6px;
+  background: var(--surface-card-strong);
+  color: var(--text-stronger);
+  font-weight: 600;
+}
+
+.branch-create {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.branch-input {
+  border: 1px solid var(--border-muted);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--text-stronger);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.branch-input:focus {
+  outline: 1px solid var(--border-strong);
+}
+
+.branch-create-button {
+  border: none;
+  border-radius: 8px;
+  background: var(--surface-card-strong);
+  color: var(--text-stronger);
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.branch-create-button:hover {
+  background: var(--surface-control-hover);
+}
+
+.branch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.branch-item {
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.branch-item:hover,
+.branch-item.is-active {
+  background: var(--surface-item);
+  color: var(--text-stronger);
+}
+
+.branch-empty {
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 4px 8px;
+}
+
+.branch-error {
+  font-size: 11px;
+  color: rgba(255, 160, 160, 0.9);
+  padding: 6px 8px 2px;
+  white-space: pre-wrap;
 }
 
 .actions {
@@ -119,7 +274,7 @@
   border-left: 1px solid var(--border-subtle);
   background: var(--surface-right-panel);
   height: 100%;
-  padding-top: var(--main-topbar-height);
+  padding-top: 0;
   padding-bottom: 0;
   grid-column: 2;
   grid-row: 1 / 5;

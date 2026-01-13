@@ -136,6 +136,18 @@ export async function getWorkspaceFiles(workspaceId: string) {
   return invoke<string[]>("list_workspace_files", { workspaceId });
 }
 
+export async function listGitBranches(workspaceId: string) {
+  return invoke<any>("list_git_branches", { workspaceId });
+}
+
+export async function checkoutGitBranch(workspaceId: string, name: string) {
+  return invoke("checkout_git_branch", { workspaceId, name });
+}
+
+export async function createGitBranch(workspaceId: string, name: string) {
+  return invoke("create_git_branch", { workspaceId, name });
+}
+
 export async function listThreads(
   workspaceId: string,
   cursor?: string | null,
