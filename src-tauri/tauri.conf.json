@@ -49,7 +49,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ3ODg2M0NDRTA3QjU2MDgKUldRSVZudmd6R09JUjcxQmxOQVlsaGx4eVJBMmY3cWdRTG9JWHovbVpBczFxZzVtYVplbVNMUmUK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY0QTgzQUU0QTc2MEVBNDMKUldSRDZtQ241RHFvOURJbm1KeC81aEZaOXlhZHlHd2NEZVpPVWs5NjdjOFNhUFEyZGJpTkV0S2YK",
       "endpoints": [
         "https://github.com/Dimillian/CodexMonitor/releases/latest/download/latest.json"
       ]
