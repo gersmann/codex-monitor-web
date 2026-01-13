@@ -1,0 +1,145 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct GitFileStatus {
+    pub(crate) path: String,
+    pub(crate) status: String,
+    pub(crate) additions: i64,
+    pub(crate) deletions: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct GitFileDiff {
+    pub(crate) path: String,
+    pub(crate) diff: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct GitLogEntry {
+    pub(crate) sha: String,
+    pub(crate) summary: String,
+    pub(crate) author: String,
+    pub(crate) timestamp: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct GitLogResponse {
+    pub(crate) total: usize,
+    pub(crate) entries: Vec<GitLogEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct BranchInfo {
+    pub(crate) name: String,
+    pub(crate) last_commit: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct WorkspaceEntry {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) path: String,
+    pub(crate) codex_bin: Option<String>,
+    #[serde(default)]
+    pub(crate) kind: WorkspaceKind,
+    #[serde(default, rename = "parentId")]
+    pub(crate) parent_id: Option<String>,
+    #[serde(default)]
+    pub(crate) worktree: Option<WorktreeInfo>,
+    #[serde(default)]
+    pub(crate) settings: WorkspaceSettings,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct WorkspaceInfo {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) path: String,
+    pub(crate) connected: bool,
+    pub(crate) codex_bin: Option<String>,
+    #[serde(default)]
+    pub(crate) kind: WorkspaceKind,
+    #[serde(default, rename = "parentId")]
+    pub(crate) parent_id: Option<String>,
+    #[serde(default)]
+    pub(crate) worktree: Option<WorktreeInfo>,
+    #[serde(default)]
+    pub(crate) settings: WorkspaceSettings,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum WorkspaceKind {
+    Main,
+    Worktree,
+}
+
+impl Default for WorkspaceKind {
+    fn default() -> Self {
+        WorkspaceKind::Main
+    }
+}
+
+impl WorkspaceKind {
+    pub(crate) fn is_worktree(&self) -> bool {
+        matches!(self, WorkspaceKind::Worktree)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct WorktreeInfo {
+    pub(crate) branch: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub(crate) struct WorkspaceSettings {
+    #[serde(default, rename = "sidebarCollapsed")]
+    pub(crate) sidebar_collapsed: bool,
+    #[serde(default, rename = "sortOrder")]
+    pub(crate) sort_order: Option<u32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct AppSettings {
+    #[serde(default, rename = "codexBin")]
+    pub(crate) codex_bin: Option<String>,
+    #[serde(default = "default_access_mode", rename = "defaultAccessMode")]
+    pub(crate) default_access_mode: String,
+}
+
+fn default_access_mode() -> String {
+    "current".to_string()
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            codex_bin: None,
+            default_access_mode: "current".to_string(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AppSettings, WorkspaceEntry, WorkspaceKind};
+
+    #[test]
+    fn app_settings_defaults_from_empty_json() {
+        let settings: AppSettings = serde_json::from_str("{}").expect("settings deserialize");
+        assert!(settings.codex_bin.is_none());
+        assert_eq!(settings.default_access_mode, "current");
+    }
+
+    #[test]
+    fn workspace_entry_defaults_from_minimal_json() {
+        let entry: WorkspaceEntry = serde_json::from_str(
+            r#"{"id":"1","name":"Test","path":"/tmp","codexBin":null}"#,
+        )
+        .expect("workspace deserialize");
+        assert!(matches!(entry.kind, WorkspaceKind::Main));
+        assert!(entry.parent_id.is_none());
+        assert!(entry.worktree.is_none());
+        assert!(entry.settings.sort_order.is_none());
+    }
+}

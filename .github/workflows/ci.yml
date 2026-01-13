@@ -7,6 +7,14 @@ on:
     branches: ["main"]
 
 jobs:
+  test-tauri:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Rust tests
+        run: cargo test
+        working-directory: src-tauri
   build-macos:
     runs-on: macos-latest
     steps:
