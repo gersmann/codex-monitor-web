@@ -53,6 +53,10 @@
   --border-accent-soft: rgba(100, 200, 255, 0.3);
   --text-accent: rgba(164, 195, 255, 0.7);
   --shadow-accent: rgba(92, 168, 255, 0.28);
+  --status-success: rgba(120, 235, 190, 0.95);
+  --status-warning: rgba(255, 175, 85, 0.95);
+  --status-error: rgba(255, 110, 110, 0.95);
+  --status-unknown: rgba(255, 255, 255, 0.3);
   --select-caret: rgba(255, 255, 255, 0.6);
   --tabbar-height: 56px;
 }
@@ -105,6 +109,10 @@
     --border-accent-soft: rgba(77, 153, 255, 0.28);
   --text-accent: rgba(45, 93, 170, 0.7);
   --shadow-accent: rgba(90, 140, 210, 0.18);
+  --status-success: rgba(30, 155, 110, 0.9);
+  --status-warning: rgba(215, 120, 20, 0.9);
+  --status-error: rgba(200, 45, 45, 0.9);
+  --status-unknown: rgba(17, 20, 28, 0.25);
   --select-caret: rgba(15, 23, 36, 0.45);
   }
 }

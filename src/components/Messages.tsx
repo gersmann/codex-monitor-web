@@ -9,13 +9,190 @@ type MessagesProps = {
   isThinking: boolean;
 };
 
+type ToolSummary = {
+  label: string;
+  value?: string;
+  detail?: string;
+  output?: string;
+};
+
+type StatusTone = "completed" | "processing" | "failed" | "unknown";
+
+function basename(path: string) {
+  if (!path) {
+    return "";
+  }
+  const normalized = path.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : path;
+}
+
+function parseToolArgs(detail: string) {
+  if (!detail) {
+    return null;
+  }
+  try {
+    return JSON.parse(detail) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function firstStringField(
+  source: Record<string, unknown> | null,
+  keys: string[],
+) {
+  if (!source) {
+    return "";
+  }
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
+function toolNameFromTitle(title: string) {
+  if (!title.toLowerCase().startsWith("tool:")) {
+    return "";
+  }
+  const [, toolPart = ""] = title.split(":");
+  const segments = toolPart.split("/").map((segment) => segment.trim());
+  return segments.length ? segments[segments.length - 1] : "";
+}
+
+function buildToolSummary(
+  item: Extract<ConversationItem, { kind: "tool" }>,
+  commandText: string,
+): ToolSummary {
+  if (item.toolType === "commandExecution") {
+    const cleanedCommand = cleanCommandText(commandText);
+    return {
+      label: "command",
+      value: cleanedCommand || "Command",
+      detail: "",
+      output: item.output || "",
+    };
+  }
+
+  if (item.toolType === "webSearch") {
+    return {
+      label: "searched",
+      value: item.detail || "",
+    };
+  }
+
+  if (item.toolType === "imageView") {
+    const file = basename(item.detail || "");
+    return {
+      label: "read",
+      value: file || "image",
+    };
+  }
+
+  if (item.toolType === "mcpToolCall") {
+    const toolName = toolNameFromTitle(item.title);
+    const args = parseToolArgs(item.detail);
+    if (toolName.toLowerCase().includes("search")) {
+      return {
+        label: "searched",
+        value:
+          firstStringField(args, ["query", "pattern", "text"]) || item.detail,
+      };
+    }
+    if (toolName.toLowerCase().includes("read")) {
+      const targetPath =
+        firstStringField(args, ["path", "file", "filename"]) || item.detail;
+      return {
+        label: "read",
+        value: basename(targetPath),
+        detail: targetPath && targetPath !== basename(targetPath) ? targetPath : "",
+      };
+    }
+    if (toolName) {
+      return {
+        label: "tool",
+        value: toolName,
+        detail: item.detail || "",
+      };
+    }
+  }
+
+  return {
+    label: "tool",
+    value: item.title || "",
+    detail: item.detail || "",
+    output: item.output || "",
+  };
+}
+
+function cleanCommandText(commandText: string) {
+  if (!commandText) {
+    return "";
+  }
+  const trimmed = commandText.trim();
+  const shellMatch = trimmed.match(
+    /^(?:\/\S+\/)?(?:bash|zsh|sh|fish)(?:\.exe)?\s+-lc\s+(['"])([\s\S]+)\1$/,
+  );
+  const inner = shellMatch ? shellMatch[2] : trimmed;
+  const cdMatch = inner.match(
+    /^\s*cd\s+[^&;]+(?:\s*&&\s*|\s*;\s*)([\s\S]+)$/i,
+  );
+  const stripped = cdMatch ? cdMatch[1] : inner;
+  return stripped.trim();
+}
+
+function statusToneFromText(status?: string): StatusTone {
+  if (!status) {
+    return "unknown";
+  }
+  const normalized = status.toLowerCase();
+  if (/(fail|error)/.test(normalized)) {
+    return "failed";
+  }
+  if (/(pending|running|processing|started|in_progress)/.test(normalized)) {
+    return "processing";
+  }
+  if (/(complete|completed|success|done)/.test(normalized)) {
+    return "completed";
+  }
+  return "unknown";
+}
+
+function toolStatusTone(
+  item: Extract<ConversationItem, { kind: "tool" }>,
+  hasChanges: boolean,
+): StatusTone {
+  const fromStatus = statusToneFromText(item.status);
+  if (fromStatus !== "unknown") {
+    return fromStatus;
+  }
+  if (item.output || hasChanges) {
+    return "completed";
+  }
+  return "processing";
+}
+
 export function Messages({ items, isThinking }: MessagesProps) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const seenItems = useRef(new Set<string>());
-  const [openItems, setOpenItems] = useState<Set<string>>(new Set());
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
   const maxVisibleItems = 30;
+  const toggleExpanded = (id: string) => {
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const visibleItems =
     !showAll && items.length > maxVisibleItems
@@ -23,22 +200,10 @@ export function Messages({ items, isThinking }: MessagesProps) {
       : items;
 
   useEffect(() => {
-    setOpenItems((prev) => {
-      let changed = false;
-      const next = new Set(prev);
-      items.forEach((item) => {
-        if (seenItems.current.has(item.id)) {
-          return;
-        }
+    items.forEach((item) => {
+      if (!seenItems.current.has(item.id)) {
         seenItems.current.add(item.id);
-        const shouldOpen =
-          item.kind === "tool" && item.toolType === "fileChange";
-        if (shouldOpen) {
-          next.add(item.id);
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
+      }
     });
   }, [items]);
 
@@ -109,41 +274,40 @@ export function Messages({ items, isThinking }: MessagesProps) {
             cleanTitle.length > 80
               ? `${cleanTitle.slice(0, 80)}…`
               : cleanTitle || "Reasoning";
+          const reasoningTone: StatusTone = summaryText ? "completed" : "processing";
+          const isExpanded = expandedItems.has(item.id);
           return (
-            <details
-              key={item.id}
-              className="item-card reasoning"
-              open={openItems.has(item.id)}
-              onToggle={(event) => {
-                const isOpen = event.currentTarget.open;
-                setOpenItems((prev) => {
-                  const next = new Set(prev);
-                  if (isOpen) {
-                    next.add(item.id);
-                  } else {
-                    next.delete(item.id);
-                  }
-                  return next;
-                });
-              }}
-            >
-              <summary>
-                <span className="item-summary-left">
-                  <span className="item-chevron" aria-hidden>
-                    ▸
-                  </span>
-                  <span className="item-title">{summaryTitle}</span>
-                </span>
-              </summary>
-              <div className="item-body">
-                {item.summary && (
-                  <Markdown value={item.summary} className="item-text markdown" />
-                )}
-                {item.content && (
-                  <Markdown value={item.content} className="item-text markdown" />
+            <div key={item.id} className="tool-inline reasoning-inline">
+              <button
+                type="button"
+                className="tool-inline-bar-toggle"
+                onClick={() => toggleExpanded(item.id)}
+                aria-expanded={expandedItems.has(item.id)}
+                aria-label="Toggle reasoning details"
+              />
+              <div className="tool-inline-content">
+                <button
+                  type="button"
+                  className="tool-inline-summary tool-inline-toggle"
+                  onClick={() => toggleExpanded(item.id)}
+                  aria-expanded={expandedItems.has(item.id)}
+                >
+                  <span
+                    className={`tool-inline-dot ${reasoningTone}`}
+                    aria-hidden
+                  />
+                  <span className="tool-inline-value">{summaryTitle}</span>
+                </button>
+                {summaryText && (
+                  <Markdown
+                    value={summaryText}
+                    className={`reasoning-inline-detail markdown ${
+                      isExpanded ? "" : "tool-inline-clamp"
+                    }`}
+                  />
                 )}
               </div>
-            </details>
+            </div>
           );
         }
         if (item.kind === "review") {
@@ -186,73 +350,98 @@ export function Messages({ items, isThinking }: MessagesProps) {
           const commandText = isCommand
             ? item.title.replace(/^Command:\s*/i, "").trim()
             : "";
-          const summaryTitle = isCommand ? "Command" : item.title;
+          const summary = buildToolSummary(item, commandText);
+          const changeNames = (item.changes ?? [])
+            .map((change) => basename(change.path))
+            .filter(Boolean);
+          const hasChanges = changeNames.length > 0;
+          const tone = toolStatusTone(item, hasChanges);
+          const isExpanded = expandedItems.has(item.id);
+          const summaryLabel = isFileChange
+            ? changeNames.length > 1
+              ? "files edited"
+              : "file edited"
+            : isCommand
+              ? ""
+            : summary.label;
+          const summaryValue = isFileChange
+            ? changeNames.length > 1
+              ? `${changeNames[0]} +${changeNames.length - 1}`
+              : changeNames[0] || "changes"
+            : summary.value;
+          const shouldFadeCommand =
+            isCommand && !isExpanded && (summaryValue?.length ?? 0) > 80;
           return (
-            <details
+            <div
               key={item.id}
-              className="item-card tool"
-              open={isFileChange ? openItems.has(item.id) : undefined}
-              onToggle={
-                isFileChange
-                  ? (event) => {
-                      const isOpen = event.currentTarget.open;
-                      setOpenItems((prev) => {
-                        const next = new Set(prev);
-                        if (isOpen) {
-                          next.add(item.id);
-                        } else {
-                          next.delete(item.id);
-                        }
-                        return next;
-                      });
-                    }
-                  : undefined
-              }
+              className={`tool-inline ${
+                expandedItems.has(item.id) ? "tool-inline-expanded" : ""
+              }`}
             >
-              <summary>
-                <span className="item-summary-left">
-                  <span className="item-chevron" aria-hidden>
-                    ▸
-                  </span>
-                  <span className="item-title">{summaryTitle}</span>
-                  {isCommand && commandText && (
-                    <span className="item-subtitle">{commandText}</span>
+              <button
+                type="button"
+                className="tool-inline-bar-toggle"
+                onClick={() => toggleExpanded(item.id)}
+                aria-expanded={expandedItems.has(item.id)}
+                aria-label="Toggle tool details"
+              />
+              <div className="tool-inline-content">
+                <button
+                  type="button"
+                  className="tool-inline-summary tool-inline-toggle"
+                  onClick={() => toggleExpanded(item.id)}
+                  aria-expanded={expandedItems.has(item.id)}
+                >
+                  <span className={`tool-inline-dot ${tone}`} aria-hidden />
+                  {summaryLabel && (
+                    <span className="tool-inline-label">{summaryLabel}:</span>
                   )}
-                </span>
-                {item.status && (
-                  <span className="item-status">{item.status}</span>
-                )}
-              </summary>
-              <div className="item-body">
-                {!isFileChange && isCommand && commandText && (
-                  <div className="tool-command">
-                    <span className="tool-label">Command</span>
-                    <pre className="tool-command-text">{commandText}</pre>
+                  {summaryValue && (
+                    <span
+                      className={`tool-inline-value ${
+                        isCommand ? "tool-inline-command" : ""
+                      } ${isCommand && isExpanded ? "tool-inline-command-full" : ""}`}
+                    >
+                      {isCommand ? (
+                        <span
+                          className={`tool-inline-command-text ${
+                            shouldFadeCommand ? "tool-inline-command-fade" : ""
+                          }`}
+                        >
+                          {summaryValue}
+                        </span>
+                      ) : (
+                        summaryValue
+                      )}
+                    </span>
+                  )}
+                </button>
+                {isExpanded && summary.detail && !isFileChange && (
+                  <div className="tool-inline-detail">
+                    {summary.detail}
                   </div>
                 )}
-                {!isFileChange && isCommand && item.detail && (
-                  <div className="tool-meta">
-                    <span className="tool-label">CWD</span>
-                    <span className="tool-cwd">{item.detail}</span>
+                {isExpanded && isCommand && item.detail && (
+                  <div className="tool-inline-detail tool-inline-muted">
+                    cwd: {item.detail}
                   </div>
                 )}
-                {!isFileChange && !isCommand && item.detail && (
-                  <Markdown value={item.detail} className="item-text markdown" />
-                )}
-                {isFileChange && item.changes?.length ? (
-                  <div className="file-change-list">
-                    {item.changes.map((change, index) => (
+                {isExpanded && isFileChange && hasChanges && (
+                  <div className="tool-inline-change-list">
+                    {item.changes?.map((change, index) => (
                       <div
                         key={`${change.path}-${index}`}
-                        className="file-change"
+                        className="tool-inline-change"
                       >
-                        <div className="file-change-header">
+                        <div className="tool-inline-change-header">
                           {change.kind && (
-                            <span className="file-change-kind">
+                            <span className="tool-inline-change-kind">
                               {change.kind.toUpperCase()}
                             </span>
                           )}
-                          <span className="file-change-path">{change.path}</span>
+                          <span className="tool-inline-change-path">
+                            {basename(change.path)}
+                          </span>
                         </div>
                         {change.diff && (
                           <div className="diff-viewer-output">
@@ -265,19 +454,19 @@ export function Messages({ items, isThinking }: MessagesProps) {
                       </div>
                     ))}
                   </div>
-                ) : null}
-                {isFileChange && !item.changes?.length && item.detail && (
+                )}
+                {isExpanded && isFileChange && !hasChanges && item.detail && (
                   <Markdown value={item.detail} className="item-text markdown" />
                 )}
-                {item.output && (!isFileChange || !item.changes?.length) && (
+                {isExpanded && summary.output && (!isFileChange || !hasChanges) && (
                   <Markdown
-                    value={item.output}
-                    className="item-output markdown"
+                    value={summary.output}
+                    className="tool-inline-output markdown"
                     codeBlock
                   />
                 )}
               </div>
-            </details>
+            </div>
           );
         }
         return null;
