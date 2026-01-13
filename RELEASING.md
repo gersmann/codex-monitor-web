@@ -22,9 +22,7 @@ cat src-tauri/tauri.conf.json
 cat package.json
 ```
 
-Bump both to the release version before building.
-
-After the release is published, bump both to the next minor.
+Bump both to the release version before building. After the release is published, bump both to the next minor.
 
 ## Build
 
@@ -50,7 +48,13 @@ CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
 
 ## Sign + Notarize + Staple (Human Step)
 
-1) Zip the app:
+1) Confirm signing identity (from Keychain):
+
+```bash
+security find-identity -v -p codesigning
+```
+
+2) Zip the app:
 
 ```bash
 ditto -c -k --keepParent \
@@ -58,7 +62,7 @@ ditto -c -k --keepParent \
   CodexMonitor.zip
 ```
 
-2) Store notary credentials (one-time per machine):
+3) Store notary credentials (one-time per machine):
 
 ```bash
 xcrun notarytool store-credentials codexmonitor-notary \
@@ -67,20 +71,19 @@ xcrun notarytool store-credentials codexmonitor-notary \
   --password "app-specific-password"
 ```
 
-If the profile already exists in Keychain, skip this step and reuse:
+If the profile already exists in Keychain, reuse it:
 
 ```bash
 --keychain-profile "codexmonitor-notary"
 ```
 
-If your `notarytool` build does not support listing profiles, validate the
-profile by running:
+Validate the profile (works even if listing is unsupported):
 
 ```bash
 xcrun notarytool history --keychain-profile "codexmonitor-notary"
 ```
 
-3) Submit for notarization and wait:
+4) Submit for notarization and wait:
 
 ```bash
 xcrun notarytool submit CodexMonitor.zip \
@@ -88,7 +91,7 @@ xcrun notarytool submit CodexMonitor.zip \
   --wait
 ```
 
-4) Staple the app:
+5) Staple the app:
 
 ```bash
 xcrun stapler staple \
@@ -116,6 +119,16 @@ hdiutil create -volname "CodexMonitor" \
   -ov -format UDZO \
   release-artifacts/CodexMonitor_<RELEASE_VERSION>_aarch64.dmg
 ```
+
+## Generate Changelog (from git log)
+
+Create release notes from the tag range using plain git log:
+
+```bash
+git log --name-only --pretty=format:"%h %s" v<PREV_VERSION>..v<RELEASE_VERSION>
+```
+
+Summarize user-facing changes into short bullet points and use them in the GitHub release notes.
 
 ## GitHub Release (with gh)
 
