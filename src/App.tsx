@@ -7,6 +7,7 @@ import "./styles/home.css";
 import "./styles/main.css";
 import "./styles/messages.css";
 import "./styles/approval-toasts.css";
+import "./styles/update-toasts.css";
 import "./styles/composer.css";
 import "./styles/diff.css";
 import "./styles/diff-viewer.css";
@@ -25,6 +26,7 @@ import { Home } from "./components/Home";
 import { MainHeader } from "./components/MainHeader";
 import { Messages } from "./components/Messages";
 import { ApprovalToasts } from "./components/ApprovalToasts";
+import { UpdateToast } from "./components/UpdateToast";
 import { Composer } from "./components/Composer";
 import { GitDiffPanel } from "./components/GitDiffPanel";
 import { GitDiffViewer } from "./components/GitDiffViewer";
@@ -117,7 +119,7 @@ function MainApp() {
     clearDebugEntries,
   } = useDebugLog();
 
-  useUpdater({ onDebug: addDebugEntry });
+  const updater = useUpdater({ onDebug: addDebugEntry });
 
   const { settings: appSettings, saveSettings, doctor } = useAppSettings();
 
@@ -664,6 +666,11 @@ function MainApp() {
       />
 
       <section className="main">
+        <UpdateToast
+          state={updater.state}
+          onUpdate={updater.startUpdate}
+          onDismiss={updater.dismiss}
+        />
         {showHome && (
           <Home
             onOpenProject={handleAddWorkspace}
@@ -710,7 +717,6 @@ function MainApp() {
               workspaces={workspaces}
               onDecision={handleApprovalDecision}
             />
-
             <div className="content">
               {centerMode === "diff" ? (
                 <GitDiffViewer
@@ -792,6 +798,11 @@ function MainApp() {
           approvals={approvals}
           workspaces={workspaces}
           onDecision={handleApprovalDecision}
+        />
+        <UpdateToast
+          state={updater.state}
+          onUpdate={updater.startUpdate}
+          onDismiss={updater.dismiss}
         />
         {showHome && (
           <Home
@@ -877,6 +888,11 @@ function MainApp() {
         approvals={approvals}
         workspaces={workspaces}
         onDecision={handleApprovalDecision}
+      />
+      <UpdateToast
+        state={updater.state}
+        onUpdate={updater.startUpdate}
+        onDismiss={updater.dismiss}
       />
       {activeTab === "projects" && <div className="compact-panel">{sidebarNode}</div>}
       {activeTab === "codex" && (
