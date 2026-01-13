@@ -8,7 +8,30 @@
   -webkit-app-region: no-drag;
 }
 .debug-panel.open {
-  height: 180px;
+  height: var(--debug-panel-height, 180px);
+  border-top: none;
+}
+
+.debug-panel-resizer {
+  height: 6px;
+  cursor: row-resize;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.debug-panel-resizer::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: var(--border-strong);
+  opacity: 0.4;
+}
+
+.debug-panel-resizer:hover::after {
+  opacity: 0.9;
 }
 
 .debug-header {

@@ -78,6 +78,8 @@ function MainApp() {
     onRightPanelResizeStart,
     planPanelHeight,
     onPlanPanelResizeStart,
+    debugPanelHeight,
+    onDebugPanelResizeStart,
   } = useResizablePanels();
   const layoutMode = useLayoutMode();
   const isCompact = layoutMode !== "desktop";
@@ -775,6 +777,7 @@ function MainApp() {
               isOpen={debugOpen}
               onClear={clearDebugEntries}
               onCopy={handleCopyDebug}
+              onResizeStart={onDebugPanelResizeStart}
             />
           </>
         )}
@@ -1042,6 +1045,7 @@ function MainApp() {
           "--sidebar-width": `${sidebarWidth}px`,
           "--right-panel-width": `${rightPanelWidth}px`,
           "--plan-panel-height": `${planPanelHeight}px`,
+          "--debug-panel-height": `${debugPanelHeight}px`,
         } as React.CSSProperties
       }
     >

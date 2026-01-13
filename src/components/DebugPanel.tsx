@@ -1,3 +1,4 @@
+import type { MouseEvent as ReactMouseEvent } from "react";
 import type { DebugEntry } from "../types";
 
 type DebugPanelProps = {
@@ -5,6 +6,7 @@ type DebugPanelProps = {
   isOpen: boolean;
   onClear: () => void;
   onCopy: () => void;
+  onResizeStart?: (event: ReactMouseEvent) => void;
   variant?: "dock" | "full";
 };
 
@@ -27,6 +29,7 @@ export function DebugPanel({
   isOpen,
   onClear,
   onCopy,
+  onResizeStart,
   variant = "dock",
 }: DebugPanelProps) {
   const isVisible = variant === "full" || isOpen;
@@ -38,6 +41,15 @@ export function DebugPanel({
     <section
       className={`debug-panel ${variant === "full" ? "full" : isOpen ? "open" : ""}`}
     >
+      {variant !== "full" && isOpen && onResizeStart && (
+        <div
+          className="debug-panel-resizer"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize debug panel"
+          onMouseDown={onResizeStart}
+        />
+      )}
       <div className="debug-header">
         <div className="debug-title">Debug</div>
         <div className="debug-actions">
