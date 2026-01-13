@@ -1,7 +1,7 @@
 import type { RateLimitSnapshot, ThreadSummary, WorkspaceInfo } from "../types";
 import { FolderKanban, Layers, Settings, TerminalSquare } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -66,6 +66,24 @@ export function Sidebar({
     width: number;
   } | null>(null);
   const addMenuRef = useRef<HTMLDivElement | null>(null);
+  const sidebarBodyRef = useRef<HTMLDivElement | null>(null);
+  const [scrollFade, setScrollFade] = useState({ top: false, bottom: false });
+
+  const updateScrollFade = useCallback(() => {
+    const node = sidebarBodyRef.current;
+    if (!node) {
+      return;
+    }
+    const { scrollTop, scrollHeight, clientHeight } = node;
+    const canScroll = scrollHeight > clientHeight;
+    const next = {
+      top: canScroll && scrollTop > 0,
+      bottom: canScroll && scrollTop + clientHeight < scrollHeight - 1,
+    };
+    setScrollFade((prev) =>
+      prev.top === next.top && prev.bottom === next.bottom ? prev : next,
+    );
+  }, []);
 
   useEffect(() => {
     if (!addMenuAnchor) {
@@ -85,6 +103,11 @@ export function Sidebar({
       window.removeEventListener("scroll", handlePointerDown, true);
     };
   }, [addMenuAnchor]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(updateScrollFade);
+    return () => cancelAnimationFrame(frame);
+  }, [updateScrollFade, workspaces, threadsByWorkspace, expandedWorkspaces]);
 
   async function showThreadMenu(
     event: React.MouseEvent,
@@ -214,7 +237,13 @@ export function Sidebar({
           +
         </button>
       </div>
-      <div className="sidebar-body">
+      <div
+        className={`sidebar-body${scrollFade.top ? " fade-top" : ""}${
+          scrollFade.bottom ? " fade-bottom" : ""
+        }`}
+        onScroll={updateScrollFade}
+        ref={sidebarBodyRef}
+      >
         <div className="workspace-list">
           {rootWorkspaces.map((entry) => {
             const threads = threadsByWorkspace[entry.id] ?? [];

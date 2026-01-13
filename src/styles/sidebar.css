@@ -6,7 +6,7 @@
   border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   -webkit-app-region: no-drag;
   min-height: 0;
   overflow: hidden;
@@ -19,6 +19,7 @@
   align-items: center;
   gap: 12px;
   padding: 0 4px;
+  margin-bottom: 4px;
   -webkit-app-region: no-drag;
 }
 
@@ -52,6 +53,59 @@
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-app-region: no-drag;
+  margin-right: calc(-1 * var(--sidebar-padding));
+  padding-right: var(--sidebar-padding);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+.sidebar-body.fade-top.fade-bottom {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 16px,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 16px,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
+}
+
+.sidebar-body.fade-top:not(.fade-bottom) {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 16px,
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 16px,
+    #000 100%
+  );
+}
+
+.sidebar-body.fade-bottom:not(.fade-top) {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
 }
 
 .workspace-list {
