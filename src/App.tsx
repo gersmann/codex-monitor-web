@@ -30,7 +30,7 @@ import { PlanPanel } from "./components/PlanPanel";
 import { AboutView } from "./components/AboutView";
 import { TabBar } from "./components/TabBar";
 import { TabletNav } from "./components/TabletNav";
-import { TerminalSquare } from "lucide-react";
+import { ArrowLeft, TerminalSquare } from "lucide-react";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import { useThreads } from "./hooks/useThreads";
 import { useWindowDrag } from "./hooks/useWindowDrag";
@@ -529,14 +529,14 @@ function MainApp() {
               <div className="main-topbar-left">
                 {centerMode === "diff" && (
                   <button
-                    className="ghost icon-button"
+                    className="icon-button back-button"
                     onClick={() => {
                       setCenterMode("chat");
                       setSelectedDiffPath(null);
                     }}
                     aria-label="Back to chat"
                   >
-                    <span aria-hidden>‹</span>
+                    <ArrowLeft aria-hidden />
                   </button>
                 )}
                 <MainHeader
