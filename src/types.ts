@@ -2,12 +2,21 @@ export type WorkspaceSettings = {
   sidebarCollapsed: boolean;
 };
 
+export type WorkspaceKind = "main" | "worktree";
+
+export type WorktreeInfo = {
+  branch: string;
+};
+
 export type WorkspaceInfo = {
   id: string;
   name: string;
   path: string;
   connected: boolean;
   codex_bin?: string | null;
+  kind?: WorkspaceKind;
+  parentId?: string | null;
+  worktree?: WorktreeInfo | null;
   settings: WorkspaceSettings;
 };
 

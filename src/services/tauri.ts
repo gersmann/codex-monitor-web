@@ -22,6 +22,13 @@ export async function addWorkspace(
   return invoke<WorkspaceInfo>("add_workspace", { path, codex_bin });
 }
 
+export async function addWorktree(
+  parentId: string,
+  branch: string,
+): Promise<WorkspaceInfo> {
+  return invoke<WorkspaceInfo>("add_worktree", { parentId, branch });
+}
+
 export async function updateWorkspaceSettings(
   id: string,
   settings: WorkspaceSettings,
@@ -31,6 +38,10 @@ export async function updateWorkspaceSettings(
 
 export async function removeWorkspace(id: string): Promise<void> {
   return invoke("remove_workspace", { id });
+}
+
+export async function removeWorktree(id: string): Promise<void> {
+  return invoke("remove_worktree", { id });
 }
 
 export async function connectWorkspace(id: string): Promise<void> {

@@ -137,7 +137,8 @@
 }
 
 .sidebar-header:hover .workspace-add,
-.workspace-row:hover .workspace-add {
+.workspace-row:hover .workspace-add,
+.worktree-row:hover .workspace-add {
   opacity: 1;
   pointer-events: auto;
 }
@@ -190,6 +191,36 @@
   pointer-events: auto;
 }
 
+.workspace-add-menu {
+  position: fixed;
+  isolation: isolate;
+  background: rgba(12, 16, 26, 0.94);
+  border: 1px solid var(--border-muted);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+  z-index: 9999;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+.workspace-add-option {
+  border: none;
+  background: transparent;
+  color: var(--text-strong);
+  font-size: 12px;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.workspace-add-option:hover {
+  background: var(--surface-hover);
+}
+
 .thread-list {
   display: flex;
   flex-direction: column;
@@ -197,11 +228,19 @@
   margin-left: 0;
 }
 
+.thread-list-nested {
+  margin-left: 16px;
+}
+
 .thread-loading {
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 6px 6px 4px;
+}
+
+.thread-loading-nested {
+  margin-left: 16px;
 }
 
 .thread-skeleton {
@@ -329,6 +368,118 @@
 
 .thread-more:hover {
   color: var(--text-stronger);
+}
+
+.worktree-section {
+  margin-top: 6px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.worktree-header {
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  padding-left: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.worktree-header-icon {
+  width: 12px;
+  height: 12px;
+  color: var(--text-faint);
+}
+
+.worktree-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.worktree-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.worktree-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  background: var(--surface-card-muted);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-app-region: no-drag;
+  overflow-x: hidden;
+}
+
+.worktree-row.active {
+  background: var(--surface-card);
+  border-left: 2px solid var(--border-accent);
+  padding-left: 6px;
+}
+
+.worktree-row:hover {
+  background: var(--surface-card);
+}
+
+.worktree-label {
+  font-size: 12px;
+  color: var(--text-stronger);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.worktree-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.worktree-toggle {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0 2px;
+  -webkit-app-region: no-drag;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.worktree-toggle:hover {
+  color: var(--text-strong);
+}
+
+.worktree-toggle-icon {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.worktree-toggle.expanded .worktree-toggle-icon {
+  transform: rotate(90deg);
+}
+
+.worktree-row:hover .worktree-toggle,
+.worktree-toggle:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .sidebar-footer {

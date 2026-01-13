@@ -4,10 +4,12 @@ import type { WorkspaceInfo, WorkspaceSettings } from "../types";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   addWorkspace as addWorkspaceService,
+  addWorktree as addWorktreeService,
   connectWorkspace as connectWorkspaceService,
   listWorkspaces,
   pickWorkspacePath,
   removeWorkspace as removeWorkspaceService,
+  removeWorktree as removeWorktreeService,
   updateWorkspaceSettings as updateWorkspaceSettingsService,
 } from "../services/tauri";
 
@@ -72,6 +74,35 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
         timestamp: Date.now(),
         source: "error",
         label: "workspace/add error",
+        payload: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  async function addWorktreeAgent(parent: WorkspaceInfo, branch: string) {
+    const trimmed = branch.trim();
+    if (!trimmed) {
+      return null;
+    }
+    onDebug?.({
+      id: `${Date.now()}-client-add-worktree`,
+      timestamp: Date.now(),
+      source: "client",
+      label: "worktree/add",
+      payload: { parentId: parent.id, branch: trimmed },
+    });
+    try {
+      const workspace = await addWorktreeService(parent.id, trimmed);
+      setWorkspaces((prev) => [...prev, workspace]);
+      setActiveWorkspaceId(workspace.id);
+      return workspace;
+    } catch (error) {
+      onDebug?.({
+        id: `${Date.now()}-client-add-worktree-error`,
+        timestamp: Date.now(),
+        source: "error",
+        label: "worktree/add error",
         payload: error instanceof Error ? error.message : String(error),
       });
       throw error;
@@ -154,9 +185,23 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
   async function removeWorkspace(workspaceId: string) {
     const workspace = workspaces.find((entry) => entry.id === workspaceId);
     const workspaceName = workspace?.name || "this workspace";
+    const worktreeCount = workspaces.filter(
+      (entry) => entry.parentId === workspaceId,
+    ).length;
+    const childIds = new Set(
+      workspaces
+        .filter((entry) => entry.parentId === workspaceId)
+        .map((entry) => entry.id),
+    );
+    const detail =
+      worktreeCount > 0
+        ? `\n\nThis will also delete ${worktreeCount} worktree${
+            worktreeCount === 1 ? "" : "s"
+          } on disk.`
+        : "";
 
     const confirmed = await ask(
-      `Are you sure you want to delete "${workspaceName}"?\n\nThis will remove the workspace from CodexMonitor.`,
+      `Are you sure you want to delete "${workspaceName}"?\n\nThis will remove the workspace from CodexMonitor.${detail}`,
       {
         title: "Delete Workspace",
         kind: "warning",
@@ -178,9 +223,15 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     });
     try {
       await removeWorkspaceService(workspaceId);
-      setWorkspaces((prev) => prev.filter((entry) => entry.id !== workspaceId));
-      setActiveWorkspaceId((prev) => (prev === workspaceId ? null : prev));
-      await refreshWorkspaces();
+      setWorkspaces((prev) =>
+        prev.filter(
+          (entry) =>
+            entry.id !== workspaceId && entry.parentId !== workspaceId,
+        ),
+      );
+      setActiveWorkspaceId((prev) =>
+        prev && (prev === workspaceId || childIds.has(prev)) ? null : prev,
+      );
     } catch (error) {
       onDebug?.({
         id: `${Date.now()}-client-remove-workspace-error`,
@@ -193,16 +244,59 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     }
   }
 
+  async function removeWorktree(workspaceId: string) {
+    const workspace = workspaces.find((entry) => entry.id === workspaceId);
+    const workspaceName = workspace?.name || "this worktree";
+
+    const confirmed = await ask(
+      `Are you sure you want to delete "${workspaceName}"?\n\nThis will close the agent, remove its worktree, and delete it from CodexMonitor.`,
+      {
+        title: "Delete Worktree",
+        kind: "warning",
+        okLabel: "Delete",
+        cancelLabel: "Cancel",
+      },
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    onDebug?.({
+      id: `${Date.now()}-client-remove-worktree`,
+      timestamp: Date.now(),
+      source: "client",
+      label: "worktree/remove",
+      payload: { workspaceId },
+    });
+    try {
+      await removeWorktreeService(workspaceId);
+      setWorkspaces((prev) => prev.filter((entry) => entry.id !== workspaceId));
+      setActiveWorkspaceId((prev) => (prev === workspaceId ? null : prev));
+    } catch (error) {
+      onDebug?.({
+        id: `${Date.now()}-client-remove-worktree-error`,
+        timestamp: Date.now(),
+        source: "error",
+        label: "worktree/remove error",
+        payload: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
   return {
     workspaces,
     activeWorkspace,
     activeWorkspaceId,
     setActiveWorkspaceId,
     addWorkspace,
+    addWorktreeAgent,
     connectWorkspace,
     markWorkspaceConnected,
     updateWorkspaceSettings,
     removeWorkspace,
+    removeWorktree,
     hasLoaded,
     refreshWorkspaces,
   };

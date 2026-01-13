@@ -14,10 +14,12 @@ import "./styles/debug.css";
 import "./styles/plan.css";
 import "./styles/about.css";
 import "./styles/tabbar.css";
+import "./styles/worktree-modal.css";
 import "./styles/compact-base.css";
 import "./styles/compact-phone.css";
 import "./styles/compact-tablet.css";
 import { Sidebar } from "./components/Sidebar";
+import { WorktreePrompt } from "./components/WorktreePrompt";
 import { Home } from "./components/Home";
 import { MainHeader } from "./components/MainHeader";
 import { Messages } from "./components/Messages";
@@ -47,7 +49,7 @@ import { useWorkspaceRefreshOnFocus } from "./hooks/useWorkspaceRefreshOnFocus";
 import { useWorkspaceRestore } from "./hooks/useWorkspaceRestore";
 import { useResizablePanels } from "./hooks/useResizablePanels";
 import { useLayoutMode } from "./hooks/useLayoutMode";
-import type { AccessMode, QueuedMessage } from "./types";
+import type { AccessMode, QueuedMessage, WorkspaceInfo } from "./types";
 
 function useWindowLabel() {
   const [label, setLabel] = useState("main");
@@ -90,6 +92,12 @@ function MainApp() {
   const [flushingByThread, setFlushingByThread] = useState<Record<string, boolean>>(
     {},
   );
+  const [worktreePrompt, setWorktreePrompt] = useState<{
+    workspace: WorkspaceInfo;
+    branch: string;
+    isSubmitting: boolean;
+    error: string | null;
+  } | null>(null);
   const {
     debugOpen,
     setDebugOpen,
@@ -106,10 +114,12 @@ function MainApp() {
     activeWorkspaceId,
     setActiveWorkspaceId,
     addWorkspace,
+    addWorktreeAgent,
     connectWorkspace,
     markWorkspaceConnected,
     updateWorkspaceSettings,
     removeWorkspace,
+    removeWorktree,
     hasLoaded,
     refreshWorkspaces,
   } = useWorkspaces({ onDebug: addDebugEntry });
@@ -217,6 +227,13 @@ function MainApp() {
   const activeQueue = activeThreadId
     ? queuedByThread[activeThreadId] ?? []
     : [];
+  const isWorktreeWorkspace = activeWorkspace?.kind === "worktree";
+  const activeParentWorkspace = isWorktreeWorkspace
+    ? workspaces.find((entry) => entry.id === activeWorkspace?.parentId) ?? null
+    : null;
+  const worktreeLabel = isWorktreeWorkspace
+    ? activeWorkspace?.worktree?.branch ?? activeWorkspace?.name ?? null
+    : null;
 
   useEffect(() => {
     if (!isPhone) {
@@ -299,6 +316,56 @@ function MainApp() {
     await startThreadForWorkspace(workspace.id);
     if (isCompact) {
       setActiveTab("codex");
+    }
+  }
+
+  async function handleAddWorktreeAgent(workspace: (typeof workspaces)[number]) {
+    exitDiffView();
+    const defaultBranch = `codex/${new Date().toISOString().slice(0, 10)}-${Math.random()
+      .toString(36)
+      .slice(2, 6)}`;
+    setWorktreePrompt({
+      workspace,
+      branch: defaultBranch,
+      isSubmitting: false,
+      error: null,
+    });
+  }
+
+  async function handleConfirmWorktreePrompt() {
+    if (!worktreePrompt || worktreePrompt.isSubmitting) {
+      return;
+    }
+    const { workspace, branch } = worktreePrompt;
+    setWorktreePrompt((prev) =>
+      prev ? { ...prev, isSubmitting: true, error: null } : prev,
+    );
+    try {
+      const worktreeWorkspace = await addWorktreeAgent(workspace, branch);
+      if (!worktreeWorkspace) {
+        setWorktreePrompt(null);
+        return;
+      }
+      selectWorkspace(worktreeWorkspace.id);
+      if (!worktreeWorkspace.connected) {
+        await connectWorkspace(worktreeWorkspace);
+      }
+      if (isCompact) {
+        setActiveTab("codex");
+      }
+      setWorktreePrompt(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setWorktreePrompt((prev) =>
+        prev ? { ...prev, isSubmitting: false, error: message } : prev,
+      );
+      addDebugEntry({
+        id: `${Date.now()}-client-add-worktree-error`,
+        timestamp: Date.now(),
+        source: "error",
+        label: "worktree/add error",
+        payload: message,
+      });
     }
   }
 
@@ -428,6 +495,7 @@ function MainApp() {
         }
       }}
       onAddAgent={handleAddAgent}
+      onAddWorktreeAgent={handleAddWorktreeAgent}
       onToggleWorkspaceCollapse={(workspaceId, collapsed) => {
         const target = workspaces.find((entry) => entry.id === workspaceId);
         if (!target) {
@@ -448,6 +516,9 @@ function MainApp() {
       }}
       onDeleteWorkspace={(workspaceId) => {
         void removeWorkspace(workspaceId);
+      }}
+      onDeleteWorktree={(workspaceId) => {
+        void removeWorktree(workspaceId);
       }}
     />
   );
@@ -558,6 +629,11 @@ function MainApp() {
                 )}
                 <MainHeader
                   workspace={activeWorkspace}
+                  parentName={activeParentWorkspace?.name ?? null}
+                  worktreeLabel={worktreeLabel}
+                  disableBranchMenu={isWorktreeWorkspace}
+                  parentPath={activeParentWorkspace?.path ?? null}
+                  worktreePath={isWorktreeWorkspace ? activeWorkspace.path : null}
                   branchName={gitStatus.branchName || "unknown"}
                   branches={branches}
                   onCheckoutBranch={handleCheckoutBranch}
@@ -669,6 +745,11 @@ function MainApp() {
               <div className="main-topbar-left">
                 <MainHeader
                   workspace={activeWorkspace}
+                  parentName={activeParentWorkspace?.name ?? null}
+                  worktreeLabel={worktreeLabel}
+                  disableBranchMenu={isWorktreeWorkspace}
+                  parentPath={activeParentWorkspace?.path ?? null}
+                  worktreePath={isWorktreeWorkspace ? activeWorkspace.path : null}
                   branchName={gitStatus.branchName || "unknown"}
                   branches={branches}
                   onCheckoutBranch={handleCheckoutBranch}
@@ -745,13 +826,18 @@ function MainApp() {
             <>
               <div className="main-topbar compact-topbar" data-tauri-drag-region>
                 <div className="main-topbar-left">
-                  <MainHeader
-                    workspace={activeWorkspace}
-                    branchName={gitStatus.branchName || "unknown"}
-                    branches={branches}
-                    onCheckoutBranch={handleCheckoutBranch}
-                    onCreateBranch={handleCreateBranch}
-                  />
+                <MainHeader
+                  workspace={activeWorkspace}
+                  parentName={activeParentWorkspace?.name ?? null}
+                  worktreeLabel={worktreeLabel}
+                  disableBranchMenu={isWorktreeWorkspace}
+                  parentPath={activeParentWorkspace?.path ?? null}
+                  worktreePath={isWorktreeWorkspace ? activeWorkspace.path : null}
+                  branchName={gitStatus.branchName || "unknown"}
+                  branches={branches}
+                  onCheckoutBranch={handleCheckoutBranch}
+                  onCreateBranch={handleCreateBranch}
+                />
                 </div>
                 <div className="actions">
                   {debugButton}
@@ -811,13 +897,18 @@ function MainApp() {
             <>
               <div className="main-topbar compact-topbar" data-tauri-drag-region>
                 <div className="main-topbar-left">
-                  <MainHeader
-                    workspace={activeWorkspace}
-                    branchName={gitStatus.branchName || "unknown"}
-                    branches={branches}
-                    onCheckoutBranch={handleCheckoutBranch}
-                    onCreateBranch={handleCreateBranch}
-                  />
+                <MainHeader
+                  workspace={activeWorkspace}
+                  parentName={activeParentWorkspace?.name ?? null}
+                  worktreeLabel={worktreeLabel}
+                  disableBranchMenu={isWorktreeWorkspace}
+                  parentPath={activeParentWorkspace?.path ?? null}
+                  worktreePath={isWorktreeWorkspace ? activeWorkspace.path : null}
+                  branchName={gitStatus.branchName || "unknown"}
+                  branches={branches}
+                  onCheckoutBranch={handleCheckoutBranch}
+                  onCreateBranch={handleCreateBranch}
+                />
                 </div>
               </div>
               <div className="compact-git">
@@ -883,6 +974,21 @@ function MainApp() {
     >
       <div className="drag-strip" id="titlebar" data-tauri-drag-region />
       {isPhone ? phoneLayout : isTablet ? tabletLayout : desktopLayout}
+      {worktreePrompt && (
+        <WorktreePrompt
+          workspaceName={worktreePrompt.workspace.name}
+          branch={worktreePrompt.branch}
+          error={worktreePrompt.error}
+          isBusy={worktreePrompt.isSubmitting}
+          onChange={(value) =>
+            setWorktreePrompt((prev) =>
+              prev ? { ...prev, branch: value, error: null } : prev,
+            )
+          }
+          onCancel={() => setWorktreePrompt(null)}
+          onConfirm={handleConfirmWorktreePrompt}
+        />
+      )}
     </div>
   );
 }
