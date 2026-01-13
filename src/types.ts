@@ -61,6 +61,19 @@ export type ReviewTarget =
 
 export type AccessMode = "read-only" | "current" | "full-access";
 
+export type AppSettings = {
+  codexBin: string | null;
+  defaultAccessMode: AccessMode;
+};
+
+export type CodexDoctorResult = {
+  ok: boolean;
+  codexBin: string | null;
+  version: string | null;
+  appServerOk: boolean;
+  details: string | null;
+};
+
 export type ApprovalRequest = {
   workspace_id: string;
   request_id: number;

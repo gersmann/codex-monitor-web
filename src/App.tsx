@@ -51,6 +51,7 @@ import { useWorkspaceRefreshOnFocus } from "./hooks/useWorkspaceRefreshOnFocus";
 import { useWorkspaceRestore } from "./hooks/useWorkspaceRestore";
 import { useResizablePanels } from "./hooks/useResizablePanels";
 import { useLayoutMode } from "./hooks/useLayoutMode";
+import { useAppSettings } from "./hooks/useAppSettings";
 import type { AccessMode, QueuedMessage, WorkspaceInfo } from "./types";
 
 function useWindowLabel() {
@@ -115,6 +116,8 @@ function MainApp() {
     clearDebugEntries,
   } = useDebugLog();
 
+  const { settings: appSettings, saveSettings, doctor } = useAppSettings();
+
   const {
     workspaces,
     activeWorkspace,
@@ -125,11 +128,18 @@ function MainApp() {
     connectWorkspace,
     markWorkspaceConnected,
     updateWorkspaceSettings,
+    updateWorkspaceCodexBin,
     removeWorkspace,
     removeWorktree,
     hasLoaded,
     refreshWorkspaces,
-  } = useWorkspaces({ onDebug: addDebugEntry });
+  } = useWorkspaces({ onDebug: addDebugEntry, defaultCodexBin: appSettings.codexBin });
+
+  useEffect(() => {
+    setAccessMode((prev) =>
+      prev === "current" ? appSettings.defaultAccessMode : prev,
+    );
+  }, [appSettings.defaultAccessMode]);
 
   useEffect(() => {
     localStorage.setItem("reduceTransparency", String(reduceTransparency));
@@ -1043,6 +1053,14 @@ function MainApp() {
           }}
           reduceTransparency={reduceTransparency}
           onToggleTransparency={setReduceTransparency}
+          appSettings={appSettings}
+          onUpdateAppSettings={async (next) => {
+            await saveSettings(next);
+          }}
+          onRunDoctor={doctor}
+          onUpdateWorkspaceCodexBin={async (id, codexBin) => {
+            await updateWorkspaceCodexBin(id, codexBin);
+          }}
         />
       )}
     </div>

@@ -10,18 +10,20 @@ import {
   pickWorkspacePath,
   removeWorkspace as removeWorkspaceService,
   removeWorktree as removeWorktreeService,
+  updateWorkspaceCodexBin as updateWorkspaceCodexBinService,
   updateWorkspaceSettings as updateWorkspaceSettingsService,
 } from "../services/tauri";
 
 type UseWorkspacesOptions = {
   onDebug?: (entry: DebugEntry) => void;
+  defaultCodexBin?: string | null;
 };
 
 export function useWorkspaces(options: UseWorkspacesOptions = {}) {
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
-  const { onDebug } = options;
+  const { onDebug, defaultCodexBin } = options;
 
   const refreshWorkspaces = useCallback(async () => {
     try {
@@ -64,7 +66,7 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
       payload: { path: selection },
     });
     try {
-      const workspace = await addWorkspaceService(selection, null);
+      const workspace = await addWorkspaceService(selection, defaultCodexBin ?? null);
       setWorkspaces((prev) => [...prev, workspace]);
       setActiveWorkspaceId(workspace.id);
       return workspace;
@@ -176,6 +178,45 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
         timestamp: Date.now(),
         source: "error",
         label: "workspace/settings error",
+        payload: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  async function updateWorkspaceCodexBin(workspaceId: string, codexBin: string | null) {
+    onDebug?.({
+      id: `${Date.now()}-client-update-workspace-codex-bin`,
+      timestamp: Date.now(),
+      source: "client",
+      label: "workspace/codexBin",
+      payload: { workspaceId, codexBin },
+    });
+    const previous = workspaces.find((entry) => entry.id === workspaceId) ?? null;
+    if (previous) {
+      setWorkspaces((prev) =>
+        prev.map((entry) =>
+          entry.id === workspaceId ? { ...entry, codex_bin: codexBin } : entry,
+        ),
+      );
+    }
+    try {
+      const updated = await updateWorkspaceCodexBinService(workspaceId, codexBin);
+      setWorkspaces((prev) =>
+        prev.map((entry) => (entry.id === workspaceId ? updated : entry)),
+      );
+      return updated;
+    } catch (error) {
+      if (previous) {
+        setWorkspaces((prev) =>
+          prev.map((entry) => (entry.id === workspaceId ? previous : entry)),
+        );
+      }
+      onDebug?.({
+        id: `${Date.now()}-client-update-workspace-codex-bin-error`,
+        timestamp: Date.now(),
+        source: "error",
+        label: "workspace/codexBin error",
         payload: error instanceof Error ? error.message : String(error),
       });
       throw error;
@@ -295,6 +336,7 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     connectWorkspace,
     markWorkspaceConnected,
     updateWorkspaceSettings,
+    updateWorkspaceCodexBin,
     removeWorkspace,
     removeWorktree,
     hasLoaded,

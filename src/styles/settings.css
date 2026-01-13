@@ -103,6 +103,72 @@
   background: var(--surface-messages);
 }
 
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.settings-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.settings-field-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-field-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.settings-field-actions svg {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+}
+
+.settings-button-compact {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.settings-help {
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+.settings-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-muted);
+  background: var(--surface-control);
+  color: var(--text-strong);
+  font-size: 12px;
+}
+
+.settings-input--compact {
+  padding: 8px 10px;
+  font-size: 11px;
+}
+
+.settings-select {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-muted);
+  background: var(--surface-control);
+  color: var(--text-strong);
+  font-size: 12px;
+}
+
 .settings-section-title {
   font-size: 15px;
   font-weight: 600;
@@ -159,6 +225,66 @@
   gap: 6px;
 }
 
+.settings-overrides {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-override-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-muted);
+  background: var(--surface-card);
+}
+
+.settings-override-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-override-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-doctor {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-muted);
+  background: var(--surface-card);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.settings-doctor.ok {
+  border-color: rgba(120, 235, 190, 0.4);
+  color: var(--text-strong);
+}
+
+.settings-doctor.error {
+  border-color: rgba(255, 120, 120, 0.45);
+  color: var(--text-strong);
+}
+
+.settings-doctor-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.settings-doctor-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .settings-empty {
   color: var(--text-faint);
   font-size: 12px;

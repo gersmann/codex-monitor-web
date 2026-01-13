@@ -361,20 +361,26 @@ struct AppState {
     workspaces: Mutex<HashMap<String, WorkspaceEntry>>,
     sessions: Mutex<HashMap<String, Arc<WorkspaceSession>>>,
     storage_path: PathBuf,
+    settings_path: PathBuf,
+    app_settings: Mutex<AppSettings>,
 }
 
 impl AppState {
     fn load(app: &AppHandle) -> Self {
-        let storage_path = app
+        let data_dir = app
             .path()
             .app_data_dir()
-            .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()))
-            .join("workspaces.json");
+            .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
+        let storage_path = data_dir.join("workspaces.json");
+        let settings_path = data_dir.join("settings.json");
         let workspaces = read_workspaces(&storage_path).unwrap_or_default();
+        let app_settings = read_settings(&settings_path).unwrap_or_default();
         Self {
             workspaces: Mutex::new(workspaces),
             sessions: Mutex::new(HashMap::new()),
             storage_path,
+            settings_path,
+            app_settings: Mutex::new(app_settings),
         }
     }
 }
@@ -396,14 +402,45 @@ fn write_workspaces(path: &PathBuf, entries: &[WorkspaceEntry]) -> Result<(), St
     std::fs::write(path, data).map_err(|e| e.to_string())
 }
 
-fn build_codex_command(entry: &WorkspaceEntry) -> Command {
-    let default_bin = entry
-        .codex_bin
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct AppSettings {
+    #[serde(default, rename = "codexBin")]
+    codex_bin: Option<String>,
+    #[serde(default, rename = "defaultAccessMode")]
+    default_access_mode: String,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            codex_bin: None,
+            default_access_mode: "current".to_string(),
+        }
+    }
+}
+
+fn read_settings(path: &PathBuf) -> Result<AppSettings, String> {
+    if !path.exists() {
+        return Ok(AppSettings::default());
+    }
+    let data = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&data).map_err(|e| e.to_string())
+}
+
+fn write_settings(path: &PathBuf, settings: &AppSettings) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let data = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
+    std::fs::write(path, data).map_err(|e| e.to_string())
+}
+
+fn build_codex_command_with_bin(codex_bin: Option<String>) -> Command {
+    let default_bin = codex_bin
         .as_ref()
         .map(|value| value.trim().is_empty())
         .unwrap_or(true);
-    let bin = entry
-        .codex_bin
+    let bin = codex_bin
         .clone()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "codex".into());
@@ -442,8 +479,8 @@ fn build_codex_command(entry: &WorkspaceEntry) -> Command {
     command
 }
 
-async fn check_codex_installation(entry: &WorkspaceEntry) -> Result<Option<String>, String> {
-    let mut command = build_codex_command(entry);
+async fn check_codex_installation(codex_bin: Option<String>) -> Result<Option<String>, String> {
+    let mut command = build_codex_command_with_bin(codex_bin);
     command.arg("--version");
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
@@ -490,11 +527,17 @@ async fn check_codex_installation(entry: &WorkspaceEntry) -> Result<Option<Strin
 
 async fn spawn_workspace_session(
     entry: WorkspaceEntry,
+    default_codex_bin: Option<String>,
     app_handle: AppHandle,
 ) -> Result<Arc<WorkspaceSession>, String> {
-    let _ = check_codex_installation(&entry).await?;
+    let codex_bin = entry
+        .codex_bin
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .or(default_codex_bin);
+    let _ = check_codex_installation(codex_bin.clone()).await?;
 
-    let mut command = build_codex_command(&entry);
+    let mut command = build_codex_command_with_bin(codex_bin);
     command.arg("app-server");
     command.stdin(std::process::Stdio::piped());
     command.stdout(std::process::Stdio::piped());
@@ -649,6 +692,60 @@ async fn list_workspaces(state: State<'_, AppState>) -> Result<Vec<WorkspaceInfo
 }
 
 #[tauri::command]
+async fn get_app_settings(state: State<'_, AppState>) -> Result<AppSettings, String> {
+    let settings = state.app_settings.lock().await;
+    Ok(settings.clone())
+}
+
+#[tauri::command]
+async fn update_app_settings(
+    settings: AppSettings,
+    state: State<'_, AppState>,
+) -> Result<AppSettings, String> {
+    write_settings(&state.settings_path, &settings)?;
+    let mut current = state.app_settings.lock().await;
+    *current = settings.clone();
+    Ok(settings)
+}
+
+#[tauri::command]
+async fn codex_doctor(
+    codex_bin: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let default_bin = {
+        let settings = state.app_settings.lock().await;
+        settings.codex_bin.clone()
+    };
+    let resolved = codex_bin
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .or(default_bin);
+    let version = check_codex_installation(resolved.clone()).await?;
+    let mut command = build_codex_command_with_bin(resolved.clone());
+    command.arg("app-server");
+    command.arg("--help");
+    command.stdout(std::process::Stdio::piped());
+    command.stderr(std::process::Stdio::piped());
+    let app_server_ok = match timeout(Duration::from_secs(5), command.output()).await {
+        Ok(result) => result.map(|output| output.status.success()).unwrap_or(false),
+        Err(_) => false,
+    };
+    let details = if app_server_ok {
+        None
+    } else {
+        Some("Failed to run `codex app-server --help`.".to_string())
+    };
+    Ok(json!({
+        "ok": version.is_some() && app_server_ok,
+        "codexBin": resolved,
+        "version": version,
+        "appServerOk": app_server_ok,
+        "details": details,
+    }))
+}
+
+#[tauri::command]
 async fn add_workspace(
     path: String,
     codex_bin: Option<String>,
@@ -671,7 +768,11 @@ async fn add_workspace(
         settings: WorkspaceSettings::default(),
     };
 
-    let session = spawn_workspace_session(entry.clone(), app).await?;
+    let default_bin = {
+        let settings = state.app_settings.lock().await;
+        settings.codex_bin.clone()
+    };
+    let session = spawn_workspace_session(entry.clone(), default_bin, app).await?;
     {
         let mut workspaces = state.workspaces.lock().await;
         workspaces.insert(entry.id.clone(), entry.clone());
@@ -758,7 +859,11 @@ async fn add_worktree(
         settings: WorkspaceSettings::default(),
     };
 
-    let session = spawn_workspace_session(entry.clone(), app).await?;
+    let default_bin = {
+        let settings = state.app_settings.lock().await;
+        settings.codex_bin.clone()
+    };
+    let session = spawn_workspace_session(entry.clone(), default_bin, app).await?;
     {
         let mut workspaces = state.workspaces.lock().await;
         workspaces.insert(entry.id.clone(), entry.clone());
@@ -903,6 +1008,40 @@ async fn update_workspace_settings(
         let entry_snapshot = match workspaces.get_mut(&id) {
             Some(entry) => {
                 entry.settings = settings.clone();
+                entry.clone()
+            }
+            None => return Err("workspace not found".to_string()),
+        };
+        let list: Vec<_> = workspaces.values().cloned().collect();
+        (entry_snapshot, list)
+    };
+    write_workspaces(&state.storage_path, &list)?;
+
+    let connected = state.sessions.lock().await.contains_key(&id);
+    Ok(WorkspaceInfo {
+        id: entry_snapshot.id,
+        name: entry_snapshot.name,
+        path: entry_snapshot.path,
+        codex_bin: entry_snapshot.codex_bin,
+        connected,
+        kind: entry_snapshot.kind,
+        parent_id: entry_snapshot.parent_id,
+        worktree: entry_snapshot.worktree,
+        settings: entry_snapshot.settings,
+    })
+}
+
+#[tauri::command]
+async fn update_workspace_codex_bin(
+    id: String,
+    codex_bin: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<WorkspaceInfo, String> {
+    let (entry_snapshot, list) = {
+        let mut workspaces = state.workspaces.lock().await;
+        let entry_snapshot = match workspaces.get_mut(&id) {
+            Some(entry) => {
+                entry.codex_bin = codex_bin.clone();
                 entry.clone()
             }
             None => return Err("workspace not found".to_string()),
@@ -1149,7 +1288,11 @@ async fn connect_workspace(
             .ok_or("workspace not found")?
     };
 
-    let session = spawn_workspace_session(entry.clone(), app).await?;
+    let default_bin = {
+        let settings = state.app_settings.lock().await;
+        settings.codex_bin.clone()
+    };
+    let session = spawn_workspace_session(entry.clone(), default_bin, app).await?;
     state.sessions.lock().await.insert(entry.id, session);
     Ok(())
 }
@@ -1587,12 +1730,16 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            get_app_settings,
+            update_app_settings,
+            codex_doctor,
             list_workspaces,
             add_workspace,
             add_worktree,
             remove_workspace,
             remove_worktree,
             update_workspace_settings,
+            update_workspace_codex_bin,
             start_thread,
             send_user_message,
             turn_interrupt,

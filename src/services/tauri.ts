@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { WorkspaceInfo, WorkspaceSettings } from "../types";
+import type {
+  AppSettings,
+  CodexDoctorResult,
+  WorkspaceInfo,
+  WorkspaceSettings,
+} from "../types";
 import type { GitFileDiff, GitFileStatus, GitLogResponse, ReviewTarget } from "../types";
 
 export async function pickWorkspacePath(): Promise<string | null> {
@@ -34,6 +39,13 @@ export async function updateWorkspaceSettings(
   settings: WorkspaceSettings,
 ): Promise<WorkspaceInfo> {
   return invoke<WorkspaceInfo>("update_workspace_settings", { id, settings });
+}
+
+export async function updateWorkspaceCodexBin(
+  id: string,
+  codex_bin: string | null,
+): Promise<WorkspaceInfo> {
+  return invoke<WorkspaceInfo>("update_workspace_codex_bin", { id, codex_bin });
 }
 
 export async function removeWorkspace(id: string): Promise<void> {
@@ -141,6 +153,20 @@ export async function getAccountRateLimits(workspaceId: string) {
 
 export async function getSkillsList(workspaceId: string) {
   return invoke<any>("skills_list", { workspaceId });
+}
+
+export async function getAppSettings(): Promise<AppSettings> {
+  return invoke<AppSettings>("get_app_settings");
+}
+
+export async function updateAppSettings(settings: AppSettings): Promise<AppSettings> {
+  return invoke<AppSettings>("update_app_settings", { settings });
+}
+
+export async function runCodexDoctor(
+  codexBin: string | null,
+): Promise<CodexDoctorResult> {
+  return invoke<CodexDoctorResult>("codex_doctor", { codexBin });
 }
 
 export async function getWorkspaceFiles(workspaceId: string) {
