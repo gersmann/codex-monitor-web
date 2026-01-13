@@ -73,6 +73,13 @@ If the profile already exists in Keychain, skip this step and reuse:
 --keychain-profile "codexmonitor-notary"
 ```
 
+If your `notarytool` build does not support listing profiles, validate the
+profile by running:
+
+```bash
+xcrun notarytool history --keychain-profile "codexmonitor-notary"
+```
+
 3) Submit for notarization and wait:
 
 ```bash
@@ -89,6 +96,10 @@ xcrun stapler staple \
 ```
 
 ## Package Release Artifacts
+
+Note: Tauri's DMG bundling can fail if the generated `bundle_dmg.sh` script
+is invoked without arguments. The manual packaging flow below is the fallback
+and is the expected path if that happens.
 
 ```bash
 mkdir -p release-artifacts release-artifacts/dmg-root
