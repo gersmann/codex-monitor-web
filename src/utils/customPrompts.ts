@@ -225,6 +225,10 @@ type PromptArgsError =
   | { kind: "MissingAssignment"; token: string }
   | { kind: "MissingKey"; token: string };
 
+type PromptInputsResult =
+  | { values: Record<string, string> }
+  | { error: PromptArgsError };
+
 function formatPromptArgsError(command: string, error: PromptArgsError) {
   if (error.kind === "MissingAssignment") {
     return `Could not parse ${command}: expected key=value but found '${error.token}'. Wrap values in double quotes if they contain spaces.`;
@@ -232,7 +236,7 @@ function formatPromptArgsError(command: string, error: PromptArgsError) {
   return `Could not parse ${command}: expected a name before '=' in '${error.token}'.`;
 }
 
-function parsePromptInputs(rest: string) {
+function parsePromptInputs(rest: string): PromptInputsResult {
   const values: Record<string, string> = {};
   if (!rest.trim()) {
     return { values } as const;
@@ -314,7 +318,7 @@ function expandNumericPlaceholders(content: string, args: string[]) {
 export function expandCustomPromptText(
   text: string,
   prompts: CustomPromptOption[],
-) {
+): { expanded: string } | { error: string } | null {
   const parsed = parseSlashName(text);
   if (!parsed) {
     return null;
