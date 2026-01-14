@@ -98,6 +98,7 @@ type LayoutNodesOptions = {
   branches: BranchInfo[];
   onCheckoutBranch: (name: string) => Promise<void>;
   onCreateBranch: (name: string) => Promise<void>;
+  onCopyThread: () => void | Promise<void>;
   centerMode: "chat" | "diff";
   onExitDiff: () => void;
   activeTab: "projects" | "codex" | "git" | "log";
@@ -315,6 +316,8 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       branches={options.branches}
       onCheckoutBranch={options.onCheckoutBranch}
       onCreateBranch={options.onCreateBranch}
+      canCopyThread={options.activeItems.length > 0}
+      onCopyThread={options.onCopyThread}
     />
   ) : null;
 
