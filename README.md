@@ -14,7 +14,7 @@ CodexMonitor is a macOS Tauri app for orchestrating multiple Codex agents across
 - Git panel with diff stats, file diffs, and commit log; open commits on GitHub when a remote is detected.
 - Branch list with checkout and create flows.
 - Model picker, reasoning effort selector, access mode (read-only/current/full-access), and context usage ring.
-- Skills menu and composer autocomplete for `$skill` and `@file` tokens.
+- Skills menu and composer autocomplete for `$skill`, `/prompts:...`, and `@file` tokens (custom prompts pulled from `~/.codex/prompts`).
 - Plan panel for per-turn planning updates and turn interruption controls.
 - Review runs against uncommitted changes, base branch, commits, or custom instructions.
 - Debug panel for warning/error events and clipboard export.

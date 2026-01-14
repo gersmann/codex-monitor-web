@@ -205,6 +205,14 @@ export type SkillOption = {
   description?: string;
 };
 
+export type CustomPromptOption = {
+  name: string;
+  path: string;
+  description?: string;
+  argumentHint?: string;
+  content: string;
+};
+
 export type BranchInfo = {
   name: string;
   lastCommit: number;

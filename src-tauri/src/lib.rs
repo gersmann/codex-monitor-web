@@ -3,6 +3,7 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 mod codex;
 mod git;
+mod prompts;
 mod settings;
 mod state;
 mod storage;
@@ -154,7 +155,8 @@ pub fn run() {
             git::create_git_branch,
             codex::model_list,
             codex::account_rate_limits,
-            codex::skills_list
+            codex::skills_list,
+            prompts::prompts_list
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
