@@ -13,6 +13,7 @@ type HomeProps = {
   onOpenProject: () => void;
   onAddWorkspace: () => void;
   latestAgentRuns: LatestAgentRun[];
+  isLoadingLatestAgents: boolean;
   onSelectThread: (workspaceId: string, threadId: string) => void;
 };
 
@@ -20,6 +21,7 @@ export function Home({
   onOpenProject,
   onAddWorkspace,
   latestAgentRuns,
+  isLoadingLatestAgents,
   onSelectThread,
 }: HomeProps) {
   return (
@@ -56,6 +58,19 @@ export function Home({
                   <div className="home-latest-status">Running</div>
                 )}
               </button>
+            ))}
+          </div>
+        ) : isLoadingLatestAgents ? (
+          <div className="home-latest-grid home-latest-grid-loading" aria-label="Loading agents">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div className="home-latest-card home-latest-card-skeleton" key={index}>
+                <div className="home-latest-card-header">
+                  <span className="home-latest-skeleton home-latest-skeleton-title" />
+                  <span className="home-latest-skeleton home-latest-skeleton-time" />
+                </div>
+                <span className="home-latest-skeleton home-latest-skeleton-line" />
+                <span className="home-latest-skeleton home-latest-skeleton-line short" />
+              </div>
             ))}
           </div>
         ) : (

@@ -573,6 +573,18 @@
   color: var(--text-stronger);
 }
 
+.usage-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.usage-reset {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
 .usage-value {
   color: var(--text-muted);
   font-weight: 600;
