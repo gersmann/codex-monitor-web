@@ -6,7 +6,7 @@ import { ComposerMetaBar } from "./ComposerMetaBar";
 import { ComposerQueue } from "./ComposerQueue";
 
 type ComposerProps = {
-  onSend: (text: string) => void;
+  onSend: (text: string, images: string[]) => void;
   onStop: () => void;
   canStop: boolean;
   disabled?: boolean;
@@ -26,10 +26,17 @@ type ComposerProps = {
   onEditQueued?: (item: QueuedMessage) => void;
   onDeleteQueued?: (id: string) => void;
   sendLabel?: string;
+  draftText?: string;
+  onDraftChange?: (text: string) => void;
+  attachedImages?: string[];
+  onPickImages?: () => void;
+  onAttachImages?: (paths: string[]) => void;
+  onRemoveImage?: (path: string) => void;
   prefillDraft?: QueuedMessage | null;
   onPrefillHandled?: (id: string) => void;
   insertText?: QueuedMessage | null;
   onInsertHandled?: (id: string) => void;
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
 };
 
 export function Composer({
@@ -53,26 +60,49 @@ export function Composer({
   onEditQueued,
   onDeleteQueued,
   sendLabel = "Send",
+  draftText = "",
+  onDraftChange,
+  attachedImages = [],
+  onPickImages,
+  onAttachImages,
+  onRemoveImage,
   prefillDraft = null,
   onPrefillHandled,
   insertText = null,
   onInsertHandled,
+  textareaRef: externalTextareaRef,
 }: ComposerProps) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(draftText);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const internalRef = useRef<HTMLTextAreaElement | null>(null);
+  const textareaRef = externalTextareaRef ?? internalRef;
+
+  useEffect(() => {
+    if (draftText === text) {
+      return;
+    }
+    setText(draftText);
+  }, [draftText, text]);
+
+  const setComposerText = useCallback(
+    (next: string) => {
+      setText(next);
+      onDraftChange?.(next);
+    },
+    [onDraftChange],
+  );
 
   const handleSend = useCallback(() => {
     if (disabled) {
       return;
     }
     const trimmed = text.trim();
-    if (!trimmed) {
+    if (!trimmed && attachedImages.length === 0) {
       return;
     }
-    onSend(trimmed);
-    setText("");
-  }, [disabled, onSend, text]);
+    onSend(trimmed, attachedImages);
+    setComposerText("");
+  }, [attachedImages, disabled, onSend, setComposerText, text]);
 
   const {
     isAutocompleteOpen,
@@ -91,7 +121,7 @@ export function Composer({
     prompts,
     files,
     textareaRef,
-    setText,
+    setText: setComposerText,
     setSelectionStart,
   });
 
@@ -99,17 +129,17 @@ export function Composer({
     if (!prefillDraft) {
       return;
     }
-    setText(prefillDraft.text);
+    setComposerText(prefillDraft.text);
     onPrefillHandled?.(prefillDraft.id);
-  }, [prefillDraft, onPrefillHandled]);
+  }, [prefillDraft, onPrefillHandled, setComposerText]);
 
   useEffect(() => {
     if (!insertText) {
       return;
     }
-    setText(insertText.text);
+    setComposerText(insertText.text);
     onInsertHandled?.(insertText.id);
-  }, [insertText, onInsertHandled]);
+  }, [insertText, onInsertHandled, setComposerText]);
 
   return (
     <footer className={`composer${disabled ? " is-disabled" : ""}`}>
@@ -125,6 +155,10 @@ export function Composer({
         canStop={canStop}
         onStop={onStop}
         onSend={handleSend}
+        attachments={attachedImages}
+        onAddAttachment={onPickImages}
+        onAttachImages={onAttachImages}
+        onRemoveAttachment={onRemoveImage}
         onTextChange={handleTextChange}
         onSelectionChange={handleSelectionChange}
         onKeyDown={(event) => {

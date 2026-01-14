@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./styles/base.css";
 import "./styles/buttons.css";
@@ -57,6 +57,7 @@ import { useResizablePanels } from "./hooks/useResizablePanels";
 import { useLayoutMode } from "./hooks/useLayoutMode";
 import { useAppSettings } from "./hooks/useAppSettings";
 import { useUpdater } from "./hooks/useUpdater";
+import { useComposerImages } from "./hooks/useComposerImages";
 import type {
   AccessMode,
   DiffLineReference,
@@ -105,6 +106,9 @@ function MainApp() {
   const [queuedByThread, setQueuedByThread] = useState<
     Record<string, QueuedMessage[]>
   >({});
+  const [composerDraftsByThread, setComposerDraftsByThread] = useState<
+    Record<string, string>
+  >({});
   const [prefillDraft, setPrefillDraft] = useState<QueuedMessage | null>(null);
   const [composerInsert, setComposerInsert] = useState<QueuedMessage | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -130,6 +134,8 @@ function MainApp() {
     handleCopyDebug,
     clearDebugEntries,
   } = useDebugLog();
+
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const updater = useUpdater({ onDebug: addDebugEntry });
 
@@ -254,6 +260,15 @@ function MainApp() {
     customPrompts: prompts,
     onMessageActivity: refreshGitStatus,
   });
+  const {
+    activeImages,
+    attachImages,
+    pickImages,
+    removeImage,
+    clearActiveImages,
+    setImagesForThread,
+    removeImagesForThread,
+  } = useComposerImages({ activeThreadId, activeWorkspaceId });
 
   const latestAgentRuns = useMemo(() => {
     const entries: Array<{
@@ -288,6 +303,14 @@ function MainApp() {
     threadsByWorkspace,
     workspaces,
   ]);
+  const isLoadingLatestAgents = useMemo(
+    () =>
+      !hasLoaded ||
+      workspaces.some(
+        (workspace) => threadListLoadingByWorkspace[workspace.id] ?? false,
+      ),
+    [hasLoaded, threadListLoadingByWorkspace, workspaces],
+  );
 
   const activeRateLimits = activeWorkspaceId
     ? rateLimitsByWorkspace[activeWorkspaceId] ?? null
@@ -315,6 +338,21 @@ function MainApp() {
   const activeQueue = activeThreadId
     ? queuedByThread[activeThreadId] ?? []
     : [];
+  const activeDraft = activeThreadId
+    ? composerDraftsByThread[activeThreadId] ?? ""
+    : "";
+  const handleDraftChange = useCallback(
+    (next: string) => {
+      if (!activeThreadId) {
+        return;
+      }
+      setComposerDraftsByThread((prev) => ({
+        ...prev,
+        [activeThreadId]: next,
+      }));
+    },
+    [activeThreadId],
+  );
   const isWorktreeWorkspace = activeWorkspace?.kind === "worktree";
   const activeParentWorkspace = isWorktreeWorkspace
     ? workspaces.find((entry) => entry.id === activeWorkspace?.parentId) ?? null
@@ -353,6 +391,22 @@ function MainApp() {
     refreshWorkspaces,
     listThreadsForWorkspace,
   });
+
+  // Cmd+N shortcut to create new agent in active workspace
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+      const modifierKey = isMac ? event.metaKey : event.ctrlKey;
+      if (modifierKey && event.key === "n") {
+        event.preventDefault();
+        if (activeWorkspace) {
+          void handleAddAgent(activeWorkspace);
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeWorkspace, handleAddAgent]);
 
   async function handleAddWorkspace() {
     try {
@@ -405,6 +459,8 @@ function MainApp() {
     if (isCompact) {
       setActiveTab("codex");
     }
+    // Focus the composer input after creating the agent
+    setTimeout(() => composerInputRef.current?.focus(), 0);
   }
 
   async function handleAddWorktreeAgent(workspace: (typeof workspaces)[number]) {
@@ -502,9 +558,11 @@ function MainApp() {
     });
   }
 
-  async function handleSend(text: string) {
+  async function handleSend(text: string, images: string[] = []) {
     const trimmed = text.trim();
-    if (!trimmed) {
+    const shouldIgnoreImages = trimmed.startsWith("/review");
+    const nextImages = shouldIgnoreImages ? [] : images;
+    if (!trimmed && nextImages.length === 0) {
       return;
     }
     if (activeThreadId && threadStatusById[activeThreadId]?.isReviewing) {
@@ -515,11 +573,13 @@ function MainApp() {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         text: trimmed,
         createdAt: Date.now(),
+        images: nextImages,
       };
       setQueuedByThread((prev) => ({
         ...prev,
         [activeThreadId]: [...(prev[activeThreadId] ?? []), item],
       }));
+      clearActiveImages();
       return;
     }
     if (activeWorkspace && !activeWorkspace.connected) {
@@ -527,9 +587,11 @@ function MainApp() {
     }
     if (trimmed.startsWith("/review")) {
       await startReview(trimmed);
+      clearActiveImages();
       return;
     }
-    await sendUserMessage(trimmed);
+    await sendUserMessage(trimmed, nextImages);
+    clearActiveImages();
   }
 
   useEffect(() => {
@@ -555,7 +617,7 @@ function MainApp() {
         if (nextItem.text.trim().startsWith("/review")) {
           await startReview(nextItem.text);
         } else {
-          await sendUserMessage(nextItem.text);
+          await sendUserMessage(nextItem.text, nextItem.images ?? []);
         }
       } catch {
         setQueuedByThread((prev) => ({
@@ -679,6 +741,14 @@ function MainApp() {
       }}
       onDeleteThread={(workspaceId, threadId) => {
         removeThread(workspaceId, threadId);
+        setComposerDraftsByThread((prev) => {
+          if (!(threadId in prev)) {
+            return prev;
+          }
+          const { [threadId]: _, ...rest } = prev;
+          return rest;
+        });
+        removeImagesForThread(threadId);
       }}
       onDeleteWorkspace={(workspaceId) => {
         void removeWorkspace(workspaceId);
@@ -689,13 +759,18 @@ function MainApp() {
     />
   );
 
+  const activeThreadStatus = activeThreadId
+    ? threadStatusById[activeThreadId] ?? null
+    : null;
+
   const messagesNode = (
     <Messages
       items={activeItems}
-      threadId={activeThreadId}
       isThinking={
         activeThreadId ? threadStatusById[activeThreadId]?.isProcessing ?? false : false
       }
+      processingStartedAt={activeThreadStatus?.processingStartedAt ?? null}
+      lastDurationMs={activeThreadStatus?.lastDurationMs ?? null}
     />
   );
 
@@ -710,6 +785,12 @@ function MainApp() {
       contextUsage={activeTokenUsage}
       queuedMessages={activeQueue}
       sendLabel={isProcessing ? "Queue" : "Send"}
+      draftText={activeDraft}
+      onDraftChange={handleDraftChange}
+      attachedImages={activeImages}
+      onPickImages={pickImages}
+      onAttachImages={attachImages}
+      onRemoveImage={removeImage}
       prefillDraft={prefillDraft}
       onPrefillHandled={(id) => {
         if (prefillDraft?.id === id) {
@@ -732,6 +813,7 @@ function MainApp() {
             (entry) => entry.id !== item.id,
           ),
         }));
+        setImagesForThread(activeThreadId, item.images ?? []);
         setPrefillDraft(item);
       }}
       onDeleteQueued={(id) => {
@@ -756,6 +838,7 @@ function MainApp() {
       skills={skills}
       prompts={prompts}
       files={files}
+      textareaRef={composerInputRef}
     />
   ) : null;
 
@@ -781,6 +864,7 @@ function MainApp() {
             onOpenProject={handleAddWorkspace}
             onAddWorkspace={handleAddWorkspace}
             latestAgentRuns={latestAgentRuns}
+            isLoadingLatestAgents={isLoadingLatestAgents}
             onSelectThread={(workspaceId, threadId) => {
               exitDiffView();
               selectWorkspace(workspaceId);
@@ -934,6 +1018,7 @@ function MainApp() {
             onOpenProject={handleAddWorkspace}
             onAddWorkspace={handleAddWorkspace}
             latestAgentRuns={latestAgentRuns}
+            isLoadingLatestAgents={isLoadingLatestAgents}
             onSelectThread={(workspaceId, threadId) => {
               exitDiffView();
               selectWorkspace(workspaceId);

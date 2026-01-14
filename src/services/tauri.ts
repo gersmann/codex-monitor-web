@@ -22,6 +22,22 @@ export async function pickWorkspacePath(): Promise<string | null> {
   return selection;
 }
 
+export async function pickImageFiles(): Promise<string[]> {
+  const selection = await open({
+    multiple: true,
+    filters: [
+      {
+        name: "Images",
+        extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif"],
+      },
+    ],
+  });
+  if (!selection) {
+    return [];
+  }
+  return Array.isArray(selection) ? selection : [selection];
+}
+
 export async function listWorkspaces(): Promise<WorkspaceInfo[]> {
   return invoke<WorkspaceInfo[]>("list_workspaces");
 }
@@ -78,6 +94,7 @@ export async function sendUserMessage(
     model?: string | null;
     effort?: string | null;
     accessMode?: "read-only" | "current" | "full-access";
+    images?: string[];
   },
 ) {
   return invoke("send_user_message", {
@@ -87,6 +104,7 @@ export async function sendUserMessage(
     model: options?.model ?? null,
     effort: options?.effort ?? null,
     accessMode: options?.accessMode ?? null,
+    images: options?.images ?? null,
   });
 }
 

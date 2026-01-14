@@ -485,6 +485,7 @@ pub(crate) async fn send_user_message(
     model: Option<String>,
     effort: Option<String>,
     access_mode: Option<String>,
+    images: Option<Vec<String>>,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     let sessions = state.sessions.lock().await;
@@ -512,9 +513,31 @@ pub(crate) async fn send_user_message(
         "on-request"
     };
 
+    let trimmed_text = text.trim();
+    let mut input: Vec<Value> = Vec::new();
+    if !trimmed_text.is_empty() {
+        input.push(json!({ "type": "text", "text": trimmed_text }));
+    }
+    if let Some(paths) = images {
+        for path in paths {
+            let trimmed = path.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if trimmed.starts_with("data:") || trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+                input.push(json!({ "type": "image", "url": trimmed }));
+            } else {
+                input.push(json!({ "type": "localImage", "path": trimmed }));
+            }
+        }
+    }
+    if input.is_empty() {
+        return Err("empty user message".to_string());
+    }
+
     let params = json!({
         "threadId": thread_id,
-        "input": [{ "type": "text", "text": text }],
+        "input": input,
         "cwd": session.entry.path,
         "approvalPolicy": approval_policy,
         "sandboxPolicy": sandbox_policy,

@@ -7,7 +7,8 @@ import { languageFromPath } from "../utils/syntax";
 type MessagesProps = {
   items: ConversationItem[];
   isThinking: boolean;
-  threadId?: string | null;
+  processingStartedAt?: number | null;
+  lastDurationMs?: number | null;
 };
 
 type ToolSummary = {
@@ -176,12 +177,15 @@ function toolStatusTone(
   return "processing";
 }
 
-export function Messages({ items, isThinking, threadId }: MessagesProps) {
+export function Messages({
+  items,
+  isThinking,
+  processingStartedAt = null,
+  lastDurationMs = null,
+}: MessagesProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const [workingSince, setWorkingSince] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [lastDurationMs, setLastDurationMs] = useState<number | null>(null);
   const toggleExpanded = (id: string) => {
     setExpandedItems((prev) => {
       const next = new Set(prev);
@@ -219,37 +223,16 @@ export function Messages({ items, isThinking, threadId }: MessagesProps) {
   }, [items.length, isThinking]);
 
   useEffect(() => {
-    setWorkingSince(null);
-    setElapsedMs(0);
-    setLastDurationMs(null);
-  }, [threadId]);
-
-  useEffect(() => {
-    if (isThinking) {
-      if (!workingSince) {
-        setWorkingSince(Date.now());
-        setElapsedMs(0);
-        setLastDurationMs(null);
-      }
-      return undefined;
-    }
-    if (workingSince) {
-      setLastDurationMs(Date.now() - workingSince);
-      setWorkingSince(null);
+    if (!isThinking || !processingStartedAt) {
       setElapsedMs(0);
-    }
-    return undefined;
-  }, [isThinking, workingSince]);
-
-  useEffect(() => {
-    if (!isThinking || !workingSince) {
       return undefined;
     }
+    setElapsedMs(Date.now() - processingStartedAt);
     const interval = window.setInterval(() => {
-      setElapsedMs(Date.now() - workingSince);
+      setElapsedMs(Date.now() - processingStartedAt);
     }, 1000);
     return () => window.clearInterval(interval);
-  }, [isThinking, workingSince]);
+  }, [isThinking, processingStartedAt]);
 
   const elapsedSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
