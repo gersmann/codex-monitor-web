@@ -502,8 +502,6 @@ export function Messages({ items, isThinking, threadId }: MessagesProps) {
         <div className="working">
           <span className="working-spinner" aria-hidden />
           <div className="working-timer">
-            <span className="working-timer-seconds">{elapsedSeconds}s</span>
-            <span className="working-timer-divider">·</span>
             <span className="working-timer-clock">{formattedElapsed}</span>
           </div>
           <span className="working-text">Working…</span>

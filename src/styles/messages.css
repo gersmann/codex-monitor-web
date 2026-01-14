@@ -52,9 +52,6 @@
   color: var(--text-stronger);
 }
 
-.working-timer-divider {
-  opacity: 0.6;
-}
 
 .working-text {
   position: relative;
