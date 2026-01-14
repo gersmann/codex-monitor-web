@@ -72,6 +72,10 @@ export type CodexDoctorResult = {
   version: string | null;
   appServerOk: boolean;
   details: string | null;
+  path: string | null;
+  nodeOk: boolean;
+  nodeVersion: string | null;
+  nodeDetails: string | null;
 };
 
 export type ApprovalRequest = {
