@@ -953,8 +953,8 @@ export function useThreads({
   }, [activeWorkspace, activeThreadId, resumeThreadForWorkspace, startThreadForWorkspace]);
 
   const sendUserMessage = useCallback(
-    async (text: string) => {
-      if (!activeWorkspace || !text.trim()) {
+    async (text: string, images: string[] = []) => {
+      if (!activeWorkspace || (!text.trim() && images.length === 0)) {
         return;
       }
       const threadId = await ensureThreadForActiveWorkspace();
@@ -969,6 +969,7 @@ export function useThreads({
         workspaceId: activeWorkspace.id,
         threadId,
         text: messageText,
+        images,
       });
       dispatch({
         type: "setThreadName",
@@ -987,6 +988,7 @@ export function useThreads({
           workspaceId: activeWorkspace.id,
           threadId,
           text: messageText,
+          images,
           model,
           effort,
         },
@@ -997,7 +999,7 @@ export function useThreads({
           activeWorkspace.id,
           threadId,
           messageText,
-          { model, effort, accessMode },
+          { model, effort, accessMode, images },
           )) as Record<string, unknown>;
         onDebug?.({
           id: `${Date.now()}-server-turn-start`,

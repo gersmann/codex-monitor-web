@@ -46,7 +46,17 @@ export function ComposerQueue({
       <div className="composer-queue-list">
         {queuedMessages.map((item) => (
           <div key={item.id} className="composer-queue-item">
-            <span className="composer-queue-text">{item.text}</span>
+            <span className="composer-queue-text">
+              {item.text ||
+                (item.images?.length
+                  ? item.images.length === 1
+                    ? "Image"
+                    : "Images"
+                  : "")}
+              {item.images?.length
+                ? ` · ${item.images.length} image${item.images.length === 1 ? "" : "s"}`
+                : ""}
+            </span>
             <button
               className="composer-queue-menu"
               onClick={(event) => handleQueueMenu(event, item)}
