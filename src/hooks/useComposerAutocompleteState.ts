@@ -107,13 +107,9 @@ export function useComposerAutocompleteState({
         triggerChar === "@" ? findPromptArgRangeAtCursor(text, cursor) : null;
       const before =
         triggerChar === "@"
-          ? promptRange
-            ? text.slice(0, promptRange.start)
-            : text.slice(0, triggerIndex)
+          ? text.slice(0, triggerIndex)
           : text.slice(0, autocompleteRange.start);
-      const after = promptRange
-        ? text.slice(promptRange.end)
-        : text.slice(autocompleteRange.end);
+      const after = text.slice(autocompleteRange.end);
       const insert = item.insertText ?? item.label;
       const actualInsert = triggerChar === "@"
         ? insert.replace(/^@+/, "")
