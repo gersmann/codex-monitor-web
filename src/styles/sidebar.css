@@ -250,7 +250,7 @@
 .workspace-add-menu {
   position: fixed;
   isolation: isolate;
-  background: rgba(12, 16, 26, 0.94);
+  background: var(--surface-command);
   border: 1px solid var(--border-muted);
   border-radius: 10px;
   padding: 6px;
