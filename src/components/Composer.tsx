@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { QueuedMessage, ThreadTokenUsage } from "../types";
+import type { CustomPromptOption, QueuedMessage, ThreadTokenUsage } from "../types";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { ComposerInput } from "./ComposerInput";
 import { ComposerMetaBar } from "./ComposerMetaBar";
@@ -19,6 +19,7 @@ type ComposerProps = {
   accessMode: "read-only" | "current" | "full-access";
   onSelectAccessMode: (mode: "read-only" | "current" | "full-access") => void;
   skills: { name: string; description?: string }[];
+  prompts: CustomPromptOption[];
   files: string[];
   contextUsage?: ThreadTokenUsage | null;
   queuedMessages?: QueuedMessage[];
@@ -52,6 +53,7 @@ export function Composer({
   accessMode,
   onSelectAccessMode,
   skills,
+  prompts,
   files,
   contextUsage = null,
   queuedMessages = [],
@@ -116,6 +118,7 @@ export function Composer({
     selectionStart,
     disabled,
     skills,
+    prompts,
     files,
     textareaRef,
     setText: setComposerText,

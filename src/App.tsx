@@ -47,6 +47,7 @@ import { useGitHubIssues } from "./hooks/useGitHubIssues";
 import { useGitRemote } from "./hooks/useGitRemote";
 import { useModels } from "./hooks/useModels";
 import { useSkills } from "./hooks/useSkills";
+import { useCustomPrompts } from "./hooks/useCustomPrompts";
 import { useWorkspaceFiles } from "./hooks/useWorkspaceFiles";
 import { useGitBranches } from "./hooks/useGitBranches";
 import { useDebugLog } from "./hooks/useDebugLog";
@@ -301,10 +302,8 @@ function MainApp() {
     setSelectedEffort
   } = useModels({ activeWorkspace, onDebug: addDebugEntry });
   const { skills } = useSkills({ activeWorkspace, onDebug: addDebugEntry });
-  const { files } = useWorkspaceFiles({
-    activeWorkspace,
-    onDebug: addDebugEntry
-  });
+  const { prompts } = useCustomPrompts({ activeWorkspace, onDebug: addDebugEntry });
+  const { files } = useWorkspaceFiles({ activeWorkspace, onDebug: addDebugEntry });
   const { branches, checkoutBranch, createBranch } = useGitBranches({
     activeWorkspace,
     onDebug: addDebugEntry
@@ -353,6 +352,7 @@ function MainApp() {
     model: resolvedModel,
     effort: selectedEffort,
     accessMode,
+    customPrompts: prompts,
     onMessageActivity: refreshGitStatus
   });
   const {
@@ -946,6 +946,7 @@ function MainApp() {
       accessMode={accessMode}
       onSelectAccessMode={setAccessMode}
       skills={skills}
+      prompts={prompts}
       files={files}
       textareaRef={composerInputRef}
     />

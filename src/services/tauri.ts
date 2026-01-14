@@ -185,6 +185,10 @@ export async function getSkillsList(workspaceId: string) {
   return invoke<any>("skills_list", { workspaceId });
 }
 
+export async function getPromptsList(workspaceId: string) {
+  return invoke<any>("prompts_list", { workspaceId });
+}
+
 export async function getAppSettings(): Promise<AppSettings> {
   return invoke<AppSettings>("get_app_settings");
 }
