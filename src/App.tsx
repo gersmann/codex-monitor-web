@@ -56,7 +56,12 @@ import { useResizablePanels } from "./hooks/useResizablePanels";
 import { useLayoutMode } from "./hooks/useLayoutMode";
 import { useAppSettings } from "./hooks/useAppSettings";
 import { useUpdater } from "./hooks/useUpdater";
-import type { AccessMode, QueuedMessage, WorkspaceInfo } from "./types";
+import type {
+  AccessMode,
+  DiffLineReference,
+  QueuedMessage,
+  WorkspaceInfo,
+} from "./types";
 
 function useWindowLabel() {
   const [label, setLabel] = useState("main");
@@ -100,6 +105,7 @@ function MainApp() {
     Record<string, QueuedMessage[]>
   >({});
   const [prefillDraft, setPrefillDraft] = useState<QueuedMessage | null>(null);
+  const [composerInsert, setComposerInsert] = useState<QueuedMessage | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [reduceTransparency, setReduceTransparency] = useState(() => {
     const stored = localStorage.getItem("reduceTransparency");
@@ -457,6 +463,36 @@ function MainApp() {
     }
   }
 
+  function handleDiffLineReference(reference: DiffLineReference) {
+    const startLine = reference.newLine ?? reference.oldLine;
+    const endLine =
+      reference.endNewLine ?? reference.endOldLine ?? startLine ?? null;
+    const lineRange =
+      startLine && endLine && endLine !== startLine
+        ? `${startLine}-${endLine}`
+        : startLine
+          ? `${startLine}`
+          : null;
+    const lineLabel = lineRange ? `${reference.path}:${lineRange}` : reference.path;
+    const changeLabel =
+      reference.type === "add"
+        ? "added"
+        : reference.type === "del"
+          ? "removed"
+          : reference.type === "mixed"
+            ? "mixed"
+            : "context";
+    const snippet = reference.lines.join("\n").trimEnd();
+    const snippetBlock = snippet ? `\n\`\`\`\n${snippet}\n\`\`\`` : "";
+    const label = reference.lines.length > 1 ? "Line range" : "Line reference";
+    const text = `${label} (${changeLabel}): ${lineLabel}${snippetBlock}`;
+    setComposerInsert({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      text,
+      createdAt: Date.now(),
+    });
+  }
+
   async function handleSend(text: string) {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -578,7 +614,7 @@ function MainApp() {
   };
 
   const showComposer = !isCompact
-    ? centerMode === "chat"
+    ? centerMode === "chat" || centerMode === "diff"
     : (isTablet ? tabletTab : activeTab) === "codex";
   const showGitDetail = Boolean(selectedDiffPath) && isPhone;
   const appClassName = `app ${isCompact ? "layout-compact" : "layout-desktop"}${
@@ -668,6 +704,12 @@ function MainApp() {
       onPrefillHandled={(id) => {
         if (prefillDraft?.id === id) {
           setPrefillDraft(null);
+        }
+      }}
+      insertText={composerInsert}
+      onInsertHandled={(id) => {
+        if (composerInsert?.id === id) {
+          setComposerInsert(null);
         }
       }}
       onEditQueued={(item) => {
@@ -784,6 +826,7 @@ function MainApp() {
                   selectedPath={selectedDiffPath}
                   isLoading={isDiffLoading}
                   error={diffError}
+                  onLineReference={handleDiffLineReference}
                 />
               ) : (
                 messagesNode
@@ -950,6 +993,7 @@ function MainApp() {
                     selectedPath={selectedDiffPath}
                     isLoading={isDiffLoading}
                     error={diffError}
+                    onLineReference={handleDiffLineReference}
                   />
                 </div>
               </div>
@@ -1049,6 +1093,7 @@ function MainApp() {
                   selectedPath={selectedDiffPath}
                   isLoading={isDiffLoading}
                   error={diffError}
+                  onLineReference={handleDiffLineReference}
                 />
               </div>
             </>
@@ -1107,6 +1152,7 @@ function MainApp() {
                       selectedPath={selectedDiffPath}
                       isLoading={isDiffLoading}
                       error={diffError}
+                      onLineReference={handleDiffLineReference}
                     />
                   </div>
                 )}

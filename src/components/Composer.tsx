@@ -27,6 +27,8 @@ type ComposerProps = {
   sendLabel?: string;
   prefillDraft?: QueuedMessage | null;
   onPrefillHandled?: (id: string) => void;
+  insertText?: QueuedMessage | null;
+  onInsertHandled?: (id: string) => void;
 };
 
 export function Composer({
@@ -51,6 +53,8 @@ export function Composer({
   sendLabel = "Send",
   prefillDraft = null,
   onPrefillHandled,
+  insertText = null,
+  onInsertHandled,
 }: ComposerProps) {
   const [text, setText] = useState("");
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
@@ -95,6 +99,14 @@ export function Composer({
     setText(prefillDraft.text);
     onPrefillHandled?.(prefillDraft.id);
   }, [prefillDraft, onPrefillHandled]);
+
+  useEffect(() => {
+    if (!insertText) {
+      return;
+    }
+    setText(insertText.text);
+    onInsertHandled?.(insertText.id);
+  }, [insertText, onInsertHandled]);
 
   return (
     <footer className={`composer${disabled ? " is-disabled" : ""}`}>
