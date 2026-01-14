@@ -59,6 +59,7 @@
   --status-unknown: rgba(255, 255, 255, 0.3);
   --select-caret: rgba(255, 255, 255, 0.6);
   --tabbar-height: 56px;
+  --ui-scale: 1;
 }
 
 .app.reduced-transparency {
@@ -182,13 +183,16 @@ body {
 }
 
 .app {
-  height: 100vh;
+  height: calc(100vh / var(--ui-scale, 1));
+  width: calc(100vw / var(--ui-scale, 1));
   display: grid;
   grid-template-columns: var(--sidebar-width, 280px) 1fr;
   background: transparent;
   border-radius: 0;
   overflow: hidden;
   position: relative;
+  transform: scale(var(--ui-scale, 1));
+  transform-origin: top left;
 }
 
 .drag-strip {

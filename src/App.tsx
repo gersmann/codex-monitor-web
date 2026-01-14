@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./styles/base.css";
 import "./styles/buttons.css";
@@ -56,11 +56,13 @@ import { useResizablePanels } from "./hooks/useResizablePanels";
 import { useLayoutMode } from "./hooks/useLayoutMode";
 import { useAppSettings } from "./hooks/useAppSettings";
 import { useUpdater } from "./hooks/useUpdater";
+import { clampUiScale, UI_SCALE_STEP } from "./utils/uiScale";
 import type {
   AccessMode,
+  AppSettings,
   DiffLineReference,
   QueuedMessage,
-  WorkspaceInfo,
+  WorkspaceInfo
 } from "./types";
 
 function useWindowLabel() {
@@ -78,6 +80,13 @@ function useWindowLabel() {
 
 function MainApp() {
   const {
+    settings: appSettings,
+    setSettings: setAppSettings,
+    saveSettings,
+    doctor
+  } = useAppSettings();
+  const uiScale = clampUiScale(appSettings.uiScale);
+  const {
     sidebarWidth,
     rightPanelWidth,
     onSidebarResizeStart,
@@ -85,17 +94,17 @@ function MainApp() {
     planPanelHeight,
     onPlanPanelResizeStart,
     debugPanelHeight,
-    onDebugPanelResizeStart,
-  } = useResizablePanels();
+    onDebugPanelResizeStart
+  } = useResizablePanels(uiScale);
   const layoutMode = useLayoutMode();
   const isCompact = layoutMode !== "desktop";
   const isTablet = layoutMode === "tablet";
   const isPhone = layoutMode === "phone";
   const [centerMode, setCenterMode] = useState<"chat" | "diff">("chat");
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
-  const [gitPanelMode, setGitPanelMode] = useState<
-    "diff" | "log" | "issues"
-  >("diff");
+  const [gitPanelMode, setGitPanelMode] = useState<"diff" | "log" | "issues">(
+    "diff"
+  );
   const [accessMode, setAccessMode] = useState<AccessMode>("current");
   const [activeTab, setActiveTab] = useState<
     "projects" | "codex" | "git" | "log"
@@ -108,15 +117,17 @@ function MainApp() {
     Record<string, string>
   >({});
   const [prefillDraft, setPrefillDraft] = useState<QueuedMessage | null>(null);
-  const [composerInsert, setComposerInsert] = useState<QueuedMessage | null>(null);
+  const [composerInsert, setComposerInsert] = useState<QueuedMessage | null>(
+    null
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [reduceTransparency, setReduceTransparency] = useState(() => {
     const stored = localStorage.getItem("reduceTransparency");
     return stored === "true";
   });
-  const [flushingByThread, setFlushingByThread] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [flushingByThread, setFlushingByThread] = useState<
+    Record<string, boolean>
+  >({});
   const [worktreePrompt, setWorktreePrompt] = useState<{
     workspace: WorkspaceInfo;
     branch: string;
@@ -130,12 +141,33 @@ function MainApp() {
     hasDebugAlerts,
     addDebugEntry,
     handleCopyDebug,
-    clearDebugEntries,
+    clearDebugEntries
   } = useDebugLog();
 
   const updater = useUpdater({ onDebug: addDebugEntry });
 
-  const { settings: appSettings, saveSettings, doctor } = useAppSettings();
+  const scaleShortcutLabel = (() => {
+    if (typeof navigator === "undefined") {
+      return "Ctrl";
+    }
+    return /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? "Cmd" : "Ctrl";
+  })();
+  const scaleShortcutTitle = `${scaleShortcutLabel}+ and ${scaleShortcutLabel}-, ${scaleShortcutLabel}+0 to reset.`;
+  const scaleShortcutText = `Shortcuts: ${scaleShortcutLabel}+ and ${scaleShortcutLabel}-, ${scaleShortcutLabel}+0 to reset.`;
+
+  const saveQueueRef = useRef(Promise.resolve());
+  const queueSaveSettings = useCallback(
+    (next: AppSettings) => {
+      const task = () => saveSettings(next);
+      const queued = saveQueueRef.current.then(task, task);
+      saveQueueRef.current = queued.then(
+        () => undefined,
+        () => undefined
+      );
+      return queued;
+    },
+    [saveSettings]
+  );
 
   const {
     workspaces,
@@ -151,12 +183,15 @@ function MainApp() {
     removeWorkspace,
     removeWorktree,
     hasLoaded,
-    refreshWorkspaces,
-  } = useWorkspaces({ onDebug: addDebugEntry, defaultCodexBin: appSettings.codexBin });
+    refreshWorkspaces
+  } = useWorkspaces({
+    onDebug: addDebugEntry,
+    defaultCodexBin: appSettings.codexBin
+  });
 
   useEffect(() => {
     setAccessMode((prev) =>
-      prev === "current" ? appSettings.defaultAccessMode : prev,
+      prev === "current" ? appSettings.defaultAccessMode : prev
     );
   }, [appSettings.defaultAccessMode]);
 
@@ -164,6 +199,65 @@ function MainApp() {
     localStorage.setItem("reduceTransparency", String(reduceTransparency));
   }, [reduceTransparency]);
 
+  const handleScaleDelta = useCallback(
+    (delta: number) => {
+      setAppSettings((current) => {
+        const nextScale = clampUiScale(current.uiScale + delta);
+        if (nextScale === current.uiScale) {
+          return current;
+        }
+        const nextSettings = {
+          ...current,
+          uiScale: nextScale
+        };
+        void queueSaveSettings(nextSettings);
+        return nextSettings;
+      });
+    },
+    [queueSaveSettings, setAppSettings]
+  );
+
+  const handleScaleReset = useCallback(() => {
+    setAppSettings((current) => {
+      if (current.uiScale === 1) {
+        return current;
+      }
+      const nextSettings = {
+        ...current,
+        uiScale: 1
+      };
+      void queueSaveSettings(nextSettings);
+      return nextSettings;
+    });
+  }, [queueSaveSettings, setAppSettings]);
+
+  useEffect(() => {
+    const handleScaleShortcut = (event: KeyboardEvent) => {
+      if (!event.metaKey && !event.ctrlKey) {
+        return;
+      }
+      if (event.altKey) {
+        return;
+      }
+      const key = event.key;
+      const isIncrease = key === "+" || key === "=";
+      const isDecrease = key === "-" || key === "_";
+      const isReset = key === "0";
+      if (!isIncrease && !isDecrease && !isReset) {
+        return;
+      }
+      event.preventDefault();
+      if (isReset) {
+        handleScaleReset();
+        return;
+      }
+      handleScaleDelta(isDecrease ? -UI_SCALE_STEP : UI_SCALE_STEP);
+    };
+    window.addEventListener("keydown", handleScaleShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleScaleShortcut);
+    };
+  }, [handleScaleDelta, handleScaleReset]);
 
   const { status: gitStatus, refresh: refreshGitStatus } =
     useGitStatus(activeWorkspace);
@@ -174,7 +268,7 @@ function MainApp() {
   const {
     diffs: gitDiffs,
     isLoading: isDiffLoading,
-    error: diffError,
+    error: diffError
   } = useGitDiffs(activeWorkspace, gitStatus.files, shouldLoadDiffs);
   const {
     entries: gitLogEntries,
@@ -185,13 +279,13 @@ function MainApp() {
     behindEntries: gitLogBehindEntries,
     upstream: gitLogUpstream,
     isLoading: gitLogLoading,
-    error: gitLogError,
+    error: gitLogError
   } = useGitLog(activeWorkspace, shouldLoadGitLog);
   const {
     issues: gitIssues,
     total: gitIssuesTotal,
     isLoading: gitIssuesLoading,
-    error: gitIssuesError,
+    error: gitIssuesError
   } = useGitHubIssues(activeWorkspace, gitPanelMode === "issues");
   const { remote: gitRemoteUrl } = useGitRemote(activeWorkspace);
   const {
@@ -201,15 +295,17 @@ function MainApp() {
     setSelectedModelId,
     reasoningOptions,
     selectedEffort,
-    setSelectedEffort,
+    setSelectedEffort
   } = useModels({ activeWorkspace, onDebug: addDebugEntry });
   const { skills } = useSkills({ activeWorkspace, onDebug: addDebugEntry });
-  const { files } = useWorkspaceFiles({ activeWorkspace, onDebug: addDebugEntry });
-  const {
-    branches,
-    checkoutBranch,
-    createBranch,
-  } = useGitBranches({ activeWorkspace, onDebug: addDebugEntry });
+  const { files } = useWorkspaceFiles({
+    activeWorkspace,
+    onDebug: addDebugEntry
+  });
+  const { branches, checkoutBranch, createBranch } = useGitBranches({
+    activeWorkspace,
+    onDebug: addDebugEntry
+  });
   const handleCheckoutBranch = async (name: string) => {
     await checkoutBranch(name);
     refreshGitStatus();
@@ -222,7 +318,9 @@ function MainApp() {
   const resolvedModel = selectedModel?.model ?? null;
   const fileStatus =
     gitStatus.files.length > 0
-      ? `${gitStatus.files.length} file${gitStatus.files.length === 1 ? "" : "s"} changed`
+      ? `${gitStatus.files.length} file${
+          gitStatus.files.length === 1 ? "" : "s"
+        } changed`
       : "Working tree clean";
 
   const {
@@ -244,7 +342,7 @@ function MainApp() {
     listThreadsForWorkspace,
     sendUserMessage,
     startReview,
-    handleApprovalDecision,
+    handleApprovalDecision
   } = useThreads({
     activeWorkspace,
     onWorkspaceConnected: markWorkspaceConnected,
@@ -252,7 +350,7 @@ function MainApp() {
     model: resolvedModel,
     effort: selectedEffort,
     accessMode,
-    onMessageActivity: refreshGitStatus,
+    onMessageActivity: refreshGitStatus
   });
 
   const latestAgentRuns = useMemo(() => {
@@ -277,7 +375,7 @@ function MainApp() {
           timestamp: entry.timestamp,
           projectName: workspace.name,
           workspaceId: workspace.id,
-          isProcessing: threadStatusById[thread.id]?.isProcessing ?? false,
+          isProcessing: threadStatusById[thread.id]?.isProcessing ?? false
         });
       });
     });
@@ -286,15 +384,15 @@ function MainApp() {
     lastAgentMessageByThread,
     threadStatusById,
     threadsByWorkspace,
-    workspaces,
+    workspaces
   ]);
   const isLoadingLatestAgents = useMemo(
     () =>
       !hasLoaded ||
       workspaces.some(
-        (workspace) => threadListLoadingByWorkspace[workspace.id] ?? false,
+        (workspace) => threadListLoadingByWorkspace[workspace.id] ?? false
       ),
-    [hasLoaded, threadListLoadingByWorkspace, workspaces],
+    [hasLoaded, threadListLoadingByWorkspace, workspaces]
   );
 
   const activeRateLimits = activeWorkspaceId
@@ -303,15 +401,17 @@ function MainApp() {
   const activeTokenUsage = activeThreadId
     ? tokenUsageByThread[activeThreadId] ?? null
     : null;
-  const activePlan = activeThreadId ? planByThread[activeThreadId] ?? null : null;
+  const activePlan = activeThreadId
+    ? planByThread[activeThreadId] ?? null
+    : null;
   const hasActivePlan = Boolean(
-    activePlan && (activePlan.steps.length > 0 || activePlan.explanation),
+    activePlan && (activePlan.steps.length > 0 || activePlan.explanation)
   );
   const showHome = !activeWorkspace;
   const canInterrupt = activeThreadId
     ? Boolean(
         threadStatusById[activeThreadId]?.isProcessing &&
-          activeTurnIdByThread[activeThreadId],
+          activeTurnIdByThread[activeThreadId]
       )
     : false;
   const isProcessing = activeThreadId
@@ -333,10 +433,10 @@ function MainApp() {
       }
       setComposerDraftsByThread((prev) => ({
         ...prev,
-        [activeThreadId]: next,
+        [activeThreadId]: next
       }));
     },
-    [activeThreadId],
+    [activeThreadId]
   );
   const isWorktreeWorkspace = activeWorkspace?.kind === "worktree";
   const activeParentWorkspace = isWorktreeWorkspace
@@ -369,12 +469,12 @@ function MainApp() {
     workspaces,
     hasLoaded,
     connectWorkspace,
-    listThreadsForWorkspace,
+    listThreadsForWorkspace
   });
   useWorkspaceRefreshOnFocus({
     workspaces,
     refreshWorkspaces,
-    listThreadsForWorkspace,
+    listThreadsForWorkspace
   });
 
   async function handleAddWorkspace() {
@@ -393,7 +493,7 @@ function MainApp() {
         timestamp: Date.now(),
         source: "error",
         label: "workspace/add error",
-        payload: message,
+        payload: message
       });
       alert(`Failed to add workspace.\n\n${message}`);
     }
@@ -404,7 +504,7 @@ function MainApp() {
     if (target?.settings.sidebarCollapsed) {
       void updateWorkspaceSettings(workspaceId, {
         ...target.settings,
-        sidebarCollapsed: false,
+        sidebarCollapsed: false
       });
     }
     setActiveWorkspaceId(workspaceId);
@@ -430,16 +530,18 @@ function MainApp() {
     }
   }
 
-  async function handleAddWorktreeAgent(workspace: (typeof workspaces)[number]) {
+  async function handleAddWorktreeAgent(
+    workspace: (typeof workspaces)[number]
+  ) {
     exitDiffView();
-    const defaultBranch = `codex/${new Date().toISOString().slice(0, 10)}-${Math.random()
-      .toString(36)
-      .slice(2, 6)}`;
+    const defaultBranch = `codex/${new Date()
+      .toISOString()
+      .slice(0, 10)}-${Math.random().toString(36).slice(2, 6)}`;
     setWorktreePrompt({
       workspace,
       branch: defaultBranch,
       isSubmitting: false,
-      error: null,
+      error: null
     });
   }
 
@@ -449,7 +551,7 @@ function MainApp() {
     }
     const { workspace, branch } = worktreePrompt;
     setWorktreePrompt((prev) =>
-      prev ? { ...prev, isSubmitting: true, error: null } : prev,
+      prev ? { ...prev, isSubmitting: true, error: null } : prev
     );
     try {
       const worktreeWorkspace = await addWorktreeAgent(workspace, branch);
@@ -468,14 +570,14 @@ function MainApp() {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setWorktreePrompt((prev) =>
-        prev ? { ...prev, isSubmitting: false, error: message } : prev,
+        prev ? { ...prev, isSubmitting: false, error: message } : prev
       );
       addDebugEntry({
         id: `${Date.now()}-client-add-worktree-error`,
         timestamp: Date.now(),
         source: "error",
         label: "worktree/add error",
-        payload: message,
+        payload: message
       });
     }
   }
@@ -503,17 +605,19 @@ function MainApp() {
       startLine && endLine && endLine !== startLine
         ? `${startLine}-${endLine}`
         : startLine
-          ? `${startLine}`
-          : null;
-    const lineLabel = lineRange ? `${reference.path}:${lineRange}` : reference.path;
+        ? `${startLine}`
+        : null;
+    const lineLabel = lineRange
+      ? `${reference.path}:${lineRange}`
+      : reference.path;
     const changeLabel =
       reference.type === "add"
         ? "added"
         : reference.type === "del"
-          ? "removed"
-          : reference.type === "mixed"
-            ? "mixed"
-            : "context";
+        ? "removed"
+        : reference.type === "mixed"
+        ? "mixed"
+        : "context";
     const snippet = reference.lines.join("\n").trimEnd();
     const snippetBlock = snippet ? `\n\`\`\`\n${snippet}\n\`\`\`` : "";
     const label = reference.lines.length > 1 ? "Line range" : "Line reference";
@@ -521,7 +625,7 @@ function MainApp() {
     setComposerInsert({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       text,
-      createdAt: Date.now(),
+      createdAt: Date.now()
     });
   }
 
@@ -537,11 +641,11 @@ function MainApp() {
       const item: QueuedMessage = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         text: trimmed,
-        createdAt: Date.now(),
+        createdAt: Date.now()
       };
       setQueuedByThread((prev) => ({
         ...prev,
-        [activeThreadId]: [...(prev[activeThreadId] ?? []), item],
+        [activeThreadId]: [...(prev[activeThreadId] ?? []), item]
       }));
       return;
     }
@@ -571,7 +675,7 @@ function MainApp() {
     setFlushingByThread((prev) => ({ ...prev, [threadId]: true }));
     setQueuedByThread((prev) => ({
       ...prev,
-      [threadId]: (prev[threadId] ?? []).slice(1),
+      [threadId]: (prev[threadId] ?? []).slice(1)
     }));
     (async () => {
       try {
@@ -583,7 +687,7 @@ function MainApp() {
       } catch {
         setQueuedByThread((prev) => ({
           ...prev,
-          [threadId]: [nextItem, ...(prev[threadId] ?? [])],
+          [threadId]: [nextItem, ...(prev[threadId] ?? [])]
         }));
       } finally {
         setFlushingByThread((prev) => ({ ...prev, [threadId]: false }));
@@ -595,7 +699,7 @@ function MainApp() {
     isProcessing,
     isReviewing,
     queuedByThread,
-    sendUserMessage,
+    sendUserMessage
   ]);
 
   const handleDebugClick = () => {
@@ -612,7 +716,10 @@ function MainApp() {
       ? entry.settings.sortOrder
       : Number.MAX_SAFE_INTEGER;
 
-  const handleMoveWorkspace = async (workspaceId: string, direction: "up" | "down") => {
+  const handleMoveWorkspace = async (
+    workspaceId: string,
+    direction: "up" | "down"
+  ) => {
     const ordered = workspaces
       .filter((entry) => (entry.kind ?? "main") !== "worktree")
       .slice()
@@ -639,9 +746,9 @@ function MainApp() {
       next.map((entry, idx) =>
         updateWorkspaceSettings(entry.id, {
           ...entry.settings,
-          sortOrder: idx,
-        }),
-      ),
+          sortOrder: idx
+        })
+      )
     );
   };
 
@@ -651,21 +758,23 @@ function MainApp() {
   const showGitDetail = Boolean(selectedDiffPath) && isPhone;
   const appClassName = `app ${isCompact ? "layout-compact" : "layout-desktop"}${
     isPhone ? " layout-phone" : ""
-  }${isTablet ? " layout-tablet" : ""}${reduceTransparency ? " reduced-transparency" : ""}`;
+  }${isTablet ? " layout-tablet" : ""}${
+    reduceTransparency ? " reduced-transparency" : ""
+  }`;
 
   const sidebarNode = (
-      <Sidebar
-        workspaces={workspaces}
-        threadsByWorkspace={threadsByWorkspace}
-        threadStatusById={threadStatusById}
-        threadListLoadingByWorkspace={threadListLoadingByWorkspace}
-        activeWorkspaceId={activeWorkspaceId}
-        activeThreadId={activeThreadId}
-        accountRateLimits={activeRateLimits}
-        onOpenSettings={handleOpenSettings}
-        onOpenDebug={handleDebugClick}
-        hasDebugAlerts={hasDebugAlerts}
-        onAddWorkspace={handleAddWorkspace}
+    <Sidebar
+      workspaces={workspaces}
+      threadsByWorkspace={threadsByWorkspace}
+      threadStatusById={threadStatusById}
+      threadListLoadingByWorkspace={threadListLoadingByWorkspace}
+      activeWorkspaceId={activeWorkspaceId}
+      activeThreadId={activeThreadId}
+      accountRateLimits={activeRateLimits}
+      onOpenSettings={handleOpenSettings}
+      onOpenDebug={handleDebugClick}
+      hasDebugAlerts={hasDebugAlerts}
+      onAddWorkspace={handleAddWorkspace}
       onSelectHome={() => {
         exitDiffView();
         setActiveWorkspaceId(null);
@@ -692,7 +801,7 @@ function MainApp() {
         }
         void updateWorkspaceSettings(workspaceId, {
           ...target.settings,
-          sidebarCollapsed: collapsed,
+          sidebarCollapsed: collapsed
         });
       }}
       onSelectThread={(workspaceId, threadId) => {
@@ -727,7 +836,9 @@ function MainApp() {
     <Messages
       items={activeItems}
       isThinking={
-        activeThreadId ? threadStatusById[activeThreadId]?.isProcessing ?? false : false
+        activeThreadId
+          ? threadStatusById[activeThreadId]?.isProcessing ?? false
+          : false
       }
       processingStartedAt={activeThreadStatus?.processingStartedAt ?? null}
       lastDurationMs={activeThreadStatus?.lastDurationMs ?? null}
@@ -740,7 +851,9 @@ function MainApp() {
       onStop={interruptTurn}
       canStop={canInterrupt}
       disabled={
-        activeThreadId ? threadStatusById[activeThreadId]?.isReviewing ?? false : false
+        activeThreadId
+          ? threadStatusById[activeThreadId]?.isReviewing ?? false
+          : false
       }
       contextUsage={activeTokenUsage}
       queuedMessages={activeQueue}
@@ -766,8 +879,8 @@ function MainApp() {
         setQueuedByThread((prev) => ({
           ...prev,
           [activeThreadId]: (prev[activeThreadId] ?? []).filter(
-            (entry) => entry.id !== item.id,
-          ),
+            (entry) => entry.id !== item.id
+          )
         }));
         setPrefillDraft(item);
       }}
@@ -778,8 +891,8 @@ function MainApp() {
         setQueuedByThread((prev) => ({
           ...prev,
           [activeThreadId]: (prev[activeThreadId] ?? []).filter(
-            (entry) => entry.id !== id,
-          ),
+            (entry) => entry.id !== id
+          )
         }));
       }}
       models={models}
@@ -851,16 +964,16 @@ function MainApp() {
                   worktreeLabel={worktreeLabel}
                   disableBranchMenu={isWorktreeWorkspace}
                   parentPath={activeParentWorkspace?.path ?? null}
-                  worktreePath={isWorktreeWorkspace ? activeWorkspace.path : null}
+                  worktreePath={
+                    isWorktreeWorkspace ? activeWorkspace.path : null
+                  }
                   branchName={gitStatus.branchName || "unknown"}
                   branches={branches}
                   onCheckoutBranch={handleCheckoutBranch}
                   onCreateBranch={handleCreateBranch}
                 />
               </div>
-              <div className="actions">
-                {null}
-              </div>
+              <div className="actions">{null}</div>
             </div>
             <ApprovalToasts
               approvals={approvals}
@@ -889,7 +1002,9 @@ function MainApp() {
               aria-label="Resize right panel"
               onMouseDown={onRightPanelResizeStart}
             />
-            <div className={`right-panel ${hasActivePlan ? "" : "plan-collapsed"}`}>
+            <div
+              className={`right-panel ${hasActivePlan ? "" : "plan-collapsed"}`}
+            >
               <div className="right-panel-top">
                 <GitDiffPanel
                   mode={gitPanelMode}
@@ -992,7 +1107,9 @@ function MainApp() {
                   worktreeLabel={worktreeLabel}
                   disableBranchMenu={isWorktreeWorkspace}
                   parentPath={activeParentWorkspace?.path ?? null}
-                  worktreePath={isWorktreeWorkspace ? activeWorkspace.path : null}
+                  worktreePath={
+                    isWorktreeWorkspace ? activeWorkspace.path : null
+                  }
                   branchName={gitStatus.branchName || "unknown"}
                   branches={branches}
                   onCheckoutBranch={handleCheckoutBranch}
@@ -1003,9 +1120,7 @@ function MainApp() {
             </div>
             {tabletTab === "codex" && (
               <>
-                <div className="content tablet-content">
-                  {messagesNode}
-                </div>
+                <div className="content tablet-content">{messagesNode}</div>
                 {composerNode}
               </>
             )}
@@ -1076,38 +1191,46 @@ function MainApp() {
         onUpdate={updater.startUpdate}
         onDismiss={updater.dismiss}
       />
-      {activeTab === "projects" && <div className="compact-panel">{sidebarNode}</div>}
+      {activeTab === "projects" && (
+        <div className="compact-panel">{sidebarNode}</div>
+      )}
       {activeTab === "codex" && (
         <div className="compact-panel">
           {activeWorkspace ? (
             <>
-              <div className="main-topbar compact-topbar" data-tauri-drag-region>
+              <div
+                className="main-topbar compact-topbar"
+                data-tauri-drag-region
+              >
                 <div className="main-topbar-left">
-                <MainHeader
-                  workspace={activeWorkspace}
-                  parentName={activeParentWorkspace?.name ?? null}
-                  worktreeLabel={worktreeLabel}
-                  disableBranchMenu={isWorktreeWorkspace}
-                  parentPath={activeParentWorkspace?.path ?? null}
-                  worktreePath={isWorktreeWorkspace ? activeWorkspace.path : null}
-                  branchName={gitStatus.branchName || "unknown"}
-                  branches={branches}
-                  onCheckoutBranch={handleCheckoutBranch}
-                  onCreateBranch={handleCreateBranch}
-                />
+                  <MainHeader
+                    workspace={activeWorkspace}
+                    parentName={activeParentWorkspace?.name ?? null}
+                    worktreeLabel={worktreeLabel}
+                    disableBranchMenu={isWorktreeWorkspace}
+                    parentPath={activeParentWorkspace?.path ?? null}
+                    worktreePath={
+                      isWorktreeWorkspace ? activeWorkspace.path : null
+                    }
+                    branchName={gitStatus.branchName || "unknown"}
+                    branches={branches}
+                    onCheckoutBranch={handleCheckoutBranch}
+                    onCreateBranch={handleCreateBranch}
+                  />
                 </div>
                 <div className="actions" />
               </div>
-              <div className="content compact-content">
-                {messagesNode}
-              </div>
+              <div className="content compact-content">{messagesNode}</div>
               {composerNode}
             </>
           ) : (
             <div className="compact-empty">
               <h3>No workspace selected</h3>
               <p>Choose a project to start chatting.</p>
-              <button className="ghost" onClick={() => setActiveTab("projects")}>
+              <button
+                className="ghost"
+                onClick={() => setActiveTab("projects")}
+              >
                 Go to Projects
               </button>
             </div>
@@ -1120,7 +1243,10 @@ function MainApp() {
             <div className="compact-empty">
               <h3>No workspace selected</h3>
               <p>Select a project to inspect diffs.</p>
-              <button className="ghost" onClick={() => setActiveTab("projects")}>
+              <button
+                className="ghost"
+                onClick={() => setActiveTab("projects")}
+              >
                 Go to Projects
               </button>
             </div>
@@ -1152,20 +1278,25 @@ function MainApp() {
           )}
           {activeWorkspace && !showGitDetail && (
             <>
-              <div className="main-topbar compact-topbar" data-tauri-drag-region>
+              <div
+                className="main-topbar compact-topbar"
+                data-tauri-drag-region
+              >
                 <div className="main-topbar-left">
-                <MainHeader
-                  workspace={activeWorkspace}
-                  parentName={activeParentWorkspace?.name ?? null}
-                  worktreeLabel={worktreeLabel}
-                  disableBranchMenu={isWorktreeWorkspace}
-                  parentPath={activeParentWorkspace?.path ?? null}
-                  worktreePath={isWorktreeWorkspace ? activeWorkspace.path : null}
-                  branchName={gitStatus.branchName || "unknown"}
-                  branches={branches}
-                  onCheckoutBranch={handleCheckoutBranch}
-                  onCreateBranch={handleCreateBranch}
-                />
+                  <MainHeader
+                    workspace={activeWorkspace}
+                    parentName={activeParentWorkspace?.name ?? null}
+                    worktreeLabel={worktreeLabel}
+                    disableBranchMenu={isWorktreeWorkspace}
+                    parentPath={activeParentWorkspace?.path ?? null}
+                    worktreePath={
+                      isWorktreeWorkspace ? activeWorkspace.path : null
+                    }
+                    branchName={gitStatus.branchName || "unknown"}
+                    branches={branches}
+                    onCheckoutBranch={handleCheckoutBranch}
+                    onCreateBranch={handleCreateBranch}
+                  />
                 </div>
               </div>
               <div className="compact-git">
@@ -1238,6 +1369,7 @@ function MainApp() {
           "--right-panel-width": `${rightPanelWidth}px`,
           "--plan-panel-height": `${planPanelHeight}px`,
           "--debug-panel-height": `${debugPanelHeight}px`,
+          "--ui-scale": String(uiScale)
         } as React.CSSProperties
       }
     >
@@ -1251,7 +1383,7 @@ function MainApp() {
           isBusy={worktreePrompt.isSubmitting}
           onChange={(value) =>
             setWorktreePrompt((prev) =>
-              prev ? { ...prev, branch: value, error: null } : prev,
+              prev ? { ...prev, branch: value, error: null } : prev
             )
           }
           onCancel={() => setWorktreePrompt(null)}
@@ -1270,12 +1402,14 @@ function MainApp() {
           onToggleTransparency={setReduceTransparency}
           appSettings={appSettings}
           onUpdateAppSettings={async (next) => {
-            await saveSettings(next);
+            await queueSaveSettings(next);
           }}
           onRunDoctor={doctor}
           onUpdateWorkspaceCodexBin={async (id, codexBin) => {
             await updateWorkspaceCodexBin(id, codexBin);
           }}
+          scaleShortcutTitle={scaleShortcutTitle}
+          scaleShortcutText={scaleShortcutText}
         />
       )}
     </div>
