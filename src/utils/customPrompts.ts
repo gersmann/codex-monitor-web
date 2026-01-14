@@ -9,6 +9,12 @@ export type PromptArgRange = {
   end: number;
 };
 
+function normalizeQuotes(input: string) {
+  return input
+    .replace(/[\u201C\u201D]/g, "\"")
+    .replace(/[\u2018\u2019]/g, "'");
+}
+
 export function promptArgumentNames(content: string) {
   const names: string[] = [];
   const seen = new Set<string>();
@@ -98,18 +104,19 @@ function findPromptArgRangesInLine(line: string): PromptArgRange[] {
   if (!isPromptCommandLine(line)) {
     return [];
   }
+  const normalized = normalizeQuotes(line);
   const ranges: PromptArgRange[] = [];
   let index = 0;
   while (index < line.length) {
-    const assignIndex = line.indexOf("=\"", index);
+    const assignIndex = normalized.indexOf("=\"", index);
     if (assignIndex === -1) {
       break;
     }
     const valueStart = assignIndex + 2;
     let end = valueStart;
     let found = false;
-    while (end < line.length) {
-      const char = line[end];
+    while (end < normalized.length) {
+      const char = normalized[end];
       if (char === "\"" && line[end - 1] !== "\\") {
         found = true;
         break;
@@ -211,7 +218,7 @@ function splitShlex(input: string) {
 }
 
 function parsePositionalArgs(rest: string) {
-  return splitShlex(rest);
+  return splitShlex(normalizeQuotes(rest));
 }
 
 type PromptArgsError =
@@ -230,7 +237,7 @@ function parsePromptInputs(rest: string) {
   if (!rest.trim()) {
     return { values } as const;
   }
-  const tokens = splitShlex(rest);
+  const tokens = splitShlex(normalizeQuotes(rest));
   for (const token of tokens) {
     const eqIndex = token.indexOf("=");
     if (eqIndex <= 0) {
