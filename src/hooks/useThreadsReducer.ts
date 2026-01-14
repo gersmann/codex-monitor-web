@@ -47,6 +47,7 @@ export type ThreadAction =
       workspaceId: string;
       threadId: string;
       text: string;
+      images?: string[];
     }
   | { type: "addAssistantMessage"; threadId: string; text: string }
   | { type: "setThreadName"; workspaceId: string; threadId: string; name: string }
@@ -272,11 +273,20 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       };
     case "addUserMessage": {
       const list = state.itemsByThread[action.threadId] ?? [];
+      const imageCount = action.images?.length ?? 0;
+      const imageLabel =
+        imageCount > 0 ? (imageCount === 1 ? "[image]" : `[image x${imageCount}]`) : "";
+      const textValue = action.text.trim();
+      const combinedText = textValue
+        ? imageLabel
+          ? `${textValue}\n${imageLabel}`
+          : textValue
+        : imageLabel;
       const message: ConversationItem = {
         id: `${Date.now()}-user`,
         kind: "message",
         role: "user",
-        text: action.text,
+        text: combinedText || "[message]",
       };
       const threads = state.threadsByWorkspace[action.workspaceId] ?? [];
       const bumpedThreads = threads.length

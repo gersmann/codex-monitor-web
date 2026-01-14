@@ -57,6 +57,7 @@ import { useLayoutMode } from "./hooks/useLayoutMode";
 import { useAppSettings } from "./hooks/useAppSettings";
 import { useUpdater } from "./hooks/useUpdater";
 import { clampUiScale, UI_SCALE_STEP } from "./utils/uiScale";
+import { useComposerImages } from "./hooks/useComposerImages";
 import type {
   AccessMode,
   AppSettings,
@@ -352,6 +353,15 @@ function MainApp() {
     accessMode,
     onMessageActivity: refreshGitStatus
   });
+  const {
+    activeImages,
+    attachImages,
+    pickImages,
+    removeImage,
+    clearActiveImages,
+    setImagesForThread,
+    removeImagesForThread,
+  } = useComposerImages({ activeThreadId, activeWorkspaceId });
 
   const latestAgentRuns = useMemo(() => {
     const entries: Array<{
@@ -629,9 +639,11 @@ function MainApp() {
     });
   }
 
-  async function handleSend(text: string) {
+  async function handleSend(text: string, images: string[] = []) {
     const trimmed = text.trim();
-    if (!trimmed) {
+    const shouldIgnoreImages = trimmed.startsWith("/review");
+    const nextImages = shouldIgnoreImages ? [] : images;
+    if (!trimmed && nextImages.length === 0) {
       return;
     }
     if (activeThreadId && threadStatusById[activeThreadId]?.isReviewing) {
@@ -641,12 +653,14 @@ function MainApp() {
       const item: QueuedMessage = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         text: trimmed,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        images: nextImages,
       };
       setQueuedByThread((prev) => ({
         ...prev,
         [activeThreadId]: [...(prev[activeThreadId] ?? []), item]
       }));
+      clearActiveImages();
       return;
     }
     if (activeWorkspace && !activeWorkspace.connected) {
@@ -654,9 +668,11 @@ function MainApp() {
     }
     if (trimmed.startsWith("/review")) {
       await startReview(trimmed);
+      clearActiveImages();
       return;
     }
-    await sendUserMessage(trimmed);
+    await sendUserMessage(trimmed, nextImages);
+    clearActiveImages();
   }
 
   useEffect(() => {
@@ -682,7 +698,7 @@ function MainApp() {
         if (nextItem.text.trim().startsWith("/review")) {
           await startReview(nextItem.text);
         } else {
-          await sendUserMessage(nextItem.text);
+          await sendUserMessage(nextItem.text, nextItem.images ?? []);
         }
       } catch {
         setQueuedByThread((prev) => ({
@@ -818,6 +834,7 @@ function MainApp() {
           const { [threadId]: _, ...rest } = prev;
           return rest;
         });
+        removeImagesForThread(threadId);
       }}
       onDeleteWorkspace={(workspaceId) => {
         void removeWorkspace(workspaceId);
@@ -860,6 +877,10 @@ function MainApp() {
       sendLabel={isProcessing ? "Queue" : "Send"}
       draftText={activeDraft}
       onDraftChange={handleDraftChange}
+      attachedImages={activeImages}
+      onPickImages={pickImages}
+      onAttachImages={attachImages}
+      onRemoveImage={removeImage}
       prefillDraft={prefillDraft}
       onPrefillHandled={(id) => {
         if (prefillDraft?.id === id) {
@@ -882,6 +903,7 @@ function MainApp() {
             (entry) => entry.id !== item.id
           )
         }));
+        setImagesForThread(activeThreadId, item.images ?? []);
         setPrefillDraft(item);
       }}
       onDeleteQueued={(id) => {

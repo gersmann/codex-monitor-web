@@ -1,6 +1,9 @@
 import { useEffect, useRef } from "react";
 import type { KeyboardEvent, RefObject } from "react";
 import type { AutocompleteItem } from "../hooks/useComposerAutocomplete";
+import { ImagePlus } from "lucide-react";
+import { useComposerImageDrop } from "../hooks/useComposerImageDrop";
+import { ComposerAttachments } from "./ComposerAttachments";
 
 type ComposerInputProps = {
   text: string;
@@ -9,6 +12,10 @@ type ComposerInputProps = {
   canStop: boolean;
   onStop: () => void;
   onSend: () => void;
+  attachments?: string[];
+  onAddAttachment?: () => void;
+  onAttachImages?: (paths: string[]) => void;
+  onRemoveAttachment?: (path: string) => void;
   onTextChange: (next: string, selectionStart: number | null) => void;
   onSelectionChange: (selectionStart: number | null) => void;
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -27,6 +34,10 @@ export function ComposerInput({
   canStop,
   onStop,
   onSend,
+  attachments = [],
+  onAddAttachment,
+  onAttachImages,
+  onRemoveAttachment,
   onTextChange,
   onSelectionChange,
   onKeyDown,
@@ -47,6 +58,18 @@ export function ComposerInput({
     const parts = normalized.split("/").filter(Boolean);
     return parts.length ? parts[parts.length - 1] : path;
   };
+  const {
+    dropTargetRef,
+    isDragOver,
+    handleDragOver,
+    handleDragEnter,
+    handleDragLeave,
+    handleDrop,
+    handlePaste,
+  } = useComposerImageDrop({
+    disabled,
+    onAttachImages,
+  });
 
   useEffect(() => {
     if (!suggestionsOpen) {
@@ -82,26 +105,55 @@ export function ComposerInput({
 
   return (
     <div className="composer-input">
-      <div className="composer-input-area">
-        <textarea
-          ref={textareaRef}
-          placeholder={
-            disabled
-              ? "Review in progress. Chat will re-enable when it completes."
-              : "Ask Codex to do something..."
-          }
-          value={text}
-          onChange={(event) =>
-            onTextChange(event.target.value, event.target.selectionStart)
-          }
-          onSelect={(event) =>
-            onSelectionChange(
-              (event.target as HTMLTextAreaElement).selectionStart,
-            )
-          }
+      <div
+        className={`composer-input-area${isDragOver ? " is-drag-over" : ""}`}
+        ref={dropTargetRef}
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <ComposerAttachments
+          attachments={attachments}
           disabled={disabled}
-          onKeyDown={onKeyDown}
+          onRemoveAttachment={onRemoveAttachment}
         />
+        <div className="composer-input-row">
+          <button
+            type="button"
+            className="composer-attach"
+            onClick={onAddAttachment}
+            disabled={disabled || !onAddAttachment}
+            aria-label="Add image"
+            title="Add image"
+          >
+            <ImagePlus size={14} aria-hidden />
+          </button>
+          <textarea
+            ref={textareaRef}
+            placeholder={
+              disabled
+                ? "Review in progress. Chat will re-enable when it completes."
+                : "Ask Codex to do something..."
+            }
+            value={text}
+            onChange={(event) =>
+              onTextChange(event.target.value, event.target.selectionStart)
+            }
+            onSelect={(event) =>
+              onSelectionChange(
+                (event.target as HTMLTextAreaElement).selectionStart,
+              )
+            }
+            disabled={disabled}
+            onKeyDown={onKeyDown}
+            onDragOver={handleDragOver}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onPaste={handlePaste}
+          />
+        </div>
         {suggestionsOpen && (
           <div className="composer-suggestions" role="listbox" ref={suggestionListRef}>
             {suggestions.map((item, index) => (

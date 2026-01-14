@@ -187,6 +187,7 @@ export type QueuedMessage = {
   id: string;
   text: string;
   createdAt: number;
+  images?: string[];
 };
 
 export type ModelOption = {

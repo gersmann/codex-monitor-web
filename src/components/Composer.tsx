@@ -6,7 +6,7 @@ import { ComposerMetaBar } from "./ComposerMetaBar";
 import { ComposerQueue } from "./ComposerQueue";
 
 type ComposerProps = {
-  onSend: (text: string) => void;
+  onSend: (text: string, images: string[]) => void;
   onStop: () => void;
   canStop: boolean;
   disabled?: boolean;
@@ -27,6 +27,10 @@ type ComposerProps = {
   sendLabel?: string;
   draftText?: string;
   onDraftChange?: (text: string) => void;
+  attachedImages?: string[];
+  onPickImages?: () => void;
+  onAttachImages?: (paths: string[]) => void;
+  onRemoveImage?: (path: string) => void;
   prefillDraft?: QueuedMessage | null;
   onPrefillHandled?: (id: string) => void;
   insertText?: QueuedMessage | null;
@@ -55,6 +59,10 @@ export function Composer({
   sendLabel = "Send",
   draftText = "",
   onDraftChange,
+  attachedImages = [],
+  onPickImages,
+  onAttachImages,
+  onRemoveImage,
   prefillDraft = null,
   onPrefillHandled,
   insertText = null,
@@ -84,12 +92,12 @@ export function Composer({
       return;
     }
     const trimmed = text.trim();
-    if (!trimmed) {
+    if (!trimmed && attachedImages.length === 0) {
       return;
     }
-    onSend(trimmed);
+    onSend(trimmed, attachedImages);
     setComposerText("");
-  }, [disabled, onSend, setComposerText, text]);
+  }, [attachedImages, disabled, onSend, setComposerText, text]);
 
   const {
     isAutocompleteOpen,
@@ -141,6 +149,10 @@ export function Composer({
         canStop={canStop}
         onStop={onStop}
         onSend={handleSend}
+        attachments={attachedImages}
+        onAddAttachment={onPickImages}
+        onAttachImages={onAttachImages}
+        onRemoveAttachment={onRemoveImage}
         onTextChange={handleTextChange}
         onSelectionChange={handleSelectionChange}
         onKeyDown={(event) => {
