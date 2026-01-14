@@ -47,6 +47,7 @@ type ThreadState = {
   tokenUsageByThread: Record<string, ThreadTokenUsage>;
   rateLimitsByWorkspace: Record<string, RateLimitSnapshot | null>;
   planByThread: Record<string, TurnPlan | null>;
+  lastAgentMessageByThread: Record<string, { text: string; timestamp: number }>;
 };
 
 type ThreadAction =
@@ -92,7 +93,13 @@ type ThreadAction =
     }
   | { type: "setActiveTurnId"; threadId: string; turnId: string | null }
   | { type: "setThreadPlan"; threadId: string; plan: TurnPlan | null }
-  | { type: "clearThreadPlan"; threadId: string };
+  | { type: "clearThreadPlan"; threadId: string }
+  | {
+      type: "setLastAgentMessage";
+      threadId: string;
+      text: string;
+      timestamp: number;
+    };
 
 const initialState: ThreadState = {
   activeThreadIdByWorkspace: {},
@@ -105,6 +112,7 @@ const initialState: ThreadState = {
   tokenUsageByThread: {},
   rateLimitsByWorkspace: {},
   planByThread: {},
+  lastAgentMessageByThread: {},
 };
 
 function loadThreadActivity(): ThreadActivityMap {
@@ -195,6 +203,17 @@ function normalizeItem(item: ConversationItem): ConversationItem {
     };
   }
   return item;
+}
+
+function getThreadTimestamp(thread: Record<string, unknown>) {
+  const raw =
+    (thread.updatedAt ?? thread.updated_at ?? thread.createdAt ?? thread.created_at) ??
+    0;
+  const numeric = typeof raw === "string" ? Number(raw) : Number(raw);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return Date.now();
+  }
+  return numeric < 1_000_000_000_000 ? numeric * 1000 : numeric;
 }
 
 function prepareThreadItems(items: ConversationItem[]) {
@@ -454,6 +473,19 @@ function threadReducer(state: ThreadState, action: ThreadAction): ThreadState {
         itemsByThread: {
           ...state.itemsByThread,
           [action.threadId]: prepareThreadItems(action.items),
+        },
+      };
+    case "setLastAgentMessage":
+      if (
+        state.lastAgentMessageByThread[action.threadId]?.timestamp >= action.timestamp
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        lastAgentMessageByThread: {
+          ...state.lastAgentMessageByThread,
+          [action.threadId]: { text: action.text, timestamp: action.timestamp },
         },
       };
     case "appendReasoningSummary": {
@@ -1251,9 +1283,17 @@ export function useThreads({
         itemId: string;
         text: string;
       }) => {
+        const timestamp = Date.now();
         dispatch({ type: "ensureThread", workspaceId, threadId });
         dispatch({ type: "completeAgentMessage", threadId, itemId, text });
+        dispatch({
+          type: "setLastAgentMessage",
+          threadId,
+          text,
+          timestamp,
+        });
         dispatch({ type: "markProcessing", threadId, isProcessing: false });
+        recordThreadActivity(workspaceId, threadId, timestamp);
         try {
           void onMessageActivity?.();
         } catch {
@@ -1413,6 +1453,7 @@ export function useThreads({
       handleWorkspaceConnected,
       onDebug,
       onMessageActivity,
+      recordThreadActivity,
     ],
   );
 
@@ -1521,6 +1562,23 @@ export function useThreads({
               name: previewThreadName(preview, `Agent ${threadId.slice(0, 4)}`),
             });
           }
+          const lastAgentMessage = [...mergedItems]
+            .reverse()
+            .find(
+              (item) => item.kind === "message" && item.role === "assistant",
+            ) as ConversationItem | undefined;
+          const lastText =
+            lastAgentMessage && lastAgentMessage.kind === "message"
+              ? lastAgentMessage.text
+              : preview;
+          if (lastText) {
+            dispatch({
+              type: "setLastAgentMessage",
+              threadId,
+              text: lastText,
+              timestamp: getThreadTimestamp(thread),
+            });
+          }
         }
         loadedThreads.current[threadId] = true;
         return threadId;
@@ -1621,6 +1679,19 @@ export function useThreads({
           type: "setThreads",
           workspaceId: workspace.id,
           threads: summaries,
+        });
+        uniqueThreads.forEach((thread) => {
+          const threadId = String(thread?.id ?? "");
+          const preview = asString(thread?.preview ?? "").trim();
+          if (!threadId || !preview) {
+            return;
+          }
+          dispatch({
+            type: "setLastAgentMessage",
+            threadId,
+            text: preview,
+            timestamp: getThreadTimestamp(thread),
+          });
         });
       } catch (error) {
         onDebug?.({
@@ -1929,6 +2000,7 @@ export function useThreads({
     tokenUsageByThread: state.tokenUsageByThread,
     rateLimitsByWorkspace: state.rateLimitsByWorkspace,
     planByThread: state.planByThread,
+    lastAgentMessageByThread: state.lastAgentMessageByThread,
     refreshAccountRateLimits,
     interruptTurn,
     removeThread,

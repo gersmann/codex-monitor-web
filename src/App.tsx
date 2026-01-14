@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./styles/base.css";
 import "./styles/buttons.css";
@@ -228,6 +228,7 @@ function MainApp() {
     tokenUsageByThread,
     rateLimitsByWorkspace,
     planByThread,
+    lastAgentMessageByThread,
     interruptTurn,
     removeThread,
     startThreadForWorkspace,
@@ -244,6 +245,40 @@ function MainApp() {
     accessMode,
     onMessageActivity: refreshGitStatus,
   });
+
+  const latestAgentRuns = useMemo(() => {
+    const entries: Array<{
+      threadId: string;
+      message: string;
+      timestamp: number;
+      projectName: string;
+      workspaceId: string;
+      isProcessing: boolean;
+    }> = [];
+    workspaces.forEach((workspace) => {
+      const threads = threadsByWorkspace[workspace.id] ?? [];
+      threads.forEach((thread) => {
+        const entry = lastAgentMessageByThread[thread.id];
+        if (!entry) {
+          return;
+        }
+        entries.push({
+          threadId: thread.id,
+          message: entry.text,
+          timestamp: entry.timestamp,
+          projectName: workspace.name,
+          workspaceId: workspace.id,
+          isProcessing: threadStatusById[thread.id]?.isProcessing ?? false,
+        });
+      });
+    });
+    return entries.sort((a, b) => b.timestamp - a.timestamp).slice(0, 3);
+  }, [
+    lastAgentMessageByThread,
+    threadStatusById,
+    threadsByWorkspace,
+    workspaces,
+  ]);
 
   const activeRateLimits = activeWorkspaceId
     ? rateLimitsByWorkspace[activeWorkspaceId] ?? null
@@ -692,7 +727,15 @@ function MainApp() {
           <Home
             onOpenProject={handleAddWorkspace}
             onAddWorkspace={handleAddWorkspace}
-            onCloneRepository={() => {}}
+            latestAgentRuns={latestAgentRuns}
+            onSelectThread={(workspaceId, threadId) => {
+              exitDiffView();
+              selectWorkspace(workspaceId);
+              setActiveThreadId(threadId, workspaceId);
+              if (isCompact) {
+                setActiveTab("codex");
+              }
+            }}
           />
         )}
 
@@ -835,7 +878,15 @@ function MainApp() {
           <Home
             onOpenProject={handleAddWorkspace}
             onAddWorkspace={handleAddWorkspace}
-            onCloneRepository={() => {}}
+            latestAgentRuns={latestAgentRuns}
+            onSelectThread={(workspaceId, threadId) => {
+              exitDiffView();
+              selectWorkspace(workspaceId);
+              setActiveThreadId(threadId, workspaceId);
+              if (isCompact) {
+                setActiveTab("codex");
+              }
+            }}
           />
         )}
         {activeWorkspace && !showHome && (
