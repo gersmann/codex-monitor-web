@@ -9,7 +9,7 @@ set -euo pipefail
 
 # --- Set versions ---
 # Update these two values each release.
-RELEASE_VERSION="0.6.0"
+RELEASE_VERSION="0.6.1"
 PREV_VERSION="0.5.1"
 
 # --- Update version fields (manual check afterwards) ---
