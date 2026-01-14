@@ -86,6 +86,7 @@ fn build_codex_path_env(codex_bin: Option<&str>) -> Option<String> {
     .collect::<Vec<String>>();
     if let Ok(home) = env::var("HOME") {
         extras.push(format!("{home}/.local/bin"));
+        extras.push(format!("{home}/.local/share/mise/shims"));
         extras.push(format!("{home}/.cargo/bin"));
         extras.push(format!("{home}/.bun/bin"));
         let nvm_root = Path::new(&home).join(".nvm/versions/node");
