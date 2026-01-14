@@ -7,6 +7,7 @@ import { languageFromPath } from "../utils/syntax";
 type MessagesProps = {
   items: ConversationItem[];
   isThinking: boolean;
+  threadId?: string | null;
 };
 
 type ToolSummary = {
@@ -175,9 +176,12 @@ function toolStatusTone(
   return "processing";
 }
 
-export function Messages({ items, isThinking }: MessagesProps) {
+export function Messages({ items, isThinking, threadId }: MessagesProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [workingSince, setWorkingSince] = useState<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [lastDurationMs, setLastDurationMs] = useState<number | null>(null);
   const toggleExpanded = (id: string) => {
     setExpandedItems((prev) => {
       const next = new Set(prev);
@@ -213,6 +217,52 @@ export function Messages({ items, isThinking }: MessagesProps) {
       }
     };
   }, [items.length, isThinking]);
+
+  useEffect(() => {
+    setWorkingSince(null);
+    setElapsedMs(0);
+    setLastDurationMs(null);
+  }, [threadId]);
+
+  useEffect(() => {
+    if (isThinking) {
+      if (!workingSince) {
+        setWorkingSince(Date.now());
+        setElapsedMs(0);
+        setLastDurationMs(null);
+      }
+      return undefined;
+    }
+    if (workingSince) {
+      setLastDurationMs(Date.now() - workingSince);
+      setWorkingSince(null);
+      setElapsedMs(0);
+    }
+    return undefined;
+  }, [isThinking, workingSince]);
+
+  useEffect(() => {
+    if (!isThinking || !workingSince) {
+      return undefined;
+    }
+    const interval = window.setInterval(() => {
+      setElapsedMs(Date.now() - workingSince);
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [isThinking, workingSince]);
+
+  const elapsedSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  const elapsedRemainder = elapsedSeconds % 60;
+  const formattedElapsed = `${elapsedMinutes}:${String(elapsedRemainder).padStart(2, "0")}`;
+  const lastDurationSeconds = lastDurationMs
+    ? Math.max(0, Math.floor(lastDurationMs / 1000))
+    : 0;
+  const lastDurationMinutes = Math.floor(lastDurationSeconds / 60);
+  const lastDurationRemainder = lastDurationSeconds % 60;
+  const formattedLastDuration = `${lastDurationMinutes}:${String(
+    lastDurationRemainder,
+  ).padStart(2, "0")}`;
 
   return (
     <div
@@ -449,7 +499,24 @@ export function Messages({ items, isThinking }: MessagesProps) {
         return null;
       })}
       {isThinking && (
-        <div className="thinking">Codex is thinking...</div>
+        <div className="working">
+          <span className="working-spinner" aria-hidden />
+          <div className="working-timer">
+            <span className="working-timer-seconds">{elapsedSeconds}s</span>
+            <span className="working-timer-divider">·</span>
+            <span className="working-timer-clock">{formattedElapsed}</span>
+          </div>
+          <span className="working-text">Working…</span>
+        </div>
+      )}
+      {!isThinking && lastDurationMs !== null && items.length > 0 && (
+        <div className="turn-complete" aria-live="polite">
+          <span className="turn-complete-line" aria-hidden />
+          <span className="turn-complete-label">
+            Done in {formattedLastDuration}
+          </span>
+          <span className="turn-complete-line" aria-hidden />
+        </div>
       )}
       {!items.length && (
         <div className="empty messages-empty">

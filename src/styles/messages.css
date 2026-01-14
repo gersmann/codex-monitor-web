@@ -24,6 +24,92 @@
   margin-bottom: 12px;
 }
 
+.working {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  margin: 4px 24px 12px 0;
+  color: var(--text-fainter);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.working-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--text-stronger);
+  animation: working-spin 1s linear infinite;
+}
+
+.working-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-stronger);
+}
+
+.working-timer-divider {
+  opacity: 0.6;
+}
+
+.working-text {
+  position: relative;
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.3),
+    rgba(255, 255, 255, 0.95),
+    rgba(255, 255, 255, 0.3)
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: working-shimmer 2.2s ease-in-out infinite;
+}
+
+.turn-complete {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 24px 12px 24px;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.turn-complete-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18));
+}
+
+.turn-complete-label {
+  white-space: nowrap;
+}
+
+@keyframes working-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes working-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
 .message {
   display: flex;
   margin-bottom: 12px;
