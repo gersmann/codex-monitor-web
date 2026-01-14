@@ -12,6 +12,8 @@ type ThreadActivityStatus = {
   isProcessing: boolean;
   hasUnread: boolean;
   isReviewing: boolean;
+  processingStartedAt: number | null;
+  lastDurationMs: number | null;
 };
 
 export type ThreadState = {
@@ -32,7 +34,12 @@ export type ThreadAction =
   | { type: "setActiveThreadId"; workspaceId: string; threadId: string | null }
   | { type: "ensureThread"; workspaceId: string; threadId: string }
   | { type: "removeThread"; workspaceId: string; threadId: string }
-  | { type: "markProcessing"; threadId: string; isProcessing: boolean }
+  | {
+      type: "markProcessing";
+      threadId: string;
+      isProcessing: boolean;
+      timestamp: number;
+    }
   | { type: "markReviewing"; threadId: string; isReviewing: boolean }
   | { type: "markUnread"; threadId: string; hasUnread: boolean }
   | {
@@ -113,6 +120,11 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
                 hasUnread: false,
                 isReviewing:
                   state.threadStatusById[action.threadId]?.isReviewing ?? false,
+                processingStartedAt:
+                  state.threadStatusById[action.threadId]?.processingStartedAt ??
+                  null,
+                lastDurationMs:
+                  state.threadStatusById[action.threadId]?.lastDurationMs ?? null,
               },
             }
           : state.threadStatusById,
@@ -138,6 +150,8 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             isProcessing: false,
             hasUnread: false,
             isReviewing: false,
+            processingStartedAt: null,
+            lastDurationMs: null,
           },
         },
         activeThreadIdByWorkspace: {
@@ -174,19 +188,45 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         },
       };
     }
-    case "markProcessing":
+    case "markProcessing": {
+      const previous = state.threadStatusById[action.threadId];
+      const wasProcessing = previous?.isProcessing ?? false;
+      const startedAt = previous?.processingStartedAt ?? null;
+      const lastDurationMs = previous?.lastDurationMs ?? null;
+      if (action.isProcessing) {
+        return {
+          ...state,
+          threadStatusById: {
+            ...state.threadStatusById,
+            [action.threadId]: {
+              isProcessing: true,
+              hasUnread: previous?.hasUnread ?? false,
+              isReviewing: previous?.isReviewing ?? false,
+              processingStartedAt:
+                wasProcessing && startedAt ? startedAt : action.timestamp,
+              lastDurationMs,
+            },
+          },
+        };
+      }
+      const nextDuration =
+        wasProcessing && startedAt
+          ? Math.max(0, action.timestamp - startedAt)
+          : lastDurationMs ?? null;
       return {
         ...state,
         threadStatusById: {
           ...state.threadStatusById,
           [action.threadId]: {
-            isProcessing: action.isProcessing,
-            hasUnread: state.threadStatusById[action.threadId]?.hasUnread ?? false,
-            isReviewing:
-              state.threadStatusById[action.threadId]?.isReviewing ?? false,
+            isProcessing: false,
+            hasUnread: previous?.hasUnread ?? false,
+            isReviewing: previous?.isReviewing ?? false,
+            processingStartedAt: null,
+            lastDurationMs: nextDuration,
           },
         },
       };
+    }
     case "setActiveTurnId":
       return {
         ...state,
@@ -205,6 +245,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
               state.threadStatusById[action.threadId]?.isProcessing ?? false,
             hasUnread: state.threadStatusById[action.threadId]?.hasUnread ?? false,
             isReviewing: action.isReviewing,
+            processingStartedAt:
+              state.threadStatusById[action.threadId]?.processingStartedAt ?? null,
+            lastDurationMs:
+              state.threadStatusById[action.threadId]?.lastDurationMs ?? null,
           },
         },
       };
@@ -219,6 +263,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             hasUnread: action.hasUnread,
             isReviewing:
               state.threadStatusById[action.threadId]?.isReviewing ?? false,
+            processingStartedAt:
+              state.threadStatusById[action.threadId]?.processingStartedAt ?? null,
+            lastDurationMs:
+              state.threadStatusById[action.threadId]?.lastDurationMs ?? null,
           },
         },
       };

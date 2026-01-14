@@ -686,13 +686,18 @@ function MainApp() {
     />
   );
 
+  const activeThreadStatus = activeThreadId
+    ? threadStatusById[activeThreadId] ?? null
+    : null;
+
   const messagesNode = (
     <Messages
       items={activeItems}
-      threadId={activeThreadId}
       isThinking={
         activeThreadId ? threadStatusById[activeThreadId]?.isProcessing ?? false : false
       }
+      processingStartedAt={activeThreadStatus?.processingStartedAt ?? null}
+      lastDurationMs={activeThreadStatus?.lastDurationMs ?? null}
     />
   );
 
