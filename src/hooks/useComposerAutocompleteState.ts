@@ -4,6 +4,8 @@ import { useComposerAutocomplete } from "./useComposerAutocomplete";
 import type { CustomPromptOption } from "../types";
 import {
   buildPromptInsertText,
+  findNextPromptArgCursor,
+  findPromptArgRangeAtCursor,
   getPromptArgumentHint,
 } from "../utils/customPrompts";
 
@@ -100,16 +102,27 @@ export function useComposerAutocompleteState({
       }
       const triggerIndex = Math.max(0, autocompleteRange.start - 1);
       const triggerChar = text[triggerIndex] ?? "";
+      const cursor = selectionStart ?? autocompleteRange.end;
+      const promptRange =
+        triggerChar === "@" ? findPromptArgRangeAtCursor(text, cursor) : null;
       const before =
         triggerChar === "@"
-          ? text.slice(0, triggerIndex)
+          ? promptRange
+            ? text.slice(0, promptRange.start)
+            : text.slice(0, triggerIndex)
           : text.slice(0, autocompleteRange.start);
-      const after = text.slice(autocompleteRange.end);
+      const after = promptRange
+        ? text.slice(promptRange.end)
+        : text.slice(autocompleteRange.end);
       const insert = item.insertText ?? item.label;
       const actualInsert = triggerChar === "@"
         ? insert.replace(/^@+/, "")
         : insert;
-      const needsSpace = after.length === 0 ? true : !/^\s/.test(after);
+      const needsSpace = promptRange
+        ? false
+        : after.length === 0
+          ? true
+          : !/^\s/.test(after);
       const nextText = `${before}${actualInsert}${needsSpace ? " " : ""}${after}`;
       setText(nextText);
       closeAutocomplete();
@@ -131,7 +144,15 @@ export function useComposerAutocompleteState({
         setSelectionStart(cursor);
       });
     },
-    [autocompleteRange, closeAutocomplete, setSelectionStart, setText, text, textareaRef],
+    [
+      autocompleteRange,
+      closeAutocomplete,
+      selectionStart,
+      setSelectionStart,
+      setText,
+      text,
+      textareaRef,
+    ],
   );
 
   const handleTextChange = useCallback(
@@ -189,6 +210,22 @@ export function useComposerAutocompleteState({
           return;
         }
       }
+      if (event.key === "Tab") {
+        const cursor = selectionStart ?? text.length;
+        const nextCursor = findNextPromptArgCursor(text, cursor);
+        if (nextCursor !== null) {
+          event.preventDefault();
+          requestAnimationFrame(() => {
+            const textarea = textareaRef.current;
+            if (!textarea) {
+              return;
+            }
+            textarea.focus();
+            textarea.setSelectionRange(nextCursor, nextCursor);
+            setSelectionStart(nextCursor);
+          });
+        }
+      }
     },
     [
       applyAutocomplete,
@@ -198,6 +235,10 @@ export function useComposerAutocompleteState({
       highlightIndex,
       isAutocompleteOpen,
       moveHighlight,
+      selectionStart,
+      setSelectionStart,
+      text,
+      textareaRef,
     ],
   );
 

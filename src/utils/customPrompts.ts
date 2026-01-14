@@ -4,6 +4,11 @@ const PROMPTS_CMD_PREFIX = "prompts";
 const PROMPTS_CMD = `${PROMPTS_CMD_PREFIX}:`;
 const PROMPT_ARG_REGEX = /\$[A-Z][A-Z0-9_]*/g;
 
+export type PromptArgRange = {
+  start: number;
+  end: number;
+};
+
 export function promptArgumentNames(content: string) {
   const names: string[] = [];
   const seen = new Set<string>();
@@ -83,6 +88,75 @@ export function parseSlashName(line: string) {
   }
   const rest = stripped.slice(nameEnd).trimStart();
   return { name, rest };
+}
+
+function isPromptCommandLine(line: string) {
+  return line.startsWith(`/${PROMPTS_CMD}`);
+}
+
+function findPromptArgRangesInLine(line: string): PromptArgRange[] {
+  if (!isPromptCommandLine(line)) {
+    return [];
+  }
+  const ranges: PromptArgRange[] = [];
+  let index = 0;
+  while (index < line.length) {
+    const assignIndex = line.indexOf("=\"", index);
+    if (assignIndex === -1) {
+      break;
+    }
+    const valueStart = assignIndex + 2;
+    let end = valueStart;
+    let found = false;
+    while (end < line.length) {
+      const char = line[end];
+      if (char === "\"" && line[end - 1] !== "\\") {
+        found = true;
+        break;
+      }
+      end += 1;
+    }
+    if (!found) {
+      break;
+    }
+    ranges.push({ start: valueStart, end });
+    index = end + 1;
+  }
+  return ranges;
+}
+
+export function findPromptArgRangeAtCursor(text: string, cursor: number) {
+  const newlineIndex = text.indexOf("\n");
+  const lineEnd = newlineIndex === -1 ? text.length : newlineIndex;
+  if (cursor > lineEnd) {
+    return null;
+  }
+  const line = text.slice(0, lineEnd);
+  const ranges = findPromptArgRangesInLine(line);
+  return ranges.find((range) => cursor >= range.start && cursor <= range.end) ?? null;
+}
+
+export function findNextPromptArgCursor(text: string, cursor: number) {
+  const newlineIndex = text.indexOf("\n");
+  const lineEnd = newlineIndex === -1 ? text.length : newlineIndex;
+  if (cursor > lineEnd) {
+    return null;
+  }
+  const line = text.slice(0, lineEnd);
+  const ranges = findPromptArgRangesInLine(line);
+  if (!ranges.length) {
+    return null;
+  }
+  for (let i = 0; i < ranges.length; i += 1) {
+    const range = ranges[i];
+    if (cursor >= range.start && cursor <= range.end) {
+      return ranges[i + 1]?.start ?? null;
+    }
+    if (cursor < range.start) {
+      return range.start;
+    }
+  }
+  return null;
 }
 
 function splitShlex(input: string) {
