@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { ConversationItem } from "../types";
 import { Markdown } from "./Markdown";
 import { DiffBlock } from "./DiffBlock";
@@ -198,7 +198,7 @@ function scrollKeyForItems(items: ConversationItem[]) {
   }
 }
 
-export function Messages({
+export const Messages = memo(function Messages({
   items,
   isThinking,
   processingStartedAt = null,
@@ -531,4 +531,4 @@ export function Messages({
       <div ref={bottomRef} />
     </div>
   );
-}
+});
