@@ -187,6 +187,7 @@ pub(crate) async fn spawn_workspace_session(
     let _ = check_codex_installation(codex_bin.clone()).await?;
 
     let mut command = build_codex_command_with_bin(codex_bin);
+    command.current_dir(&entry.path);
     command.arg("app-server");
     command.stdin(std::process::Stdio::piped());
     command.stdout(std::process::Stdio::piped());
