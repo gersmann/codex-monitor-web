@@ -9,8 +9,8 @@ set -euo pipefail
 
 # --- Set versions ---
 # Update these two values each release.
-RELEASE_VERSION="0.4.3"
-PREV_VERSION="0.4.2"
+RELEASE_VERSION="0.5.1"
+PREV_VERSION="0.5.0"
 
 # --- Update version fields (manual check afterwards) ---
 perl -pi -e "s/\"version\": \"[^\"]+\"/\"version\": \"${RELEASE_VERSION}\"/" package.json
