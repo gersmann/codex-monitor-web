@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { formatRelativeTime } from "../utils/time";
 
 type SidebarProps = {
   workspaces: WorkspaceInfo[];
@@ -183,6 +184,24 @@ export function Sidebar({
     typeof globalUsagePercent === "number" ? clampPercent(globalUsagePercent) : null;
   const sessionLabel = "Session";
   const weeklyLabel = "Weekly";
+  const sessionResetLabel = (() => {
+    const resetValue = accountRateLimits?.primary?.resetsAt;
+    if (typeof resetValue !== "number" || !Number.isFinite(resetValue)) {
+      return null;
+    }
+    const resetMs = resetValue > 1_000_000_000_000 ? resetValue : resetValue * 1000;
+    const relative = formatRelativeTime(resetMs).replace(/^in\s+/i, "");
+    return `Resets ${relative}`;
+  })();
+  const weeklyResetLabel = (() => {
+    const resetValue = accountRateLimits?.secondary?.resetsAt;
+    if (typeof resetValue !== "number" || !Number.isFinite(resetValue)) {
+      return null;
+    }
+    const resetMs = resetValue > 1_000_000_000_000 ? resetValue : resetValue * 1000;
+    const relative = formatRelativeTime(resetMs).replace(/^in\s+/i, "");
+    return `Resets ${relative}`;
+  })();
 
   const rootWorkspaces = workspaces
     .filter((entry) => (entry.kind ?? "main") !== "worktree" && !entry.parentId)
@@ -648,7 +667,12 @@ export function Sidebar({
         <div className="usage-bars">
           <div className="usage-block">
             <div className="usage-label">
-              <span>{sessionLabel}</span>
+              <span className="usage-title">
+                <span>{sessionLabel}</span>
+                {sessionResetLabel && (
+                  <span className="usage-reset">· {sessionResetLabel}</span>
+                )}
+              </span>
               <span className="usage-value">
                 {sessionPercent === null ? "--" : `${sessionPercent}%`}
               </span>
@@ -663,7 +687,12 @@ export function Sidebar({
           {accountRateLimits?.secondary && (
             <div className="usage-block">
               <div className="usage-label">
-                <span>{weeklyLabel}</span>
+                <span className="usage-title">
+                  <span>{weeklyLabel}</span>
+                  {weeklyResetLabel && (
+                    <span className="usage-reset">· {weeklyResetLabel}</span>
+                  )}
+                </span>
                 <span className="usage-value">
                   {weeklyPercent === null ? "--" : `${weeklyPercent}%`}
                 </span>
