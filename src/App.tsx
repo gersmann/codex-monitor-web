@@ -683,6 +683,7 @@ function MainApp() {
   const messagesNode = (
     <Messages
       items={activeItems}
+      threadId={activeThreadId}
       isThinking={
         activeThreadId ? threadStatusById[activeThreadId]?.isProcessing ?? false : false
       }
