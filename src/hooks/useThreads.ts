@@ -84,6 +84,25 @@ function asString(value: unknown) {
   return typeof value === "string" ? value : value ? String(value) : "";
 }
 
+function extractRpcErrorMessage(response: unknown) {
+  if (!response || typeof response !== "object") {
+    return null;
+  }
+  const record = response as Record<string, unknown>;
+  if (!record.error) {
+    return null;
+  }
+  const errorValue = record.error;
+  if (typeof errorValue === "string") {
+    return errorValue;
+  }
+  if (typeof errorValue === "object" && errorValue) {
+    const message = asString((errorValue as Record<string, unknown>).message);
+    return message || "Request failed.";
+  }
+  return "Request failed.";
+}
+
 function parseReviewTarget(input: string) {
   const trimmed = input.trim();
   const rest = trimmed.replace(/^\/review\b/i, "").trim();
@@ -391,6 +410,20 @@ export function useThreads({
     [activeWorkspaceId, onDebug],
   );
 
+  const pushThreadErrorMessage = useCallback(
+    (threadId: string, message: string) => {
+      dispatch({
+        type: "addAssistantMessage",
+        threadId,
+        text: message,
+      });
+      if (threadId !== activeThreadId) {
+        dispatch({ type: "markUnread", threadId, hasUnread: true });
+      }
+    },
+    [activeThreadId],
+  );
+
   const safeMessageActivity = useCallback(() => {
     try {
       void onMessageActivity?.();
@@ -601,6 +634,29 @@ export function useThreads({
           rateLimits: normalizeRateLimits(rateLimits),
         });
       },
+      onTurnError: (
+        workspaceId: string,
+        threadId: string,
+        _turnId: string,
+        payload: { message: string; willRetry: boolean },
+      ) => {
+        if (payload.willRetry) {
+          return;
+        }
+        dispatch({ type: "ensureThread", workspaceId, threadId });
+        dispatch({ type: "markProcessing", threadId, isProcessing: false });
+        dispatch({ type: "markReviewing", threadId, isReviewing: false });
+        dispatch({
+          type: "setActiveTurnId",
+          threadId,
+          turnId: null,
+        });
+        const message = payload.message
+          ? `Turn failed: ${payload.message}`
+          : "Turn failed.";
+        pushThreadErrorMessage(threadId, message);
+        safeMessageActivity();
+      },
     }),
     [
       activeThreadId,
@@ -610,6 +666,7 @@ export function useThreads({
       handleToolOutputDelta,
       onDebug,
       recordThreadActivity,
+      pushThreadErrorMessage,
       safeMessageActivity,
     ],
   );
@@ -939,15 +996,30 @@ export function useThreads({
           label: "turn/start response",
           payload: response,
         });
+        const rpcError = extractRpcErrorMessage(response);
+        if (rpcError) {
+          dispatch({ type: "markProcessing", threadId, isProcessing: false });
+          dispatch({ type: "setActiveTurnId", threadId, turnId: null });
+          pushThreadErrorMessage(threadId, `Turn failed to start: ${rpcError}`);
+          safeMessageActivity();
+          return;
+        }
         const result = (response?.result ?? response) as Record<string, unknown>;
         const turn = (result?.turn ?? response?.turn ?? null) as
           | Record<string, unknown>
           | null;
         const turnId = asString(turn?.id ?? "");
-        if (turnId) {
-          dispatch({ type: "setActiveTurnId", threadId, turnId });
+        if (!turnId) {
+          dispatch({ type: "markProcessing", threadId, isProcessing: false });
+          dispatch({ type: "setActiveTurnId", threadId, turnId: null });
+          pushThreadErrorMessage(threadId, "Turn failed to start.");
+          safeMessageActivity();
+          return;
         }
+        dispatch({ type: "setActiveTurnId", threadId, turnId });
       } catch (error) {
+        dispatch({ type: "markProcessing", threadId, isProcessing: false });
+        dispatch({ type: "setActiveTurnId", threadId, turnId: null });
         onDebug?.({
           id: `${Date.now()}-client-turn-start-error`,
           timestamp: Date.now(),
@@ -955,7 +1027,11 @@ export function useThreads({
           label: "turn/start error",
           payload: error instanceof Error ? error.message : String(error),
         });
-        throw error;
+        pushThreadErrorMessage(
+          threadId,
+          error instanceof Error ? error.message : String(error),
+        );
+        safeMessageActivity();
       }
     },
     [
@@ -964,6 +1040,7 @@ export function useThreads({
       accessMode,
       model,
       onDebug,
+      pushThreadErrorMessage,
       recordThreadActivity,
       ensureThreadForActiveWorkspace,
       safeMessageActivity,
@@ -1069,6 +1146,15 @@ export function useThreads({
           label: "review/start response",
           payload: response,
         });
+        const rpcError = extractRpcErrorMessage(response);
+        if (rpcError) {
+          dispatch({ type: "markProcessing", threadId, isProcessing: false });
+          dispatch({ type: "markReviewing", threadId, isReviewing: false });
+          dispatch({ type: "setActiveTurnId", threadId, turnId: null });
+          pushThreadErrorMessage(threadId, `Review failed to start: ${rpcError}`);
+          safeMessageActivity();
+          return;
+        }
       } catch (error) {
         dispatch({ type: "markProcessing", threadId, isProcessing: false });
         dispatch({ type: "markReviewing", threadId, isReviewing: false });
@@ -1079,10 +1165,20 @@ export function useThreads({
           label: "review/start error",
           payload: error instanceof Error ? error.message : String(error),
         });
-        throw error;
+        pushThreadErrorMessage(
+          threadId,
+          error instanceof Error ? error.message : String(error),
+        );
+        safeMessageActivity();
       }
     },
-    [activeWorkspace, ensureThreadForActiveWorkspace, onDebug, safeMessageActivity],
+    [
+      activeWorkspace,
+      ensureThreadForActiveWorkspace,
+      onDebug,
+      pushThreadErrorMessage,
+      safeMessageActivity,
+    ],
   );
 
   const handleApprovalDecision = useCallback(
