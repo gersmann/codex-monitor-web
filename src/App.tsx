@@ -288,6 +288,14 @@ function MainApp() {
     threadsByWorkspace,
     workspaces,
   ]);
+  const isLoadingLatestAgents = useMemo(
+    () =>
+      !hasLoaded ||
+      workspaces.some(
+        (workspace) => threadListLoadingByWorkspace[workspace.id] ?? false,
+      ),
+    [hasLoaded, threadListLoadingByWorkspace, workspaces],
+  );
 
   const activeRateLimits = activeWorkspaceId
     ? rateLimitsByWorkspace[activeWorkspaceId] ?? null
@@ -809,6 +817,7 @@ function MainApp() {
             onOpenProject={handleAddWorkspace}
             onAddWorkspace={handleAddWorkspace}
             latestAgentRuns={latestAgentRuns}
+            isLoadingLatestAgents={isLoadingLatestAgents}
             onSelectThread={(workspaceId, threadId) => {
               exitDiffView();
               selectWorkspace(workspaceId);
@@ -962,6 +971,7 @@ function MainApp() {
             onOpenProject={handleAddWorkspace}
             onAddWorkspace={handleAddWorkspace}
             latestAgentRuns={latestAgentRuns}
+            isLoadingLatestAgents={isLoadingLatestAgents}
             onSelectThread={(workspaceId, threadId) => {
               exitDiffView();
               selectWorkspace(workspaceId);
