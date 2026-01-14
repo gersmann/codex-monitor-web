@@ -463,6 +463,12 @@ function MainApp() {
     }
   }
 
+  function handleActiveDiffPath(path: string) {
+    if (path !== selectedDiffPath) {
+      setSelectedDiffPath(path);
+    }
+  }
+
   function handleDiffLineReference(reference: DiffLineReference) {
     const startLine = reference.newLine ?? reference.oldLine;
     const endLine =
@@ -827,6 +833,7 @@ function MainApp() {
                   isLoading={isDiffLoading}
                   error={diffError}
                   onLineReference={handleDiffLineReference}
+                  onActivePathChange={handleActiveDiffPath}
                 />
               ) : (
                 messagesNode
@@ -994,6 +1001,7 @@ function MainApp() {
                     isLoading={isDiffLoading}
                     error={diffError}
                     onLineReference={handleDiffLineReference}
+                    onActivePathChange={handleActiveDiffPath}
                   />
                 </div>
               </div>
@@ -1094,6 +1102,7 @@ function MainApp() {
                   isLoading={isDiffLoading}
                   error={diffError}
                   onLineReference={handleDiffLineReference}
+                  onActivePathChange={handleActiveDiffPath}
                 />
               </div>
             </>
@@ -1153,6 +1162,7 @@ function MainApp() {
                       isLoading={isDiffLoading}
                       error={diffError}
                       onLineReference={handleDiffLineReference}
+                      onActivePathChange={handleActiveDiffPath}
                     />
                   </div>
                 )}

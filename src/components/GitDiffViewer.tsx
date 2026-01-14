@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DiffBlock } from "./DiffBlock";
 import { parseDiff } from "../utils/diff";
 import { languageFromPath } from "../utils/syntax";
@@ -17,6 +17,7 @@ type GitDiffViewerProps = {
   isLoading: boolean;
   error: string | null;
   onLineReference?: (reference: DiffLineReference) => void;
+  onActivePathChange?: (path: string) => void;
 };
 
 type SelectedRange = {
@@ -40,13 +41,27 @@ export function GitDiffViewer({
   isLoading,
   error,
   onLineReference,
+  onActivePathChange,
 }: GitDiffViewerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef(new Map<string, HTMLDivElement>());
   const lastScrolledPath = useRef<string | null>(null);
+  const lastActivePath = useRef<string | null>(null);
+  const skipAutoScroll = useRef(false);
+  const scrollFrame = useRef<number | null>(null);
+  const scrollLock = useRef<{ path: string; expiresAt: number } | null>(null);
   const [selectedRange, setSelectedRange] = useState<SelectedRange | null>(null);
 
   useEffect(() => {
+    lastActivePath.current = selectedPath;
+  }, [selectedPath]);
+
+  useEffect(() => {
     if (!selectedPath) {
+      return;
+    }
+    if (skipAutoScroll.current) {
+      skipAutoScroll.current = false;
       return;
     }
     if (lastScrolledPath.current === selectedPath) {
@@ -56,8 +71,98 @@ export function GitDiffViewer({
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
       lastScrolledPath.current = selectedPath;
+      scrollLock.current = {
+        path: selectedPath,
+        expiresAt: performance.now() + 900,
+      };
     }
   }, [selectedPath, diffs.length]);
+
+  const updateActivePath = useCallback(() => {
+    const container = containerRef.current;
+    if (!container || !onActivePathChange) {
+      return;
+    }
+    const containerRect = container.getBoundingClientRect();
+    const anchorTop = containerRect.top + 12;
+    if (scrollLock.current) {
+      const now = performance.now();
+      const lock = scrollLock.current;
+      if (now >= lock.expiresAt) {
+        scrollLock.current = null;
+      } else {
+        const lockedNode = itemRefs.current.get(lock.path);
+        if (!lockedNode) {
+          scrollLock.current = null;
+        } else {
+          const rect = lockedNode.getBoundingClientRect();
+          const reachedTarget =
+            rect.top <= anchorTop + 2 && rect.bottom >= containerRect.top;
+          if (reachedTarget) {
+            scrollLock.current = null;
+          }
+        }
+      }
+    }
+    if (scrollLock.current) {
+      return;
+    }
+    let above: { path: string; top: number } | null = null;
+    let below: { path: string; top: number } | null = null;
+
+    for (const [path, node] of itemRefs.current.entries()) {
+      const rect = node.getBoundingClientRect();
+      const isVisible = rect.bottom > containerRect.top && rect.top < containerRect.bottom;
+      if (!isVisible) {
+        continue;
+      }
+      if (rect.top <= anchorTop) {
+        if (!above || rect.top > above.top) {
+          above = { path, top: rect.top };
+        }
+      } else if (!below || rect.top < below.top) {
+        below = { path, top: rect.top };
+      }
+    }
+
+    const nextPath = above?.path ?? below?.path ?? null;
+    if (!nextPath || nextPath === lastActivePath.current) {
+      return;
+    }
+    lastActivePath.current = nextPath;
+    if (nextPath !== selectedPath) {
+      skipAutoScroll.current = true;
+      onActivePathChange(nextPath);
+    }
+  }, [onActivePathChange, selectedPath]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !onActivePathChange) {
+      return;
+    }
+    const handleScroll = () => {
+      if (scrollFrame.current !== null) {
+        return;
+      }
+      scrollFrame.current = window.requestAnimationFrame(() => {
+        scrollFrame.current = null;
+        updateActivePath();
+      });
+    };
+
+    handleScroll();
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll);
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+      if (scrollFrame.current !== null) {
+        window.cancelAnimationFrame(scrollFrame.current);
+        scrollFrame.current = null;
+      }
+    };
+  }, [diffs.length, onActivePathChange, updateActivePath]);
 
   useEffect(() => {
     if (!selectedRange) {
@@ -115,7 +220,7 @@ export function GitDiffViewer({
   };
 
   return (
-    <div className="diff-viewer">
+    <div className="diff-viewer" ref={containerRef}>
       {error && <div className="diff-viewer-empty">{error}</div>}
       {!error && isLoading && diffs.length > 0 && (
         <div className="diff-viewer-loading">Refreshing diff...</div>

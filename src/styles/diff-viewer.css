@@ -17,8 +17,8 @@
 }
 
 .diff-viewer-item.active {
-  border-color: var(--border-accent);
-  box-shadow: 0 0 0 1px var(--border-accent-soft);
+  border-color: var(--border-subtle);
+  box-shadow: none;
 }
 
 .diff-viewer-header {
