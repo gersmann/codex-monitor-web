@@ -130,10 +130,16 @@ pub(crate) struct AppSettings {
     pub(crate) codex_bin: Option<String>,
     #[serde(default = "default_access_mode", rename = "defaultAccessMode")]
     pub(crate) default_access_mode: String,
+    #[serde(default = "default_ui_scale", rename = "uiScale")]
+    pub(crate) ui_scale: f64,
 }
 
 fn default_access_mode() -> String {
     "current".to_string()
+}
+
+fn default_ui_scale() -> f64 {
+    1.0
 }
 
 impl Default for AppSettings {
@@ -141,6 +147,7 @@ impl Default for AppSettings {
         Self {
             codex_bin: None,
             default_access_mode: "current".to_string(),
+            ui_scale: 1.0,
         }
     }
 }
@@ -154,6 +161,7 @@ mod tests {
         let settings: AppSettings = serde_json::from_str("{}").expect("settings deserialize");
         assert!(settings.codex_bin.is_none());
         assert_eq!(settings.default_access_mode, "current");
+        assert!((settings.ui_scale - 1.0).abs() < f64::EPSILON);
     }
 
     #[test]

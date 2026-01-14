@@ -160,6 +160,26 @@
   font-size: 11px;
 }
 
+.settings-input--scale {
+  flex: 0 0 auto;
+  width: 88px;
+  text-align: right;
+}
+
+
+.settings-scale-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.settings-scale-reset {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
 .settings-select {
   padding: 10px 12px;
   border-radius: 10px;
@@ -304,6 +324,14 @@
   border-radius: 12px;
   background: var(--surface-card);
   border: 1px solid var(--border-muted);
+}
+
+.settings-toggle-row + .settings-toggle-row {
+  margin-top: 12px;
+}
+
+.settings-scale-row > div:first-child {
+  min-width: 0;
 }
 
 .settings-toggle-title {

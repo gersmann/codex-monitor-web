@@ -11,6 +11,9 @@ import {
   X,
 } from "lucide-react";
 import type { AppSettings, CodexDoctorResult, WorkspaceInfo } from "../types";
+import {
+  clampUiScale,
+} from "../utils/uiScale";
 
 type SettingsViewProps = {
   workspaces: WorkspaceInfo[];
@@ -23,6 +26,8 @@ type SettingsViewProps = {
   onUpdateAppSettings: (next: AppSettings) => Promise<void>;
   onRunDoctor: (codexBin: string | null) => Promise<CodexDoctorResult>;
   onUpdateWorkspaceCodexBin: (id: string, codexBin: string | null) => Promise<void>;
+  scaleShortcutTitle: string;
+  scaleShortcutText: string;
 };
 
 type SettingsSection = "projects" | "display";
@@ -44,9 +49,14 @@ export function SettingsView({
   onUpdateAppSettings,
   onRunDoctor,
   onUpdateWorkspaceCodexBin,
+  scaleShortcutTitle,
+  scaleShortcutText,
 }: SettingsViewProps) {
   const [activeSection, setActiveSection] = useState<CodexSection>("projects");
   const [codexPathDraft, setCodexPathDraft] = useState(appSettings.codexBin ?? "");
+  const [scaleDraft, setScaleDraft] = useState(
+    `${Math.round(clampUiScale(appSettings.uiScale) * 100)}%`,
+  );
   const [overrideDrafts, setOverrideDrafts] = useState<Record<string, string>>({});
   const [doctorState, setDoctorState] = useState<{
     status: "idle" | "running" | "done";
@@ -72,6 +82,10 @@ export function SettingsView({
   }, [appSettings.codexBin]);
 
   useEffect(() => {
+    setScaleDraft(`${Math.round(clampUiScale(appSettings.uiScale) * 100)}%`);
+  }, [appSettings.uiScale]);
+
+  useEffect(() => {
     setOverrideDrafts((prev) => {
       const next: Record<string, string> = {};
       projects.forEach((workspace) => {
@@ -85,6 +99,12 @@ export function SettingsView({
   const codexDirty =
     (codexPathDraft.trim() || null) !== (appSettings.codexBin ?? null);
 
+  const trimmedScale = scaleDraft.trim();
+  const parsedPercent = trimmedScale
+    ? Number(trimmedScale.replace("%", ""))
+    : Number.NaN;
+  const parsedScale = Number.isFinite(parsedPercent) ? parsedPercent / 100 : null;
+
   const handleSaveCodexSettings = async () => {
     setIsSavingSettings(true);
     try {
@@ -95,6 +115,34 @@ export function SettingsView({
     } finally {
       setIsSavingSettings(false);
     }
+  };
+
+  const handleCommitScale = async () => {
+    if (parsedScale === null) {
+      setScaleDraft(`${Math.round(clampUiScale(appSettings.uiScale) * 100)}%`);
+      return;
+    }
+    const nextScale = clampUiScale(parsedScale);
+    setScaleDraft(`${Math.round(nextScale * 100)}%`);
+    if (nextScale === appSettings.uiScale) {
+      return;
+    }
+    await onUpdateAppSettings({
+      ...appSettings,
+      uiScale: nextScale,
+    });
+  };
+
+  const handleResetScale = async () => {
+    if (appSettings.uiScale === 1) {
+      setScaleDraft("100%");
+      return;
+    }
+    setScaleDraft("100%");
+    await onUpdateAppSettings({
+      ...appSettings,
+      uiScale: 1,
+    });
   };
 
   const handleBrowseCodex = async () => {
@@ -243,6 +291,46 @@ export function SettingsView({
                   >
                     <span className="settings-toggle-knob" />
                   </button>
+                </div>
+                <div className="settings-toggle-row settings-scale-row">
+                  <div>
+                    <div className="settings-toggle-title">Interface scale</div>
+                    <div
+                      className="settings-toggle-subtitle"
+                      title={scaleShortcutTitle}
+                    >
+                      {scaleShortcutText}
+                    </div>
+                  </div>
+                  <div className="settings-scale-controls">
+                    <input
+                      id="ui-scale"
+                      type="text"
+                      inputMode="decimal"
+                      className="settings-input settings-input--scale"
+                      value={scaleDraft}
+                      aria-label="Interface scale"
+                      onChange={(event) => setScaleDraft(event.target.value)}
+                      onBlur={() => {
+                        void handleCommitScale();
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void handleCommitScale();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-scale-reset"
+                      onClick={() => {
+                        void handleResetScale();
+                      }}
+                    >
+                      Reset
+                    </button>
+                  </div>
                 </div>
               </section>
             )}

@@ -64,6 +64,7 @@ export type AccessMode = "read-only" | "current" | "full-access";
 export type AppSettings = {
   codexBin: string | null;
   defaultAccessMode: AccessMode;
+  uiScale: number;
 };
 
 export type CodexDoctorResult = {

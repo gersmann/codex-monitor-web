@@ -13,6 +13,14 @@ mod workspaces;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    {
+        // Avoid WebKit compositing issues on some Linux setups (GBM buffer errors).
+        if std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
+            std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+        }
+    }
+
     tauri::Builder::default()
         .enable_macos_default_menu(false)
         .menu(|handle| {

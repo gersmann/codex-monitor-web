@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AppSettings } from "../types";
 import { getAppSettings, runCodexDoctor, updateAppSettings } from "../services/tauri";
+import { clampUiScale, UI_SCALE_DEFAULT } from "../utils/uiScale";
 
 const defaultSettings: AppSettings = {
   codexBin: null,
   defaultAccessMode: "current",
+  uiScale: UI_SCALE_DEFAULT,
 };
+
+function normalizeAppSettings(settings: AppSettings): AppSettings {
+  return {
+    ...settings,
+    uiScale: clampUiScale(settings.uiScale),
+  };
+}
 
 export function useAppSettings() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
@@ -17,10 +26,12 @@ export function useAppSettings() {
       try {
         const response = await getAppSettings();
         if (active) {
-          setSettings({
-            ...defaultSettings,
-            ...response,
-          });
+          setSettings(
+            normalizeAppSettings({
+              ...defaultSettings,
+              ...response,
+            }),
+          );
         }
       } finally {
         if (active) {
@@ -34,11 +45,14 @@ export function useAppSettings() {
   }, []);
 
   const saveSettings = useCallback(async (next: AppSettings) => {
-    const saved = await updateAppSettings(next);
-    setSettings({
-      ...defaultSettings,
-      ...saved,
-    });
+    const normalized = normalizeAppSettings(next);
+    const saved = await updateAppSettings(normalized);
+    setSettings(
+      normalizeAppSettings({
+        ...defaultSettings,
+        ...saved,
+      }),
+    );
     return saved;
   }, []);
 

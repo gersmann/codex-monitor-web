@@ -45,7 +45,7 @@ function readStoredWidth(key: string, fallback: number, min: number, max: number
   return clamp(parsed, min, max);
 }
 
-export function useResizablePanels() {
+export function useResizablePanels(uiScale = 1) {
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     readStoredWidth(
       STORAGE_KEY_SIDEBAR,
@@ -79,6 +79,11 @@ export function useResizablePanels() {
     ),
   );
   const resizeRef = useRef<ResizeState | null>(null);
+  const scaleRef = useRef(Math.max(0.1, uiScale || 1));
+
+  useEffect(() => {
+    scaleRef.current = Math.max(0.1, uiScale || 1);
+  }, [uiScale]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY_SIDEBAR, String(sidebarWidth));
@@ -110,8 +115,9 @@ export function useResizablePanels() {
       if (!resizeRef.current) {
         return;
       }
+      const scale = scaleRef.current;
       if (resizeRef.current.type === "sidebar") {
-        const delta = event.clientX - resizeRef.current.startX;
+        const delta = (event.clientX - resizeRef.current.startX) / scale;
         const next = clamp(
           resizeRef.current.startWidth + delta,
           MIN_SIDEBAR_WIDTH,
@@ -119,7 +125,7 @@ export function useResizablePanels() {
         );
         setSidebarWidth(next);
       } else if (resizeRef.current.type === "right-panel") {
-        const delta = event.clientX - resizeRef.current.startX;
+        const delta = (event.clientX - resizeRef.current.startX) / scale;
         const next = clamp(
           resizeRef.current.startWidth - delta,
           MIN_RIGHT_PANEL_WIDTH,
@@ -127,7 +133,7 @@ export function useResizablePanels() {
         );
         setRightPanelWidth(next);
       } else if (resizeRef.current.type === "plan-panel") {
-        const delta = event.clientY - resizeRef.current.startY;
+        const delta = (event.clientY - resizeRef.current.startY) / scale;
         const next = clamp(
           resizeRef.current.startHeight - delta,
           MIN_PLAN_PANEL_HEIGHT,
@@ -135,7 +141,7 @@ export function useResizablePanels() {
         );
         setPlanPanelHeight(next);
       } else {
-        const delta = event.clientY - resizeRef.current.startY;
+        const delta = (event.clientY - resizeRef.current.startY) / scale;
         const next = clamp(
           resizeRef.current.startHeight - delta,
           MIN_DEBUG_PANEL_HEIGHT,
