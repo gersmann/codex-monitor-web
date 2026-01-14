@@ -29,6 +29,7 @@ type ComposerProps = {
   onPrefillHandled?: (id: string) => void;
   insertText?: QueuedMessage | null;
   onInsertHandled?: (id: string) => void;
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
 };
 
 export function Composer({
@@ -55,10 +56,12 @@ export function Composer({
   onPrefillHandled,
   insertText = null,
   onInsertHandled,
+  textareaRef: externalTextareaRef,
 }: ComposerProps) {
   const [text, setText] = useState("");
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const internalRef = useRef<HTMLTextAreaElement | null>(null);
+  const textareaRef = externalTextareaRef ?? internalRef;
 
   const handleSend = useCallback(() => {
     if (disabled) {
