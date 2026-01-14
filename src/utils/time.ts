@@ -2,6 +2,17 @@ export function formatRelativeTime(timestamp: number) {
   const now = Date.now();
   const diffSeconds = Math.round((timestamp - now) / 1000);
   const absSeconds = Math.abs(diffSeconds);
+  if (absSeconds < 5) {
+    return "just now";
+  }
+  if (absSeconds < 60) {
+    const value = Math.max(1, Math.round(absSeconds));
+    return diffSeconds < 0 ? `${value}s ago` : `in ${value}s`;
+  }
+  if (absSeconds < 60 * 60) {
+    const value = Math.max(1, Math.round(absSeconds / 60));
+    return diffSeconds < 0 ? `${value}m ago` : `in ${value}m`;
+  }
   const ranges: { unit: Intl.RelativeTimeFormatUnit; seconds: number }[] = [
     { unit: "year", seconds: 60 * 60 * 24 * 365 },
     { unit: "month", seconds: 60 * 60 * 24 * 30 },

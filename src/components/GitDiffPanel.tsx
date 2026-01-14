@@ -338,7 +338,7 @@ export function GitDiffPanel({
                       </span>
                       <span className="git-log-sep">·</span>
                       <span className="git-log-date">
-                        {new Date(entry.timestamp * 1000).toLocaleDateString()}
+                        {formatRelativeTime(entry.timestamp * 1000)}
                       </span>
                     </div>
                   </div>
@@ -369,7 +369,7 @@ export function GitDiffPanel({
                       </span>
                       <span className="git-log-sep">·</span>
                       <span className="git-log-date">
-                        {new Date(entry.timestamp * 1000).toLocaleDateString()}
+                        {formatRelativeTime(entry.timestamp * 1000)}
                       </span>
                     </div>
                   </div>
@@ -398,7 +398,7 @@ export function GitDiffPanel({
                       </span>
                       <span className="git-log-sep">·</span>
                       <span className="git-log-date">
-                        {new Date(entry.timestamp * 1000).toLocaleDateString()}
+                        {formatRelativeTime(entry.timestamp * 1000)}
                       </span>
                     </div>
                   </div>
