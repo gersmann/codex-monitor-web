@@ -4,23 +4,25 @@
 
 CodexMonitor is a macOS Tauri app for orchestrating multiple Codex agents across local workspaces. It provides a sidebar to manage projects, a home screen for quick actions, and a conversation view backed by the Codex app-server protocol.
 
-## Features (MVP)
+## Features
 
-- Add and persist workspaces using the system folder picker.
-- Spawn one `codex app-server` per workspace and stream events over JSON-RPC.
-- Restore threads per workspace from the Codex rollout history (`thread/list`) and resume on selection.
-- Start agent threads, send messages, show reasoning/tool call items, and handle approvals.
-- Worktree agents per workspace (create/delete git worktrees under `.codex-worktrees`).
-- Git panel with diff stats, file diffs, and commit log; open commits on GitHub when a remote is detected.
+- Add and persist workspaces with a home dashboard of recent agent activity.
+- Spawn one `codex app-server` per workspace, stream JSON-RPC events, and resume threads on selection.
+- Start agent threads, send messages, render reasoning/tool/diff items, and handle approvals.
+- Worktree agents per workspace (create/delete git worktrees under `.codex-worktrees`) with quick worktree info.
+- Git panel with diff stats, file diffs, commit log, and GitHub Issues (via `gh`); open commits on GitHub when a remote is detected.
 - Branch list with checkout and create flows.
 - Model picker, reasoning effort selector, access mode (read-only/current/full-access), and context usage ring.
-- Skills menu and composer autocomplete for `$skill`, `/prompts:...`, and `@file` tokens (custom prompts pulled from `~/.codex/prompts`).
-- Plan panel for per-turn planning updates and turn interruption controls.
+- Skills menu and composer autocomplete for `$skill`, `/prompts:...`, `/review ...`, and `@file` tokens.
+- Plan panel for per-turn planning updates plus turn interrupt controls.
 - Review runs against uncommitted changes, base branch, commits, or custom instructions.
-- Debug panel for warning/error events and clipboard export.
+- Debug panel for warning/error events with clipboard export.
 - Sidebar usage + credits meter for account rate limits.
-- Archive threads (removes from UI and calls `thread/archive`).
-- macOS overlay title bar with vibrancy effects.
+- Composer queueing plus image attachments (picker, drag/drop, paste) with per-thread drafts.
+- Resizable sidebar/right/plan/debug panels with persisted sizes.
+- Responsive layouts for desktop/tablet/phone with tabbed navigation.
+- In-app updater with toast-driven download/install.
+- macOS overlay title bar with vibrancy effects and optional reduced transparency.
 
 ## Requirements
 
@@ -28,6 +30,7 @@ CodexMonitor is a macOS Tauri app for orchestrating multiple Codex agents across
 - Rust toolchain (stable)
 - Codex installed on your system and available as `codex` in `PATH`
 - Git CLI (used for worktree operations)
+- GitHub CLI (`gh`) for the Issues panel (optional)
 
 If the `codex` binary is not in `PATH`, update the backend to pass a custom path per workspace.
 
@@ -82,12 +85,15 @@ src-tauri/
 ## Notes
 
 - Workspaces persist to `workspaces.json` under the app data directory.
+- App settings persist to `settings.json` under the app data directory (Codex path, default access mode, UI scale).
 - On launch and on window focus, the app reconnects and refreshes thread lists for each workspace.
 - Threads are restored by filtering `thread/list` results using the workspace `cwd`.
 - Selecting a thread always calls `thread/resume` to refresh messages from disk.
 - CLI sessions appear if their `cwd` matches the workspace path; they are not live-streamed unless resumed.
 - The app uses `codex app-server` over stdio; see `src-tauri/src/lib.rs`.
 - Worktree agents live in `.codex-worktrees/` and are removed on delete; the root repo gets a `.gitignore` entry.
+- UI state (panel sizes, reduced transparency toggle, recent thread activity) is stored in `localStorage`.
+- Custom prompts load from `$CODEX_HOME/prompts` (or `~/.codex/prompts`) with optional frontmatter description/argument hints.
 
 ## Tauri IPC Surface
 

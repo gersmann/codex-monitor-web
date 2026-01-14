@@ -7,12 +7,24 @@ CodexMonitor is a macOS Tauri app that orchestrates Codex agents across local wo
 
 - `src/App.tsx`: composition root
 - `src/components/`: presentational UI components
+- `src/components/SettingsView.tsx`: settings UI (projects, display, Codex)
+- `src/components/UpdateToast.tsx`: in-app updater UI
+- `src/components/Home.tsx`: home dashboard + latest agent runs
 - `src/hooks/`: state + event wiring
+- `src/hooks/useAppSettings.ts`: app settings load/save + doctor
+- `src/hooks/useUpdater.ts`: update checks + install flow
+- `src/hooks/useResizablePanels.ts`: panel resize + persistence
+- `src/hooks/useComposerImages.ts`: image attachment state
+- `src/hooks/useComposerImageDrop.ts`: drag/drop + paste images
+- `src/hooks/useGitHubIssues.ts`: GitHub issues tab data
 - `src/utils/threadItems.ts`: thread item normalization + conversion
 - `src/services/tauri.ts`: Tauri IPC wrapper
 - `src/styles/`: split CSS by area
 - `src/types.ts`: shared types
 - `src-tauri/src/lib.rs`: backend app-server client
+- `src-tauri/src/git.rs`: git status/log/diff + GitHub issues via `gh`
+- `src-tauri/src/settings.rs`: app settings persistence
+- `src-tauri/src/prompts.rs`: custom prompt discovery/parsing
 - `src-tauri/tauri.conf.json`: window config + effects
 
 ## Architecture Guidelines
@@ -73,7 +85,9 @@ to the next minor version.
 - UI layout or styling: update `src/components/*` and `src/styles/*`.
 - App-server event handling: edit `src/hooks/useAppServerEvents.ts`.
 - Tauri IPC: add wrappers in `src/services/tauri.ts` and implement in `src-tauri/src/lib.rs`.
+- App settings or updater behavior: `src/hooks/useAppSettings.ts`, `src/hooks/useUpdater.ts`, and `src/components/SettingsView.tsx`.
 - Git diff behavior: `src/hooks/useGitStatus.ts` (polling + activity refresh) and `src-tauri/src/lib.rs` (libgit2 status).
+- GitHub issues panel: `src/hooks/useGitHubIssues.ts` + `src-tauri/src/git.rs`.
 - Thread history rendering: `src/hooks/useThreads.ts` converts `thread/resume` turns into UI items.
   - Thread names update on first user message (preview-based), and on resume if a preview exists.
 - Thread item parsing/normalization: `src/utils/threadItems.ts`.
@@ -84,3 +98,7 @@ to the next minor version.
 - The window uses `titleBarStyle: "Overlay"` and macOS private APIs for transparency.
 - Avoid breaking the JSON-RPC format; app-server rejects requests before initialization.
 - The debug panel is UI-only; it logs client/server/app-server events from `useAppServerEvents`.
+- App settings live in `settings.json` under the app data directory (Codex path, default access mode, UI scale).
+- UI preferences (panel sizes, reduced transparency toggle, recent thread activity) live in `localStorage`.
+- GitHub issues require `gh` to be installed and authenticated.
+- Custom prompts are loaded from `$CODEX_HOME/prompts` (or `~/.codex/prompts`) and support optional frontmatter metadata.
