@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./styles/base.css";
 import "./styles/buttons.css";
@@ -103,6 +103,9 @@ function MainApp() {
   const tabletTab = activeTab === "projects" ? "codex" : activeTab;
   const [queuedByThread, setQueuedByThread] = useState<
     Record<string, QueuedMessage[]>
+  >({});
+  const [composerDraftsByThread, setComposerDraftsByThread] = useState<
+    Record<string, string>
   >({});
   const [prefillDraft, setPrefillDraft] = useState<QueuedMessage | null>(null);
   const [composerInsert, setComposerInsert] = useState<QueuedMessage | null>(null);
@@ -312,6 +315,21 @@ function MainApp() {
   const activeQueue = activeThreadId
     ? queuedByThread[activeThreadId] ?? []
     : [];
+  const activeDraft = activeThreadId
+    ? composerDraftsByThread[activeThreadId] ?? ""
+    : "";
+  const handleDraftChange = useCallback(
+    (next: string) => {
+      if (!activeThreadId) {
+        return;
+      }
+      setComposerDraftsByThread((prev) => ({
+        ...prev,
+        [activeThreadId]: next,
+      }));
+    },
+    [activeThreadId],
+  );
   const isWorktreeWorkspace = activeWorkspace?.kind === "worktree";
   const activeParentWorkspace = isWorktreeWorkspace
     ? workspaces.find((entry) => entry.id === activeWorkspace?.parentId) ?? null
@@ -676,6 +694,13 @@ function MainApp() {
       }}
       onDeleteThread={(workspaceId, threadId) => {
         removeThread(workspaceId, threadId);
+        setComposerDraftsByThread((prev) => {
+          if (!(threadId in prev)) {
+            return prev;
+          }
+          const { [threadId]: _, ...rest } = prev;
+          return rest;
+        });
       }}
       onDeleteWorkspace={(workspaceId) => {
         void removeWorkspace(workspaceId);
@@ -712,6 +737,8 @@ function MainApp() {
       contextUsage={activeTokenUsage}
       queuedMessages={activeQueue}
       sendLabel={isProcessing ? "Queue" : "Send"}
+      draftText={activeDraft}
+      onDraftChange={handleDraftChange}
       prefillDraft={prefillDraft}
       onPrefillHandled={(id) => {
         if (prefillDraft?.id === id) {
