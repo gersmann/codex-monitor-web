@@ -177,6 +177,27 @@ function toolStatusTone(
   return "processing";
 }
 
+function scrollKeyForItems(items: ConversationItem[]) {
+  if (!items.length) {
+    return "empty";
+  }
+  const last = items[items.length - 1];
+  switch (last.kind) {
+    case "message":
+      return `${last.id}-${last.text.length}`;
+    case "reasoning":
+      return `${last.id}-${last.summary.length}-${last.content.length}`;
+    case "tool":
+      return `${last.id}-${last.status ?? ""}-${last.output?.length ?? 0}`;
+    case "diff":
+      return `${last.id}-${last.status ?? ""}-${last.diff.length}`;
+    case "review":
+      return `${last.id}-${last.state}-${last.text.length}`;
+    default:
+      return last.id;
+  }
+}
+
 export function Messages({
   items,
   isThinking,
@@ -186,6 +207,7 @@ export function Messages({
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [elapsedMs, setElapsedMs] = useState(0);
+  const scrollKey = scrollKeyForItems(items);
   const toggleExpanded = (id: string) => {
     setExpandedItems((prev) => {
       const next = new Set(prev);
@@ -220,7 +242,7 @@ export function Messages({
         window.cancelAnimationFrame(raf2);
       }
     };
-  }, [items.length, isThinking]);
+  }, [scrollKey, isThinking]);
 
   useEffect(() => {
     if (!isThinking || !processingStartedAt) {
