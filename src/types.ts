@@ -97,6 +97,16 @@ export type GitFileDiff = {
   diff: string;
 };
 
+export type DiffLineReference = {
+  path: string;
+  type: "add" | "del" | "context" | "mixed";
+  oldLine: number | null;
+  newLine: number | null;
+  endOldLine: number | null;
+  endNewLine: number | null;
+  lines: string[];
+};
+
 export type GitLogEntry = {
   sha: string;
   summary: string;
