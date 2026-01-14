@@ -137,6 +137,11 @@ export function ComposerInput({
                         {item.description}
                       </span>
                     )}
+                    {item.hint && (
+                      <span className="composer-suggestion-description">
+                        {item.hint}
+                      </span>
+                    )}
                   </>
                 )}
               </button>

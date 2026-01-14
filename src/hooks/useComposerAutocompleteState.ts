@@ -1,14 +1,19 @@
 import { useCallback, useMemo } from "react";
 import type { AutocompleteItem } from "./useComposerAutocomplete";
 import { useComposerAutocomplete } from "./useComposerAutocomplete";
+import type { CustomPromptOption } from "../types";
+import {
+  buildPromptInsertText,
+  getPromptArgumentHint,
+} from "../utils/customPrompts";
 
 type Skill = { name: string; description?: string };
-
 type UseComposerAutocompleteStateArgs = {
   text: string;
   selectionStart: number | null;
   disabled: boolean;
   skills: Skill[];
+  prompts: CustomPromptOption[];
   files: string[];
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   setText: (next: string) => void;
@@ -20,6 +25,7 @@ export function useComposerAutocompleteState({
   selectionStart,
   disabled,
   skills,
+  prompts,
   files,
   textareaRef,
   setText,
@@ -46,12 +52,31 @@ export function useComposerAutocompleteState({
     [files],
   );
 
+  const promptItems = useMemo<AutocompleteItem[]>(
+    () =>
+      prompts
+        .filter((prompt) => prompt.name)
+        .map((prompt) => {
+          const insert = buildPromptInsertText(prompt);
+          return {
+            id: `prompt:${prompt.name}`,
+            label: `prompts:${prompt.name}`,
+            description: prompt.description,
+            hint: getPromptArgumentHint(prompt),
+            insertText: insert.text,
+            cursorOffset: insert.cursorOffset,
+          };
+        }),
+    [prompts],
+  );
+
   const triggers = useMemo(
     () => [
       { trigger: "$", items: skillItems },
+      { trigger: "/", items: promptItems },
       { trigger: "@", items: fileItems },
     ],
-    [fileItems, skillItems],
+    [fileItems, promptItems, skillItems],
   );
 
   const {
@@ -93,8 +118,14 @@ export function useComposerAutocompleteState({
         if (!textarea) {
           return;
         }
+        const insertCursor = Math.min(
+          actualInsert.length,
+          Math.max(0, item.cursorOffset ?? actualInsert.length),
+        );
         const cursor =
-          before.length + actualInsert.length + (needsSpace ? 1 : 0);
+          before.length +
+          insertCursor +
+          (item.cursorOffset === undefined ? (needsSpace ? 1 : 0) : 0);
         textarea.focus();
         textarea.setSelectionRange(cursor, cursor);
         setSelectionStart(cursor);

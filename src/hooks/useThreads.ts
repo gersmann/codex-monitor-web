@@ -3,6 +3,7 @@ import type {
   ApprovalRequest,
   AppServerEvent,
   ConversationItem,
+  CustomPromptOption,
   DebugEntry,
   RateLimitSnapshot,
   ThreadTokenUsage,
@@ -31,6 +32,7 @@ import {
   mergeThreadItems,
   previewThreadName,
 } from "../utils/threadItems";
+import { expandCustomPromptText } from "../utils/customPrompts";
 import { initialState, threadReducer } from "./useThreadsReducer";
 
 const STORAGE_KEY_THREAD_ACTIVITY = "codexmonitor.threadLastUserActivity";
@@ -77,6 +79,7 @@ type UseThreadsOptions = {
   model?: string | null;
   effort?: string | null;
   accessMode?: "read-only" | "current" | "full-access";
+  customPrompts?: CustomPromptOption[];
   onMessageActivity?: () => void;
 };
 
@@ -328,6 +331,7 @@ export function useThreads({
   model,
   effort,
   accessMode,
+  customPrompts = [],
   onMessageActivity,
 }: UseThreadsOptions) {
   const [state, dispatch] = useReducer(threadReducer, initialState);
@@ -947,24 +951,40 @@ export function useThreads({
       if (!activeWorkspace || !text.trim()) {
         return;
       }
+      const messageText = text.trim();
+      const promptExpansion = expandCustomPromptText(messageText, customPrompts);
+      if (promptExpansion && "error" in promptExpansion) {
+        if (activeThreadId) {
+          pushThreadErrorMessage(activeThreadId, promptExpansion.error);
+          safeMessageActivity();
+        } else {
+          onDebug?.({
+            id: `${Date.now()}-client-prompt-expand-error`,
+            timestamp: Date.now(),
+            source: "error",
+            label: "prompt/expand error",
+            payload: promptExpansion.error,
+          });
+        }
+        return;
+      }
+      const finalText = promptExpansion?.expanded ?? messageText;
       const threadId = await ensureThreadForActiveWorkspace();
       if (!threadId) {
         return;
       }
-
-      const messageText = text.trim();
       recordThreadActivity(activeWorkspace.id, threadId);
       dispatch({
         type: "addUserMessage",
         workspaceId: activeWorkspace.id,
         threadId,
-        text: messageText,
+        text: finalText,
       });
       dispatch({
         type: "setThreadName",
         workspaceId: activeWorkspace.id,
         threadId,
-        name: previewThreadName(messageText, `Agent ${threadId.slice(0, 4)}`),
+        name: previewThreadName(finalText, `Agent ${threadId.slice(0, 4)}`),
       });
       dispatch({ type: "markProcessing", threadId, isProcessing: true });
       safeMessageActivity();
@@ -976,7 +996,7 @@ export function useThreads({
         payload: {
           workspaceId: activeWorkspace.id,
           threadId,
-          text: messageText,
+          text: finalText,
           model,
           effort,
         },
@@ -986,7 +1006,7 @@ export function useThreads({
           (await sendUserMessageService(
           activeWorkspace.id,
           threadId,
-          messageText,
+          finalText,
           { model, effort, accessMode },
           )) as Record<string, unknown>;
         onDebug?.({
@@ -1036,8 +1056,10 @@ export function useThreads({
     },
     [
       activeWorkspace,
+      activeThreadId,
       effort,
       accessMode,
+      customPrompts,
       model,
       onDebug,
       pushThreadErrorMessage,

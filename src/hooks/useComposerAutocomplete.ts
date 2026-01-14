@@ -5,6 +5,8 @@ export type AutocompleteItem = {
   label: string;
   description?: string;
   insertText?: string;
+  hint?: string;
+  cursorOffset?: number;
 };
 
 export type AutocompleteTrigger = {
