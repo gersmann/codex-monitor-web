@@ -168,13 +168,28 @@ export function Sidebar({
   const usagePercent = accountRateLimits?.primary?.usedPercent;
   const globalUsagePercent = accountRateLimits?.secondary?.usedPercent;
   const credits = accountRateLimits?.credits ?? null;
-  const creditsLabel = credits?.hasCredits
-    ? credits.unlimited
-      ? "Credits: unlimited"
-      : credits.balance
-        ? `Credits: ${credits.balance}`
-        : "Credits"
-    : null;
+  const creditsLabel = (() => {
+    if (!credits?.hasCredits) {
+      return null;
+    }
+    if (credits.unlimited) {
+      return "Credits: Unlimited";
+    }
+    const balance = credits.balance?.trim() ?? "";
+    if (!balance) {
+      return null;
+    }
+    const intValue = Number.parseInt(balance, 10);
+    if (Number.isFinite(intValue) && intValue > 0) {
+      return `Credits: ${intValue} credits`;
+    }
+    const floatValue = Number.parseFloat(balance);
+    if (Number.isFinite(floatValue) && floatValue > 0) {
+      const rounded = Math.round(floatValue);
+      return rounded > 0 ? `Credits: ${rounded} credits` : null;
+    }
+    return null;
+  })();
 
   const clampPercent = (value: number) =>
     Math.min(Math.max(Math.round(value), 0), 100);
