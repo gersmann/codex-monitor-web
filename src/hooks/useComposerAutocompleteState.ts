@@ -46,12 +46,43 @@ export function useComposerAutocompleteState({
     [files],
   );
 
+  const slashItems = useMemo<AutocompleteItem[]>(
+    () => [
+      {
+        id: "review",
+        label: "review",
+        description: "review uncommitted changes",
+        insertText: "review",
+      },
+      {
+        id: "review-base",
+        label: "review base main",
+        description: "review against main",
+        insertText: "review base main",
+      },
+      {
+        id: "review-base-other",
+        label: "review base",
+        description: "review against another base branch",
+        insertText: "review base ",
+      },
+      {
+        id: "review-commit",
+        label: "review commit",
+        description: "review a specific commit",
+        insertText: "review commit",
+      },
+    ],
+    [],
+  );
+
   const triggers = useMemo(
     () => [
+      { trigger: "/", items: slashItems },
       { trigger: "$", items: skillItems },
       { trigger: "@", items: fileItems },
     ],
-    [fileItems, skillItems],
+    [fileItems, skillItems, slashItems],
   );
 
   const {
