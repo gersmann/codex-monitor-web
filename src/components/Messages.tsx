@@ -308,6 +308,7 @@ export function Messages({
             !normalizedSummaryText ||
             normalizedSummaryText === summaryTitle ||
             summaryLines.length <= 1;
+          const showReasoningBody = !shouldHideReasoningBody && summaryText;
           return (
             <div key={item.id} className="tool-inline reasoning-inline">
               <button
@@ -330,7 +331,7 @@ export function Messages({
                   />
                   <span className="tool-inline-value">{summaryTitle}</span>
                 </button>
-                {!shouldHideReasoningBody && summaryText && (
+                {showReasoningBody && (
                   <Markdown
                     value={summaryText}
                     className={`reasoning-inline-detail markdown ${
@@ -403,6 +404,7 @@ export function Messages({
             : summary.value;
           const shouldFadeCommand =
             isCommand && !isExpanded && (summaryValue?.length ?? 0) > 80;
+          const showToolOutput = isExpanded && (!isFileChange || !hasChanges);
           return (
             <div
               key={item.id}
@@ -490,7 +492,7 @@ export function Messages({
                 {isExpanded && isFileChange && !hasChanges && item.detail && (
                   <Markdown value={item.detail} className="item-text markdown" />
                 )}
-                {isExpanded && summary.output && (!isFileChange || !hasChanges) && (
+                {showToolOutput && summary.output && (
                   <Markdown
                     value={summary.output}
                     className="tool-inline-output markdown"
