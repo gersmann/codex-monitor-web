@@ -136,6 +136,11 @@ jobs:
             -p "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" \
             src-tauri/target/release/bundle/macos/CodexMonitor.app.tar.gz
 
+          cp src-tauri/target/release/bundle/macos/CodexMonitor.app.tar.gz \
+            release-artifacts/CodexMonitor.app.tar.gz
+          cp src-tauri/target/release/bundle/macos/CodexMonitor.app.tar.gz.sig \
+            release-artifacts/CodexMonitor.app.tar.gz.sig
+
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -143,8 +148,8 @@ jobs:
           path: |
             release-artifacts/CodexMonitor.zip
             release-artifacts/CodexMonitor_*_aarch64.dmg
-            src-tauri/target/release/bundle/macos/CodexMonitor.app.tar.gz
-            src-tauri/target/release/bundle/macos/CodexMonitor.app.tar.gz.sig
+            release-artifacts/CodexMonitor.app.tar.gz
+            release-artifacts/CodexMonitor.app.tar.gz.sig
 
   build_linux:
     name: appimage (${{ matrix.arch }})
