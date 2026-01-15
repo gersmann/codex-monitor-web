@@ -1350,7 +1350,11 @@ export function useThreads({
         request.request_id,
         decision,
       );
-      dispatch({ type: "removeApproval", requestId: request.request_id });
+      dispatch({
+        type: "removeApproval",
+        requestId: request.request_id,
+        workspaceId: request.workspace_id,
+      });
     },
     [],
   );

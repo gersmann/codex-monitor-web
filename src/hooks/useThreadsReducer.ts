@@ -82,7 +82,7 @@ export type ThreadAction =
       cursor: string | null;
     }
   | { type: "addApproval"; approval: ApprovalRequest }
-  | { type: "removeApproval"; requestId: number }
+  | { type: "removeApproval"; requestId: number; workspaceId: string }
   | { type: "setThreadTokenUsage"; threadId: string; tokenUsage: ThreadTokenUsage }
   | {
       type: "setRateLimits";
@@ -540,13 +540,24 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         },
       };
     }
-    case "addApproval":
+    case "addApproval": {
+      const exists = state.approvals.some(
+        (item) =>
+          item.request_id === action.approval.request_id &&
+          item.workspace_id === action.approval.workspace_id,
+      );
+      if (exists) {
+        return state;
+      }
       return { ...state, approvals: [...state.approvals, action.approval] };
+    }
     case "removeApproval":
       return {
         ...state,
         approvals: state.approvals.filter(
-          (item) => item.request_id !== action.requestId,
+          (item) =>
+            item.request_id !== action.requestId ||
+            item.workspace_id !== action.workspaceId,
         ),
       };
     case "setThreads": {
