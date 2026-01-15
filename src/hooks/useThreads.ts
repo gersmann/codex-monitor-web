@@ -6,6 +6,7 @@ import type {
   CustomPromptOption,
   DebugEntry,
   RateLimitSnapshot,
+  ThreadSummary,
   ThreadTokenUsage,
   TurnPlan,
   TurnPlanStep,
