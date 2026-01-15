@@ -2,6 +2,7 @@ import type { ConversationItem } from "../types";
 
 const MAX_ITEMS_PER_THREAD = 200;
 const MAX_ITEM_TEXT = 20000;
+const TOOL_OUTPUT_RECENT_ITEMS = 40;
 const NO_TRUNCATE_TOOL_TYPES = new Set(["fileChange", "commandExecution"]);
 
 function asString(value: unknown) {
@@ -57,9 +58,27 @@ export function normalizeItem(item: ConversationItem): ConversationItem {
 
 export function prepareThreadItems(items: ConversationItem[]) {
   const normalized = items.map((item) => normalizeItem(item));
-  return normalized.length > MAX_ITEMS_PER_THREAD
-    ? normalized.slice(-MAX_ITEMS_PER_THREAD)
-    : normalized;
+  const limited =
+    normalized.length > MAX_ITEMS_PER_THREAD
+      ? normalized.slice(-MAX_ITEMS_PER_THREAD)
+      : normalized;
+  const cutoff = Math.max(0, limited.length - TOOL_OUTPUT_RECENT_ITEMS);
+  return limited.map((item, index) => {
+    if (index >= cutoff || item.kind !== "tool") {
+      return item;
+    }
+    const output = item.output ? truncateText(item.output) : item.output;
+    const changes = item.changes
+      ? item.changes.map((change) => ({
+          ...change,
+          diff: change.diff ? truncateText(change.diff) : change.diff,
+        }))
+      : item.changes;
+    if (output === item.output && changes === item.changes) {
+      return item;
+    }
+    return { ...item, output, changes };
+  });
 }
 
 export function upsertItem(list: ConversationItem[], item: ConversationItem) {
