@@ -278,11 +278,12 @@ pub(crate) async fn spawn_workspace_session(
         }
     });
 
+    let client_version = app_handle.package_info().version.to_string();
     let init_params = json!({
         "clientInfo": {
             "name": "codex_monitor",
             "title": "CodexMonitor",
-            "version": "0.1.0"
+            "version": client_version
         }
     });
     let init_result = timeout(
