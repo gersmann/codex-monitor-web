@@ -2,11 +2,6 @@ name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Release macOS version"
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -111,7 +106,14 @@ jobs:
       - name: Package artifacts
         run: |
           set -euo pipefail
-          VERSION="${{ inputs.version }}"
+          VERSION=$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("src-tauri/tauri.conf.json").read_text())
+          print(data["version"])
+          PY
+          )
 
           mkdir -p release-artifacts release-artifacts/dmg-root
           rm -rf release-artifacts/dmg-root/CodexMonitor.app
@@ -139,7 +141,14 @@ jobs:
       - name: Build latest.json
         run: |
           set -euo pipefail
-          VERSION="${{ inputs.version }}"
+          VERSION=$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("src-tauri/tauri.conf.json").read_text())
+          print(data["version"])
+          PY
+          )
           SIGNATURE=$(cat src-tauri/target/release/bundle/macos/CodexMonitor.app.tar.gz.sig)
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
           if [ -n "$LAST_TAG" ]; then
@@ -175,7 +184,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          VERSION="${{ inputs.version }}"
+          VERSION=$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("src-tauri/tauri.conf.json").read_text())
+          print(data["version"])
+          PY
+          )
 
           gh release create "v${VERSION}" \
             --title "v${VERSION}" \
@@ -192,7 +208,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          VERSION="${{ inputs.version }}"
+          VERSION=$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("src-tauri/tauri.conf.json").read_text())
+          print(data["version"])
+          PY
+          )
 
           NEXT_VERSION=$(python3 - <<'PY' "$VERSION"
           import sys
