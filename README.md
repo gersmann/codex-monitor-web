@@ -72,8 +72,7 @@ Note: `npm run build` also runs `tsc` before bundling the frontend.
 
 ```
 src/
-  components/       UI building blocks
-  hooks/            state + event wiring
+  features/         feature-sliced UI + hooks
   services/         Tauri IPC wrapper
   styles/           split CSS by area
   types.ts          shared types

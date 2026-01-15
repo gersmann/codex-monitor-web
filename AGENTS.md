@@ -6,17 +6,16 @@ CodexMonitor is a macOS Tauri app that orchestrates Codex agents across local wo
 ## Key Paths
 
 - `src/App.tsx`: composition root
-- `src/components/`: presentational UI components
-- `src/components/SettingsView.tsx`: settings UI (projects, display, Codex)
-- `src/components/UpdateToast.tsx`: in-app updater UI
-- `src/components/Home.tsx`: home dashboard + latest agent runs
-- `src/hooks/`: state + event wiring
-- `src/hooks/useAppSettings.ts`: app settings load/save + doctor
-- `src/hooks/useUpdater.ts`: update checks + install flow
-- `src/hooks/useResizablePanels.ts`: panel resize + persistence
-- `src/hooks/useComposerImages.ts`: image attachment state
-- `src/hooks/useComposerImageDrop.ts`: drag/drop + paste images
-- `src/hooks/useGitHubIssues.ts`: GitHub issues tab data
+- `src/features/`: feature-sliced UI, hooks, and local helpers
+- `src/features/settings/components/SettingsView.tsx`: settings UI (projects, display, Codex)
+- `src/features/update/components/UpdateToast.tsx`: in-app updater UI
+- `src/features/home/components/Home.tsx`: home dashboard + latest agent runs
+- `src/features/settings/hooks/useAppSettings.ts`: app settings load/save + doctor
+- `src/features/update/hooks/useUpdater.ts`: update checks + install flow
+- `src/features/layout/hooks/useResizablePanels.ts`: panel resize + persistence
+- `src/features/composer/hooks/useComposerImages.ts`: image attachment state
+- `src/features/composer/hooks/useComposerImageDrop.ts`: drag/drop + paste images
+- `src/features/git/hooks/useGitHubIssues.ts`: GitHub issues tab data
 - `src/utils/threadItems.ts`: thread item normalization + conversion
 - `src/services/tauri.ts`: Tauri IPC wrapper
 - `src/styles/`: split CSS by area
@@ -82,16 +81,16 @@ to the next minor version.
 
 ## Common Changes
 
-- UI layout or styling: update `src/components/*` and `src/styles/*`.
-- App-server event handling: edit `src/hooks/useAppServerEvents.ts`.
+- UI layout or styling: update `src/features/*/components/*` and `src/styles/*`.
+- App-server event handling: edit `src/features/app/hooks/useAppServerEvents.ts`.
 - Tauri IPC: add wrappers in `src/services/tauri.ts` and implement in `src-tauri/src/lib.rs`.
-- App settings or updater behavior: `src/hooks/useAppSettings.ts`, `src/hooks/useUpdater.ts`, and `src/components/SettingsView.tsx`.
-- Git diff behavior: `src/hooks/useGitStatus.ts` (polling + activity refresh) and `src-tauri/src/lib.rs` (libgit2 status).
-- GitHub issues panel: `src/hooks/useGitHubIssues.ts` + `src-tauri/src/git.rs`.
-- Thread history rendering: `src/hooks/useThreads.ts` converts `thread/resume` turns into UI items.
+- App settings or updater behavior: `src/features/settings/hooks/useAppSettings.ts`, `src/features/update/hooks/useUpdater.ts`, and `src/features/settings/components/SettingsView.tsx`.
+- Git diff behavior: `src/features/git/hooks/useGitStatus.ts` (polling + activity refresh) and `src-tauri/src/lib.rs` (libgit2 status).
+- GitHub issues panel: `src/features/git/hooks/useGitHubIssues.ts` + `src-tauri/src/git.rs`.
+- Thread history rendering: `src/features/threads/hooks/useThreads.ts` converts `thread/resume` turns into UI items.
   - Thread names update on first user message (preview-based), and on resume if a preview exists.
 - Thread item parsing/normalization: `src/utils/threadItems.ts`.
-- Thread state reducer: `src/hooks/useThreadsReducer.ts`.
+- Thread state reducer: `src/features/threads/hooks/useThreadsReducer.ts`.
 
 ## Notes
 
