@@ -53,7 +53,7 @@ import { useWorktreePrompt } from "./hooks/useWorktreePrompt";
 import { useUiScaleShortcuts } from "./hooks/useUiScaleShortcuts";
 import { useWorkspaceSelection } from "./hooks/useWorkspaceSelection";
 import { useNewAgentShortcut } from "./hooks/useNewAgentShortcut";
-import { buildThreadTranscript } from "./utils/threadText";
+import { useCopyThread } from "./hooks/useCopyThread";
 import type { AccessMode, DiffLineReference, QueuedMessage, WorkspaceInfo } from "./types";
 
 function useWindowLabel() {
@@ -259,26 +259,10 @@ function MainApp() {
     onMessageActivity: refreshGitStatus
   });
 
-  const handleCopyThread = useCallback(async () => {
-    if (!activeItems.length) {
-      return;
-    }
-    const transcript = buildThreadTranscript(activeItems);
-    if (!transcript) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(transcript);
-    } catch (error) {
-      addDebugEntry({
-        id: `${Date.now()}-client-copy-thread-error`,
-        timestamp: Date.now(),
-        source: "error",
-        label: "thread/copy error",
-        payload: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }, [activeItems, addDebugEntry]);
+  const { handleCopyThread } = useCopyThread({
+    activeItems,
+    onDebug: addDebugEntry,
+  });
 
   const {
     activeImages,
