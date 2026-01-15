@@ -53,6 +53,7 @@ import { useWorktreePrompt } from "./hooks/useWorktreePrompt";
 import { useUiScaleShortcuts } from "./hooks/useUiScaleShortcuts";
 import { useWorkspaceSelection } from "./hooks/useWorkspaceSelection";
 import { useNewAgentShortcut } from "./hooks/useNewAgentShortcut";
+import { useCopyThread } from "./hooks/useCopyThread";
 import type { AccessMode, DiffLineReference, QueuedMessage, WorkspaceInfo } from "./types";
 
 function useWindowLabel() {
@@ -257,6 +258,12 @@ function MainApp() {
     customPrompts: prompts,
     onMessageActivity: refreshGitStatus
   });
+
+  const { handleCopyThread } = useCopyThread({
+    activeItems,
+    onDebug: addDebugEntry,
+  });
+
   const {
     activeImages,
     attachImages,
@@ -687,6 +694,7 @@ function MainApp() {
     branches,
     onCheckoutBranch: handleCheckoutBranch,
     onCreateBranch: handleCreateBranch,
+    onCopyThread: handleCopyThread,
     centerMode,
     onExitDiff: () => {
       setCenterMode("chat");

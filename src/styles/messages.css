@@ -127,6 +127,71 @@
   word-break: break-word;
 }
 
+.message-bubble {
+  position: relative;
+}
+
+.message-copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  right: 6px;
+  bottom: -12px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface-card-strong);
+  border: 1px solid var(--border-strong);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.message:hover .message-copy-button {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.message-copy-icon {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message-copy-icon svg {
+  position: absolute;
+  inset: 0;
+  transition: opacity 160ms ease, transform 160ms ease, filter 160ms ease;
+}
+
+.message-copy-icon-copy {
+  opacity: 1;
+  transform: scale(1);
+  filter: blur(0);
+}
+
+.message-copy-icon-check {
+  opacity: 0;
+  transform: scale(0.82);
+  filter: blur(2px);
+  transition-delay: 60ms;
+}
+
+.message-copy-button.is-copied .message-copy-icon-copy {
+  opacity: 0;
+  transform: scale(0.82);
+  filter: blur(2px);
+}
+
+.message-copy-button.is-copied .message-copy-icon-check {
+  opacity: 1;
+  transform: scale(1);
+  filter: blur(0);
+}
+
 .message.user .bubble {
   background: var(--surface-bubble-user);
 }
