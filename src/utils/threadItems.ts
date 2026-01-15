@@ -1,6 +1,6 @@
 import type { ConversationItem } from "../types";
 
-const MAX_ITEMS_PER_THREAD = 400;
+const MAX_ITEMS_PER_THREAD = 200;
 const MAX_ITEM_TEXT = 20000;
 const NO_TRUNCATE_TOOL_TYPES = new Set(["fileChange", "commandExecution"]);
 
