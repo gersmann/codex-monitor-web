@@ -78,11 +78,8 @@ export function Composer({
   const textareaRef = externalTextareaRef ?? internalRef;
 
   useEffect(() => {
-    if (draftText === text) {
-      return;
-    }
-    setText(draftText);
-  }, [draftText, text]);
+    setText((prev) => (prev === draftText ? prev : draftText));
+  }, [draftText]);
 
   const setComposerText = useCallback(
     (next: string) => {
