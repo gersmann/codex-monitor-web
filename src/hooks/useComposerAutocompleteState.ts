@@ -22,6 +22,8 @@ type UseComposerAutocompleteStateArgs = {
   setSelectionStart: (next: number | null) => void;
 };
 
+const MAX_FILE_SUGGESTIONS = 500;
+
 function textIncludesFile(text: string, path: string) {
   if (!text || !path) {
     return false;
@@ -33,6 +35,23 @@ function textIncludesFile(text: string, path: string) {
       "(?=$|[\\s\"'`\\)\\]\\}\\.,:;!?])",
   );
   return pattern.test(text);
+}
+
+function isFileTriggerActive(text: string, cursor: number | null) {
+  if (!text || cursor === null) {
+    return false;
+  }
+  const beforeCursor = text.slice(0, cursor);
+  const atIndex = beforeCursor.lastIndexOf("@");
+  if (atIndex < 0) {
+    return false;
+  }
+  const prevChar = atIndex > 0 ? beforeCursor[atIndex - 1] : "";
+  if (prevChar && !/[\s"'`(\[{]/.test(prevChar)) {
+    return false;
+  }
+  const afterAt = beforeCursor.slice(atIndex + 1);
+  return afterAt.length === 0 || !/\s/.test(afterAt);
 }
 
 export function useComposerAutocompleteState({
@@ -59,14 +78,17 @@ export function useComposerAutocompleteState({
 
   const fileItems = useMemo<AutocompleteItem[]>(
     () =>
-      files
-        .filter((path) => !textIncludesFile(text, path))
-        .map((path) => ({
-          id: path,
-          label: path,
-          insertText: path,
-        })),
-    [files, text],
+      isFileTriggerActive(text, selectionStart)
+        ? files
+            .filter((path) => !textIncludesFile(text, path))
+            .slice(0, MAX_FILE_SUGGESTIONS)
+            .map((path) => ({
+              id: path,
+              label: path,
+              insertText: path,
+            }))
+        : [],
+    [files, selectionStart, text],
   );
 
   const promptItems = useMemo<AutocompleteItem[]>(

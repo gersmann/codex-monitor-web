@@ -14,6 +14,13 @@ use crate::types::{
 };
 use crate::utils::normalize_git_path;
 
+fn should_skip_dir(name: &str) -> bool {
+    matches!(
+        name,
+        ".git" | "node_modules" | "dist" | "target" | "release-artifacts"
+    )
+}
+
 fn sanitize_worktree_name(branch: &str) -> String {
     let mut result = String::new();
     for ch in branch.chars() {
@@ -36,10 +43,20 @@ fn list_workspace_files_inner(root: &PathBuf, max_files: usize) -> Vec<String> {
     let walker = WalkBuilder::new(root)
         // Allow hidden entries.
         .hidden(false)
-        // Follow symlinks to search their contents.
-        .follow_links(true)
+        // Avoid crawling symlink targets.
+        .follow_links(false)
         // Don't require git to be present to apply to apply git-related ignore rules.
         .require_git(false)
+        .filter_entry(|entry| {
+            if entry.depth() == 0 {
+                return true;
+            }
+            if entry.file_type().is_some_and(|ft| ft.is_dir()) {
+                let name = entry.file_name().to_string_lossy();
+                return !should_skip_dir(&name);
+            }
+            true
+        })
         .build();
 
     for entry in walker {
