@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
+import { Check, Copy } from "lucide-react";
 import type { ConversationItem } from "../types";
 import { Markdown } from "./Markdown";
 import { DiffBlock } from "./DiffBlock";
@@ -207,6 +208,8 @@ export const Messages = memo(function Messages({
 }: MessagesProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const copyTimeoutRef = useRef<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const scrollKey = scrollKeyForItems(items);
   const toggleExpanded = (id: string) => {
@@ -222,6 +225,29 @@ export const Messages = memo(function Messages({
   };
 
   const visibleItems = items;
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        window.clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopyMessage = async (item: Extract<ConversationItem, { kind: "message" }>) => {
+    try {
+      await navigator.clipboard.writeText(item.text);
+      setCopiedMessageId(item.id);
+      if (copyTimeoutRef.current) {
+        window.clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = window.setTimeout(() => {
+        setCopiedMessageId(null);
+      }, 1200);
+    } catch {
+      // No-op: clipboard errors can occur in restricted contexts.
+    }
+  };
 
   useEffect(() => {
     if (!bottomRef.current) {
@@ -276,10 +302,23 @@ export const Messages = memo(function Messages({
     >
       {visibleItems.map((item) => {
         if (item.kind === "message") {
+          const isCopied = copiedMessageId === item.id;
           return (
             <div key={item.id} className={`message ${item.role}`}>
-              <div className="bubble">
+              <div className="bubble message-bubble">
                 <Markdown value={item.text} className="markdown" />
+                <button
+                  type="button"
+                  className={`ghost message-copy-button${isCopied ? " is-copied" : ""}`}
+                  onClick={() => handleCopyMessage(item)}
+                  aria-label="Copy message"
+                  title="Copy message"
+                >
+                  <span className="message-copy-icon" aria-hidden>
+                    <Copy className="message-copy-icon-copy" size={14} />
+                    <Check className="message-copy-icon-check" size={14} />
+                  </span>
+                </button>
               </div>
             </div>
           );

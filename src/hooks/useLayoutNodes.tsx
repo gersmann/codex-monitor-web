@@ -65,7 +65,7 @@ type LayoutNodesOptions = {
   ) => void;
   onOpenSettings: () => void;
   onOpenDebug: () => void;
-  hasDebugAlerts: boolean;
+  showDebugButton: boolean;
   onAddWorkspace: () => void;
   onSelectHome: () => void;
   onSelectWorkspace: (workspaceId: string) => void;
@@ -98,6 +98,7 @@ type LayoutNodesOptions = {
   branches: BranchInfo[];
   onCheckoutBranch: (name: string) => Promise<void>;
   onCreateBranch: (name: string) => Promise<void>;
+  onCopyThread: () => void | Promise<void>;
   centerMode: "chat" | "diff";
   onExitDiff: () => void;
   activeTab: "projects" | "codex" | "git" | "log";
@@ -213,7 +214,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       accountRateLimits={options.activeRateLimits}
       onOpenSettings={options.onOpenSettings}
       onOpenDebug={options.onOpenDebug}
-      hasDebugAlerts={options.hasDebugAlerts}
+      showDebugButton={options.showDebugButton}
       onAddWorkspace={options.onAddWorkspace}
       onSelectHome={options.onSelectHome}
       onSelectWorkspace={options.onSelectWorkspace}
@@ -315,6 +316,8 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       branches={options.branches}
       onCheckoutBranch={options.onCheckoutBranch}
       onCreateBranch={options.onCreateBranch}
+      canCopyThread={options.activeItems.length > 0}
+      onCopyThread={options.onCopyThread}
     />
   ) : null;
 

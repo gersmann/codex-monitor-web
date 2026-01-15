@@ -16,6 +16,7 @@
 }
 
 .main-header {
+  width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -28,6 +29,61 @@
   display: flex;
   align-items: center;
   min-width: 0;
+}
+
+.main-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.main-header-action {
+  padding: 6px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.main-header-icon {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.main-header-icon svg {
+  position: absolute;
+  inset: 0;
+  transition: opacity 160ms ease, transform 160ms ease, filter 160ms ease;
+}
+
+.main-header-icon-copy {
+  opacity: 1;
+  transform: scale(1);
+  filter: blur(0);
+}
+
+.main-header-icon-check {
+  opacity: 0;
+  transform: scale(0.82);
+  filter: blur(2px);
+  transition-delay: 60ms;
+}
+
+.main-header-action.is-copied .main-header-icon-copy {
+  opacity: 0;
+  transform: scale(0.82);
+  filter: blur(2px);
+}
+
+.main-header-action.is-copied .main-header-icon-check {
+  opacity: 1;
+  transform: scale(1);
+  filter: blur(0);
 }
 
 .main-topbar {
