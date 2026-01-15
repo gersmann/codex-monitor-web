@@ -227,3 +227,5 @@ export type DebugEntry = {
   label: string;
   payload?: unknown;
 };
+
+export type TerminalStatus = "idle" | "connecting" | "ready" | "error";

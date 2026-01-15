@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const STORAGE_KEY_SIDEBAR = "codexmonitor.sidebarWidth";
 const STORAGE_KEY_RIGHT_PANEL = "codexmonitor.rightPanelWidth";
 const STORAGE_KEY_PLAN_PANEL = "codexmonitor.planPanelHeight";
+const STORAGE_KEY_TERMINAL_PANEL = "codexmonitor.terminalPanelHeight";
 const STORAGE_KEY_DEBUG_PANEL = "codexmonitor.debugPanelHeight";
 const MIN_SIDEBAR_WIDTH = 220;
 const MAX_SIDEBAR_WIDTH = 420;
@@ -11,15 +12,18 @@ const MIN_RIGHT_PANEL_WIDTH = 200;
 const MAX_RIGHT_PANEL_WIDTH = 420;
 const MIN_PLAN_PANEL_HEIGHT = 140;
 const MAX_PLAN_PANEL_HEIGHT = 420;
+const MIN_TERMINAL_PANEL_HEIGHT = 140;
+const MAX_TERMINAL_PANEL_HEIGHT = 480;
 const MIN_DEBUG_PANEL_HEIGHT = 120;
 const MAX_DEBUG_PANEL_HEIGHT = 420;
 const DEFAULT_SIDEBAR_WIDTH = 280;
 const DEFAULT_RIGHT_PANEL_WIDTH = 230;
 const DEFAULT_PLAN_PANEL_HEIGHT = 220;
+const DEFAULT_TERMINAL_PANEL_HEIGHT = 220;
 const DEFAULT_DEBUG_PANEL_HEIGHT = 180;
 
 type ResizeState = {
-  type: "sidebar" | "right-panel" | "plan-panel" | "debug-panel";
+  type: "sidebar" | "right-panel" | "plan-panel" | "terminal-panel" | "debug-panel";
   startX: number;
   startY: number;
   startWidth: number;
@@ -70,6 +74,14 @@ export function useResizablePanels(uiScale = 1) {
       MAX_PLAN_PANEL_HEIGHT,
     ),
   );
+  const [terminalPanelHeight, setTerminalPanelHeight] = useState(() =>
+    readStoredWidth(
+      STORAGE_KEY_TERMINAL_PANEL,
+      DEFAULT_TERMINAL_PANEL_HEIGHT,
+      MIN_TERMINAL_PANEL_HEIGHT,
+      MAX_TERMINAL_PANEL_HEIGHT,
+    ),
+  );
   const [debugPanelHeight, setDebugPanelHeight] = useState(() =>
     readStoredWidth(
       STORAGE_KEY_DEBUG_PANEL,
@@ -102,6 +114,13 @@ export function useResizablePanels(uiScale = 1) {
       String(planPanelHeight),
     );
   }, [planPanelHeight]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      STORAGE_KEY_TERMINAL_PANEL,
+      String(terminalPanelHeight),
+    );
+  }, [terminalPanelHeight]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -140,6 +159,14 @@ export function useResizablePanels(uiScale = 1) {
           MAX_PLAN_PANEL_HEIGHT,
         );
         setPlanPanelHeight(next);
+      } else if (resizeRef.current.type === "terminal-panel") {
+        const delta = (event.clientY - resizeRef.current.startY) / scale;
+        const next = clamp(
+          resizeRef.current.startHeight - delta,
+          MIN_TERMINAL_PANEL_HEIGHT,
+          MAX_TERMINAL_PANEL_HEIGHT,
+        );
+        setTerminalPanelHeight(next);
       } else {
         const delta = (event.clientY - resizeRef.current.startY) / scale;
         const next = clamp(
@@ -213,6 +240,21 @@ export function useResizablePanels(uiScale = 1) {
     [planPanelHeight, rightPanelWidth],
   );
 
+  const onTerminalPanelResizeStart = useCallback(
+    (event: ReactMouseEvent) => {
+      resizeRef.current = {
+        type: "terminal-panel",
+        startX: event.clientX,
+        startY: event.clientY,
+        startWidth: rightPanelWidth,
+        startHeight: terminalPanelHeight,
+      };
+      document.body.style.cursor = "row-resize";
+      document.body.style.userSelect = "none";
+    },
+    [rightPanelWidth, terminalPanelHeight],
+  );
+
   const onDebugPanelResizeStart = useCallback(
     (event: ReactMouseEvent) => {
       resizeRef.current = {
@@ -232,10 +274,12 @@ export function useResizablePanels(uiScale = 1) {
     sidebarWidth,
     rightPanelWidth,
     planPanelHeight,
+    terminalPanelHeight,
     debugPanelHeight,
     onSidebarResizeStart,
     onRightPanelResizeStart,
     onPlanPanelResizeStart,
+    onTerminalPanelResizeStart,
     onDebugPanelResizeStart,
   };
 }

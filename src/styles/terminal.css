@@ -1,0 +1,160 @@
+.terminal-panel {
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-debug);
+  display: flex;
+  flex-direction: column;
+  grid-column: 1;
+  grid-row: 4;
+  height: var(--terminal-panel-height, 220px);
+  -webkit-app-region: no-drag;
+}
+
+.terminal-panel-resizer {
+  height: 6px;
+  cursor: row-resize;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.terminal-panel-resizer::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: var(--border-strong);
+  opacity: 0.4;
+}
+
+.terminal-panel-resizer:hover::after {
+  opacity: 0.9;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 20px;
+  font-size: 12px;
+}
+
+.terminal-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.terminal-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.terminal-tab.active {
+  color: var(--text-stronger);
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.terminal-tab-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.terminal-tab-close {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.terminal-tab-add {
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.terminal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  padding: 0 20px 12px;
+}
+
+.terminal-body > .terminal-shell {
+  flex: 1;
+  min-height: 0;
+}
+
+.terminal-shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+}
+
+.terminal-surface {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  border-radius: 0;
+  overflow: hidden;
+  background: transparent;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+  box-sizing: border-box;
+}
+
+.terminal-surface .xterm,
+.terminal-surface .xterm-screen,
+.terminal-surface .xterm-viewport {
+  background: transparent !important;
+}
+
+.terminal-surface .xterm {
+  height: 100%;
+  width: 100%;
+}
+
+.terminal-surface .xterm-viewport {
+  height: 100% !important;
+}
+
+.terminal-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(15, 17, 21, 0.85);
+  color: var(--text-muted);
+  pointer-events: none;
+  text-align: center;
+  font-size: 12px;
+  padding: 16px;
+}
+
+.terminal-status {
+  max-width: 280px;
+}

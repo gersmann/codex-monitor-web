@@ -12,6 +12,7 @@ import "./styles/composer.css";
 import "./styles/diff.css";
 import "./styles/diff-viewer.css";
 import "./styles/debug.css";
+import "./styles/terminal.css";
 import "./styles/plan.css";
 import "./styles/about.css";
 import "./styles/tabbar.css";
@@ -58,6 +59,8 @@ import { useNewAgentShortcut } from "./hooks/useNewAgentShortcut";
 import { useAgentSoundNotifications } from "./hooks/useAgentSoundNotifications";
 import { useWindowFocusState } from "./hooks/useWindowFocusState";
 import { useCopyThread } from "./hooks/useCopyThread";
+import { usePanelVisibility } from "./hooks/usePanelVisibility";
+import { useTerminalController } from "./hooks/useTerminalController";
 import { playNotificationSound } from "./utils/notificationSounds";
 import type { AccessMode, DiffLineReference, QueuedMessage, WorkspaceInfo } from "./types";
 
@@ -98,6 +101,8 @@ function MainApp() {
     onRightPanelResizeStart,
     planPanelHeight,
     onPlanPanelResizeStart,
+    terminalPanelHeight,
+    onTerminalPanelResizeStart,
     debugPanelHeight,
     onDebugPanelResizeStart
   } = useResizablePanels(uiScale);
@@ -559,13 +564,6 @@ function MainApp() {
     });
   }
 
-  const handleDebugClick = () => {
-    if (isCompact) {
-      setActiveTab("log");
-      return;
-    }
-    setDebugOpen((prev) => !prev);
-  };
   const handleOpenSettings = () => setSettingsOpen(true);
 
   const orderValue = (entry: WorkspaceInfo) =>
@@ -613,6 +611,29 @@ function MainApp() {
     ? centerMode === "chat" || centerMode === "diff"
     : (isTablet ? tabletTab : activeTab) === "codex";
   const showGitDetail = Boolean(selectedDiffPath) && isPhone;
+  const {
+    terminalOpen,
+    onToggleDebug: handleDebugClick,
+    onToggleTerminal: handleToggleTerminal,
+  } = usePanelVisibility({
+    isCompact,
+    activeWorkspaceId,
+    setActiveTab,
+    setDebugOpen,
+  });
+  const {
+    terminalTabs,
+    activeTerminalId,
+    onSelectTerminal,
+    onNewTerminal,
+    onCloseTerminal,
+    terminalState,
+  } = useTerminalController({
+    activeWorkspaceId,
+    activeWorkspace,
+    terminalOpen,
+    onDebug: addDebugEntry,
+  });
   const appClassName = `app ${isCompact ? "layout-compact" : "layout-desktop"}${
     isPhone ? " layout-phone" : ""
   }${isTablet ? " layout-tablet" : ""}${
@@ -634,6 +655,7 @@ function MainApp() {
     planPanelNode,
     debugPanelNode,
     debugPanelFullNode,
+    terminalDockNode,
     compactEmptyCodexNode,
     compactEmptyGitNode,
     compactGitBackNode,
@@ -728,6 +750,8 @@ function MainApp() {
     onCheckoutBranch: handleCheckoutBranch,
     onCreateBranch: handleCreateBranch,
     onCopyThread: handleCopyThread,
+    onToggleTerminal: handleToggleTerminal,
+    showTerminalButton: !isCompact,
     centerMode,
     onExitDiff: () => {
       setCenterMode("chat");
@@ -816,9 +840,17 @@ function MainApp() {
     plan: activePlan,
     debugEntries,
     debugOpen,
+    terminalOpen,
+    terminalTabs,
+    activeTerminalId,
+    onSelectTerminal,
+    onNewTerminal,
+    onCloseTerminal,
+    terminalState,
     onClearDebug: clearDebugEntries,
     onCopyDebug: handleCopyDebug,
     onResizeDebug: onDebugPanelResizeStart,
+    onResizeTerminal: onTerminalPanelResizeStart,
     onBackFromDiff: () => {
       setSelectedDiffPath(null);
       setCenterMode("chat");
@@ -834,6 +866,7 @@ function MainApp() {
           "--sidebar-width": `${sidebarWidth}px`,
           "--right-panel-width": `${rightPanelWidth}px`,
           "--plan-panel-height": `${planPanelHeight}px`,
+          "--terminal-panel-height": `${terminalPanelHeight}px`,
           "--debug-panel-height": `${debugPanelHeight}px`,
           "--ui-scale": String(uiScale)
         } as React.CSSProperties
@@ -892,6 +925,7 @@ function MainApp() {
           gitDiffPanelNode={gitDiffPanelNode}
           planPanelNode={planPanelNode}
           composerNode={composerNode}
+          terminalDockNode={terminalDockNode}
           debugPanelNode={debugPanelNode}
           hasActivePlan={hasActivePlan}
           onSidebarResizeStart={onSidebarResizeStart}

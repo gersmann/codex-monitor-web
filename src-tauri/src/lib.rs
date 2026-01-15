@@ -6,6 +6,7 @@ mod git;
 mod prompts;
 mod settings;
 mod state;
+mod terminal;
 mod storage;
 mod types;
 mod utils;
@@ -164,7 +165,11 @@ pub fn run() {
             codex::model_list,
             codex::account_rate_limits,
             codex::skills_list,
-            prompts::prompts_list
+            prompts::prompts_list,
+            terminal::terminal_open,
+            terminal::terminal_write,
+            terminal::terminal_resize,
+            terminal::terminal_close
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

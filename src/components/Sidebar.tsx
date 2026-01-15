@@ -1,5 +1,5 @@
 import type { RateLimitSnapshot, ThreadSummary, WorkspaceInfo } from "../types";
-import { FolderKanban, Layers, Settings, TerminalSquare } from "lucide-react";
+import { FolderKanban, Layers, ScrollText, Settings } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
@@ -780,7 +780,7 @@ export function Sidebar({
             aria-label="Open debug log"
             title="Debug log"
           >
-            <TerminalSquare size={14} aria-hidden />
+            <ScrollText size={14} aria-hidden />
           </button>
         )}
       </div>

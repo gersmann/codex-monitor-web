@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Terminal } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { BranchInfo, WorkspaceInfo } from "../types";
 
@@ -16,6 +16,9 @@ type MainHeaderProps = {
   onCreateBranch: (name: string) => Promise<void> | void;
   canCopyThread?: boolean;
   onCopyThread?: () => void | Promise<void>;
+  onToggleTerminal: () => void;
+  isTerminalOpen: boolean;
+  showTerminalButton?: boolean;
 };
 
 export function MainHeader({
@@ -31,6 +34,9 @@ export function MainHeader({
   onCreateBranch,
   canCopyThread = false,
   onCopyThread,
+  onToggleTerminal,
+  isTerminalOpen,
+  showTerminalButton = true,
 }: MainHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -276,6 +282,18 @@ export function MainHeader({
         </div>
       </div>
       <div className="main-header-actions">
+        {showTerminalButton && (
+          <button
+            type="button"
+            className={`ghost main-header-action${isTerminalOpen ? " is-active" : ""}`}
+            onClick={onToggleTerminal}
+            data-tauri-drag-region="false"
+            aria-label="Toggle terminal panel"
+            title="Terminal"
+          >
+            <Terminal size={14} aria-hidden />
+          </button>
+        )}
         <button
           type="button"
           className={`ghost main-header-action${copyFeedback ? " is-copied" : ""}`}

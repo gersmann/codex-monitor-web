@@ -13,6 +13,8 @@ import { DebugPanel } from "../components/DebugPanel";
 import { PlanPanel } from "../components/PlanPanel";
 import { TabBar } from "../components/TabBar";
 import { TabletNav } from "../components/TabletNav";
+import { TerminalDock } from "../components/TerminalDock";
+import { TerminalPanel } from "../components/TerminalPanel";
 import type {
   AccessMode,
   ApprovalRequest,
@@ -34,6 +36,8 @@ import type {
   WorkspaceInfo,
 } from "../types";
 import type { UpdateState } from "./useUpdater";
+import type { TerminalSessionState } from "./useTerminalSession";
+import type { TerminalTab } from "./useTerminalTabs";
 
 type ThreadActivityStatus = {
   isProcessing: boolean;
@@ -102,6 +106,8 @@ type LayoutNodesOptions = {
   onCheckoutBranch: (name: string) => Promise<void>;
   onCreateBranch: (name: string) => Promise<void>;
   onCopyThread: () => void | Promise<void>;
+  onToggleTerminal: () => void;
+  showTerminalButton: boolean;
   centerMode: "chat" | "diff";
   onExitDiff: () => void;
   activeTab: "projects" | "codex" | "git" | "log";
@@ -173,9 +179,17 @@ type LayoutNodesOptions = {
   plan: TurnPlan | null;
   debugEntries: DebugEntry[];
   debugOpen: boolean;
+  terminalOpen: boolean;
+  terminalTabs: TerminalTab[];
+  activeTerminalId: string | null;
+  onSelectTerminal: (terminalId: string) => void;
+  onNewTerminal: () => void;
+  onCloseTerminal: (terminalId: string) => void;
+  terminalState: TerminalSessionState | null;
   onClearDebug: () => void;
   onCopyDebug: () => void;
   onResizeDebug: (event: MouseEvent<Element>) => void;
+  onResizeTerminal: (event: MouseEvent<Element>) => void;
   onBackFromDiff: () => void;
   onGoProjects: () => void;
 };
@@ -196,6 +210,7 @@ type LayoutNodesResult = {
   planPanelNode: ReactNode;
   debugPanelNode: ReactNode;
   debugPanelFullNode: ReactNode;
+  terminalDockNode: ReactNode;
   compactEmptyCodexNode: ReactNode;
   compactEmptyGitNode: ReactNode;
   compactGitBackNode: ReactNode;
@@ -324,6 +339,9 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       onCreateBranch={options.onCreateBranch}
       canCopyThread={options.activeItems.length > 0}
       onCopyThread={options.onCopyThread}
+      onToggleTerminal={options.onToggleTerminal}
+      isTerminalOpen={options.terminalOpen}
+      showTerminalButton={options.showTerminalButton}
     />
   ) : null;
 
@@ -392,6 +410,27 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
 
   const planPanelNode = <PlanPanel plan={options.plan} isProcessing={options.isProcessing} />;
 
+  const terminalPanelNode = options.terminalState ? (
+    <TerminalPanel
+      containerRef={options.terminalState.containerRef}
+      status={options.terminalState.status}
+      message={options.terminalState.message}
+    />
+  ) : null;
+
+  const terminalDockNode = (
+    <TerminalDock
+      isOpen={options.terminalOpen}
+      terminals={options.terminalTabs}
+      activeTerminalId={options.activeTerminalId}
+      onSelectTerminal={options.onSelectTerminal}
+      onNewTerminal={options.onNewTerminal}
+      onCloseTerminal={options.onCloseTerminal}
+      onResizeStart={options.onResizeTerminal}
+      terminalNode={terminalPanelNode}
+    />
+  );
+
   const debugPanelNode = (
     <DebugPanel
       entries={options.debugEntries}
@@ -455,6 +494,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
     planPanelNode,
     debugPanelNode,
     debugPanelFullNode,
+    terminalDockNode,
     compactEmptyCodexNode,
     compactEmptyGitNode,
     compactGitBackNode,
