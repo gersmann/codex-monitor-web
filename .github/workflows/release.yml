@@ -16,6 +16,7 @@ jobs:
       NOTARY_PROFILE_NAME: ${{ vars.NOTARY_PROFILE_NAME }}
       APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      TAURI_SIGNING_PRIVATE_KEY_B64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_B64 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,19 +69,16 @@ jobs:
             --key "private_keys/AuthKey.p8"
 
       - name: Write Tauri signing key
-        env:
-          TAURI_SIGNING_PRIVATE_KEY_B64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_B64 }}
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.tauri"
           echo "$TAURI_SIGNING_PRIVATE_KEY_B64" | base64 --decode > "$HOME/.tauri/codexmonitor.key"
 
       - name: Build app bundle
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
+          export TAURI_SIGNING_PRIVATE_KEY
+          TAURI_SIGNING_PRIVATE_KEY="$(cat "$HOME/.tauri/codexmonitor.key")"
           npm run tauri -- build --bundles app
 
       - name: Bundle OpenSSL and re-sign
@@ -152,6 +150,9 @@ jobs:
     name: appimage (${{ matrix.arch }})
     runs-on: ${{ matrix.platform }}
     environment: release
+    env:
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      TAURI_SIGNING_PRIVATE_KEY_B64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_B64 }}
     strategy:
       fail-fast: false
       matrix:
@@ -185,9 +186,17 @@ jobs:
       - name: install frontend dependencies
         run: npm ci
 
+      - name: Write Tauri signing key
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.tauri"
+          echo "$TAURI_SIGNING_PRIVATE_KEY_B64" | base64 --decode > "$HOME/.tauri/codexmonitor.key"
+
       - name: build AppImage
         run: |
           set -euo pipefail
+          export TAURI_SIGNING_PRIVATE_KEY
+          TAURI_SIGNING_PRIVATE_KEY="$(cat "$HOME/.tauri/codexmonitor.key")"
           npm run tauri -- build --bundles appimage
 
       - name: Upload AppImage
