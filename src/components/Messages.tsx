@@ -325,14 +325,11 @@ export const Messages = memo(function Messages({
         }
         if (item.kind === "reasoning") {
           const summaryText = item.summary || item.content;
-          const summaryLines = summaryText
-            .split("\n")
-            .map((line) => line.trim())
-            .filter(Boolean);
+          const summaryLines = summaryText.split("\n");
+          const trimmedLines = summaryLines.map((line) => line.trim());
+          const titleLineIndex = trimmedLines.findIndex(Boolean);
           const rawTitle =
-            summaryLines.length > 0
-              ? summaryLines[summaryLines.length - 1]
-              : "Reasoning";
+            titleLineIndex >= 0 ? trimmedLines[titleLineIndex] : "Reasoning";
           const cleanTitle = rawTitle
             .replace(/[`*_~]/g, "")
             .replace(/\[(.*?)\]\(.*?\)/g, "$1")
@@ -343,12 +340,14 @@ export const Messages = memo(function Messages({
               : cleanTitle || "Reasoning";
           const reasoningTone: StatusTone = summaryText ? "completed" : "processing";
           const isExpanded = expandedItems.has(item.id);
-          const normalizedSummaryText = summaryText.trim();
-          const shouldHideReasoningBody =
-            !normalizedSummaryText ||
-            normalizedSummaryText === summaryTitle ||
-            summaryLines.length <= 1;
-          const showReasoningBody = !shouldHideReasoningBody && summaryText;
+          const bodyText =
+            titleLineIndex >= 0
+              ? summaryLines
+                  .filter((_, index) => index !== titleLineIndex)
+                  .join("\n")
+                  .trim()
+              : "";
+          const showReasoningBody = Boolean(bodyText);
           return (
             <div key={item.id} className="tool-inline reasoning-inline">
               <button
@@ -373,7 +372,7 @@ export const Messages = memo(function Messages({
                 </button>
                 {showReasoningBody && (
                   <Markdown
-                    value={summaryText}
+                    value={bodyText}
                     className={`reasoning-inline-detail markdown ${
                       isExpanded ? "" : "tool-inline-clamp"
                     }`}
