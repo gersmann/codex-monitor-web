@@ -253,7 +253,9 @@ jobs:
           )
 
           SIGNATURE=$(cat release-artifacts/CodexMonitor.app.tar.gz.sig)
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          LAST_TAG=$(git tag --sort=-version:refname \
+            | grep -v "^v${VERSION}$" \
+            | head -n 1 || true)
           if [ -n "$LAST_TAG" ]; then
             git log "${LAST_TAG}..HEAD" --pretty=format:"%s" > release-artifacts/release-commits.txt
           else
