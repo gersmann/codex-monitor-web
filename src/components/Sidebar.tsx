@@ -15,6 +15,8 @@ type SidebarProps = {
     { isProcessing: boolean; hasUnread: boolean; isReviewing: boolean }
   >;
   threadListLoadingByWorkspace: Record<string, boolean>;
+  threadListPagingByWorkspace: Record<string, boolean>;
+  threadListCursorByWorkspace: Record<string, string | null>;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   accountRateLimits: RateLimitSnapshot | null;
@@ -32,6 +34,7 @@ type SidebarProps = {
   onDeleteThread: (workspaceId: string, threadId: string) => void;
   onDeleteWorkspace: (workspaceId: string) => void;
   onDeleteWorktree: (workspaceId: string) => void;
+  onLoadOlderThreads: (workspaceId: string) => void;
 };
 
 export function Sidebar({
@@ -39,6 +42,8 @@ export function Sidebar({
   threadsByWorkspace,
   threadStatusById,
   threadListLoadingByWorkspace,
+  threadListPagingByWorkspace,
+  threadListCursorByWorkspace,
   activeWorkspaceId,
   activeThreadId,
   accountRateLimits,
@@ -56,6 +61,7 @@ export function Sidebar({
   onDeleteThread,
   onDeleteWorkspace,
   onDeleteWorktree,
+  onLoadOlderThreads,
 }: SidebarProps) {
   const [expandedWorkspaces, setExpandedWorkspaces] = useState(
     new Set<string>(),
@@ -287,6 +293,8 @@ export function Sidebar({
               threadListLoadingByWorkspace[entry.id] ?? false;
             const showThreadLoader =
               !isCollapsed && isLoadingThreads && threads.length === 0;
+            const nextCursor = threadListCursorByWorkspace[entry.id] ?? null;
+            const isPaging = threadListPagingByWorkspace[entry.id] ?? false;
             const worktrees = worktreesByParent.get(entry.id) ?? [];
 
             return (
@@ -425,6 +433,10 @@ export function Sidebar({
                           !worktreeCollapsed &&
                           isLoadingWorktreeThreads &&
                           worktreeThreads.length === 0;
+                        const worktreeNextCursor =
+                          threadListCursorByWorkspace[worktree.id] ?? null;
+                        const isWorktreePaging =
+                          threadListPagingByWorkspace[worktree.id] ?? false;
                         const worktreeBranch = worktree.worktree?.branch ?? "";
 
                         return (
@@ -565,9 +577,24 @@ export function Sidebar({
                                   >
                                     {expandedWorkspaces.has(worktree.id)
                                       ? "Show less"
-                                      : `${worktreeThreads.length - 3} more...`}
+                                      : "More..."}
                                   </button>
                                 )}
+                                {expandedWorkspaces.has(worktree.id) &&
+                                  worktreeNextCursor && (
+                                    <button
+                                      className="thread-more"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        onLoadOlderThreads(worktree.id);
+                                      }}
+                                      disabled={isWorktreePaging}
+                                    >
+                                      {isWorktreePaging
+                                        ? "Loading..."
+                                        : "Load older..."}
+                                    </button>
+                                  )}
                               </div>
                             )}
                             {showWorktreeLoader && (
@@ -658,7 +685,19 @@ export function Sidebar({
                       >
                         {expandedWorkspaces.has(entry.id)
                           ? "Show less"
-                          : `${threads.length - 3} more...`}
+                          : "More..."}
+                      </button>
+                    )}
+                    {expandedWorkspaces.has(entry.id) && nextCursor && (
+                      <button
+                        className="thread-more"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onLoadOlderThreads(entry.id);
+                        }}
+                        disabled={isPaging}
+                      >
+                        {isPaging ? "Loading..." : "Load older..."}
                       </button>
                     )}
                   </div>

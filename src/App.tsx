@@ -257,6 +257,8 @@ function MainApp() {
     threadsByWorkspace,
     threadStatusById,
     threadListLoadingByWorkspace,
+    threadListPagingByWorkspace,
+    threadListCursorByWorkspace,
     activeTurnIdByThread,
     tokenUsageByThread,
     rateLimitsByWorkspace,
@@ -266,6 +268,7 @@ function MainApp() {
     removeThread,
     startThreadForWorkspace,
     listThreadsForWorkspace,
+    loadOlderThreadsForWorkspace,
     sendUserMessage,
     startReview,
     handleApprovalDecision
@@ -639,6 +642,8 @@ function MainApp() {
     threadsByWorkspace,
     threadStatusById,
     threadListLoadingByWorkspace,
+    threadListPagingByWorkspace,
+    threadListCursorByWorkspace,
     activeWorkspaceId,
     activeThreadId,
     activeItems,
@@ -693,6 +698,13 @@ function MainApp() {
     },
     onDeleteWorktree: (workspaceId) => {
       void removeWorktree(workspaceId);
+    },
+    onLoadOlderThreads: (workspaceId) => {
+      const workspace = workspaces.find((entry) => entry.id === workspaceId);
+      if (!workspace) {
+        return;
+      }
+      void loadOlderThreadsForWorkspace(workspace);
     },
     updaterState: updater.state,
     onUpdate: updater.startUpdate,

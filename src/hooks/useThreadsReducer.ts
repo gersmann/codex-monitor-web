@@ -22,6 +22,8 @@ export type ThreadState = {
   threadsByWorkspace: Record<string, ThreadSummary[]>;
   threadStatusById: Record<string, ThreadActivityStatus>;
   threadListLoadingByWorkspace: Record<string, boolean>;
+  threadListPagingByWorkspace: Record<string, boolean>;
+  threadListCursorByWorkspace: Record<string, string | null>;
   activeTurnIdByThread: Record<string, string | null>;
   approvals: ApprovalRequest[];
   tokenUsageByThread: Record<string, ThreadTokenUsage>;
@@ -69,6 +71,16 @@ export type ThreadAction =
       workspaceId: string;
       isLoading: boolean;
     }
+  | {
+      type: "setThreadListPaging";
+      workspaceId: string;
+      isLoading: boolean;
+    }
+  | {
+      type: "setThreadListCursor";
+      workspaceId: string;
+      cursor: string | null;
+    }
   | { type: "addApproval"; approval: ApprovalRequest }
   | { type: "removeApproval"; requestId: number }
   | { type: "setThreadTokenUsage"; threadId: string; tokenUsage: ThreadTokenUsage }
@@ -95,6 +107,8 @@ export const initialState: ThreadState = {
   threadsByWorkspace: {},
   threadStatusById: {},
   threadListLoadingByWorkspace: {},
+  threadListPagingByWorkspace: {},
+  threadListCursorByWorkspace: {},
   activeTurnIdByThread: {},
   approvals: [],
   tokenUsageByThread: {},
@@ -550,6 +564,22 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         threadListLoadingByWorkspace: {
           ...state.threadListLoadingByWorkspace,
           [action.workspaceId]: action.isLoading,
+        },
+      };
+    case "setThreadListPaging":
+      return {
+        ...state,
+        threadListPagingByWorkspace: {
+          ...state.threadListPagingByWorkspace,
+          [action.workspaceId]: action.isLoading,
+        },
+      };
+    case "setThreadListCursor":
+      return {
+        ...state,
+        threadListCursorByWorkspace: {
+          ...state.threadListCursorByWorkspace,
+          [action.workspaceId]: action.cursor,
         },
       };
     case "setThreadTokenUsage":

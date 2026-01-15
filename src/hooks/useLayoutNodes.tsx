@@ -54,6 +54,8 @@ type LayoutNodesOptions = {
   threadsByWorkspace: Record<string, ThreadSummary[]>;
   threadStatusById: Record<string, ThreadActivityStatus>;
   threadListLoadingByWorkspace: Record<string, boolean>;
+  threadListPagingByWorkspace: Record<string, boolean>;
+  threadListCursorByWorkspace: Record<string, string | null>;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   activeItems: ConversationItem[];
@@ -77,6 +79,7 @@ type LayoutNodesOptions = {
   onDeleteThread: (workspaceId: string, threadId: string) => void;
   onDeleteWorkspace: (workspaceId: string) => void;
   onDeleteWorktree: (workspaceId: string) => void;
+  onLoadOlderThreads: (workspaceId: string) => void;
   updaterState: UpdateState;
   onUpdate: () => void;
   onDismissUpdate: () => void;
@@ -209,6 +212,8 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       threadsByWorkspace={options.threadsByWorkspace}
       threadStatusById={options.threadStatusById}
       threadListLoadingByWorkspace={options.threadListLoadingByWorkspace}
+      threadListPagingByWorkspace={options.threadListPagingByWorkspace}
+      threadListCursorByWorkspace={options.threadListCursorByWorkspace}
       activeWorkspaceId={options.activeWorkspaceId}
       activeThreadId={options.activeThreadId}
       accountRateLimits={options.activeRateLimits}
@@ -226,6 +231,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       onDeleteThread={options.onDeleteThread}
       onDeleteWorkspace={options.onDeleteWorkspace}
       onDeleteWorktree={options.onDeleteWorktree}
+      onLoadOlderThreads={options.onLoadOlderThreads}
     />
   );
 
