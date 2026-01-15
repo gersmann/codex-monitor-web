@@ -197,7 +197,7 @@ function MainApp() {
   const compactTab = isTablet ? tabletTab : activeTab;
   const shouldLoadDiffs =
     centerMode === "diff" || (isCompact && compactTab === "git");
-  const shouldLoadGitLog = Boolean(activeWorkspace);
+  const shouldLoadGitLog = gitPanelMode === "log" && Boolean(activeWorkspace);
   const {
     diffs: gitDiffs,
     isLoading: isDiffLoading,
