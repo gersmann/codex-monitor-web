@@ -22,6 +22,19 @@ type UseComposerAutocompleteStateArgs = {
   setSelectionStart: (next: number | null) => void;
 };
 
+function textIncludesFile(text: string, path: string) {
+  if (!text || !path) {
+    return false;
+  }
+  const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(
+    "(^|[\\s\"'`(\\[\\{]|@)" +
+      escaped +
+      "(?=$|[\\s\"'`\\)\\]\\}\\.,:;!?])",
+  );
+  return pattern.test(text);
+}
+
 export function useComposerAutocompleteState({
   text,
   selectionStart,
@@ -46,12 +59,14 @@ export function useComposerAutocompleteState({
 
   const fileItems = useMemo<AutocompleteItem[]>(
     () =>
-      files.map((path) => ({
-        id: path,
-        label: path,
-        insertText: path,
-      })),
-    [files],
+      files
+        .filter((path) => !textIncludesFile(text, path))
+        .map((path) => ({
+          id: path,
+          label: path,
+          insertText: path,
+        })),
+    [files, text],
   );
 
   const promptItems = useMemo<AutocompleteItem[]>(
