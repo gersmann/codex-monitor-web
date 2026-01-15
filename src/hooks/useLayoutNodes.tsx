@@ -253,6 +253,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
   const messagesNode = (
     <Messages
       items={options.activeItems}
+      threadId={options.activeThreadId ?? null}
       isThinking={
         options.activeThreadId
           ? options.threadStatusById[options.activeThreadId]?.isProcessing ?? false

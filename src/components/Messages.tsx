@@ -7,6 +7,7 @@ import { languageFromPath } from "../utils/syntax";
 
 type MessagesProps = {
   items: ConversationItem[];
+  threadId: string | null;
   isThinking: boolean;
   processingStartedAt?: number | null;
   lastDurationMs?: number | null;
@@ -202,16 +203,34 @@ function scrollKeyForItems(items: ConversationItem[]) {
 
 export const Messages = memo(function Messages({
   items,
+  threadId,
   isThinking,
   processingStartedAt = null,
   lastDurationMs = null,
 }: MessagesProps) {
+  const SCROLL_THRESHOLD_PX = 120;
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const autoScrollRef = useRef(true);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copyTimeoutRef = useRef<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const scrollKey = scrollKeyForItems(items);
+
+  const isNearBottom = (node: HTMLDivElement) =>
+    node.scrollHeight - node.scrollTop - node.clientHeight <= SCROLL_THRESHOLD_PX;
+
+  const updateAutoScroll = () => {
+    if (!containerRef.current) {
+      return;
+    }
+    autoScrollRef.current = isNearBottom(containerRef.current);
+  };
+
+  useEffect(() => {
+    autoScrollRef.current = true;
+  }, [threadId]);
   const toggleExpanded = (id: string) => {
     setExpandedItems((prev) => {
       const next = new Set(prev);
@@ -251,6 +270,13 @@ export const Messages = memo(function Messages({
 
   useEffect(() => {
     if (!bottomRef.current) {
+      return undefined;
+    }
+    const container = containerRef.current;
+    const shouldScroll =
+      autoScrollRef.current ||
+      (container ? isNearBottom(container) : true);
+    if (!shouldScroll) {
       return undefined;
     }
     let raf1 = 0;
@@ -299,6 +325,8 @@ export const Messages = memo(function Messages({
   return (
     <div
       className="messages messages-full"
+      ref={containerRef}
+      onScroll={updateAutoScroll}
     >
       {visibleItems.map((item) => {
         if (item.kind === "message") {
