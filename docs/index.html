@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Codex Monitor - Orchestrate Codex agents across your workspaces</title>
+    <meta
+      name="description"
+      content="Codex Monitor is a macOS Tauri app that orchestrates Codex agents across local workspaces with threads, reviews, and a glassy command center."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+    <div class="bg-orb orb-3"></div>
+
+    <header class="site-header">
+      <div class="container nav">
+        <div class="logo">
+          <img class="logo-mark" src="assets/app-icon.png" alt="Codex Monitor app icon" />
+          Codex Monitor
+        </div>
+        <nav class="nav-links">
+          <a href="#features">Features</a>
+          <a href="#screens">Screens</a>
+          <a href="#workflow">Workflow</a>
+          <a href="#cta">Get started</a>
+        </nav>
+        <div class="nav-actions">
+          <a class="btn ghost" href="https://github.com/Dimillian/CodexMonitor" target="_blank" rel="noreferrer">GitHub</a>
+          <a class="btn primary" href="https://github.com/Dimillian/CodexMonitor/releases" target="_blank" rel="noreferrer">Download</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <div class="eyebrow">macOS command center for Codex</div>
+            <h1>Monitor your Codex situation.</h1>
+            <p>
+              Orchestrate any number of Codex agents across any number of projects in a beautifully crafted
+              command center for threads, reviews, and worktrees.
+            </p>
+            <div class="hero-actions">
+              <a class="btn primary" href="https://github.com/Dimillian/CodexMonitor/releases" target="_blank" rel="noreferrer">Get the app</a>
+              <a class="btn ghost" href="#features">Explore features</a>
+            </div>
+            <div class="hero-meta">
+              <div>
+                <span class="meta-label">Built on</span>
+                <span class="meta-value">Tauri + React</span>
+              </div>
+              <div>
+                <span class="meta-label">Platform</span>
+                <span class="meta-value">macOS + Linux</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="hero-shot">
+            <img src="assets/main.png" alt="Codex Monitor dashboard and chat view" />
+          </div>
+        </div>
+      </section>
+
+      <section id="features" class="section">
+        <div class="container">
+          <div class="section-title">
+            <h2>Everything you need to run Codex like a studio.</h2>
+            <p>
+              Build, review, and ship across multiple repos without losing context. Codex Monitor keeps the
+              entire workflow in one surface.
+            </p>
+          </div>
+
+          <div class="feature-grid">
+            <article class="glass card">
+              <h3>Workspace orchestration</h3>
+              <p>Add, persist, and reconnect workspaces with a live dashboard of recent activity.</p>
+            </article>
+            <article class="glass card">
+              <h3>Thread control</h3>
+              <p>Start threads, resume history, and handle approvals without leaving the main view.</p>
+            </article>
+            <article class="glass card">
+              <h3>Worktree agents</h3>
+              <p>Spin up per-branch worktrees for isolated changes and clean reviews.</p>
+            </article>
+            <article class="glass card">
+              <h3>Git + GitHub insight</h3>
+              <p>Diffs, logs, branch controls, and Issues via <code>gh</code> built right in.</p>
+            </article>
+            <article class="glass card">
+              <h3>Model + access controls</h3>
+              <p>Pick models, tune reasoning effort, and lock in access modes per run.</p>
+            </article>
+            <article class="glass card">
+              <h3>Plans and reviews</h3>
+              <p>Track per-turn plans, run reviews, and export debug logs on demand.</p>
+            </article>
+            <article class="glass card">
+              <h3>Skills + prompts</h3>
+              <p>Autocomplete skills, prompts, and file tokens in the composer.</p>
+            </article>
+            <article class="glass card">
+              <h3>Updater + polish</h3>
+              <p>Toast-driven updates, resizable panels, and a macOS overlay title bar.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="screens" class="section">
+        <div class="container">
+          <div class="section-title">
+            <h2>The next-generation IDE.</h2>
+            <p>Without a text editor built in, because you don’t need it.</p>
+          </div>
+
+          <div class="screens">
+            <div class="glass shot-large">
+              <img src="assets/main.png" alt="Codex Monitor full interface" />
+            </div>
+            <div class="shot-row">
+              <figure class="glass shot-small">
+                <img src="assets/feature1.png" alt="Projects and Codex threads overview" />
+                <figcaption>Projects and Codex threads overview</figcaption>
+              </figure>
+              <figure class="glass shot-small shot-wide">
+                <img src="assets/feature2.png" alt="Beautiful chat interface and integrated terminal" />
+                <figcaption>Beautiful chat interface and integrated terminal</figcaption>
+              </figure>
+              <figure class="glass shot-small">
+                <img src="assets/feature3.png" alt="Git diff, log, and issues all built in" />
+                <figcaption>Git diff, log, and issues all built in</figcaption>
+              </figure>
+              <figure class="glass shot-small">
+                <img src="assets/feature4.png" alt="Files tree with search" />
+                <figcaption>Files tree with search</figcaption>
+              </figure>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="workflow" class="section">
+        <div class="container">
+          <div class="section-title">
+            <h2>From repo to review in three moves.</h2>
+          </div>
+          <div class="workflow">
+            <div class="glass card">
+              <span class="step">01</span>
+              <h3>Connect your workspaces</h3>
+              <p>Codex Monitor spawns a Codex app-server per repo and restores your threads.</p>
+            </div>
+            <div class="glass card">
+              <span class="step">02</span>
+              <h3>Run the agent</h3>
+              <p>Pick models, access mode, and skills, then chat and manage approvals in one view.</p>
+            </div>
+            <div class="glass card">
+              <span class="step">03</span>
+              <h3>Review + ship</h3>
+              <p>Open diffs, logs, and reviews alongside your threads with instant context.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="cta" class="section">
+        <div class="container">
+          <div class="glass cta">
+            <div>
+              <h2>Ready to monitor every agent run?</h2>
+              <p>Codex Monitor keeps your Codex workflows visible, organized, and fast.</p>
+            </div>
+            <div class="cta-actions">
+              <a class="btn primary" href="https://github.com/Dimillian/CodexMonitor" target="_blank" rel="noreferrer">View repo</a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-grid">
+        <div>
+          <div class="logo">
+            <img class="logo-mark" src="assets/app-icon.png" alt="Codex Monitor app icon" />
+            Codex Monitor
+          </div>
+          <p>macOS Codex agents orchestration, built by and for individuals who ship fast.</p>
+        </div>
+        <div class="footer-links">
+          <a href="#features">Features</a>
+          <a href="#screens">Screenshots</a>
+          <a href="#workflow">Workflow</a>
+          <a href="https://github.com/Dimillian/CodexMonitor" target="_blank" rel="noreferrer">GitHub</a>
+        </div>
+      </div>
+      <div class="container footer-meta">
+        <span>© 2026 Codex Monitor. Made with ❤️ by Codex &amp; <a href="https://x.com/dimillian" target="_blank" rel="noreferrer">Dimillian</a>.</span>
+      </div>
+    </footer>
+  </body>
+</html>
