@@ -29,6 +29,7 @@
   display: flex;
   align-items: center;
   min-width: 0;
+  flex: 1;
 }
 
 .main-header-actions {
@@ -36,6 +37,7 @@
   align-items: center;
   gap: 8px;
   -webkit-app-region: no-drag;
+  flex-shrink: 0;
 }
 
 .main-header-action {
@@ -141,12 +143,18 @@
   gap: 8px;
   min-width: 0;
   white-space: nowrap;
+  flex: 1;
+  overflow: hidden;
 }
 
 .workspace-title {
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.2px;
+  max-width: min(32vw, 420px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workspace-separator {
@@ -162,6 +170,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: block;
 }
 
 .workspace-branch-static {
@@ -194,6 +203,10 @@
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
+  max-width: min(44vw, 520px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workspace-branch-static-button:hover {
@@ -315,6 +328,8 @@
   border-radius: 6px;
   cursor: pointer;
   color: var(--text-subtle);
+  max-width: min(44vw, 520px);
+  min-width: 0;
 }
 
 .workspace-branch-button:hover {
