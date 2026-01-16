@@ -3,6 +3,8 @@ import { Check, ChevronDown, Copy, Terminal } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { openWorkspaceIn } from "../../../services/tauri";
 import type { BranchInfo, WorkspaceInfo } from "../../../types";
+import { OPEN_APP_STORAGE_KEY, type OpenAppId } from "../constants";
+import { getStoredOpenAppId } from "../utils/openApp";
 import cursorIcon from "../../../assets/app-icons/cursor.png";
 import finderIcon from "../../../assets/app-icons/finder.png";
 import vscodeIcon from "../../../assets/app-icons/vscode.png";
@@ -25,10 +27,8 @@ type MainHeaderProps = {
   showTerminalButton?: boolean;
 };
 
-const OPEN_APP_STORAGE_KEY = "open-workspace-app";
-
 type OpenTarget = {
-  id: "vscode" | "cursor" | "finder";
+  id: OpenAppId;
   label: string;
   icon: string;
   open: (path: string) => Promise<void>;
@@ -62,13 +62,9 @@ export function MainHeader({
   const infoRef = useRef<HTMLDivElement | null>(null);
   const openMenuRef = useRef<HTMLDivElement | null>(null);
   const [openMenuOpen, setOpenMenuOpen] = useState(false);
-  const [openAppId, setOpenAppId] = useState<OpenTarget["id"]>(() => {
-    const stored = window.localStorage.getItem(OPEN_APP_STORAGE_KEY);
-    if (stored === "cursor" || stored === "finder" || stored === "vscode") {
-      return stored;
-    }
-    return "vscode";
-  });
+  const [openAppId, setOpenAppId] = useState<OpenTarget["id"]>(() => (
+    getStoredOpenAppId()
+  ));
 
   const recentBranches = branches.slice(0, 12);
   const resolvedWorktreePath = worktreePath ?? workspace.path;

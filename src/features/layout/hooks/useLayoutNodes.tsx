@@ -260,6 +260,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
     <Messages
       items={options.activeItems}
       threadId={options.activeThreadId ?? null}
+      workspacePath={options.activeWorkspace?.path ?? null}
       isThinking={
         options.activeThreadId
           ? options.threadStatusById[options.activeThreadId]?.isProcessing ?? false
