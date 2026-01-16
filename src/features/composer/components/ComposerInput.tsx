@@ -163,7 +163,11 @@ export function ComposerInput({
           />
         </div>
         {suggestionsOpen && (
-          <div className="composer-suggestions" role="listbox" ref={suggestionListRef}>
+          <div
+            className="composer-suggestions popover-surface"
+            role="listbox"
+            ref={suggestionListRef}
+          >
             {suggestions.map((item, index) => (
               <button
                 key={item.id}

@@ -128,7 +128,7 @@ export function MainHeader({
                 {worktreeLabel || branchName}
               </button>
               {infoOpen && (
-                <div className="worktree-info-popover" role="dialog">
+                <div className="worktree-info-popover popover-surface" role="dialog">
                   <div className="worktree-info-title">Worktree</div>
                   <div className="worktree-info-row">
                     <span className="worktree-info-label">
@@ -188,7 +188,7 @@ export function MainHeader({
               </button>
               {menuOpen && (
                 <div
-                  className="workspace-branch-dropdown"
+                  className="workspace-branch-dropdown popover-surface"
                   role="menu"
                   data-tauri-drag-region="false"
                 >

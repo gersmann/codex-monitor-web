@@ -382,7 +382,7 @@ export function Sidebar({
                 {addMenuAnchor?.workspaceId === entry.id &&
                   createPortal(
                     <div
-                      className="workspace-add-menu"
+                      className="workspace-add-menu popover-surface"
                       ref={addMenuRef}
                       style={{
                         top: addMenuAnchor.top,
