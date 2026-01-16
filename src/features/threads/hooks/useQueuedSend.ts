@@ -5,6 +5,7 @@ type UseQueuedSendOptions = {
   activeThreadId: string | null;
   isProcessing: boolean;
   isReviewing: boolean;
+  steerEnabled: boolean;
   activeWorkspace: WorkspaceInfo | null;
   connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
   sendUserMessage: (text: string, images?: string[]) => Promise<void>;
@@ -23,6 +24,7 @@ export function useQueuedSend({
   activeThreadId,
   isProcessing,
   isReviewing,
+  steerEnabled,
   activeWorkspace,
   connectWorkspace,
   sendUserMessage,
@@ -78,7 +80,7 @@ export function useQueuedSend({
       if (activeThreadId && isReviewing) {
         return;
       }
-      if (isProcessing && activeThreadId) {
+      if (isProcessing && activeThreadId && !steerEnabled) {
         const item: QueuedMessage = {
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           text: trimmed,
@@ -108,6 +110,7 @@ export function useQueuedSend({
       enqueueMessage,
       isProcessing,
       isReviewing,
+      steerEnabled,
       sendUserMessage,
       startReview,
     ],

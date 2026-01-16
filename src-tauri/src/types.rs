@@ -137,6 +137,11 @@ pub(crate) struct AppSettings {
         rename = "notificationSoundsEnabled"
     )]
     pub(crate) notification_sounds_enabled: bool,
+    #[serde(
+        default = "default_experimental_steer_enabled",
+        rename = "experimentalSteerEnabled"
+    )]
+    pub(crate) experimental_steer_enabled: bool,
 }
 
 fn default_access_mode() -> String {
@@ -151,6 +156,10 @@ fn default_notification_sounds_enabled() -> bool {
     true
 }
 
+fn default_experimental_steer_enabled() -> bool {
+    false
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -158,6 +167,7 @@ impl Default for AppSettings {
             default_access_mode: "current".to_string(),
             ui_scale: 1.0,
             notification_sounds_enabled: true,
+            experimental_steer_enabled: false,
         }
     }
 }
@@ -173,6 +183,7 @@ mod tests {
         assert_eq!(settings.default_access_mode, "current");
         assert!((settings.ui_scale - 1.0).abs() < f64::EPSILON);
         assert!(settings.notification_sounds_enabled);
+        assert!(!settings.experimental_steer_enabled);
     }
 
     #[test]

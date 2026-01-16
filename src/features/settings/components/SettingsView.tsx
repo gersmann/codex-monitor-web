@@ -9,6 +9,7 @@ import {
   TerminalSquare,
   Trash2,
   X,
+  FlaskConical,
 } from "lucide-react";
 import type { AppSettings, CodexDoctorResult, WorkspaceInfo } from "../../../types";
 import {
@@ -32,7 +33,7 @@ type SettingsViewProps = {
 };
 
 type SettingsSection = "projects" | "display";
-type CodexSection = SettingsSection | "codex";
+type CodexSection = SettingsSection | "codex" | "experimental";
 
 function orderValue(workspace: WorkspaceInfo) {
   const value = workspace.settings.sortOrder;
@@ -220,6 +221,14 @@ export function SettingsView({
             >
               <TerminalSquare aria-hidden />
               Codex
+            </button>
+            <button
+              type="button"
+              className={`settings-nav ${activeSection === "experimental" ? "active" : ""}`}
+              onClick={() => setActiveSection("experimental")}
+            >
+              <FlaskConical aria-hidden />
+              Experimental
             </button>
           </aside>
           <div className="settings-content">
@@ -536,6 +545,35 @@ export function SettingsView({
                   </div>
                 </div>
 
+              </section>
+            )}
+            {activeSection === "experimental" && (
+              <section className="settings-section">
+                <div className="settings-section-title">Experimental</div>
+                <div className="settings-section-subtitle">
+                  Preview features that may change or be removed.
+                </div>
+                <div className="settings-toggle-row">
+                  <div>
+                    <div className="settings-toggle-title">Steer mode</div>
+                    <div className="settings-toggle-subtitle">
+                      Send messages immediately, even while an agent is running.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`settings-toggle ${appSettings.experimentalSteerEnabled ? "on" : ""}`}
+                    onClick={() =>
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        experimentalSteerEnabled: !appSettings.experimentalSteerEnabled,
+                      })
+                    }
+                    aria-pressed={appSettings.experimentalSteerEnabled}
+                  >
+                    <span className="settings-toggle-knob" />
+                  </button>
+                </div>
               </section>
             )}
           </div>

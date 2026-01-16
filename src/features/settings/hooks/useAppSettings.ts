@@ -8,6 +8,7 @@ const defaultSettings: AppSettings = {
   defaultAccessMode: "current",
   uiScale: UI_SCALE_DEFAULT,
   notificationSoundsEnabled: true,
+  experimentalSteerEnabled: false,
 };
 
 function normalizeAppSettings(settings: AppSettings): AppSettings {

@@ -66,6 +66,7 @@ export type AppSettings = {
   defaultAccessMode: AccessMode;
   uiScale: number;
   notificationSoundsEnabled: boolean;
+  experimentalSteerEnabled: boolean;
 };
 
 export type CodexDoctorResult = {

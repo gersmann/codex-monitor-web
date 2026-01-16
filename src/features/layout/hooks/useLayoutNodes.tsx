@@ -149,6 +149,7 @@ type LayoutNodesOptions = {
   canStop: boolean;
   isReviewing: boolean;
   isProcessing: boolean;
+  steerEnabled: boolean;
   activeTokenUsage: ThreadTokenUsage | null;
   activeQueue: QueuedMessage[];
   draftText: string;
@@ -272,7 +273,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       disabled={options.isReviewing}
       contextUsage={options.activeTokenUsage}
       queuedMessages={options.activeQueue}
-      sendLabel={options.isProcessing ? "Queue" : "Send"}
+      sendLabel={options.isProcessing && !options.steerEnabled ? "Queue" : "Send"}
       draftText={options.draftText}
       onDraftChange={options.onDraftChange}
       attachedImages={options.activeImages}
