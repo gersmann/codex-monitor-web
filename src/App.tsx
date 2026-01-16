@@ -400,7 +400,7 @@ function MainApp() {
   const isReviewing = activeThreadId
     ? threadStatusById[activeThreadId]?.isReviewing ?? false
     : false;
-  const { activeQueue, handleSend, removeQueuedMessage } = useQueuedSend({
+  const { activeQueue, handleSend, queueMessage, removeQueuedMessage } = useQueuedSend({
     activeThreadId,
     isProcessing,
     isReviewing,
@@ -787,6 +787,7 @@ function MainApp() {
     onDiffLineReference: handleDiffLineReference,
     onDiffActivePathChange: handleActiveDiffPath,
     onSend: handleSend,
+    onQueue: queueMessage,
     onStop: interruptTurn,
     canStop: canInterrupt,
     isReviewing,

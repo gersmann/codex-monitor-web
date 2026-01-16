@@ -145,6 +145,7 @@ type LayoutNodesOptions = {
   onDiffLineReference: (reference: DiffLineReference) => void;
   onDiffActivePathChange: (path: string) => void;
   onSend: (text: string, images: string[]) => void | Promise<void>;
+  onQueue: (text: string, images: string[]) => void | Promise<void>;
   onStop: () => void;
   canStop: boolean;
   isReviewing: boolean;
@@ -268,12 +269,15 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
   const composerNode = options.showComposer ? (
     <Composer
       onSend={options.onSend}
+      onQueue={options.onQueue}
       onStop={options.onStop}
       canStop={options.canStop}
       disabled={options.isReviewing}
       contextUsage={options.activeTokenUsage}
       queuedMessages={options.activeQueue}
       sendLabel={options.isProcessing && !options.steerEnabled ? "Queue" : "Send"}
+      steerEnabled={options.steerEnabled}
+      isProcessing={options.isProcessing}
       draftText={options.draftText}
       onDraftChange={options.onDraftChange}
       attachedImages={options.activeImages}

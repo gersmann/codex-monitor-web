@@ -17,6 +17,7 @@ type UseQueuedSendResult = {
   queuedByThread: Record<string, QueuedMessage[]>;
   activeQueue: QueuedMessage[];
   handleSend: (text: string, images?: string[]) => Promise<void>;
+  queueMessage: (text: string, images?: string[]) => Promise<void>;
   removeQueuedMessage: (threadId: string, messageId: string) => void;
 };
 
@@ -116,6 +117,32 @@ export function useQueuedSend({
     ],
   );
 
+  const queueMessage = useCallback(
+    async (text: string, images: string[] = []) => {
+      const trimmed = text.trim();
+      const shouldIgnoreImages = trimmed.startsWith("/review");
+      const nextImages = shouldIgnoreImages ? [] : images;
+      if (!trimmed && nextImages.length === 0) {
+        return;
+      }
+      if (activeThreadId && isReviewing) {
+        return;
+      }
+      if (!activeThreadId) {
+        return;
+      }
+      const item: QueuedMessage = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text: trimmed,
+        createdAt: Date.now(),
+        images: nextImages,
+      };
+      enqueueMessage(activeThreadId, item);
+      clearActiveImages();
+    },
+    [activeThreadId, clearActiveImages, enqueueMessage, isReviewing],
+  );
+
   useEffect(() => {
     if (!activeThreadId || isProcessing || isReviewing) {
       return;
@@ -162,6 +189,7 @@ export function useQueuedSend({
     queuedByThread,
     activeQueue,
     handleSend,
+    queueMessage,
     removeQueuedMessage,
   };
 }

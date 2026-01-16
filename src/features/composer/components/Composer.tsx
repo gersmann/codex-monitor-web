@@ -7,9 +7,12 @@ import { ComposerQueue } from "./ComposerQueue";
 
 type ComposerProps = {
   onSend: (text: string, images: string[]) => void;
+  onQueue: (text: string, images: string[]) => void;
   onStop: () => void;
   canStop: boolean;
   disabled?: boolean;
+  isProcessing: boolean;
+  steerEnabled: boolean;
   models: { id: string; displayName: string; model: string }[];
   selectedModelId: string | null;
   onSelectModel: (id: string) => void;
@@ -41,9 +44,12 @@ type ComposerProps = {
 
 export function Composer({
   onSend,
+  onQueue,
   onStop,
   canStop,
   disabled = false,
+  isProcessing,
+  steerEnabled,
   models,
   selectedModelId,
   onSelectModel,
@@ -100,6 +106,18 @@ export function Composer({
     onSend(trimmed, attachedImages);
     setComposerText("");
   }, [attachedImages, disabled, onSend, setComposerText, text]);
+
+  const handleQueue = useCallback(() => {
+    if (disabled) {
+      return;
+    }
+    const trimmed = text.trim();
+    if (!trimmed && attachedImages.length === 0) {
+      return;
+    }
+    onQueue(trimmed, attachedImages);
+    setComposerText("");
+  }, [attachedImages, disabled, onQueue, setComposerText, text]);
 
   const {
     isAutocompleteOpen,
@@ -175,6 +193,17 @@ export function Composer({
               textarea.setSelectionRange(nextCursor, nextCursor);
               handleSelectionChange(nextCursor);
             });
+            return;
+          }
+          if (
+            event.key === "Tab" &&
+            !event.shiftKey &&
+            steerEnabled &&
+            isProcessing &&
+            !isAutocompleteOpen
+          ) {
+            event.preventDefault();
+            handleQueue();
             return;
           }
           handleInputKeyDown(event);

@@ -557,7 +557,7 @@ export function SettingsView({
                   <div>
                     <div className="settings-toggle-title">Steer mode</div>
                     <div className="settings-toggle-subtitle">
-                      Send messages immediately, even while an agent is running.
+                      Send messages immediately. Use Tab to queue while a run is active.
                     </div>
                   </div>
                   <button
