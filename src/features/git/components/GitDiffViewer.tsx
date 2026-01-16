@@ -47,7 +47,7 @@ export function GitDiffViewer({
   const itemRefs = useRef(new Map<string, HTMLDivElement>());
   const lastScrolledPath = useRef<string | null>(null);
   const lastActivePath = useRef<string | null>(null);
-  const skipAutoScroll = useRef(false);
+  const skipAutoScroll = useRef<string | null>(null);
   const scrollFrame = useRef<number | null>(null);
   const scrollLock = useRef<{ path: string; expiresAt: number } | null>(null);
   const [selectedRange, setSelectedRange] = useState<SelectedRange | null>(null);
@@ -61,8 +61,11 @@ export function GitDiffViewer({
       return;
     }
     if (skipAutoScroll.current) {
-      skipAutoScroll.current = false;
-      return;
+      const skipPath = skipAutoScroll.current;
+      skipAutoScroll.current = null;
+      if (skipPath === selectedPath) {
+        return;
+      }
     }
     if (lastScrolledPath.current === selectedPath) {
       return;
@@ -131,7 +134,7 @@ export function GitDiffViewer({
     }
     lastActivePath.current = nextPath;
     if (nextPath !== selectedPath) {
-      skipAutoScroll.current = true;
+      skipAutoScroll.current = nextPath;
       onActivePathChange(nextPath);
     }
   }, [onActivePathChange, selectedPath]);
