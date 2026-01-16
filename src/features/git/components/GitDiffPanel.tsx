@@ -4,12 +4,13 @@ import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { GitBranch } from "lucide-react";
+import { ArrowLeftRight, GitBranch } from "lucide-react";
 import { formatRelativeTime } from "../../../utils/time";
 
 type GitDiffPanelProps = {
   mode: "diff" | "log" | "issues";
   onModeChange: (mode: "diff" | "log" | "issues") => void;
+  onToggleFilePanel: () => void;
   branchName: string;
   totalAdditions: number;
   totalDeletions: number;
@@ -95,6 +96,7 @@ function getStatusClass(status: string) {
 export function GitDiffPanel({
   mode,
   onModeChange,
+  onToggleFilePanel,
   branchName,
   totalAdditions,
   totalDeletions,
@@ -188,10 +190,17 @@ export function GitDiffPanel({
   return (
     <aside className="diff-panel">
       <div className="git-panel-header">
-        <div className="git-panel-title">
+        <button
+          type="button"
+          className="git-panel-title git-panel-title-button"
+          onClick={onToggleFilePanel}
+          aria-label="Show file tree"
+          title="Show file tree"
+        >
           <GitBranch className="git-panel-icon" />
           Git
-        </div>
+          <ArrowLeftRight className="git-panel-switch-icon" aria-hidden />
+        </button>
         <div className="git-panel-toggle" role="tablist" aria-label="Git panel">
           <button
             type="button"

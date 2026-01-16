@@ -3,7 +3,7 @@
   flex-direction: column;
   gap: 8px;
   -webkit-app-region: no-drag;
-  padding: 12px 32px 24px;
+  padding: 12px var(--main-panel-padding) 24px;
   border-top: 1px solid var(--border-subtle);
   background: var(--surface-composer);
   grid-column: 1;

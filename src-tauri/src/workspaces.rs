@@ -547,7 +547,7 @@ pub(crate) async fn list_workspace_files(
         .get(&workspace_id)
         .ok_or("workspace not found")?;
     let root = PathBuf::from(&entry.path);
-    Ok(list_workspace_files_inner(&root, 20000))
+    Ok(list_workspace_files_inner(&root, usize::MAX))
 }
 
 #[cfg(test)]
