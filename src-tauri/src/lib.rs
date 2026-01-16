@@ -161,6 +161,7 @@ pub fn run() {
             git::get_git_remote,
             git::get_github_issues,
             workspaces::list_workspace_files,
+            workspaces::open_workspace_in,
             git::list_git_branches,
             git::checkout_git_branch,
             git::create_git_branch,

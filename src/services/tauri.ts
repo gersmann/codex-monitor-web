@@ -78,6 +78,10 @@ export async function removeWorktree(id: string): Promise<void> {
   return invoke("remove_worktree", { id });
 }
 
+export async function openWorkspaceIn(path: string, app: string): Promise<void> {
+  return invoke("open_workspace_in", { path, app });
+}
+
 export async function connectWorkspace(id: string): Promise<void> {
   return invoke("connect_workspace", { id });
 }

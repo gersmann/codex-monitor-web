@@ -550,6 +550,24 @@ pub(crate) async fn list_workspace_files(
     Ok(list_workspace_files_inner(&root, usize::MAX))
 }
 
+#[tauri::command]
+pub(crate) async fn open_workspace_in(
+    path: String,
+    app: String,
+) -> Result<(), String> {
+    let status = std::process::Command::new("open")
+        .arg("-a")
+        .arg(app)
+        .arg(path)
+        .status()
+        .map_err(|error| format!("Failed to open app: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Failed to open app".to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{sanitize_worktree_name, sort_workspaces};

@@ -41,6 +41,90 @@
   flex-shrink: 0;
 }
 
+.open-app-menu {
+  position: relative;
+}
+
+.open-app-button {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.open-app-action {
+  padding: 6px 10px;
+  border-radius: 0;
+  border: none;
+}
+
+.open-app-button .open-app-action,
+.open-app-button .open-app-toggle {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.open-app-button .open-app-action:hover,
+.open-app-button .open-app-toggle:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.open-app-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.open-app-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.open-app-toggle {
+  padding: 6px 8px;
+  border-radius: 0;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.open-app-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 160px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--surface-popover);
+  border: 1px solid var(--border-muted);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
+  z-index: 5;
+}
+
+.open-app-option {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: left;
+}
+
+.open-app-option:hover,
+.open-app-option.is-active {
+  background: var(--surface-hover);
+  color: var(--text-stronger);
+}
+
 .main-header-action {
   padding: 6px;
   border-radius: 8px;
@@ -328,7 +412,7 @@
   border-radius: 6px;
   cursor: pointer;
   color: var(--text-subtle);
-  max-width: min(44vw, 520px);
+  max-width: min(24vw, 260px);
   min-width: 0;
 }
 

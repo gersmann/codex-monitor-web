@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, Terminal } from "lucide-react";
+import { Check, ChevronDown, Copy, Terminal } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openWorkspaceIn } from "../../../services/tauri";
 import type { BranchInfo, WorkspaceInfo } from "../../../types";
+import cursorIcon from "../../../assets/app-icons/cursor.png";
+import finderIcon from "../../../assets/app-icons/finder.png";
+import vscodeIcon from "../../../assets/app-icons/vscode.png";
 
 type MainHeaderProps = {
   workspace: WorkspaceInfo;
@@ -19,6 +23,15 @@ type MainHeaderProps = {
   onToggleTerminal: () => void;
   isTerminalOpen: boolean;
   showTerminalButton?: boolean;
+};
+
+const OPEN_APP_STORAGE_KEY = "open-workspace-app";
+
+type OpenTarget = {
+  id: "vscode" | "cursor" | "finder";
+  label: string;
+  icon: string;
+  open: (path: string) => Promise<void>;
 };
 
 export function MainHeader({
@@ -47,6 +60,15 @@ export function MainHeader({
   const copyTimeoutRef = useRef<number | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const infoRef = useRef<HTMLDivElement | null>(null);
+  const openMenuRef = useRef<HTMLDivElement | null>(null);
+  const [openMenuOpen, setOpenMenuOpen] = useState(false);
+  const [openAppId, setOpenAppId] = useState<OpenTarget["id"]>(() => {
+    const stored = window.localStorage.getItem(OPEN_APP_STORAGE_KEY);
+    if (stored === "cursor" || stored === "finder" || stored === "vscode") {
+      return stored;
+    }
+    return "vscode";
+  });
 
   const recentBranches = branches.slice(0, 12);
   const resolvedWorktreePath = worktreePath ?? workspace.path;
@@ -55,18 +77,42 @@ export function MainHeader({
       ? resolvedWorktreePath.slice(parentPath.length + 1)
       : resolvedWorktreePath;
   const cdCommand = `cd "${relativeWorktreePath}"`;
+  const openTargets: OpenTarget[] = [
+    {
+      id: "vscode",
+      label: "VS Code",
+      icon: vscodeIcon,
+      open: async (path) => openWorkspaceIn(path, "Visual Studio Code"),
+    },
+    {
+      id: "cursor",
+      label: "Cursor",
+      icon: cursorIcon,
+      open: async (path) => openWorkspaceIn(path, "Cursor"),
+    },
+    {
+      id: "finder",
+      label: "Finder",
+      icon: finderIcon,
+      open: async (path) => revealItemInDir(path),
+    },
+  ];
+  const selectedOpenTarget =
+    openTargets.find((target) => target.id === openAppId) ?? openTargets[0];
 
   useEffect(() => {
-    if (!menuOpen && !infoOpen) {
+    if (!menuOpen && !infoOpen && !openMenuOpen) {
       return;
     }
     const handleClick = (event: MouseEvent) => {
       const target = event.target as Node;
       const menuContains = menuRef.current?.contains(target) ?? false;
       const infoContains = infoRef.current?.contains(target) ?? false;
-      if (!menuContains && !infoContains) {
+      const openContains = openMenuRef.current?.contains(target) ?? false;
+      if (!menuContains && !infoContains && !openContains) {
         setMenuOpen(false);
         setInfoOpen(false);
+        setOpenMenuOpen(false);
         setIsCreating(false);
         setNewBranch("");
         setError(null);
@@ -102,6 +148,17 @@ export function MainHeader({
     } catch {
       // Errors are handled upstream in the copy handler.
     }
+  };
+
+  const handleOpenWorkspace = async () => {
+    await selectedOpenTarget.open(resolvedWorktreePath);
+  };
+
+  const handleSelectOpenTarget = async (target: OpenTarget) => {
+    setOpenAppId(target.id);
+    window.localStorage.setItem(OPEN_APP_STORAGE_KEY, target.id);
+    setOpenMenuOpen(false);
+    await target.open(resolvedWorktreePath);
   };
 
   return (
@@ -282,6 +339,59 @@ export function MainHeader({
         </div>
       </div>
       <div className="main-header-actions">
+        <div className="open-app-menu" ref={openMenuRef}>
+          <div className="open-app-button">
+            <button
+              type="button"
+              className="ghost main-header-action open-app-action"
+              onClick={handleOpenWorkspace}
+              data-tauri-drag-region="false"
+              aria-label={`Open in ${selectedOpenTarget.label}`}
+              title={`Open in ${selectedOpenTarget.label}`}
+            >
+              <span className="open-app-label">
+                <img
+                  className="open-app-icon"
+                  src={selectedOpenTarget.icon}
+                  alt=""
+                  aria-hidden
+                />
+                {selectedOpenTarget.label}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="ghost main-header-action open-app-toggle"
+              onClick={() => setOpenMenuOpen((prev) => !prev)}
+              data-tauri-drag-region="false"
+              aria-haspopup="menu"
+              aria-expanded={openMenuOpen}
+              aria-label="Select editor"
+              title="Select editor"
+            >
+              <ChevronDown size={14} aria-hidden />
+            </button>
+          </div>
+          {openMenuOpen && (
+            <div className="open-app-dropdown" role="menu">
+              {openTargets.map((target) => (
+                <button
+                  key={target.id}
+                  type="button"
+                  className={`open-app-option${
+                    target.id === openAppId ? " is-active" : ""
+                  }`}
+                  onClick={() => handleSelectOpenTarget(target)}
+                  role="menuitem"
+                  data-tauri-drag-region="false"
+                >
+                  <img className="open-app-icon" src={target.icon} alt="" aria-hidden />
+                  {target.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {showTerminalButton && (
           <button
             type="button"
