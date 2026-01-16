@@ -90,7 +90,8 @@ src-tauri/
 - Selecting a thread always calls `thread/resume` to refresh messages from disk.
 - CLI sessions appear if their `cwd` matches the workspace path; they are not live-streamed unless resumed.
 - The app uses `codex app-server` over stdio; see `src-tauri/src/lib.rs`.
-- Worktree agents live in `.codex-worktrees/` and are removed on delete; the root repo gets a `.gitignore` entry.
+- Codex sessions use the default Codex home (usually `~/.codex`); if a legacy `.codexmonitor/` exists in a workspace, it is used for that workspace.
+- Worktree agents live under the app data directory (`worktrees/<workspace-id>`); legacy `.codex-worktrees/` paths remain supported, and the app no longer edits repo `.gitignore` files.
 - UI state (panel sizes, reduced transparency toggle, recent thread activity) is stored in `localStorage`.
 - Custom prompts load from `$CODEX_HOME/prompts` (or `~/.codex/prompts`) with optional frontmatter description/argument hints.
 

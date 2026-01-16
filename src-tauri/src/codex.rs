@@ -1,5 +1,6 @@
 use serde_json::{json, Map, Value};
 use std::io::ErrorKind;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -20,10 +21,18 @@ pub(crate) async fn spawn_workspace_session(
     entry: WorkspaceEntry,
     default_codex_bin: Option<String>,
     app_handle: AppHandle,
+    codex_home: Option<PathBuf>,
 ) -> Result<Arc<WorkspaceSession>, String> {
     let client_version = app_handle.package_info().version.to_string();
     let event_sink = TauriEventSink::new(app_handle);
-    spawn_workspace_session_inner(entry, default_codex_bin, client_version, event_sink).await
+    spawn_workspace_session_inner(
+        entry,
+        default_codex_bin,
+        client_version,
+        event_sink,
+        codex_home,
+    )
+    .await
 }
 
 #[tauri::command]

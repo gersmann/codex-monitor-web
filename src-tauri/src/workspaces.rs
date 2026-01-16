@@ -1,8 +1,7 @@
-use std::io::Write;
 use std::path::PathBuf;
 
 use ignore::WalkBuilder;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tokio::process::Command;
 use uuid::Uuid;
 
@@ -13,6 +12,22 @@ use crate::types::{
     WorkspaceEntry, WorkspaceInfo, WorkspaceKind, WorkspaceSettings, WorktreeInfo,
 };
 use crate::utils::normalize_git_path;
+
+fn resolve_codex_home(entry: &WorkspaceEntry, parent_path: Option<&str>) -> Option<PathBuf> {
+    if entry.kind.is_worktree() {
+        if let Some(parent_path) = parent_path {
+            let legacy_home = PathBuf::from(parent_path).join(".codexmonitor");
+            if legacy_home.is_dir() {
+                return Some(legacy_home);
+            }
+        }
+    }
+    let legacy_home = PathBuf::from(&entry.path).join(".codexmonitor");
+    if legacy_home.is_dir() {
+        return Some(legacy_home);
+    }
+    None
+}
 
 fn should_skip_dir(name: &str) -> bool {
     matches!(
@@ -140,27 +155,6 @@ fn unique_worktree_path(base_dir: &PathBuf, name: &str) -> PathBuf {
     candidate
 }
 
-fn ensure_worktree_ignored(repo_path: &PathBuf) -> Result<(), String> {
-    let ignore_path = repo_path.join(".gitignore");
-    let entry = ".codex-worktrees/";
-    let existing = std::fs::read_to_string(&ignore_path).unwrap_or_default();
-    if existing.lines().any(|line| line.trim() == entry) {
-        return Ok(());
-    }
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&ignore_path)
-        .map_err(|e| format!("Failed to update .gitignore: {e}"))?;
-    if !existing.ends_with('\n') && !existing.is_empty() {
-        file.write_all(b"\n")
-            .map_err(|e| format!("Failed to update .gitignore: {e}"))?;
-    }
-    file.write_all(format!("{entry}\n").as_bytes())
-        .map_err(|e| format!("Failed to update .gitignore: {e}"))?;
-    Ok(())
-}
-
 #[tauri::command]
 pub(crate) async fn list_workspaces(
     state: State<'_, AppState>,
@@ -212,7 +206,8 @@ pub(crate) async fn add_workspace(
         let settings = state.app_settings.lock().await;
         settings.codex_bin.clone()
     };
-    let session = spawn_workspace_session(entry.clone(), default_bin, app).await?;
+    let codex_home = resolve_codex_home(&entry, None);
+    let session = spawn_workspace_session(entry.clone(), default_bin, app, codex_home).await?;
     {
         let mut workspaces = state.workspaces.lock().await;
         workspaces.insert(entry.id.clone(), entry.clone());
@@ -262,10 +257,14 @@ pub(crate) async fn add_worktree(
         return Err("Cannot create a worktree from another worktree.".to_string());
     }
 
-    let worktree_root = PathBuf::from(&parent_entry.path).join(".codex-worktrees");
+    let worktree_root = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {e}"))?
+        .join("worktrees")
+        .join(&parent_entry.id);
     std::fs::create_dir_all(&worktree_root)
         .map_err(|e| format!("Failed to create worktree directory: {e}"))?;
-    ensure_worktree_ignored(&PathBuf::from(&parent_entry.path))?;
 
     let safe_name = sanitize_worktree_name(branch);
     let worktree_path = unique_worktree_path(&worktree_root, &safe_name);
@@ -303,7 +302,8 @@ pub(crate) async fn add_worktree(
         let settings = state.app_settings.lock().await;
         settings.codex_bin.clone()
     };
-    let session = spawn_workspace_session(entry.clone(), default_bin, app).await?;
+    let codex_home = resolve_codex_home(&entry, Some(&parent_entry.path));
+    let session = spawn_workspace_session(entry.clone(), default_bin, app, codex_home).await?;
     {
         let mut workspaces = state.workspaces.lock().await;
         workspaces.insert(entry.id.clone(), entry.clone());
@@ -511,11 +511,19 @@ pub(crate) async fn connect_workspace(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    let entry = {
+    let (entry, parent_path) = {
         let workspaces = state.workspaces.lock().await;
         workspaces
             .get(&id)
             .cloned()
+            .map(|entry| {
+                let parent_path = entry
+                    .parent_id
+                    .as_ref()
+                    .and_then(|parent_id| workspaces.get(parent_id))
+                    .map(|parent| parent.path.clone());
+                (entry, parent_path)
+            })
             .ok_or("workspace not found")?
     };
 
@@ -523,7 +531,8 @@ pub(crate) async fn connect_workspace(
         let settings = state.app_settings.lock().await;
         settings.codex_bin.clone()
     };
-    let session = spawn_workspace_session(entry.clone(), default_bin, app).await?;
+    let codex_home = resolve_codex_home(&entry, parent_path.as_deref());
+    let session = spawn_workspace_session(entry.clone(), default_bin, app, codex_home).await?;
     state.sessions.lock().await.insert(entry.id, session);
     Ok(())
 }

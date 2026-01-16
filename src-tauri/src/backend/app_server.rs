@@ -2,7 +2,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -178,6 +178,7 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
     default_codex_bin: Option<String>,
     client_version: String,
     event_sink: E,
+    codex_home: Option<PathBuf>,
 ) -> Result<Arc<WorkspaceSession>, String> {
     let codex_bin = entry
         .codex_bin
@@ -189,6 +190,9 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
     let mut command = build_codex_command_with_bin(codex_bin);
     command.current_dir(&entry.path);
     command.arg("app-server");
+    if let Some(codex_home) = codex_home {
+        command.env("CODEX_HOME", codex_home);
+    }
     command.stdin(std::process::Stdio::piped());
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
