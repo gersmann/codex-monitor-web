@@ -889,8 +889,8 @@ export function useThreads({
         uniqueThreads.sort((a, b) => {
           const aId = String(a?.id ?? "");
           const bId = String(b?.id ?? "");
-          const aCreated = Number(a?.createdAt ?? a?.created_at ?? 0);
-          const bCreated = Number(b?.createdAt ?? b?.created_at ?? 0);
+          const aCreated = getThreadTimestamp(a);
+          const bCreated = getThreadTimestamp(b);
           const aActivity = Math.max(activityByThread[aId] ?? 0, aCreated);
           const bActivity = Math.max(activityByThread[bId] ?? 0, bCreated);
           return bActivity - aActivity;
