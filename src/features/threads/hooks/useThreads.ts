@@ -1142,12 +1142,6 @@ export function useThreads({
         text: finalText,
         images,
       });
-      dispatch({
-        type: "setThreadName",
-        workspaceId: activeWorkspace.id,
-        threadId,
-        name: previewThreadName(finalText, `Agent ${threadId.slice(0, 4)}`),
-      });
       markProcessing(threadId, true);
       safeMessageActivity();
       onDebug?.({
