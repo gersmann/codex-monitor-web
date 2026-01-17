@@ -86,6 +86,7 @@ type LayoutNodesOptions = {
   onDeleteWorkspace: (workspaceId: string) => void;
   onDeleteWorktree: (workspaceId: string) => void;
   onLoadOlderThreads: (workspaceId: string) => void;
+  onReloadWorkspaceThreads: (workspaceId: string) => void;
   updaterState: UpdateState;
   onUpdate: () => void;
   onDismissUpdate: () => void;
@@ -255,6 +256,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       onDeleteWorkspace={options.onDeleteWorkspace}
       onDeleteWorktree={options.onDeleteWorktree}
       onLoadOlderThreads={options.onLoadOlderThreads}
+      onReloadWorkspaceThreads={options.onReloadWorkspaceThreads}
     />
   );
 

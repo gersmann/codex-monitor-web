@@ -735,6 +735,13 @@ function MainApp() {
       }
       void loadOlderThreadsForWorkspace(workspace);
     },
+    onReloadWorkspaceThreads: (workspaceId) => {
+      const workspace = workspaces.find((entry) => entry.id === workspaceId);
+      if (!workspace) {
+        return;
+      }
+      void listThreadsForWorkspace(workspace);
+    },
     updaterState: updater.state,
     onUpdate: updater.startUpdate,
     onDismissUpdate: updater.dismiss,

@@ -36,6 +36,7 @@ type SidebarProps = {
   onDeleteWorkspace: (workspaceId: string) => void;
   onDeleteWorktree: (workspaceId: string) => void;
   onLoadOlderThreads: (workspaceId: string) => void;
+  onReloadWorkspaceThreads: (workspaceId: string) => void;
 };
 
 export function Sidebar({
@@ -64,6 +65,7 @@ export function Sidebar({
   onDeleteWorkspace,
   onDeleteWorktree,
   onLoadOlderThreads,
+  onReloadWorkspaceThreads,
 }: SidebarProps) {
   const [expandedWorkspaces, setExpandedWorkspaces] = useState(
     new Set<string>(),
@@ -156,11 +158,15 @@ export function Sidebar({
   ) {
     event.preventDefault();
     event.stopPropagation();
+    const reloadItem = await MenuItem.new({
+      text: "Reload threads",
+      action: () => onReloadWorkspaceThreads(workspaceId),
+    });
     const deleteItem = await MenuItem.new({
       text: "Delete",
       action: () => onDeleteWorkspace(workspaceId),
     });
-    const menu = await Menu.new({ items: [deleteItem] });
+    const menu = await Menu.new({ items: [reloadItem, deleteItem] });
     const window = getCurrentWindow();
     const position = new LogicalPosition(event.clientX, event.clientY);
     await menu.popup(position, window);
@@ -172,11 +178,15 @@ export function Sidebar({
   ) {
     event.preventDefault();
     event.stopPropagation();
+    const reloadItem = await MenuItem.new({
+      text: "Reload threads",
+      action: () => onReloadWorkspaceThreads(workspaceId),
+    });
     const deleteItem = await MenuItem.new({
       text: "Delete worktree",
       action: () => onDeleteWorktree(workspaceId),
     });
-    const menu = await Menu.new({ items: [deleteItem] });
+    const menu = await Menu.new({ items: [reloadItem, deleteItem] });
     const window = getCurrentWindow();
     const position = new LogicalPosition(event.clientX, event.clientY);
     await menu.popup(position, window);
