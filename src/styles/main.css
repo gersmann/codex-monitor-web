@@ -264,6 +264,10 @@
   color: var(--text-muted);
 }
 
+.topbar-leading .back-button {
+  margin-left: 0;
+}
+
 
 .workspace-title-line {
   display: flex;
