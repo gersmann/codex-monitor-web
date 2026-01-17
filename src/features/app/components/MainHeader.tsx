@@ -8,7 +8,9 @@ import { OPEN_APP_STORAGE_KEY, type OpenAppId } from "../constants";
 import { getStoredOpenAppId } from "../utils/openApp";
 import cursorIcon from "../../../assets/app-icons/cursor.png";
 import finderIcon from "../../../assets/app-icons/finder.png";
+import ghosttyIcon from "../../../assets/app-icons/ghostty.png";
 import vscodeIcon from "../../../assets/app-icons/vscode.png";
+import zedIcon from "../../../assets/app-icons/zed.png";
 
 type MainHeaderProps = {
   workspace: WorkspaceInfo;
@@ -88,6 +90,18 @@ export function MainHeader({
       label: "Cursor",
       icon: cursorIcon,
       open: async (path) => openWorkspaceIn(path, "Cursor"),
+    },
+    {
+      id: "zed",
+      label: "Zed",
+      icon: zedIcon,
+      open: async (path) => openWorkspaceIn(path, "Zed"),
+    },
+    {
+      id: "ghostty",
+      label: "Ghostty",
+      icon: ghosttyIcon,
+      open: async (path) => openWorkspaceIn(path, "Ghostty"),
     },
     {
       id: "finder",

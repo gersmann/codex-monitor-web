@@ -12,6 +12,8 @@ type OpenTarget = {
 const OPEN_TARGETS: Record<OpenTarget["id"], OpenTarget> = {
   vscode: { id: "vscode", appName: "Visual Studio Code" },
   cursor: { id: "cursor", appName: "Cursor" },
+  zed: { id: "zed", appName: "Zed" },
+  ghostty: { id: "ghostty", appName: "Ghostty" },
   finder: { id: "finder" },
 };
 
