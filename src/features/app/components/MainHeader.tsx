@@ -121,7 +121,7 @@ export function MainHeader({
     return () => {
       window.removeEventListener("mousedown", handleClick);
     };
-  }, [infoOpen, menuOpen]);
+  }, [infoOpen, menuOpen, openMenuOpen]);
 
   useEffect(() => {
     return () => {

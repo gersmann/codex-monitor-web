@@ -674,7 +674,6 @@ export function useThreads({
     }),
     [
       activeThreadId,
-      activeWorkspaceId,
       handleWorkspaceConnected,
       handleItemUpdate,
       handleToolOutputDelta,
