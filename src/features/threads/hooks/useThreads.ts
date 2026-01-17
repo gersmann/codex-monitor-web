@@ -906,7 +906,11 @@ export function useThreads({
                   ? `${preview.slice(0, 38)}…`
                   : preview
                 : fallbackName;
-            return { id: String(thread?.id ?? ""), name };
+            return {
+              id: String(thread?.id ?? ""),
+              name,
+              updatedAt: getThreadTimestamp(thread),
+            };
           })
           .filter((entry) => entry.id);
         dispatch({
@@ -1018,7 +1022,7 @@ export function useThreads({
                 ? `${preview.slice(0, 38)}…`
                 : preview
               : fallbackName;
-          additions.push({ id, name });
+          additions.push({ id, name, updatedAt: getThreadTimestamp(thread) });
           existingIds.add(id);
         });
 

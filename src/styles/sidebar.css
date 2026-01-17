@@ -329,6 +329,7 @@
   cursor: pointer;
   -webkit-app-region: no-drag;
   min-width: 0;
+  position: relative;
 }
 
 .thread-status {
@@ -381,9 +382,16 @@
   -webkit-box-orient: vertical;
 }
 
+.thread-time {
+  color: var(--text-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 
 .thread-menu {
-  position: relative;
+  position: absolute;
+  right: 6px;
 }
 
 .thread-menu-trigger {

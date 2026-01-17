@@ -672,6 +672,7 @@ function MainApp() {
     threadListLoadingByWorkspace,
     threadListPagingByWorkspace,
     threadListCursorByWorkspace,
+    lastAgentMessageByThread,
     activeWorkspaceId,
     activeThreadId,
     activeItems,
