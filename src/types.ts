@@ -134,6 +134,32 @@ export type GitHubIssuesResponse = {
   issues: GitHubIssue[];
 };
 
+export type GitHubUser = {
+  login: string;
+};
+
+export type GitHubPullRequest = {
+  number: number;
+  title: string;
+  url: string;
+  updatedAt: string;
+  headRefName: string;
+  baseRefName: string;
+  isDraft: boolean;
+  author: GitHubUser | null;
+};
+
+export type GitHubPullRequestsResponse = {
+  total: number;
+  pullRequests: GitHubPullRequest[];
+};
+
+export type GitHubPullRequestDiff = {
+  path: string;
+  status: string;
+  diff: string;
+};
+
 export type TokenUsageBreakdown = {
   totalTokens: number;
   inputTokens: number;

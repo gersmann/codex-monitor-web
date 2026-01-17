@@ -27,6 +27,7 @@ import type {
   DictationTranscript,
   GitFileStatus,
   GitHubIssue,
+  GitHubPullRequest,
   GitLogEntry,
   ModelOption,
   QueuedMessage,
@@ -119,8 +120,8 @@ type LayoutNodesOptions = {
   activeTab: "projects" | "codex" | "git" | "log";
   onSelectTab: (tab: "projects" | "codex" | "git" | "log") => void;
   tabletNavTab: "codex" | "git" | "log";
-  gitPanelMode: "diff" | "log" | "issues";
-  onGitPanelModeChange: (mode: "diff" | "log" | "issues") => void;
+  gitPanelMode: "diff" | "log" | "issues" | "prs";
+  onGitPanelModeChange: (mode: "diff" | "log" | "issues" | "prs") => void;
   filePanelMode: "git" | "files";
   onToggleFilePanel: () => void;
   fileTreeLoading: boolean;
@@ -147,6 +148,12 @@ type LayoutNodesOptions = {
   gitIssuesTotal: number;
   gitIssuesLoading: boolean;
   gitIssuesError: string | null;
+  gitPullRequests: GitHubPullRequest[];
+  gitPullRequestsTotal: number;
+  gitPullRequestsLoading: boolean;
+  gitPullRequestsError: string | null;
+  selectedPullRequestNumber: number | null;
+  onSelectPullRequest: (pullRequest: GitHubPullRequest) => void;
   gitRemoteUrl: string | null;
   gitDiffs: GitDiffViewerItem[];
   gitDiffLoading: boolean;
@@ -439,6 +446,12 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         issuesTotal={options.gitIssuesTotal}
         issuesLoading={options.gitIssuesLoading}
         issuesError={options.gitIssuesError}
+        pullRequests={options.gitPullRequests}
+        pullRequestsTotal={options.gitPullRequestsTotal}
+        pullRequestsLoading={options.gitPullRequestsLoading}
+        pullRequestsError={options.gitPullRequestsError}
+        selectedPullRequest={options.selectedPullRequestNumber}
+        onSelectPullRequest={options.onSelectPullRequest}
         gitRemoteUrl={options.gitRemoteUrl}
         onToggleFilePanel={options.onToggleFilePanel}
       />
