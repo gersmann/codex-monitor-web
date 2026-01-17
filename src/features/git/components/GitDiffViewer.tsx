@@ -1,9 +1,7 @@
 import { memo, useEffect, useMemo, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { FileDiff, WorkerPoolContextProvider } from "@pierre/diffs/react";
-import type {
-  FileDiffMetadata,
-  Hunk,
-} from "@pierre/diffs";
+import type { FileDiffMetadata } from "@pierre/diffs";
 import { parsePatchFiles } from "@pierre/diffs";
 import { workerFactory } from "../../../utils/diffsWorker";
 
@@ -19,16 +17,6 @@ type GitDiffViewerProps = {
   isLoading: boolean;
   error: string | null;
   onActivePathChange?: (path: string) => void;
-};
-
-type LineMaps = {
-  oldLines: Map<number, string>;
-  newLines: Map<number, string>;
-};
-
-type ParsedDiffEntry = GitDiffViewerItem & {
-  fileDiff: FileDiffMetadata | null;
-  lineMaps: LineMaps | null;
 };
 
 const DIFF_SCROLL_CSS = `
@@ -51,37 +39,8 @@ function normalizePatchName(name: string) {
   return name.replace(/^(?:a|b)\//, "");
 }
 
-function buildLineMaps(hunks: Hunk[]): LineMaps {
-  const oldLines = new Map<number, string>();
-  const newLines = new Map<number, string>();
-  for (const hunk of hunks) {
-    let oldLine = hunk.deletionStart;
-    let newLine = hunk.additionStart;
-    for (const content of hunk.hunkContent) {
-      if (content.type === "context") {
-        for (const line of content.lines) {
-          oldLines.set(oldLine, line);
-          newLines.set(newLine, line);
-          oldLine += 1;
-          newLine += 1;
-        }
-      } else {
-        for (const line of content.deletions) {
-          oldLines.set(oldLine, line);
-          oldLine += 1;
-        }
-        for (const line of content.additions) {
-          newLines.set(newLine, line);
-          newLine += 1;
-        }
-      }
-    }
-  }
-  return { oldLines, newLines };
-}
-
 type DiffCardProps = {
-  entry: ParsedDiffEntry;
+  entry: GitDiffViewerItem;
   isSelected: boolean;
 };
 
@@ -100,6 +59,26 @@ const DiffCard = memo(function DiffCard({
     [],
   );
 
+  const fileDiff = useMemo(() => {
+    if (!entry.diff.trim()) {
+      return null;
+    }
+    const patch = parsePatchFiles(entry.diff);
+    const parsed = patch[0]?.files[0];
+    if (!parsed) {
+      return null;
+    }
+    const normalizedName = normalizePatchName(parsed.name || entry.path);
+    const normalizedPrevName = parsed.prevName
+      ? normalizePatchName(parsed.prevName)
+      : undefined;
+    return {
+      ...parsed,
+      name: normalizedName,
+      prevName: normalizedPrevName,
+    } satisfies FileDiffMetadata;
+  }, [entry.diff, entry.path]);
+
   return (
     <div
       data-diff-path={entry.path}
@@ -109,10 +88,10 @@ const DiffCard = memo(function DiffCard({
         <span className="diff-viewer-status">{entry.status}</span>
         <span className="diff-viewer-path">{entry.path}</span>
       </div>
-      {entry.diff.trim().length > 0 && entry.fileDiff ? (
+      {entry.diff.trim().length > 0 && fileDiff ? (
         <div className="diff-viewer-output">
           <FileDiff
-            fileDiff={entry.fileDiff}
+            fileDiff={fileDiff}
             options={diffOptions}
             className="diff-viewer-diffs"
             style={{ width: "100%", maxWidth: "100%", minWidth: 0 }}
@@ -138,31 +117,20 @@ export function GitDiffViewer({
     () => ({ theme: { dark: "pierre-dark", light: "pierre-light" } }),
     [],
   );
-  const parsedDiffs = useMemo<ParsedDiffEntry[]>(
-    () =>
-      diffs.map((entry) => {
-        const patch = parsePatchFiles(entry.diff);
-        const fileDiff = patch[0]?.files[0];
-        if (!fileDiff) {
-          return { ...entry, fileDiff: null, lineMaps: null };
-        }
-        const normalizedName = normalizePatchName(fileDiff.name || entry.path);
-        const normalizedPrevName = fileDiff.prevName
-          ? normalizePatchName(fileDiff.prevName)
-          : undefined;
-        const normalized: FileDiffMetadata = {
-          ...fileDiff,
-          name: normalizedName,
-          prevName: normalizedPrevName,
-        };
-        return {
-          ...entry,
-          fileDiff: normalized,
-          lineMaps: buildLineMaps(normalized.hunks),
-        };
-      }),
-    [diffs],
-  );
+  const indexByPath = useMemo(() => {
+    const map = new Map<string, number>();
+    diffs.forEach((entry, index) => {
+      map.set(entry.path, index);
+    });
+    return map;
+  }, [diffs]);
+  const rowVirtualizer = useVirtualizer({
+    count: diffs.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: () => 260,
+    overscan: 6,
+  });
+  const virtualItems = rowVirtualizer.getVirtualItems();
 
   useEffect(() => {
     if (!selectedPath) {
@@ -171,31 +139,13 @@ export function GitDiffViewer({
     if (lastScrolledPathRef.current === selectedPath) {
       return;
     }
-    const container = containerRef.current;
-    if (!container) {
+    const index = indexByPath.get(selectedPath);
+    if (index === undefined) {
       return;
     }
-    let target: HTMLElement | null = null;
-    const items = container.querySelectorAll<HTMLElement>("[data-diff-path]");
-    for (const item of items) {
-      if (item.dataset.diffPath === selectedPath) {
-        target = item;
-        break;
-      }
-    }
-    if (!target) {
-      return;
-    }
-    const containerRect = container.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-    const isVisible =
-      targetRect.top >= containerRect.top &&
-      targetRect.bottom <= containerRect.bottom;
-    if (!isVisible) {
-      target.scrollIntoView({ block: "start" });
-    }
+    rowVirtualizer.scrollToIndex(index, { align: "start" });
     lastScrolledPathRef.current = selectedPath;
-  }, [selectedPath, parsedDiffs]);
+  }, [selectedPath, indexByPath, rowVirtualizer]);
 
   return (
     <WorkerPoolContextProvider
@@ -205,19 +155,41 @@ export function GitDiffViewer({
       <div className="diff-viewer" ref={containerRef}>
         {error && <div className="diff-viewer-empty">{error}</div>}
         {!error && isLoading && diffs.length > 0 && (
-          <div className="diff-viewer-loading">Refreshing diff...</div>
+          <div className="diff-viewer-loading diff-viewer-loading-overlay">
+            Refreshing diff...
+          </div>
         )}
         {!error && !isLoading && !diffs.length && (
           <div className="diff-viewer-empty">No changes detected.</div>
         )}
-        {!error && parsedDiffs.length > 0 &&
-          parsedDiffs.map((entry) => (
-            <DiffCard
-              key={entry.path}
-              entry={entry}
-              isSelected={entry.path === selectedPath}
-            />
-          ))}
+        {!error && diffs.length > 0 && (
+          <div
+            className="diff-viewer-list"
+            style={{
+              height: rowVirtualizer.getTotalSize(),
+            }}
+          >
+            {virtualItems.map((virtualRow) => {
+              const entry = diffs[virtualRow.index];
+              return (
+                <div
+                  key={entry.path}
+                  className="diff-viewer-row"
+                  data-index={virtualRow.index}
+                  ref={rowVirtualizer.measureElement}
+                  style={{
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <DiffCard
+                    entry={entry}
+                    isSelected={entry.path === selectedPath}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </WorkerPoolContextProvider>
   );
