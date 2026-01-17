@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { formatRelativeTimeShort } from "../../../utils/time";
+import { formatRelativeTime, formatRelativeTimeShort } from "../../../utils/time";
 
 type SidebarProps = {
   workspaces: WorkspaceInfo[];
