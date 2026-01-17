@@ -23,7 +23,6 @@ import type {
   ConversationItem,
   CustomPromptOption,
   DebugEntry,
-  DiffLineReference,
   DictationSessionState,
   DictationTranscript,
   GitFileStatus,
@@ -152,8 +151,7 @@ type LayoutNodesOptions = {
   gitDiffs: GitDiffViewerItem[];
   gitDiffLoading: boolean;
   gitDiffError: string | null;
-  onDiffLineReference: (reference: DiffLineReference) => void;
-  onDiffActivePathChange: (path: string) => void;
+  onDiffActivePathChange?: (path: string) => void;
   onSend: (text: string, images: string[]) => void | Promise<void>;
   onQueue: (text: string, images: string[]) => void | Promise<void>;
   onStop: () => void;
@@ -429,7 +427,6 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         logError={options.gitLogError}
         logLoading={options.gitLogLoading}
         files={options.gitStatus.files}
-        selectedPath={options.selectedDiffPath}
         onSelectFile={options.onSelectDiff}
         logEntries={options.gitLogEntries}
         logTotal={options.gitLogTotal}
@@ -453,7 +450,6 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       selectedPath={options.selectedDiffPath}
       isLoading={options.gitDiffLoading}
       error={options.gitDiffError}
-      onLineReference={options.onDiffLineReference}
       onActivePathChange={options.onDiffActivePathChange}
     />
   );

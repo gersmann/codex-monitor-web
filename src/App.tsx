@@ -72,7 +72,7 @@ import { useCopyThread } from "./features/threads/hooks/useCopyThread";
 import { usePanelVisibility } from "./features/layout/hooks/usePanelVisibility";
 import { useTerminalController } from "./features/terminal/hooks/useTerminalController";
 import { playNotificationSound } from "./utils/notificationSounds";
-import type { AccessMode, DiffLineReference, QueuedMessage, WorkspaceInfo } from "./types";
+import type { AccessMode, QueuedMessage, WorkspaceInfo } from "./types";
 
 function useWindowLabel() {
   const [label, setLabel] = useState("main");
@@ -627,43 +627,6 @@ function MainApp() {
     }
   }
 
-  function handleActiveDiffPath(path: string) {
-    if (path !== selectedDiffPath) {
-      setSelectedDiffPath(path);
-    }
-  }
-
-  function handleDiffLineReference(reference: DiffLineReference) {
-    const startLine = reference.newLine ?? reference.oldLine;
-    const endLine =
-      reference.endNewLine ?? reference.endOldLine ?? startLine ?? null;
-    const lineRange =
-      startLine && endLine && endLine !== startLine
-        ? `${startLine}-${endLine}`
-        : startLine
-        ? `${startLine}`
-        : null;
-    const lineLabel = lineRange
-      ? `${reference.path}:${lineRange}`
-      : reference.path;
-    const changeLabel =
-      reference.type === "add"
-        ? "added"
-        : reference.type === "del"
-        ? "removed"
-        : reference.type === "mixed"
-        ? "mixed"
-        : "context";
-    const snippet = reference.lines.join("\n").trimEnd();
-    const snippetBlock = snippet ? `\n\`\`\`\n${snippet}\n\`\`\`` : "";
-    const label = reference.lines.length > 1 ? "Line range" : "Line reference";
-    const text = `${label} (${changeLabel}): ${lineLabel}${snippetBlock}`;
-    setComposerInsert({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      text,
-      createdAt: Date.now()
-    });
-  }
 
   const handleOpenSettings = useCallback(
     (section?: SettingsSection) => {
@@ -741,13 +704,14 @@ function MainApp() {
     terminalOpen,
     onDebug: addDebugEntry,
   });
+  const isDefaultScale = Math.abs(uiScale - 1) < 0.001;
   const appClassName = `app ${isCompact ? "layout-compact" : "layout-desktop"}${
     isPhone ? " layout-phone" : ""
   }${isTablet ? " layout-tablet" : ""}${
     reduceTransparency ? " reduced-transparency" : ""
   }${!isCompact && sidebarCollapsed ? " sidebar-collapsed" : ""}${
     !isCompact && rightPanelCollapsed ? " right-panel-collapsed" : ""
-  }`;
+  }${isDefaultScale ? " ui-scale-default" : ""}`;
   const {
     sidebarNode,
     messagesNode,
@@ -909,8 +873,6 @@ function MainApp() {
     gitDiffs,
     gitDiffLoading: isDiffLoading,
     gitDiffError: diffError,
-    onDiffLineReference: handleDiffLineReference,
-    onDiffActivePathChange: handleActiveDiffPath,
     onSend: handleSend,
     onQueue: queueMessage,
     onStop: interruptTurn,

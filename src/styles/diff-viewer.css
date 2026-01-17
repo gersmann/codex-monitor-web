@@ -7,6 +7,13 @@
   flex: 1;
   min-height: 0;
   min-width: 0;
+  background: var(--surface-messages);
+}
+
+
+.main .diff-viewer {
+  margin-top: calc(-1 * var(--main-topbar-height));
+  padding-top: calc(12px + var(--main-topbar-height));
 }
 
 .diff-viewer-item {
@@ -56,7 +63,21 @@
   color: var(--text-quiet);
   font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
   max-width: 100%;
-  overflow-x: auto;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  --diffs-font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
+  --diffs-font-size: 11px;
+  --diffs-line-height: 1.4;
+  --diffs-tab-size: 2;
+}
+
+
+.diff-viewer-output diffs-container {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
 }
 
 .diff-line {

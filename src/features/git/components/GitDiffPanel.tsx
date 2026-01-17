@@ -29,7 +29,6 @@ type GitDiffPanelProps = {
   issuesLoading?: boolean;
   issuesError?: string | null;
   gitRemoteUrl?: string | null;
-  selectedPath?: string | null;
   onSelectFile?: (path: string) => void;
   files: {
     path: string;
@@ -106,7 +105,6 @@ export function GitDiffPanel({
   logLoading = false,
   logTotal = 0,
   gitRemoteUrl = null,
-  selectedPath,
   onSelectFile,
   files,
   logEntries,
@@ -271,13 +269,12 @@ export function GitDiffPanel({
           {files.map((file) => {
             const { name, dir } = splitPath(file.path);
             const { base, extension } = splitNameAndExtension(name);
-            const isSelected = file.path === selectedPath;
             const statusSymbol = getStatusSymbol(file.status);
             const statusClass = getStatusClass(file.status);
             return (
               <div
                 key={file.path}
-                className={`diff-row ${isSelected ? "active" : ""}`}
+                className="diff-row"
                 role="button"
                 tabIndex={0}
                 onClick={() => onSelectFile?.(file.path)}
