@@ -14,6 +14,7 @@ const OPEN_TARGETS: Record<OpenTarget["id"], OpenTarget> = {
   cursor: { id: "cursor", appName: "Cursor" },
   zed: { id: "zed", appName: "Zed" },
   ghostty: { id: "ghostty", appName: "Ghostty" },
+  antigravity: { id: "antigravity", appName: "Antigravity" },
   finder: { id: "finder" },
 };
 

@@ -8,6 +8,7 @@ import { OPEN_APP_STORAGE_KEY, type OpenAppId } from "../constants";
 import { getStoredOpenAppId } from "../utils/openApp";
 import cursorIcon from "../../../assets/app-icons/cursor.png";
 import finderIcon from "../../../assets/app-icons/finder.png";
+import antigravityIcon from "../../../assets/app-icons/antigravity.png";
 import ghosttyIcon from "../../../assets/app-icons/ghostty.png";
 import vscodeIcon from "../../../assets/app-icons/vscode.png";
 import zedIcon from "../../../assets/app-icons/zed.png";
@@ -102,6 +103,12 @@ export function MainHeader({
       label: "Ghostty",
       icon: ghosttyIcon,
       open: async (path) => openWorkspaceIn(path, "Ghostty"),
+    },
+    {
+      id: "antigravity",
+      label: "Antigravity",
+      icon: antigravityIcon,
+      open: async (path) => openWorkspaceIn(path, "Antigravity"),
     },
     {
       id: "finder",

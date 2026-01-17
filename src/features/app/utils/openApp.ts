@@ -11,6 +11,7 @@ export function getStoredOpenAppId(): OpenAppId {
     stored === "cursor" ||
     stored === "zed" ||
     stored === "ghostty" ||
+    stored === "antigravity" ||
     stored === "finder"
   ) {
     return stored;
