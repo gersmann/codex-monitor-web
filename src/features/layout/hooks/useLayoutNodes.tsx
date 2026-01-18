@@ -66,6 +66,7 @@ type LayoutNodesOptions = {
   }>;
   hasWorkspaceGroups: boolean;
   threadsByWorkspace: Record<string, ThreadSummary[]>;
+  threadParentById: Record<string, string>;
   threadStatusById: Record<string, ThreadActivityStatus>;
   threadListLoadingByWorkspace: Record<string, boolean>;
   threadListPagingByWorkspace: Record<string, boolean>;
@@ -276,6 +277,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       groupedWorkspaces={options.groupedWorkspaces}
       hasWorkspaceGroups={options.hasWorkspaceGroups}
       threadsByWorkspace={options.threadsByWorkspace}
+      threadParentById={options.threadParentById}
       threadStatusById={options.threadStatusById}
       threadListLoadingByWorkspace={options.threadListLoadingByWorkspace}
       threadListPagingByWorkspace={options.threadListPagingByWorkspace}
