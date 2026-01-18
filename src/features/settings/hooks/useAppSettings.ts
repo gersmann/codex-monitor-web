@@ -10,6 +10,7 @@ const defaultSettings: AppSettings = {
   notificationSoundsEnabled: true,
   experimentalCollabEnabled: false,
   experimentalSteerEnabled: false,
+  experimentalUnifiedExecEnabled: false,
   dictationEnabled: false,
   dictationModelId: "base",
   dictationPreferredLanguage: null,

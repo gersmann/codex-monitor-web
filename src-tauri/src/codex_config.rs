@@ -12,12 +12,20 @@ pub(crate) fn read_collab_enabled() -> Result<Option<bool>, String> {
     read_feature_flag("collab")
 }
 
+pub(crate) fn read_unified_exec_enabled() -> Result<Option<bool>, String> {
+    read_feature_flag("unified_exec")
+}
+
 pub(crate) fn write_steer_enabled(enabled: bool) -> Result<(), String> {
     write_feature_flag("steer", enabled)
 }
 
 pub(crate) fn write_collab_enabled(enabled: bool) -> Result<(), String> {
     write_feature_flag("collab", enabled)
+}
+
+pub(crate) fn write_unified_exec_enabled(enabled: bool) -> Result<(), String> {
+    write_feature_flag("unified_exec", enabled)
 }
 
 fn read_feature_flag(key: &str) -> Result<Option<bool>, String> {

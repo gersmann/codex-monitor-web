@@ -69,6 +69,7 @@ export type AppSettings = {
   notificationSoundsEnabled: boolean;
   experimentalCollabEnabled: boolean;
   experimentalSteerEnabled: boolean;
+  experimentalUnifiedExecEnabled: boolean;
   dictationEnabled: boolean;
   dictationModelId: string;
   dictationPreferredLanguage: string | null;

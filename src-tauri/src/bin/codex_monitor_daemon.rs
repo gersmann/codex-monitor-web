@@ -208,6 +208,7 @@ impl DaemonState {
     async fn update_app_settings(&self, settings: AppSettings) -> Result<AppSettings, String> {
         let _ = codex_config::write_collab_enabled(settings.experimental_collab_enabled);
         let _ = codex_config::write_steer_enabled(settings.experimental_steer_enabled);
+        let _ = codex_config::write_unified_exec_enabled(settings.experimental_unified_exec_enabled);
         write_settings(&self.settings_path, &settings)?;
         let mut current = self.app_settings.lock().await;
         *current = settings.clone();
@@ -698,6 +699,9 @@ async fn handle_rpc_request(
             }
             if let Ok(Some(steer_enabled)) = codex_config::read_steer_enabled() {
                 settings.experimental_steer_enabled = steer_enabled;
+            }
+            if let Ok(Some(unified_exec_enabled)) = codex_config::read_unified_exec_enabled() {
+                settings.experimental_unified_exec_enabled = unified_exec_enabled;
             }
             serde_json::to_value(settings).map_err(|err| err.to_string())
         }
