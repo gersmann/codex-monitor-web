@@ -158,6 +158,7 @@ export type GitHubPullRequest = {
   title: string;
   url: string;
   updatedAt: string;
+  body: string;
   headRefName: string;
   baseRefName: string;
   isDraft: boolean;

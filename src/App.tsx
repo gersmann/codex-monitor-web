@@ -1060,6 +1060,7 @@ function MainApp() {
     gitPullRequestsLoading,
     gitPullRequestsError,
     selectedPullRequestNumber: selectedPullRequest?.number ?? null,
+    selectedPullRequest: diffSource === "pr" ? selectedPullRequest : null,
     onSelectPullRequest: handleSelectPullRequest,
     gitRemoteUrl,
     gitRoot: activeGitRoot,

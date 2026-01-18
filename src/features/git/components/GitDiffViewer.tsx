@@ -4,6 +4,9 @@ import { FileDiff, WorkerPoolContextProvider } from "@pierre/diffs/react";
 import type { FileDiffMetadata } from "@pierre/diffs";
 import { parsePatchFiles } from "@pierre/diffs";
 import { workerFactory } from "../../../utils/diffsWorker";
+import type { GitHubPullRequest } from "../../../types";
+import { formatRelativeTime } from "../../../utils/time";
+import { Markdown } from "../../messages/components/Markdown";
 
 type GitDiffViewerItem = {
   path: string;
@@ -16,6 +19,7 @@ type GitDiffViewerProps = {
   selectedPath: string | null;
   isLoading: boolean;
   error: string | null;
+  pullRequest?: GitHubPullRequest | null;
   onActivePathChange?: (path: string) => void;
 };
 
@@ -110,6 +114,7 @@ export function GitDiffViewer({
   selectedPath,
   isLoading,
   error,
+  pullRequest,
   onActivePathChange,
 }: GitDiffViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -215,12 +220,60 @@ export function GitDiffViewer({
     };
   }, [diffs, onActivePathChange, rowVirtualizer]);
 
+  const prUpdatedLabel = pullRequest?.updatedAt
+    ? formatRelativeTime(new Date(pullRequest.updatedAt).getTime())
+    : null;
+  const prAuthor = pullRequest?.author?.login ?? "unknown";
+  const prBody = pullRequest?.body?.trim() ?? "";
+
   return (
     <WorkerPoolContextProvider
       poolOptions={poolOptions}
       highlighterOptions={highlighterOptions}
     >
       <div className="diff-viewer" ref={containerRef}>
+        {pullRequest && (
+          <section className="diff-viewer-pr" aria-label="Pull request summary">
+            <div className="diff-viewer-pr-header">
+              <div className="diff-viewer-pr-title">
+                <span className="diff-viewer-pr-number">
+                  #{pullRequest.number}
+                </span>
+                <span className="diff-viewer-pr-title-text">
+                  {pullRequest.title}
+                </span>
+              </div>
+              <div className="diff-viewer-pr-meta">
+                <span className="diff-viewer-pr-author">@{prAuthor}</span>
+                {prUpdatedLabel && (
+                  <>
+                    <span className="diff-viewer-pr-sep">·</span>
+                    <span>{prUpdatedLabel}</span>
+                  </>
+                )}
+                <span className="diff-viewer-pr-sep">·</span>
+                <span className="diff-viewer-pr-branch">
+                  {pullRequest.baseRefName} ← {pullRequest.headRefName}
+                </span>
+                {pullRequest.isDraft && (
+                  <span className="diff-viewer-pr-pill">Draft</span>
+                )}
+              </div>
+            </div>
+            <div className="diff-viewer-pr-body">
+              {prBody ? (
+                <Markdown
+                  value={prBody}
+                  className="diff-viewer-pr-markdown markdown"
+                />
+              ) : (
+                <div className="diff-viewer-pr-empty">
+                  No description provided.
+                </div>
+              )}
+            </div>
+          </section>
+        )}
         {!error && stickyEntry && (
           <div className="diff-viewer-sticky">
             <div className="diff-viewer-header diff-viewer-header-sticky">

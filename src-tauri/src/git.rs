@@ -679,7 +679,7 @@ pub(crate) async fn get_github_pull_requests(
             "--limit",
             "50",
             "--json",
-            "number,title,url,updatedAt,headRefName,baseRefName,isDraft,author",
+            "number,title,url,updatedAt,body,headRefName,baseRefName,isDraft,author",
         ])
         .current_dir(&repo_root)
         .output()

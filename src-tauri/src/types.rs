@@ -65,6 +65,7 @@ pub(crate) struct GitHubPullRequest {
     pub(crate) url: String,
     #[serde(rename = "updatedAt")]
     pub(crate) updated_at: String,
+    pub(crate) body: String,
     #[serde(rename = "headRefName")]
     pub(crate) head_ref_name: String,
     #[serde(rename = "baseRefName")]
