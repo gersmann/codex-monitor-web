@@ -1,5 +1,7 @@
 #[path = "../backend/mod.rs"]
 mod backend;
+#[path = "../codex_config.rs"]
+mod codex_config;
 #[path = "../storage.rs"]
 mod storage;
 #[path = "../types.rs"]
@@ -204,6 +206,7 @@ impl DaemonState {
     }
 
     async fn update_app_settings(&self, settings: AppSettings) -> Result<AppSettings, String> {
+        let _ = codex_config::write_steer_enabled(settings.experimental_steer_enabled);
         write_settings(&self.settings_path, &settings)?;
         let mut current = self.app_settings.lock().await;
         *current = settings.clone();
@@ -688,8 +691,11 @@ async fn handle_rpc_request(
             serde_json::to_value(files).map_err(|err| err.to_string())
         }
         "get_app_settings" => {
-            let settings = state.app_settings.lock().await;
-            serde_json::to_value(settings.clone()).map_err(|err| err.to_string())
+            let mut settings = state.app_settings.lock().await.clone();
+            if let Ok(Some(steer_enabled)) = codex_config::read_steer_enabled() {
+                settings.experimental_steer_enabled = steer_enabled;
+            }
+            serde_json::to_value(settings).map_err(|err| err.to_string())
         }
         "update_app_settings" => {
             let settings_value = match params {

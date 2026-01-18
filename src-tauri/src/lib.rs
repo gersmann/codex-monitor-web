@@ -3,6 +3,7 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 mod backend;
 mod codex;
+mod codex_config;
 mod dictation;
 mod event_sink;
 mod git;
