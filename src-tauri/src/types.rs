@@ -65,6 +65,8 @@ pub(crate) struct GitHubPullRequest {
     pub(crate) url: String,
     #[serde(rename = "updatedAt")]
     pub(crate) updated_at: String,
+    #[serde(rename = "createdAt")]
+    pub(crate) created_at: String,
     pub(crate) body: String,
     #[serde(rename = "headRefName")]
     pub(crate) head_ref_name: String,
@@ -88,6 +90,19 @@ pub(crate) struct GitHubPullRequestDiff {
     pub(crate) path: String,
     pub(crate) status: String,
     pub(crate) diff: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct GitHubPullRequestComment {
+    pub(crate) id: u64,
+    #[serde(default)]
+    pub(crate) body: String,
+    #[serde(rename = "createdAt")]
+    pub(crate) created_at: String,
+    #[serde(default)]
+    pub(crate) url: String,
+    #[serde(default)]
+    pub(crate) author: Option<GitHubPullRequestAuthor>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

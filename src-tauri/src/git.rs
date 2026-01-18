@@ -11,8 +11,9 @@ use crate::git_utils::{
 };
 use crate::state::AppState;
 use crate::types::{
-    BranchInfo, GitFileDiff, GitFileStatus, GitHubIssue, GitHubIssuesResponse, GitHubPullRequest,
-    GitHubPullRequestDiff, GitHubPullRequestsResponse, GitLogResponse,
+    BranchInfo, GitFileDiff, GitFileStatus, GitHubIssue, GitHubIssuesResponse,
+    GitHubPullRequest, GitHubPullRequestComment, GitHubPullRequestDiff,
+    GitHubPullRequestsResponse, GitLogResponse,
 };
 use crate::utils::normalize_git_path;
 
@@ -679,7 +680,7 @@ pub(crate) async fn get_github_pull_requests(
             "--limit",
             "50",
             "--json",
-            "number,title,url,updatedAt,body,headRefName,baseRefName,isDraft,author",
+            "number,title,url,updatedAt,createdAt,body,headRefName,baseRefName,isDraft,author",
         ])
         .current_dir(&repo_root)
         .output()
@@ -775,6 +776,52 @@ pub(crate) async fn get_github_pull_request_diff(
 
     let diff_text = String::from_utf8_lossy(&output.stdout);
     Ok(parse_pr_diff(&diff_text))
+}
+
+#[tauri::command]
+pub(crate) async fn get_github_pull_request_comments(
+    workspace_id: String,
+    pr_number: u64,
+    state: State<'_, AppState>,
+) -> Result<Vec<GitHubPullRequestComment>, String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo_root = resolve_git_root(&entry)?;
+    let repo_name = github_repo_from_path(&repo_root)?;
+
+    let comments_endpoint =
+        format!("/repos/{repo_name}/issues/{pr_number}/comments?per_page=30");
+    let jq_filter = r#"[.[] | {id, body, createdAt: .created_at, url: .html_url, author: (if .user then {login: .user.login} else null end)}]"#;
+
+    let output = Command::new("gh")
+        .args(["api", &comments_endpoint, "--jq", jq_filter])
+        .current_dir(&repo_root)
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run gh: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let detail = if stderr.trim().is_empty() {
+            stdout.trim()
+        } else {
+            stderr.trim()
+        };
+        if detail.is_empty() {
+            return Err("GitHub CLI command failed.".to_string());
+        }
+        return Err(detail.to_string());
+    }
+
+    let comments: Vec<GitHubPullRequestComment> =
+        serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())?;
+
+    Ok(comments)
 }
 
 #[tauri::command]

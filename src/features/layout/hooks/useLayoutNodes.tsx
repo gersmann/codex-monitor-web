@@ -28,6 +28,7 @@ import type {
   DictationTranscript,
   GitFileStatus,
   GitHubIssue,
+  GitHubPullRequestComment,
   GitHubPullRequest,
   GitLogEntry,
   ModelOption,
@@ -165,6 +166,9 @@ type LayoutNodesOptions = {
   gitPullRequestsError: string | null;
   selectedPullRequestNumber: number | null;
   selectedPullRequest: GitHubPullRequest | null;
+  selectedPullRequestComments: GitHubPullRequestComment[];
+  selectedPullRequestCommentsLoading: boolean;
+  selectedPullRequestCommentsError: string | null;
   onSelectPullRequest: (pullRequest: GitHubPullRequest) => void;
   gitRemoteUrl: string | null;
   gitRoot: string | null;
@@ -515,6 +519,9 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       isLoading={options.gitDiffLoading}
       error={options.gitDiffError}
       pullRequest={options.selectedPullRequest}
+      pullRequestComments={options.selectedPullRequestComments}
+      pullRequestCommentsLoading={options.selectedPullRequestCommentsLoading}
+      pullRequestCommentsError={options.selectedPullRequestCommentsError}
       onActivePathChange={options.onDiffActivePathChange}
     />
   );

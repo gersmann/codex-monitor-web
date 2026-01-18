@@ -12,6 +12,7 @@ import type {
   GitFileDiff,
   GitFileStatus,
   GitHubIssuesResponse,
+  GitHubPullRequestComment,
   GitHubPullRequestDiff,
   GitHubPullRequestsResponse,
   GitLogResponse,
@@ -215,6 +216,16 @@ export async function getGitHubPullRequestDiff(
   prNumber: number,
 ): Promise<GitHubPullRequestDiff[]> {
   return invoke("get_github_pull_request_diff", {
+    workspaceId: workspace_id,
+    prNumber,
+  });
+}
+
+export async function getGitHubPullRequestComments(
+  workspace_id: string,
+  prNumber: number,
+): Promise<GitHubPullRequestComment[]> {
+  return invoke("get_github_pull_request_comments", {
     workspaceId: workspace_id,
     prNumber,
   });

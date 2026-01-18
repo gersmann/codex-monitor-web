@@ -39,6 +39,7 @@ import { useGitLog } from "./features/git/hooks/useGitLog";
 import { useGitHubIssues } from "./features/git/hooks/useGitHubIssues";
 import { useGitHubPullRequests } from "./features/git/hooks/useGitHubPullRequests";
 import { useGitHubPullRequestDiffs } from "./features/git/hooks/useGitHubPullRequestDiffs";
+import { useGitHubPullRequestComments } from "./features/git/hooks/useGitHubPullRequestComments";
 import { useGitRemote } from "./features/git/hooks/useGitRemote";
 import { useGitRepoScan } from "./features/git/hooks/useGitRepoScan";
 import { useModels } from "./features/models/hooks/useModels";
@@ -341,6 +342,15 @@ function MainApp() {
     isLoading: gitPullRequestDiffsLoading,
     error: gitPullRequestDiffsError
   } = useGitHubPullRequestDiffs(
+    activeWorkspace,
+    selectedPullRequest?.number ?? null,
+    shouldLoadDiffs && diffSource === "pr"
+  );
+  const {
+    comments: gitPullRequestComments,
+    isLoading: gitPullRequestCommentsLoading,
+    error: gitPullRequestCommentsError
+  } = useGitHubPullRequestComments(
     activeWorkspace,
     selectedPullRequest?.number ?? null,
     shouldLoadDiffs && diffSource === "pr"
@@ -1061,6 +1071,9 @@ function MainApp() {
     gitPullRequestsError,
     selectedPullRequestNumber: selectedPullRequest?.number ?? null,
     selectedPullRequest: diffSource === "pr" ? selectedPullRequest : null,
+    selectedPullRequestComments: diffSource === "pr" ? gitPullRequestComments : [],
+    selectedPullRequestCommentsLoading: gitPullRequestCommentsLoading,
+    selectedPullRequestCommentsError: gitPullRequestCommentsError,
     onSelectPullRequest: handleSelectPullRequest,
     gitRemoteUrl,
     gitRoot: activeGitRoot,
