@@ -305,7 +305,7 @@ impl Default for AppSettings {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppSettings, BackendMode, WorkspaceEntry, WorkspaceKind};
+    use super::{AppSettings, BackendMode, WorkspaceEntry, WorkspaceKind, WorkspaceSettings};
 
     #[test]
     fn app_settings_defaults_from_empty_json() {
@@ -336,5 +336,14 @@ mod tests {
         assert!(entry.worktree.is_none());
         assert!(entry.settings.sort_order.is_none());
         assert!(entry.settings.group_id.is_none());
+    }
+
+    #[test]
+    fn workspace_settings_defaults() {
+        let settings = WorkspaceSettings::default();
+        assert!(!settings.sidebar_collapsed);
+        assert!(settings.sort_order.is_none());
+        assert!(settings.group_id.is_none());
+        assert!(settings.git_root.is_none());
     }
 }

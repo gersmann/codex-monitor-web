@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use ignore::WalkBuilder;
@@ -101,8 +102,25 @@ fn sort_workspaces(list: &mut Vec<WorkspaceInfo>) {
     list.sort_by(|a, b| {
         let a_order = a.settings.sort_order.unwrap_or(u32::MAX);
         let b_order = b.settings.sort_order.unwrap_or(u32::MAX);
-        a_order.cmp(&b_order).then_with(|| a.name.cmp(&b.name))
+        a_order
+            .cmp(&b_order)
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.id.cmp(&b.id))
     });
+}
+
+fn apply_workspace_settings_update(
+    workspaces: &mut HashMap<String, WorkspaceEntry>,
+    id: &str,
+    settings: WorkspaceSettings,
+) -> Result<WorkspaceEntry, String> {
+    match workspaces.get_mut(id) {
+        Some(entry) => {
+            entry.settings = settings.clone();
+            Ok(entry.clone())
+        }
+        None => Err("workspace not found".to_string()),
+    }
 }
 
 async fn run_git_command(repo_path: &PathBuf, args: &[&str]) -> Result<String, String> {
@@ -445,13 +463,7 @@ pub(crate) async fn update_workspace_settings(
 ) -> Result<WorkspaceInfo, String> {
     let (entry_snapshot, list) = {
         let mut workspaces = state.workspaces.lock().await;
-        let entry_snapshot = match workspaces.get_mut(&id) {
-            Some(entry) => {
-                entry.settings = settings.clone();
-                entry.clone()
-            }
-            None => return Err("workspace not found".to_string()),
-        };
+        let entry_snapshot = apply_workspace_settings_update(&mut workspaces, &id, settings)?;
         let list: Vec<_> = workspaces.values().cloned().collect();
         (entry_snapshot, list)
     };
@@ -570,19 +582,43 @@ pub(crate) async fn open_workspace_in(
 
 #[cfg(test)]
 mod tests {
-    use super::{sanitize_worktree_name, sort_workspaces};
-    use crate::types::{WorkspaceInfo, WorkspaceKind, WorkspaceSettings};
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    use super::{apply_workspace_settings_update, sanitize_worktree_name, sort_workspaces};
+    use crate::storage::{read_workspaces, write_workspaces};
+    use crate::types::{WorktreeInfo, WorkspaceEntry, WorkspaceInfo, WorkspaceKind, WorkspaceSettings};
+    use uuid::Uuid;
 
     fn workspace(name: &str, sort_order: Option<u32>) -> WorkspaceInfo {
+        workspace_with_id_and_kind(name, name, sort_order, WorkspaceKind::Main)
+    }
+
+    fn workspace_with_id_and_kind(
+        name: &str,
+        id: &str,
+        sort_order: Option<u32>,
+        kind: WorkspaceKind,
+    ) -> WorkspaceInfo {
+        let (parent_id, worktree) = if kind.is_worktree() {
+            (
+                Some("parent".to_string()),
+                Some(WorktreeInfo {
+                    branch: name.to_string(),
+                }),
+            )
+        } else {
+            (None, None)
+        };
         WorkspaceInfo {
-            id: name.to_string(),
+            id: id.to_string(),
             name: name.to_string(),
             path: "/tmp".to_string(),
             connected: false,
             codex_bin: None,
-            kind: WorkspaceKind::Main,
-            parent_id: None,
-            worktree: None,
+            kind,
+            parent_id,
+            worktree,
             settings: WorkspaceSettings {
                 sidebar_collapsed: false,
                 sort_order,
@@ -600,6 +636,12 @@ mod tests {
     }
 
     #[test]
+    fn sanitize_worktree_name_allows_safe_chars() {
+        assert_eq!(sanitize_worktree_name("release_1.2.3"), "release_1.2.3");
+        assert_eq!(sanitize_worktree_name("feature--x"), "feature--x");
+    }
+
+    #[test]
     fn sort_workspaces_orders_by_sort_then_name() {
         let mut items = vec![
             workspace("beta", None),
@@ -612,5 +654,108 @@ mod tests {
 
         let names: Vec<_> = items.into_iter().map(|item| item.name).collect();
         assert_eq!(names, vec!["gamma", "delta", "alpha", "beta"]);
+    }
+
+    #[test]
+    fn sort_workspaces_places_unordered_last_and_names_tie_break() {
+        let mut items = vec![
+            workspace("delta", None),
+            workspace("beta", Some(1)),
+            workspace("alpha", Some(1)),
+            workspace("gamma", None),
+        ];
+
+        sort_workspaces(&mut items);
+
+        let names: Vec<_> = items.into_iter().map(|item| item.name).collect();
+        assert_eq!(names, vec!["alpha", "beta", "delta", "gamma"]);
+    }
+
+    #[test]
+    fn sort_workspaces_ignores_group_ids() {
+        let mut first = workspace("beta", Some(2));
+        first.settings.group_id = Some("group-b".to_string());
+        let mut second = workspace("alpha", Some(1));
+        second.settings.group_id = Some("group-a".to_string());
+        let mut third = workspace("gamma", None);
+        third.settings.group_id = Some("group-a".to_string());
+
+        let mut items = vec![first, second, third];
+        sort_workspaces(&mut items);
+
+        let names: Vec<_> = items.into_iter().map(|item| item.name).collect();
+        assert_eq!(names, vec!["alpha", "beta", "gamma"]);
+    }
+
+    #[test]
+    fn sort_workspaces_breaks_ties_by_id() {
+        let mut items = vec![
+            workspace_with_id_and_kind("alpha", "b-id", Some(1), WorkspaceKind::Main),
+            workspace_with_id_and_kind("alpha", "a-id", Some(1), WorkspaceKind::Main),
+        ];
+
+        sort_workspaces(&mut items);
+
+        let ids: Vec<_> = items.into_iter().map(|item| item.id).collect();
+        assert_eq!(ids, vec!["a-id", "b-id"]);
+    }
+
+    #[test]
+    fn sort_workspaces_does_not_bias_kind() {
+        let mut items = vec![
+            workspace_with_id_and_kind("main", "main", Some(2), WorkspaceKind::Main),
+            workspace_with_id_and_kind("worktree", "worktree", Some(1), WorkspaceKind::Worktree),
+        ];
+
+        sort_workspaces(&mut items);
+
+        let kinds: Vec<_> = items.into_iter().map(|item| item.kind).collect();
+        assert!(matches!(
+            kinds.as_slice(),
+            [WorkspaceKind::Worktree, WorkspaceKind::Main]
+        ));
+    }
+
+    #[test]
+    fn update_workspace_settings_persists_sort_and_group() {
+        let id = "workspace-1".to_string();
+        let entry = WorkspaceEntry {
+            id: id.clone(),
+            name: "Workspace".to_string(),
+            path: "/tmp".to_string(),
+            codex_bin: None,
+            kind: WorkspaceKind::Main,
+            parent_id: None,
+            worktree: None,
+            settings: WorkspaceSettings::default(),
+        };
+        let mut workspaces = HashMap::from([(id.clone(), entry)]);
+
+        let mut settings = WorkspaceSettings::default();
+        settings.sort_order = Some(3);
+        settings.group_id = Some("group-1".to_string());
+        settings.sidebar_collapsed = true;
+        settings.git_root = Some("/tmp".to_string());
+
+        let updated =
+            apply_workspace_settings_update(&mut workspaces, &id, settings.clone()).expect("update");
+        assert_eq!(updated.settings.sort_order, Some(3));
+        assert_eq!(updated.settings.group_id.as_deref(), Some("group-1"));
+        assert!(updated.settings.sidebar_collapsed);
+        assert_eq!(updated.settings.git_root.as_deref(), Some("/tmp"));
+
+        let temp_dir = std::env::temp_dir()
+            .join(format!("codex-monitor-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).expect("create temp dir");
+        let path = PathBuf::from(temp_dir.join("workspaces.json"));
+        let list: Vec<_> = workspaces.values().cloned().collect();
+        write_workspaces(&path, &list).expect("write workspaces");
+
+        let read = read_workspaces(&path).expect("read workspaces");
+        let stored = read.get(&id).expect("stored workspace");
+        assert_eq!(stored.settings.sort_order, Some(3));
+        assert_eq!(stored.settings.group_id.as_deref(), Some("group-1"));
+        assert!(stored.settings.sidebar_collapsed);
+        assert_eq!(stored.settings.git_root.as_deref(), Some("/tmp"));
     }
 }
