@@ -174,6 +174,11 @@ pub(crate) struct AppSettings {
     )]
     pub(crate) notification_sounds_enabled: bool,
     #[serde(
+        default = "default_experimental_collab_enabled",
+        rename = "experimentalCollabEnabled"
+    )]
+    pub(crate) experimental_collab_enabled: bool,
+    #[serde(
         default = "default_experimental_steer_enabled",
         rename = "experimentalSteerEnabled"
     )]
@@ -206,6 +211,10 @@ fn default_notification_sounds_enabled() -> bool {
     true
 }
 
+fn default_experimental_collab_enabled() -> bool {
+    false
+}
+
 fn default_experimental_steer_enabled() -> bool {
     false
 }
@@ -229,6 +238,7 @@ impl Default for AppSettings {
             default_access_mode: "current".to_string(),
             ui_scale: 1.0,
             notification_sounds_enabled: true,
+            experimental_collab_enabled: false,
             experimental_steer_enabled: false,
             dictation_enabled: false,
             dictation_model_id: default_dictation_model_id(),

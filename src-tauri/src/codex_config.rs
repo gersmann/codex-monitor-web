@@ -8,8 +8,16 @@ pub(crate) fn read_steer_enabled() -> Result<Option<bool>, String> {
     read_feature_flag("steer")
 }
 
+pub(crate) fn read_collab_enabled() -> Result<Option<bool>, String> {
+    read_feature_flag("collab")
+}
+
 pub(crate) fn write_steer_enabled(enabled: bool) -> Result<(), String> {
     write_feature_flag("steer", enabled)
+}
+
+pub(crate) fn write_collab_enabled(enabled: bool) -> Result<(), String> {
+    write_feature_flag("collab", enabled)
 }
 
 fn read_feature_flag(key: &str) -> Result<Option<bool>, String> {

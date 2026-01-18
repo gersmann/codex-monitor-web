@@ -67,6 +67,7 @@ export type AppSettings = {
   defaultAccessMode: AccessMode;
   uiScale: number;
   notificationSoundsEnabled: boolean;
+  experimentalCollabEnabled: boolean;
   experimentalSteerEnabled: boolean;
   dictationEnabled: boolean;
   dictationModelId: string;

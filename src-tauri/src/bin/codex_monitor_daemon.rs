@@ -206,6 +206,7 @@ impl DaemonState {
     }
 
     async fn update_app_settings(&self, settings: AppSettings) -> Result<AppSettings, String> {
+        let _ = codex_config::write_collab_enabled(settings.experimental_collab_enabled);
         let _ = codex_config::write_steer_enabled(settings.experimental_steer_enabled);
         write_settings(&self.settings_path, &settings)?;
         let mut current = self.app_settings.lock().await;
@@ -692,6 +693,9 @@ async fn handle_rpc_request(
         }
         "get_app_settings" => {
             let mut settings = state.app_settings.lock().await.clone();
+            if let Ok(Some(collab_enabled)) = codex_config::read_collab_enabled() {
+                settings.experimental_collab_enabled = collab_enabled;
+            }
             if let Ok(Some(steer_enabled)) = codex_config::read_steer_enabled() {
                 settings.experimental_steer_enabled = steer_enabled;
             }
