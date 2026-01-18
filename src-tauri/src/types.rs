@@ -200,6 +200,10 @@ pub(crate) struct AppSettings {
     pub(crate) remote_backend_token: Option<String>,
     #[serde(default = "default_access_mode", rename = "defaultAccessMode")]
     pub(crate) default_access_mode: String,
+    #[serde(default, rename = "lastComposerModelId")]
+    pub(crate) last_composer_model_id: Option<String>,
+    #[serde(default, rename = "lastComposerReasoningEffort")]
+    pub(crate) last_composer_reasoning_effort: Option<String>,
     #[serde(default = "default_ui_scale", rename = "uiScale")]
     pub(crate) ui_scale: f64,
     #[serde(
@@ -305,6 +309,8 @@ impl Default for AppSettings {
             remote_backend_host: default_remote_backend_host(),
             remote_backend_token: None,
             default_access_mode: "current".to_string(),
+            last_composer_model_id: None,
+            last_composer_reasoning_effort: None,
             ui_scale: 1.0,
             notification_sounds_enabled: true,
             experimental_collab_enabled: false,
@@ -331,6 +337,8 @@ mod tests {
         assert_eq!(settings.remote_backend_host, "127.0.0.1:4732");
         assert!(settings.remote_backend_token.is_none());
         assert_eq!(settings.default_access_mode, "current");
+        assert!(settings.last_composer_model_id.is_none());
+        assert!(settings.last_composer_reasoning_effort.is_none());
         assert!((settings.ui_scale - 1.0).abs() < f64::EPSILON);
         assert!(settings.notification_sounds_enabled);
         assert!(!settings.experimental_steer_enabled);

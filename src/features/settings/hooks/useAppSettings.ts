@@ -9,6 +9,8 @@ const defaultSettings: AppSettings = {
   remoteBackendHost: "127.0.0.1:4732",
   remoteBackendToken: null,
   defaultAccessMode: "current",
+  lastComposerModelId: null,
+  lastComposerReasoningEffort: null,
   uiScale: UI_SCALE_DEFAULT,
   notificationSoundsEnabled: true,
   experimentalCollabEnabled: false,

@@ -77,6 +77,8 @@ export type AppSettings = {
   remoteBackendHost: string;
   remoteBackendToken: string | null;
   defaultAccessMode: AccessMode;
+  lastComposerModelId: string | null;
+  lastComposerReasoningEffort: string | null;
   uiScale: number;
   notificationSoundsEnabled: boolean;
   experimentalCollabEnabled: boolean;

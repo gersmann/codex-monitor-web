@@ -96,7 +96,8 @@ function MainApp() {
     settings: appSettings,
     setSettings: setAppSettings,
     saveSettings,
-    doctor
+    doctor,
+    isLoading: appSettingsLoading
   } = useAppSettings();
   const dictationModel = useDictationModel(appSettings.dictationModelId);
   const {
@@ -374,7 +375,12 @@ function MainApp() {
     reasoningOptions,
     selectedEffort,
     setSelectedEffort
-  } = useModels({ activeWorkspace, onDebug: addDebugEntry });
+  } = useModels({
+    activeWorkspace,
+    onDebug: addDebugEntry,
+    preferredModelId: appSettings.lastComposerModelId,
+    preferredEffort: appSettings.lastComposerReasoningEffort,
+  });
   const {
     collaborationModes,
     selectedCollaborationMode,
@@ -486,6 +492,36 @@ function MainApp() {
     diffSource === "pr" ? gitPullRequestDiffsLoading : isDiffLoading;
   const activeDiffError =
     diffSource === "pr" ? gitPullRequestDiffsError : diffError;
+
+  useEffect(() => {
+    if (appSettingsLoading) {
+      return;
+    }
+    if (!selectedModelId && selectedEffort === null) {
+      return;
+    }
+    setAppSettings((current) => {
+      if (
+        current.lastComposerModelId === selectedModelId &&
+        current.lastComposerReasoningEffort === selectedEffort
+      ) {
+        return current;
+      }
+      const nextSettings = {
+        ...current,
+        lastComposerModelId: selectedModelId,
+        lastComposerReasoningEffort: selectedEffort,
+      };
+      void queueSaveSettings(nextSettings);
+      return nextSettings;
+    });
+  }, [
+    appSettingsLoading,
+    queueSaveSettings,
+    selectedEffort,
+    selectedModelId,
+    setAppSettings,
+  ]);
 
   useEffect(() => {
     if (diffSource !== "pr" || centerMode !== "diff") {
