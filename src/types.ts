@@ -77,6 +77,9 @@ export type AppSettings = {
   remoteBackendHost: string;
   remoteBackendToken: string | null;
   defaultAccessMode: AccessMode;
+  composerModelShortcut: string | null;
+  composerAccessShortcut: string | null;
+  composerReasoningShortcut: string | null;
   lastComposerModelId: string | null;
   lastComposerReasoningEffort: string | null;
   uiScale: number;

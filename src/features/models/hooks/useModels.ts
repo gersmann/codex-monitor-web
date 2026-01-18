@@ -9,6 +9,12 @@ type UseModelsOptions = {
   preferredEffort?: string | null;
 };
 
+const pickDefaultModel = (models: ModelOption[]) =>
+  models.find((model) => model.model === "gpt-5.2-codex") ??
+  models.find((model) => model.isDefault) ??
+  models[0] ??
+  null;
+
 export function useModels({
   activeWorkspace,
   onDebug,
@@ -16,13 +22,35 @@ export function useModels({
   preferredEffort = null,
 }: UseModelsOptions) {
   const [models, setModels] = useState<ModelOption[]>([]);
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [selectedEffort, setSelectedEffort] = useState<string | null>(null);
+  const [selectedModelId, setSelectedModelIdState] = useState<string | null>(null);
+  const [selectedEffort, setSelectedEffortState] = useState<string | null>(null);
   const lastFetchedWorkspaceId = useRef<string | null>(null);
   const inFlight = useRef(false);
+  const hasUserSelectedModel = useRef(false);
+  const hasUserSelectedEffort = useRef(false);
+  const lastWorkspaceId = useRef<string | null>(null);
 
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
+
+  useEffect(() => {
+    if (workspaceId === lastWorkspaceId.current) {
+      return;
+    }
+    hasUserSelectedModel.current = false;
+    hasUserSelectedEffort.current = false;
+    lastWorkspaceId.current = workspaceId;
+  }, [workspaceId]);
+
+  const setSelectedModelId = useCallback((next: string | null) => {
+    hasUserSelectedModel.current = true;
+    setSelectedModelIdState(next);
+  }, []);
+
+  const setSelectedEffort = useCallback((next: string | null) => {
+    hasUserSelectedEffort.current = true;
+    setSelectedEffortState(next);
+  }, []);
 
   const selectedModel = useMemo(
     () => models.find((model) => model.id === selectedModelId) ?? null,
@@ -37,6 +65,26 @@ export function useModels({
       (effort) => effort.reasoningEffort,
     );
   }, [selectedModel]);
+
+  const resolveEffort = useCallback(
+    (model: ModelOption, preferCurrent: boolean) => {
+      const supportedEfforts = model.supportedReasoningEfforts.map(
+        (effort) => effort.reasoningEffort,
+      );
+      if (
+        preferCurrent &&
+        selectedEffort &&
+        supportedEfforts.includes(selectedEffort)
+      ) {
+        return selectedEffort;
+      }
+      if (preferredEffort && supportedEfforts.includes(preferredEffort)) {
+        return preferredEffort;
+      }
+      return model.defaultReasoningEffort ?? null;
+    },
+    [preferredEffort, selectedEffort],
+  );
 
   const refreshModels = useCallback(async () => {
     if (!workspaceId || !isConnected) {
@@ -85,28 +133,32 @@ export function useModels({
       }));
       setModels(data);
       lastFetchedWorkspaceId.current = workspaceId;
-      const preferredModel =
-        data.find((model) => model.model === "gpt-5.2-codex") ?? null;
-      const defaultModel =
-        preferredModel ?? data.find((model) => model.isDefault) ?? data[0] ?? null;
+      const defaultModel = pickDefaultModel(data);
       const existingSelection = data.find((model) => model.id === selectedModelId) ?? null;
-      const preferredSelection = data.find((model) => model.id === preferredModelId) ?? null;
-      const nextSelection = existingSelection ?? preferredSelection ?? defaultModel;
+      if (selectedModelId && !existingSelection) {
+        hasUserSelectedModel.current = false;
+      }
+      const preferredSelection = preferredModelId
+        ? data.find((model) => model.id === preferredModelId) ?? null
+        : null;
+      const shouldKeepExisting =
+        hasUserSelectedModel.current && existingSelection !== null;
+      const nextSelection =
+        (shouldKeepExisting ? existingSelection : null) ??
+        preferredSelection ??
+        defaultModel ??
+        existingSelection;
       if (nextSelection) {
-        setSelectedModelId(nextSelection.id);
-        const nextEffort =
-          selectedEffort &&
-          nextSelection.supportedReasoningEfforts.some(
-            (effort) => effort.reasoningEffort === selectedEffort,
-          )
-            ? selectedEffort
-            : preferredEffort &&
-                nextSelection.supportedReasoningEfforts.some(
-                  (effort) => effort.reasoningEffort === preferredEffort,
-                )
-              ? preferredEffort
-              : nextSelection.defaultReasoningEffort ?? null;
-        setSelectedEffort(nextEffort);
+        if (nextSelection.id !== selectedModelId) {
+          setSelectedModelIdState(nextSelection.id);
+        }
+        const nextEffort = resolveEffort(
+          nextSelection,
+          hasUserSelectedEffort.current,
+        );
+        if (nextEffort !== selectedEffort) {
+          setSelectedEffortState(nextEffort);
+        }
       }
     } catch (error) {
       onDebug?.({
@@ -122,10 +174,10 @@ export function useModels({
   }, [
     isConnected,
     onDebug,
-    preferredEffort,
     preferredModelId,
     selectedEffort,
     selectedModelId,
+    resolveEffort,
     workspaceId,
   ]);
 
@@ -151,7 +203,8 @@ export function useModels({
     ) {
       return;
     }
-    setSelectedEffort(selectedModel.defaultReasoningEffort ?? null);
+    hasUserSelectedEffort.current = false;
+    setSelectedEffortState(selectedModel.defaultReasoningEffort ?? null);
   }, [selectedEffort, selectedModel]);
 
   useEffect(() => {
@@ -161,44 +214,31 @@ export function useModels({
     const preferredSelection = preferredModelId
       ? models.find((model) => model.id === preferredModelId) ?? null
       : null;
-    if (!preferredSelection) {
+    const defaultModel = pickDefaultModel(models);
+    const existingSelection = selectedModelId
+      ? models.find((model) => model.id === selectedModelId) ?? null
+      : null;
+    if (selectedModelId && !existingSelection) {
+      hasUserSelectedModel.current = false;
+    }
+    const shouldKeepUserSelection =
+      hasUserSelectedModel.current && existingSelection !== null;
+    if (shouldKeepUserSelection) {
       return;
     }
-    const preferredCodex =
-      models.find((model) => model.model === "gpt-5.2-codex") ?? null;
-    const defaultModel =
-      preferredCodex ?? models.find((model) => model.isDefault) ?? models[0] ?? null;
-    const shouldApplyPreferredModel =
-      !selectedModelId ||
-      (defaultModel &&
-        selectedModelId === defaultModel.id &&
-        selectedModelId !== preferredSelection.id);
-    if (shouldApplyPreferredModel) {
-      setSelectedModelId(preferredSelection.id);
-      const nextEffort =
-        preferredEffort &&
-        preferredSelection.supportedReasoningEfforts.some(
-          (effort) => effort.reasoningEffort === preferredEffort,
-        )
-          ? preferredEffort
-          : preferredSelection.defaultReasoningEffort ?? null;
-      setSelectedEffort(nextEffort);
+    const nextSelection =
+      preferredSelection ?? defaultModel ?? existingSelection ?? null;
+    if (!nextSelection) {
       return;
     }
-    if (selectedModelId !== preferredSelection.id || !preferredEffort) {
-      return;
+    if (nextSelection.id !== selectedModelId) {
+      setSelectedModelIdState(nextSelection.id);
     }
-    const preferredEffortSupported = preferredSelection.supportedReasoningEfforts.some(
-      (effort) => effort.reasoningEffort === preferredEffort,
-    );
-    if (!preferredEffortSupported) {
-      return;
+    const nextEffort = resolveEffort(nextSelection, hasUserSelectedEffort.current);
+    if (nextEffort !== selectedEffort) {
+      setSelectedEffortState(nextEffort);
     }
-    const defaultEffort = preferredSelection.defaultReasoningEffort ?? null;
-    if (!selectedEffort || selectedEffort === defaultEffort) {
-      setSelectedEffort(preferredEffort);
-    }
-  }, [models, preferredEffort, preferredModelId, selectedEffort, selectedModelId]);
+  }, [models, preferredModelId, selectedEffort, selectedModelId, resolveEffort]);
 
   return {
     models,
