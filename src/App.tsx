@@ -77,7 +77,12 @@ import { useCopyThread } from "./features/threads/hooks/useCopyThread";
 import { usePanelVisibility } from "./features/layout/hooks/usePanelVisibility";
 import { useTerminalController } from "./features/terminal/hooks/useTerminalController";
 import { playNotificationSound } from "./utils/notificationSounds";
-import { pickWorkspacePath } from "./services/tauri";
+import {
+  pickWorkspacePath,
+  revertGitFile,
+  stageGitFile,
+  unstageGitFile,
+} from "./services/tauri";
 import type {
   AccessMode,
   GitHubPullRequest,
@@ -305,7 +310,8 @@ function MainApp() {
   const {
     diffs: gitDiffs,
     isLoading: isDiffLoading,
-    error: diffError
+    error: diffError,
+    refresh: refreshGitDiffs,
   } = useGitDiffs(activeWorkspace, gitStatus.files, shouldLoadDiffs);
   const {
     entries: gitLogEntries,
@@ -386,6 +392,30 @@ function MainApp() {
   const handleCreateBranch = async (name: string) => {
     await createBranch(name);
     refreshGitStatus();
+  };
+  const handleStageGitFile = async (path: string) => {
+    if (!activeWorkspace) {
+      return;
+    }
+    await stageGitFile(activeWorkspace.id, path);
+    refreshGitStatus();
+    refreshGitDiffs();
+  };
+  const handleUnstageGitFile = async (path: string) => {
+    if (!activeWorkspace) {
+      return;
+    }
+    await unstageGitFile(activeWorkspace.id, path);
+    refreshGitStatus();
+    refreshGitDiffs();
+  };
+  const handleRevertGitFile = async (path: string) => {
+    if (!activeWorkspace) {
+      return;
+    }
+    await revertGitFile(activeWorkspace.id, path);
+    refreshGitStatus();
+    refreshGitDiffs();
   };
 
   const resolvedModel = selectedModel?.model ?? null;
@@ -1047,6 +1077,9 @@ function MainApp() {
       void handleSetGitRoot(null);
     },
     onPickGitRoot: handlePickGitRoot,
+    onStageGitFile: handleStageGitFile,
+    onUnstageGitFile: handleUnstageGitFile,
+    onRevertGitFile: handleRevertGitFile,
     gitDiffs: activeDiffs,
     gitDiffLoading: activeDiffLoading,
     gitDiffError: activeDiffError,

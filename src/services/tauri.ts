@@ -154,6 +154,8 @@ export async function respondToServerRequest(
 export async function getGitStatus(workspace_id: string): Promise<{
   branchName: string;
   files: GitFileStatus[];
+  stagedFiles: GitFileStatus[];
+  unstagedFiles: GitFileStatus[];
   totalAdditions: number;
   totalDeletions: number;
 }> {
@@ -182,6 +184,18 @@ export async function getGitLog(
 
 export async function getGitRemote(workspace_id: string): Promise<string | null> {
   return invoke("get_git_remote", { workspaceId: workspace_id });
+}
+
+export async function stageGitFile(workspaceId: string, path: string) {
+  return invoke("stage_git_file", { workspaceId, path });
+}
+
+export async function unstageGitFile(workspaceId: string, path: string) {
+  return invoke("unstage_git_file", { workspaceId, path });
+}
+
+export async function revertGitFile(workspaceId: string, path: string) {
+  return invoke("revert_git_file", { workspaceId, path });
 }
 
 export async function getGitHubIssues(

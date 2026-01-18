@@ -137,6 +137,8 @@ type LayoutNodesOptions = {
   gitStatus: {
     branchName: string;
     files: GitFileStatus[];
+    stagedFiles: GitFileStatus[];
+    unstagedFiles: GitFileStatus[];
     totalAdditions: number;
     totalDeletions: number;
     error: string | null;
@@ -175,6 +177,9 @@ type LayoutNodesOptions = {
   onSelectGitRoot: (path: string) => void;
   onClearGitRoot: () => void;
   onPickGitRoot: () => void | Promise<void>;
+  onStageGitFile: (path: string) => Promise<void>;
+  onUnstageGitFile: (path: string) => Promise<void>;
+  onRevertGitFile: (path: string) => Promise<void>;
   gitDiffs: GitDiffViewerItem[];
   gitDiffLoading: boolean;
   gitDiffError: string | null;
@@ -462,7 +467,8 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         error={options.gitStatus.error}
         logError={options.gitLogError}
         logLoading={options.gitLogLoading}
-        files={options.gitStatus.files}
+        stagedFiles={options.gitStatus.stagedFiles}
+        unstagedFiles={options.gitStatus.unstagedFiles}
         onSelectFile={options.onSelectDiff}
         selectedPath={options.selectedDiffPath}
         logEntries={options.gitLogEntries}
@@ -495,6 +501,9 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         onSelectGitRoot={options.onSelectGitRoot}
         onClearGitRoot={options.onClearGitRoot}
         onPickGitRoot={options.onPickGitRoot}
+        onStageFile={options.onStageGitFile}
+        onUnstageFile={options.onUnstageGitFile}
+        onRevertFile={options.onRevertGitFile}
       />
     );
 
