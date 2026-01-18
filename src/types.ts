@@ -1,7 +1,14 @@
 export type WorkspaceSettings = {
   sidebarCollapsed: boolean;
   sortOrder?: number | null;
+  groupId?: string | null;
   gitRoot?: string | null;
+};
+
+export type WorkspaceGroup = {
+  id: string;
+  name: string;
+  sortOrder?: number | null;
 };
 
 export type WorkspaceKind = "main" | "worktree";
@@ -79,6 +86,7 @@ export type AppSettings = {
   dictationModelId: string;
   dictationPreferredLanguage: string | null;
   dictationHoldKey: string | null;
+  workspaceGroups: WorkspaceGroup[];
 };
 
 export type CodexDoctorResult = {
