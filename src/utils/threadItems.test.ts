@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ConversationItem } from "../types";
 import {
   buildConversationItem,
+  buildConversationItemFromThreadItem,
   mergeThreadItems,
   normalizeItem,
   prepareThreadItems,
@@ -107,5 +108,69 @@ describe("threadItems", () => {
       expect(merged[0].output).toBe("much longer output");
       expect(merged[0].status).toBe("ok");
     }
+  });
+
+  it("builds user message text from mixed inputs", () => {
+    const item = buildConversationItemFromThreadItem({
+      type: "userMessage",
+      id: "msg-1",
+      content: [
+        { type: "text", text: "Please" },
+        { type: "skill", name: "Review" },
+        { type: "image" },
+      ],
+    });
+    expect(item).not.toBeNull();
+    if (item && item.kind === "message") {
+      expect(item.role).toBe("user");
+      expect(item.text).toBe("Please $Review [image]");
+    }
+  });
+
+  it("formats collab tool calls with receivers and agent states", () => {
+    const item = buildConversationItem({
+      type: "collabToolCall",
+      id: "collab-1",
+      tool: "handoff",
+      status: "ok",
+      senderThreadId: "thread-a",
+      receiverThreadIds: ["thread-b"],
+      newThreadId: "thread-c",
+      prompt: "Coordinate work",
+      agentStatus: { "agent-1": { status: "running" } },
+    });
+    expect(item).not.toBeNull();
+    if (item && item.kind === "tool") {
+      expect(item.title).toBe("Collab: handoff");
+      expect(item.detail).toContain("From thread-a");
+      expect(item.detail).toContain("thread-b, thread-c");
+      expect(item.output).toBe("Coordinate work\n\nagent-1: running");
+    }
+  });
+
+  it("dedupes local optimistic messages on merge (expected behavior)", () => {
+    const remote: ConversationItem[] = [
+      {
+        id: "remote-1",
+        kind: "message",
+        role: "user",
+        text: "Hello",
+      },
+    ];
+    const local: ConversationItem[] = [
+      {
+        id: "1234-user",
+        kind: "message",
+        role: "user",
+        text: "Hello",
+      },
+    ];
+    const merged = mergeThreadItems(remote, local);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({
+      kind: "message",
+      role: "user",
+      text: "Hello",
+    });
   });
 });

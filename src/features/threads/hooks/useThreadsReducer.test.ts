@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ConversationItem, ThreadSummary } from "../../../types";
 import { initialState, threadReducer } from "./useThreadsReducer";
+import type { ThreadState } from "./useThreadsReducer";
 
 describe("threadReducer", () => {
   it("ensures thread with default name and active selection", () => {
@@ -123,5 +124,53 @@ describe("threadReducer", () => {
     const items = next.itemsByThread["thread-1"] ?? [];
     expect(items).toHaveLength(1);
     expect(items[0]?.id).toBe("remote-review-1");
+  });
+
+  it("appends reasoning summary and content when missing", () => {
+    const withSummary = threadReducer(initialState, {
+      type: "appendReasoningSummary",
+      threadId: "thread-1",
+      itemId: "reasoning-1",
+      delta: "Short plan",
+    });
+    const summaryItem = withSummary.itemsByThread["thread-1"]?.[0];
+    expect(summaryItem?.kind).toBe("reasoning");
+    if (summaryItem?.kind === "reasoning") {
+      expect(summaryItem.summary).toBe("Short plan");
+      expect(summaryItem.content).toBe("");
+    }
+
+    const withContent = threadReducer(withSummary, {
+      type: "appendReasoningContent",
+      threadId: "thread-1",
+      itemId: "reasoning-1",
+      delta: "More detail",
+    });
+    const contentItem = withContent.itemsByThread["thread-1"]?.[0];
+    expect(contentItem?.kind).toBe("reasoning");
+    if (contentItem?.kind === "reasoning") {
+      expect(contentItem.summary).toBe("Short plan");
+      expect(contentItem.content).toBe("More detail");
+    }
+  });
+
+  it("ignores tool output deltas when the item is not a tool", () => {
+    const message: ConversationItem = {
+      id: "tool-1",
+      kind: "message",
+      role: "assistant",
+      text: "Hi",
+    };
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: { "thread-1": [message] },
+    };
+    const next = threadReducer(base, {
+      type: "appendToolOutput",
+      threadId: "thread-1",
+      itemId: "tool-1",
+      delta: "delta",
+    });
+    expect(next).toBe(base);
   });
 });

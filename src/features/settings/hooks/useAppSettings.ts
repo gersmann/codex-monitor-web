@@ -54,6 +54,8 @@ export function useAppSettings() {
             }),
           );
         }
+      } catch {
+        // Defaults stay in place if loading settings fails.
       } finally {
         if (active) {
           setIsLoading(false);
