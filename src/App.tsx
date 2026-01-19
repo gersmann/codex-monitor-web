@@ -164,6 +164,7 @@ function MainApp() {
   };
   const [centerMode, setCenterMode] = useState<"chat" | "diff">("chat");
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
+  const [diffScrollRequestId, setDiffScrollRequestId] = useState(0);
   const [gitPanelMode, setGitPanelMode] = useState<
     "diff" | "log" | "issues" | "prs"
   >("diff");
@@ -975,6 +976,7 @@ function MainApp() {
 
   function handleSelectDiff(path: string) {
     setSelectedDiffPath(path);
+    setDiffScrollRequestId((current) => current + 1);
     setCenterMode("diff");
     setGitPanelMode("diff");
     setDiffSource("local");
@@ -1253,6 +1255,7 @@ function MainApp() {
     gitStatus,
     fileStatus,
     selectedDiffPath,
+    diffScrollRequestId,
     onSelectDiff: handleSelectDiff,
     gitLogEntries,
     gitLogTotal,
