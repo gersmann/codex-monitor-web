@@ -1,5 +1,22 @@
 use tauri::{Theme, Window};
 
+#[cfg(test)]
+use std::sync::{Mutex, OnceLock};
+
+#[cfg(test)]
+type WindowAppearanceOverride =
+    Box<dyn Fn(&Window, &str) -> Result<(), String> + Send + Sync + 'static>;
+
+#[cfg(test)]
+static WINDOW_APPEARANCE_OVERRIDE: OnceLock<Mutex<Option<WindowAppearanceOverride>>> =
+    OnceLock::new();
+
+#[cfg(test)]
+pub(crate) fn set_window_appearance_override(handler: Option<WindowAppearanceOverride>) {
+    let slot = WINDOW_APPEARANCE_OVERRIDE.get_or_init(|| Mutex::new(None));
+    *slot.lock().unwrap() = handler;
+}
+
 #[cfg(target_os = "macos")]
 fn apply_macos_window_appearance(window: &Window, theme: &str) -> Result<(), String> {
     use objc2_app_kit::{
@@ -31,6 +48,16 @@ fn apply_macos_window_appearance(window: &Window, theme: &str) -> Result<(), Str
 }
 
 pub(crate) fn apply_window_appearance(window: &Window, theme: &str) -> Result<(), String> {
+    #[cfg(test)]
+    if let Some(handler) = WINDOW_APPEARANCE_OVERRIDE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap()
+        .as_ref()
+    {
+        return handler(window, theme);
+    }
+
     let next_theme = match theme {
         "light" => Some(Theme::Light),
         "dark" => Some(Theme::Dark),
