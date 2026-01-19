@@ -96,6 +96,7 @@ type LayoutNodesOptions = {
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
   onSelectThread: (workspaceId: string, threadId: string) => void;
   onDeleteThread: (workspaceId: string, threadId: string) => void;
+  onRenameThread: (workspaceId: string, threadId: string) => void;
   onDeleteWorkspace: (workspaceId: string) => void;
   onDeleteWorktree: (workspaceId: string) => void;
   onLoadOlderThreads: (workspaceId: string) => void;
@@ -329,6 +330,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       onToggleWorkspaceCollapse={options.onToggleWorkspaceCollapse}
       onSelectThread={options.onSelectThread}
       onDeleteThread={options.onDeleteThread}
+      onRenameThread={options.onRenameThread}
       onDeleteWorkspace={options.onDeleteWorkspace}
       onDeleteWorktree={options.onDeleteWorktree}
       onLoadOlderThreads={options.onLoadOlderThreads}
