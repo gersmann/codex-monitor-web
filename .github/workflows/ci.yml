@@ -34,5 +34,7 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npm run typecheck
+      - name: Tests
+        run: npm run test
       - name: Tauri debug build
         run: npm run tauri -- build --debug --no-bundle
