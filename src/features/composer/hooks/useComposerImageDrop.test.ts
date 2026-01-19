@@ -225,4 +225,37 @@ describe("useComposerImageDrop", () => {
 
     hook.unmount();
   });
+
+  it("ignores drag/drop and paste when disabled", async () => {
+    const onAttachImages = vi.fn();
+    const hook = renderImageDropHook({ disabled: true, onAttachImages });
+    const preventDefault = vi.fn();
+
+    act(() => {
+      hook.result.handleDragOver({
+        dataTransfer: { types: ["Files"] },
+        preventDefault,
+      } as unknown as React.DragEvent<HTMLElement>);
+    });
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(hook.result.isDragOver).toBe(false);
+
+    await act(async () => {
+      await hook.result.handleDrop({
+        dataTransfer: { files: [], items: [] },
+        preventDefault: vi.fn(),
+      } as unknown as React.DragEvent<HTMLElement>);
+    });
+    expect(onAttachImages).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await hook.result.handlePaste({
+        clipboardData: { items: [] },
+        preventDefault,
+      } as unknown as React.ClipboardEvent<HTMLTextAreaElement>);
+    });
+    expect(onAttachImages).not.toHaveBeenCalled();
+
+    hook.unmount();
+  });
 });

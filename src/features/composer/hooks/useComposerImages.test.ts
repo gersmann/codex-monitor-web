@@ -107,4 +107,29 @@ describe("useComposerImages", () => {
 
     hook.unmount();
   });
+
+  it("switches drafts between thread and workspace", () => {
+    const hook = renderComposerImages({
+      activeThreadId: "thread-1",
+      activeWorkspaceId: "ws-1",
+    });
+
+    act(() => {
+      hook.result.attachImages(["/tmp/a.png"]);
+    });
+    expect(hook.result.activeImages).toEqual(["/tmp/a.png"]);
+
+    hook.rerender({ activeThreadId: null, activeWorkspaceId: "ws-1" });
+    expect(hook.result.activeImages).toEqual([]);
+
+    act(() => {
+      hook.result.attachImages(["/tmp/b.png"]);
+    });
+    expect(hook.result.activeImages).toEqual(["/tmp/b.png"]);
+
+    hook.rerender({ activeThreadId: "thread-1", activeWorkspaceId: "ws-1" });
+    expect(hook.result.activeImages).toEqual(["/tmp/a.png"]);
+
+    hook.unmount();
+  });
 });
