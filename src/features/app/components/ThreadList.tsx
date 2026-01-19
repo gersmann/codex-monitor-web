@@ -56,11 +56,12 @@ export function ThreadList({
   onSelectThread,
   onShowThreadMenu,
 }: ThreadListProps) {
+  const indentUnit = nested ? 10 : 14;
   const renderThreadRow = ({ thread, depth }: ThreadRow) => {
     const relativeTime = getThreadTime(thread);
     const indentStyle =
       depth > 0
-        ? ({ "--thread-indent": `${depth * 14}px` } as CSSProperties)
+        ? ({ "--thread-indent": `${depth * indentUnit}px` } as CSSProperties)
         : undefined;
     const status = threadStatusById[thread.id];
     const statusClass = status?.isReviewing

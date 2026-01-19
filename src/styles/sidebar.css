@@ -390,7 +390,7 @@
 }
 
 .thread-list-nested {
-  margin-left: 16px;
+  margin-left: 6px;
 }
 
 .thread-loading {
@@ -401,7 +401,7 @@
 }
 
 .thread-loading-nested {
-  margin-left: 16px;
+  margin-left: 6px;
 }
 
 .thread-skeleton {
