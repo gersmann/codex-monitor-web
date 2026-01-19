@@ -631,7 +631,8 @@ function MainApp() {
     sendUserMessage,
     sendUserMessageToThread,
     startReview,
-    handleApprovalDecision
+    handleApprovalDecision,
+    handleApprovalRemember
   } = useThreads({
     activeWorkspace,
     onWorkspaceConnected: markWorkspaceConnected,
@@ -1255,6 +1256,7 @@ function MainApp() {
     activeRateLimits,
     approvals,
     handleApprovalDecision,
+    handleApprovalRemember,
     onOpenSettings: () => handleOpenSettings(),
     onOpenDictationSettings: () => handleOpenSettings("dictation"),
     onOpenDebug: handleDebugClick,

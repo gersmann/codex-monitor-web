@@ -14,7 +14,13 @@ import type {
   WorkspaceInfo,
 } from "../../../types";
 import {
+  getApprovalCommandInfo,
+  matchesCommandPrefix,
+  normalizeCommandTokens,
+} from "../../../utils/approvalRules";
+import {
   respondToServerRequest,
+  rememberApprovalRule,
   sendUserMessage as sendUserMessageService,
   startReview as startReviewService,
   startThread as startThreadService,
@@ -439,6 +445,7 @@ export function useThreads({
   void pinnedThreadsVersion;
   const pendingInterruptsRef = useRef<Set<string>>(new Set());
   const customNamesRef = useRef<CustomNamesMap>({});
+  const approvalAllowlistRef = useRef<Record<string, string[][]>>({});
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -752,10 +759,43 @@ export function useThreads({
     [onWorkspaceConnected, refreshAccountRateLimits],
   );
 
+  const rememberApprovalPrefix = useCallback((workspaceId: string, command: string[]) => {
+    const normalized = normalizeCommandTokens(command);
+    if (!normalized.length) {
+      return;
+    }
+    const allowlist = approvalAllowlistRef.current[workspaceId] ?? [];
+    const exists = allowlist.some(
+      (entry) =>
+        entry.length === normalized.length &&
+        entry.every((token, index) => token === normalized[index]),
+    );
+    if (!exists) {
+      approvalAllowlistRef.current = {
+        ...approvalAllowlistRef.current,
+        [workspaceId]: [...allowlist, normalized],
+      };
+    }
+  }, []);
+
   const handlers = useMemo(
     () => ({
       onWorkspaceConnected: handleWorkspaceConnected,
       onApprovalRequest: (approval: ApprovalRequest) => {
+        const commandInfo = getApprovalCommandInfo(approval.params ?? {});
+        const allowlist =
+          approvalAllowlistRef.current[approval.workspace_id] ?? [];
+        if (
+          commandInfo &&
+          matchesCommandPrefix(commandInfo.tokens, allowlist)
+        ) {
+          void respondToServerRequest(
+            approval.workspace_id,
+            approval.request_id,
+            "accept",
+          );
+          return;
+        }
         dispatch({ type: "addApproval", approval });
       },
       onAppServerEvent: (event: AppServerEvent) => {
@@ -1753,6 +1793,36 @@ export function useThreads({
     [],
   );
 
+  const handleApprovalRemember = useCallback(
+    async (request: ApprovalRequest, command: string[]) => {
+      try {
+        await rememberApprovalRule(request.workspace_id, command);
+      } catch (error) {
+        onDebug?.({
+          id: `${Date.now()}-client-approval-rule-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "approval rule error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      rememberApprovalPrefix(request.workspace_id, command);
+
+      await respondToServerRequest(
+        request.workspace_id,
+        request.request_id,
+        "accept",
+      );
+      dispatch({
+        type: "removeApproval",
+        requestId: request.request_id,
+        workspaceId: request.workspace_id,
+      });
+    },
+    [onDebug, rememberApprovalPrefix],
+  );
+
   const setActiveThreadId = useCallback(
     (threadId: string | null, workspaceId?: string) => {
       const targetId = workspaceId ?? activeWorkspaceId;
@@ -1836,5 +1906,6 @@ export function useThreads({
     sendUserMessageToThread,
     startReview,
     handleApprovalDecision,
+    handleApprovalRemember,
   };
 }
