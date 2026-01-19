@@ -94,6 +94,7 @@ type LayoutNodesOptions = {
   onConnectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
   onAddAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onAddWorktreeAgent: (workspace: WorkspaceInfo) => Promise<void>;
+  onAddCloneAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
   onSelectThread: (workspaceId: string, threadId: string) => void;
   onDeleteThread: (workspaceId: string, threadId: string) => void;
@@ -344,6 +345,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       onConnectWorkspace={options.onConnectWorkspace}
       onAddAgent={options.onAddAgent}
       onAddWorktreeAgent={options.onAddWorktreeAgent}
+      onAddCloneAgent={options.onAddCloneAgent}
       onToggleWorkspaceCollapse={options.onToggleWorkspaceCollapse}
       onSelectThread={options.onSelectThread}
       onDeleteThread={options.onDeleteThread}
