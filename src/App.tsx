@@ -594,6 +594,10 @@ function MainApp() {
     lastAgentMessageByThread,
     interruptTurn,
     removeThread,
+    pinThread,
+    unpinThread,
+    isThreadPinned,
+    getPinTimestamp,
     renameThread,
     startThreadForWorkspace,
     listThreadsForWorkspace,
@@ -1185,6 +1189,10 @@ function MainApp() {
       });
       removeImagesForThread(threadId);
     },
+    pinThread,
+    unpinThread,
+    isThreadPinned,
+    getPinTimestamp,
     onRenameThread: (workspaceId, threadId) => {
       handleRenameThread(workspaceId, threadId);
     },

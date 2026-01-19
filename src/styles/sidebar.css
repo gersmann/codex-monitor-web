@@ -382,6 +382,13 @@
   margin-left: 0;
 }
 
+.pinned-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
 .thread-list-nested {
   margin-left: 16px;
 }
@@ -439,6 +446,16 @@
   border-radius: 999px;
   display: inline-block;
   margin-left: 4px;
+}
+
+.thread-pin-icon {
+  font-size: 10px;
+  margin-right: 2px;
+  opacity: 0.7;
+}
+
+.thread-row:hover .thread-pin-icon {
+  opacity: 1;
 }
 
 .thread-status.processing {
@@ -533,6 +550,16 @@
 
 .thread-more:hover {
   color: var(--text-stronger);
+}
+
+.thread-list-separator {
+  height: 1px;
+  margin: 6px 16px 6px 10px;
+  background: linear-gradient(
+    90deg,
+    var(--border-subtle) 0%,
+    transparent 100%
+  );
 }
 
 .worktree-section {
