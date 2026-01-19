@@ -317,6 +317,34 @@ function MainApp() {
 
   const { status: gitStatus, refresh: refreshGitStatus } =
     useGitStatus(activeWorkspace);
+  const gitStatusRefreshTimeoutRef = useRef<number | null>(null);
+  const activeWorkspaceIdRef = useRef<string | null>(activeWorkspace?.id ?? null);
+  useEffect(() => {
+    activeWorkspaceIdRef.current = activeWorkspace?.id ?? null;
+  }, [activeWorkspace?.id]);
+  useEffect(() => {
+    return () => {
+      if (gitStatusRefreshTimeoutRef.current !== null) {
+        window.clearTimeout(gitStatusRefreshTimeoutRef.current);
+      }
+    };
+  }, []);
+  const queueGitStatusRefresh = useCallback(() => {
+    const workspaceId = activeWorkspaceIdRef.current;
+    if (!workspaceId) {
+      return;
+    }
+    if (gitStatusRefreshTimeoutRef.current !== null) {
+      window.clearTimeout(gitStatusRefreshTimeoutRef.current);
+    }
+    gitStatusRefreshTimeoutRef.current = window.setTimeout(() => {
+      gitStatusRefreshTimeoutRef.current = null;
+      if (activeWorkspaceIdRef.current !== workspaceId) {
+        return;
+      }
+      refreshGitStatus();
+    }, 500);
+  }, [refreshGitStatus]);
   const compactTab = isTablet ? tabletTab : activeTab;
   const shouldLoadDiffs =
     centerMode === "diff" || (isCompact && compactTab === "git");
@@ -608,7 +636,7 @@ function MainApp() {
     collaborationMode: selectedCollaborationMode?.value ?? null,
     accessMode,
     customPrompts: prompts,
-    onMessageActivity: refreshGitStatus
+    onMessageActivity: queueGitStatusRefresh
   });
 
   const { handleCopyThread } = useCopyThread({
