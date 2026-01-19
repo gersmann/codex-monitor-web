@@ -248,7 +248,7 @@
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  padding: 6px 6px 2px;
+  padding: 6px 0 2px;
 }
 
 .diff-section-list {
