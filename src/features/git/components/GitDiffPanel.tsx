@@ -4,7 +4,7 @@ import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeftRight, FileText, GitBranch, ScrollText, Search } from "lucide-react";
 import { formatRelativeTime } from "../../../utils/time";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
 
@@ -191,6 +191,18 @@ export function GitDiffPanel({
   onClearGitRoot,
   onPickGitRoot,
 }: GitDiffPanelProps) {
+  const ModeIcon = (() => {
+    switch (mode) {
+      case "log":
+        return ScrollText;
+      case "issues":
+        return Search;
+      case "prs":
+        return GitBranch;
+      default:
+        return FileText;
+    }
+  })();
   const githubBaseUrl = (() => {
     if (!gitRemoteUrl) {
       return null;
@@ -337,6 +349,9 @@ export function GitDiffPanel({
       <div className="git-panel-header">
         <PanelTabs active={filePanelMode} onSelect={onFilePanelModeChange} />
         <div className="git-panel-select" role="group" aria-label="Git panel">
+          <span className="git-panel-select-icon" aria-hidden>
+            <ModeIcon />
+          </span>
           <select
             className="git-panel-select-input"
             value={mode}
