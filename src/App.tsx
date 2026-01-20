@@ -92,8 +92,14 @@ import { useCopyThread } from "./features/threads/hooks/useCopyThread";
 import { usePanelVisibility } from "./features/layout/hooks/usePanelVisibility";
 import { useTerminalController } from "./features/terminal/hooks/useTerminalController";
 import { playNotificationSound } from "./utils/notificationSounds";
+import { shouldApplyCommitMessage } from "./utils/commitMessage";
 import {
   pickWorkspacePath,
+  generateCommitMessage,
+  commitGit,
+  stageGitAll,
+  pushGit,
+  syncGit,
 } from "./services/tauri";
 import {
   subscribeMenuAddWorkspace,
@@ -411,7 +417,8 @@ function MainApp() {
     behindEntries: gitLogBehindEntries,
     upstream: gitLogUpstream,
     isLoading: gitLogLoading,
-    error: gitLogError
+    error: gitLogError,
+    refresh: refreshGitLog,
   } = useGitLog(activeWorkspace, shouldLoadGitLog);
   const {
     issues: gitIssues,
@@ -910,6 +917,188 @@ function MainApp() {
     },
     [handleSend],
   );
+
+  // Commit message generation state
+  const [commitMessage, setCommitMessage] = useState("");
+  const [commitMessageLoading, setCommitMessageLoading] = useState(false);
+  const [commitMessageError, setCommitMessageError] = useState<string | null>(null);
+  const hasStagedChanges = gitStatus.stagedFiles.length > 0;
+  const hasUnstagedChanges = gitStatus.unstagedFiles.length > 0;
+  const hasWorktreeChanges = hasStagedChanges || hasUnstagedChanges;
+
+  const ensureStagedForCommit = useCallback(async () => {
+    if (!activeWorkspace || hasStagedChanges || !hasUnstagedChanges) {
+      return;
+    }
+    await stageGitAll(activeWorkspace.id);
+  }, [activeWorkspace, hasStagedChanges, hasUnstagedChanges]);
+
+  const handleCommitMessageChange = useCallback((value: string) => {
+    setCommitMessage(value);
+  }, []);
+
+  const handleGenerateCommitMessage = useCallback(async () => {
+    if (!activeWorkspace || commitMessageLoading) {
+      return;
+    }
+    const workspaceId = activeWorkspace.id;
+    setCommitMessageLoading(true);
+    setCommitMessageError(null);
+    try {
+      // Generate commit message in background
+      const message = await generateCommitMessage(workspaceId);
+      if (!shouldApplyCommitMessage(activeWorkspaceIdRef.current, workspaceId)) {
+        return;
+      }
+      setCommitMessage(message);
+    } catch (error) {
+      if (!shouldApplyCommitMessage(activeWorkspaceIdRef.current, workspaceId)) {
+        return;
+      }
+      setCommitMessageError(
+        error instanceof Error ? error.message : String(error)
+      );
+    } finally {
+      if (shouldApplyCommitMessage(activeWorkspaceIdRef.current, workspaceId)) {
+        setCommitMessageLoading(false);
+      }
+    }
+  }, [activeWorkspace, commitMessageLoading]);
+
+  // Clear commit message state when workspace changes
+  useEffect(() => {
+    setCommitMessage("");
+    setCommitMessageError(null);
+    setCommitMessageLoading(false);
+  }, [activeWorkspaceId]);
+
+  // Git commit/push/sync state
+  const [commitLoading, setCommitLoading] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [commitError, setCommitError] = useState<string | null>(null);
+  const [pushError, setPushError] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  const handleCommit = useCallback(async () => {
+    if (!activeWorkspace || commitLoading || !commitMessage.trim() || !hasWorktreeChanges) {
+      return;
+    }
+    setCommitLoading(true);
+    setCommitError(null);
+    try {
+      await ensureStagedForCommit();
+      await commitGit(activeWorkspace.id, commitMessage.trim());
+      setCommitMessage("");
+      // Refresh git status after commit
+      refreshGitStatus();
+      refreshGitLog?.();
+    } catch (error) {
+      setCommitError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCommitLoading(false);
+    }
+  }, [activeWorkspace, commitLoading, commitMessage, ensureStagedForCommit, hasWorktreeChanges, refreshGitStatus, refreshGitLog]);
+
+  const handleCommitAndPush = useCallback(async () => {
+    if (!activeWorkspace || commitLoading || pushLoading || !commitMessage.trim() || !hasWorktreeChanges) {
+      return;
+    }
+    let commitSucceeded = false;
+    setCommitLoading(true);
+    setPushLoading(true);
+    setCommitError(null);
+    setPushError(null);
+    try {
+      await ensureStagedForCommit();
+      await commitGit(activeWorkspace.id, commitMessage.trim());
+      commitSucceeded = true;
+      setCommitMessage("");
+      setCommitLoading(false);
+      await pushGit(activeWorkspace.id);
+      // Refresh git status after push
+      refreshGitStatus();
+      refreshGitLog?.();
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (!commitSucceeded) {
+        setCommitError(errorMsg);
+      } else {
+        setPushError(errorMsg);
+      }
+    } finally {
+      setCommitLoading(false);
+      setPushLoading(false);
+    }
+  }, [activeWorkspace, commitLoading, pushLoading, commitMessage, ensureStagedForCommit, hasWorktreeChanges, refreshGitStatus, refreshGitLog]);
+
+  const handleCommitAndSync = useCallback(async () => {
+    if (!activeWorkspace || commitLoading || syncLoading || !commitMessage.trim() || !hasWorktreeChanges) {
+      return;
+    }
+    let commitSucceeded = false;
+    setCommitLoading(true);
+    setSyncLoading(true);
+    setCommitError(null);
+    setSyncError(null);
+    try {
+      await ensureStagedForCommit();
+      await commitGit(activeWorkspace.id, commitMessage.trim());
+      commitSucceeded = true;
+      setCommitMessage("");
+      setCommitLoading(false);
+      await syncGit(activeWorkspace.id);
+      // Refresh git status after sync
+      refreshGitStatus();
+      refreshGitLog?.();
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (!commitSucceeded) {
+        setCommitError(errorMsg);
+      } else {
+        setSyncError(errorMsg);
+      }
+    } finally {
+      setCommitLoading(false);
+      setSyncLoading(false);
+    }
+  }, [activeWorkspace, commitLoading, syncLoading, commitMessage, ensureStagedForCommit, hasWorktreeChanges, refreshGitStatus, refreshGitLog]);
+
+  const handlePush = useCallback(async () => {
+    if (!activeWorkspace || pushLoading) {
+      return;
+    }
+    setPushLoading(true);
+    setPushError(null);
+    try {
+      await pushGit(activeWorkspace.id);
+      // Refresh git status after push
+      refreshGitStatus();
+      refreshGitLog?.();
+    } catch (error) {
+      setPushError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPushLoading(false);
+    }
+  }, [activeWorkspace, pushLoading, refreshGitStatus, refreshGitLog]);
+
+  const handleSync = useCallback(async () => {
+    if (!activeWorkspace || syncLoading) {
+      return;
+    }
+    setSyncLoading(true);
+    setSyncError(null);
+    try {
+      await syncGit(activeWorkspace.id);
+      // Refresh git status after sync
+      refreshGitStatus();
+      refreshGitLog?.();
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSyncLoading(false);
+    }
+  }, [activeWorkspace, syncLoading, refreshGitStatus, refreshGitLog]);
 
   const handleSendPromptToNewAgent = useCallback(
     async (text: string) => {
@@ -1548,6 +1737,23 @@ function MainApp() {
     gitDiffLoading: activeDiffLoading,
     gitDiffError: activeDiffError,
     onDiffActivePathChange: handleActiveDiffPath,
+    commitMessage,
+    commitMessageLoading,
+    commitMessageError,
+    onCommitMessageChange: handleCommitMessageChange,
+    onGenerateCommitMessage: handleGenerateCommitMessage,
+    onCommit: handleCommit,
+    onCommitAndPush: handleCommitAndPush,
+    onCommitAndSync: handleCommitAndSync,
+    onPush: handlePush,
+    onSync: handleSync,
+    commitLoading,
+    pushLoading,
+    syncLoading,
+    commitError,
+    pushError,
+    syncError,
+    commitsAhead: gitLogAhead,
     onSendPrompt: handleSendPrompt,
     onSendPromptToNewAgent: handleSendPromptToNewAgent,
     onCreatePrompt: handleCreatePrompt,

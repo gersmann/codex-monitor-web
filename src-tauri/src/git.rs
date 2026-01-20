@@ -42,6 +42,57 @@ async fn run_git_command(repo_root: &Path, args: &[&str]) -> Result<(), String> 
     Err(detail.to_string())
 }
 
+fn parse_upstream_ref(name: &str) -> Option<(String, String)> {
+    let trimmed = name.strip_prefix("refs/remotes/").unwrap_or(name);
+    let mut parts = trimmed.splitn(2, '/');
+    let remote = parts.next()?;
+    let branch = parts.next()?;
+    if remote.is_empty() || branch.is_empty() {
+        return None;
+    }
+    Some((remote.to_string(), branch.to_string()))
+}
+
+fn upstream_remote_and_branch(repo_root: &Path) -> Result<Option<(String, String)>, String> {
+    let repo = Repository::open(repo_root).map_err(|e| e.to_string())?;
+    let head = match repo.head() {
+        Ok(head) => head,
+        Err(_) => return Ok(None),
+    };
+    if !head.is_branch() {
+        return Ok(None);
+    }
+    let branch_name = match head.shorthand() {
+        Some(name) => name,
+        None => return Ok(None),
+    };
+    let branch = repo
+        .find_branch(branch_name, BranchType::Local)
+        .map_err(|e| e.to_string())?;
+    let upstream_branch = match branch.upstream() {
+        Ok(upstream) => upstream,
+        Err(_) => return Ok(None),
+    };
+    let upstream_ref = upstream_branch.get();
+    let upstream_name = upstream_ref
+        .name()
+        .or_else(|| upstream_ref.shorthand());
+    Ok(upstream_name.and_then(parse_upstream_ref))
+}
+
+async fn push_with_upstream(repo_root: &Path) -> Result<(), String> {
+    let upstream = upstream_remote_and_branch(repo_root)?;
+    if let Some((remote, branch)) = upstream {
+        let refspec = format!("HEAD:{branch}");
+        return run_git_command(
+            repo_root,
+            &["push", remote.as_str(), refspec.as_str()],
+        )
+        .await;
+    }
+    run_git_command(repo_root, &["push"]).await
+}
+
 fn status_for_index(status: Status) -> Option<&'static str> {
     if status.contains(Status::INDEX_NEW) {
         Some("A")
@@ -72,6 +123,77 @@ fn status_for_workdir(status: Status) -> Option<&'static str> {
     } else {
         None
     }
+}
+
+fn build_combined_diff(diff: &git2::Diff) -> String {
+    let mut combined_diff = String::new();
+    for (index, delta) in diff.deltas().enumerate() {
+        let path = delta
+            .new_file()
+            .path()
+            .or_else(|| delta.old_file().path());
+        let Some(path) = path else {
+            continue;
+        };
+        let patch = match git2::Patch::from_diff(diff, index) {
+            Ok(patch) => patch,
+            Err(_) => continue,
+        };
+        let Some(mut patch) = patch else {
+            continue;
+        };
+        let content = match diff_patch_to_string(&mut patch) {
+            Ok(content) => content,
+            Err(_) => continue,
+        };
+        if content.trim().is_empty() {
+            continue;
+        }
+        if !combined_diff.is_empty() {
+            combined_diff.push_str("\n\n");
+        }
+        combined_diff.push_str(&format!("=== {} ===\n", path.display()));
+        combined_diff.push_str(&content);
+    }
+    combined_diff
+}
+
+fn collect_workspace_diff(repo_root: &Path) -> Result<String, String> {
+    let repo = Repository::open(repo_root).map_err(|e| e.to_string())?;
+    let head_tree = repo
+        .head()
+        .ok()
+        .and_then(|head| head.peel_to_tree().ok());
+
+    let mut options = DiffOptions::new();
+    let index = repo.index().map_err(|e| e.to_string())?;
+    let diff = match head_tree.as_ref() {
+        Some(tree) => repo
+            .diff_tree_to_index(Some(tree), Some(&index), Some(&mut options))
+            .map_err(|e| e.to_string())?,
+        None => repo
+            .diff_tree_to_index(None, Some(&index), Some(&mut options))
+            .map_err(|e| e.to_string())?,
+    };
+    let combined_diff = build_combined_diff(&diff);
+    if !combined_diff.trim().is_empty() {
+        return Ok(combined_diff);
+    }
+
+    let mut options = DiffOptions::new();
+    options
+        .include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .show_untracked_content(true);
+    let diff = match head_tree.as_ref() {
+        Some(tree) => repo
+            .diff_tree_to_workdir_with_index(Some(tree), Some(&mut options))
+            .map_err(|e| e.to_string())?,
+        None => repo
+            .diff_tree_to_workdir_with_index(None, Some(&mut options))
+            .map_err(|e| e.to_string())?,
+    };
+    Ok(build_combined_diff(&diff))
 }
 
 fn github_repo_from_path(path: &Path) -> Result<String, String> {
@@ -327,6 +449,21 @@ pub(crate) async fn stage_git_file(
 }
 
 #[tauri::command]
+pub(crate) async fn stage_git_all(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo_root = resolve_git_root(&entry)?;
+    run_git_command(&repo_root, &["add", "-A"]).await
+}
+
+#[tauri::command]
 pub(crate) async fn unstage_git_file(
     workspace_id: String,
     path: String,
@@ -379,6 +516,69 @@ pub(crate) async fn revert_git_all(
 }
 
 #[tauri::command]
+pub(crate) async fn commit_git(
+    workspace_id: String,
+    message: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo_root = resolve_git_root(&entry)?;
+    run_git_command(&repo_root, &["commit", "-m", &message]).await
+}
+
+#[tauri::command]
+pub(crate) async fn push_git(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo_root = resolve_git_root(&entry)?;
+    push_with_upstream(&repo_root).await
+}
+
+#[tauri::command]
+pub(crate) async fn pull_git(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo_root = resolve_git_root(&entry)?;
+    run_git_command(&repo_root, &["pull"]).await
+}
+
+#[tauri::command]
+pub(crate) async fn sync_git(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo_root = resolve_git_root(&entry)?;
+    // Pull first, then push (like VSCode sync)
+    run_git_command(&repo_root, &["pull"]).await?;
+    push_with_upstream(&repo_root).await
+}
+
+#[tauri::command]
 pub(crate) async fn list_git_roots(
     workspace_id: String,
     depth: Option<usize>,
@@ -393,6 +593,22 @@ pub(crate) async fn list_git_roots(
     let root = PathBuf::from(&entry.path);
     let depth = depth.unwrap_or(2).clamp(1, 6);
     Ok(scan_git_roots(&root, depth, 200))
+}
+
+/// Helper function to get the combined diff for a workspace (used by commit message generation)
+pub(crate) async fn get_workspace_diff(
+    workspace_id: &str,
+    state: &State<'_, AppState>,
+) -> Result<String, String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+    drop(workspaces);
+
+    let repo_root = resolve_git_root(&entry)?;
+    collect_workspace_diff(&repo_root)
 }
 
 #[tauri::command]
@@ -906,4 +1122,45 @@ pub(crate) async fn create_git_branch(
     repo.branch(&name, &target, false)
         .map_err(|e| e.to_string())?;
     checkout_branch(&repo, &name).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn create_temp_repo() -> (PathBuf, Repository) {
+        let root = std::env::temp_dir().join(format!(
+            "codex-monitor-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(&root).expect("create temp repo root");
+        let repo = Repository::init(&root).expect("init repo");
+        (root, repo)
+    }
+
+    #[test]
+    fn collect_workspace_diff_prefers_staged_changes() {
+        let (root, repo) = create_temp_repo();
+        let file_path = root.join("staged.txt");
+        fs::write(&file_path, "staged\n").expect("write staged file");
+        let mut index = repo.index().expect("index");
+        index.add_path(Path::new("staged.txt")).expect("add path");
+        index.write().expect("write index");
+
+        let diff = collect_workspace_diff(&root).expect("collect diff");
+        assert!(diff.contains("staged.txt"));
+        assert!(diff.contains("staged"));
+    }
+
+    #[test]
+    fn collect_workspace_diff_falls_back_to_workdir() {
+        let (root, _repo) = create_temp_repo();
+        let file_path = root.join("unstaged.txt");
+        fs::write(&file_path, "unstaged\n").expect("write unstaged file");
+
+        let diff = collect_workspace_diff(&root).expect("collect diff");
+        assert!(diff.contains("unstaged.txt"));
+        assert!(diff.contains("unstaged"));
+    }
 }
