@@ -1139,7 +1139,6 @@ function MainApp() {
   const {
     handleSelectPullRequest,
     resetPullRequestSelection,
-    isPullRequestComposer,
     composerSendLabel,
     handleComposerSend,
     handleComposerQueue,
