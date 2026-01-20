@@ -20,6 +20,7 @@ type GitDiffViewerProps = {
   scrollRequestId?: number;
   isLoading: boolean;
   error: string | null;
+  diffStyle?: "split" | "unified";
   pullRequest?: GitHubPullRequest | null;
   pullRequestComments?: GitHubPullRequestComment[];
   pullRequestCommentsLoading?: boolean;
@@ -50,21 +51,23 @@ function normalizePatchName(name: string) {
 type DiffCardProps = {
   entry: GitDiffViewerItem;
   isSelected: boolean;
+  diffStyle: "split" | "unified";
 };
 
 const DiffCard = memo(function DiffCard({
   entry,
   isSelected,
+  diffStyle,
 }: DiffCardProps) {
   const diffOptions = useMemo(
     () => ({
-      diffStyle: "split" as const,
+      diffStyle,
       hunkSeparators: "line-info" as const,
       overflow: "scroll" as const,
       unsafeCSS: DIFF_SCROLL_CSS,
       disableFileHeader: true,
     }),
-    [],
+    [diffStyle],
   );
 
   const fileDiff = useMemo(() => {
@@ -119,6 +122,7 @@ export function GitDiffViewer({
   scrollRequestId,
   isLoading,
   error,
+  diffStyle = "split",
   pullRequest,
   pullRequestComments,
   pullRequestCommentsLoading = false,
@@ -509,6 +513,7 @@ export function GitDiffViewer({
                   <DiffCard
                     entry={entry}
                     isSelected={entry.path === selectedPath}
+                    diffStyle={diffStyle}
                   />
                 </div>
               );

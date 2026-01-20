@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlignLeft, Columns2 } from "lucide-react";
 import "./styles/base.css";
 import "./styles/buttons.css";
 import "./styles/sidebar.css";
@@ -190,6 +191,9 @@ function MainApp() {
   const [gitPanelMode, setGitPanelMode] = useState<
     "diff" | "log" | "issues" | "prs"
   >("diff");
+  const [gitDiffViewStyle, setGitDiffViewStyle] = useState<
+    "split" | "unified"
+  >("split");
   const [filePanelMode, setFilePanelMode] = useState<
     "git" | "files" | "prompts"
   >("git");
@@ -1720,9 +1724,41 @@ function MainApp() {
     onCopyThread: handleCopyThread,
     onToggleTerminal: handleToggleTerminal,
     showTerminalButton: !isCompact,
-    mainHeaderActionsNode: !isCompact && !rightPanelCollapsed ? (
-      <RightPanelCollapseButton {...sidebarToggleProps} />
-    ) : null,
+    mainHeaderActionsNode: (
+      <>
+        {centerMode === "diff" && (
+          <div className="diff-view-toggle" role="group" aria-label="Diff view">
+            <button
+              type="button"
+              className={`diff-view-toggle-button${
+                gitDiffViewStyle === "split" ? " is-active" : ""
+              }`}
+              onClick={() => setGitDiffViewStyle("split")}
+              aria-pressed={gitDiffViewStyle === "split"}
+              title="Dual-panel diff"
+              data-tauri-drag-region="false"
+            >
+              <Columns2 size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className={`diff-view-toggle-button${
+                gitDiffViewStyle === "unified" ? " is-active" : ""
+              }`}
+              onClick={() => setGitDiffViewStyle("unified")}
+              aria-pressed={gitDiffViewStyle === "unified"}
+              title="Single-column diff"
+              data-tauri-drag-region="false"
+            >
+              <AlignLeft size={14} aria-hidden />
+            </button>
+          </div>
+        )}
+        {!isCompact && !rightPanelCollapsed ? (
+          <RightPanelCollapseButton {...sidebarToggleProps} />
+        ) : null}
+      </>
+    ),
     filePanelMode,
     onFilePanelModeChange: setFilePanelMode,
     fileTreeLoading: isFilesLoading,
@@ -1736,6 +1772,7 @@ function MainApp() {
     tabletNavTab: tabletTab,
     gitPanelMode,
     onGitPanelModeChange: handleGitPanelModeChange,
+    gitDiffViewStyle,
     worktreeApplyLabel: "apply",
     worktreeApplyTitle: activeParentWorkspace?.name
       ? `Apply changes to ${activeParentWorkspace.name}`

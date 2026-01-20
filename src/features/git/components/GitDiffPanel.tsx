@@ -610,23 +610,25 @@ export function GitDiffPanel({
     <aside className="diff-panel">
       <div className="git-panel-header">
         <PanelTabs active={filePanelMode} onSelect={onFilePanelModeChange} />
-        <div className="git-panel-select" role="group" aria-label="Git panel">
-          <span className="git-panel-select-icon" aria-hidden>
-            <ModeIcon />
-          </span>
-          <select
-            className="git-panel-select-input"
-            value={mode}
-            onChange={(event) =>
-              onModeChange(event.target.value as GitDiffPanelProps["mode"])
-            }
-            aria-label="Git panel view"
-          >
-            <option value="diff">Diff</option>
-            <option value="log">Log</option>
-            <option value="issues">Issues</option>
-            <option value="prs">PRs</option>
-          </select>
+        <div className="git-panel-actions" role="group" aria-label="Git panel">
+          <div className="git-panel-select">
+            <span className="git-panel-select-icon" aria-hidden>
+              <ModeIcon />
+            </span>
+            <select
+              className="git-panel-select-input"
+              value={mode}
+              onChange={(event) =>
+                onModeChange(event.target.value as GitDiffPanelProps["mode"])
+              }
+              aria-label="Git panel view"
+            >
+              <option value="diff">Diff</option>
+              <option value="log">Log</option>
+              <option value="issues">Issues</option>
+              <option value="prs">PRs</option>
+            </select>
+          </div>
         </div>
       </div>
       {mode === "diff" ? (

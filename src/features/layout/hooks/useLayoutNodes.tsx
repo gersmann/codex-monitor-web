@@ -148,6 +148,7 @@ type LayoutNodesOptions = {
   tabletNavTab: "codex" | "git" | "log";
   gitPanelMode: "diff" | "log" | "issues" | "prs";
   onGitPanelModeChange: (mode: "diff" | "log" | "issues" | "prs") => void;
+  gitDiffViewStyle: "split" | "unified";
   worktreeApplyLabel: string;
   worktreeApplyTitle: string | null;
   worktreeApplyLoading: boolean;
@@ -646,6 +647,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       scrollRequestId={options.diffScrollRequestId}
       isLoading={options.gitDiffLoading}
       error={options.gitDiffError}
+      diffStyle={options.gitDiffViewStyle}
       pullRequest={options.selectedPullRequest}
       pullRequestComments={options.selectedPullRequestComments}
       pullRequestCommentsLoading={options.selectedPullRequestCommentsLoading}
