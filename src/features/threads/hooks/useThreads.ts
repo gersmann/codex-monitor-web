@@ -405,27 +405,6 @@ function normalizePlanUpdate(
   };
 }
 
-function formatReviewLabel(target: ReturnType<typeof parseReviewTarget>) {
-  if (target.type === "uncommittedChanges") {
-    return "current changes";
-  }
-  if (target.type === "baseBranch") {
-    return `base branch ${target.branch}`;
-  }
-  if (target.type === "commit") {
-    return target.title
-      ? `commit ${target.sha}: ${target.title}`
-      : `commit ${target.sha}`;
-  }
-  const instructions = target.instructions.trim();
-  if (!instructions) {
-    return "custom review";
-  }
-  return instructions.length > 80
-    ? `${instructions.slice(0, 80)}…`
-    : instructions;
-}
-
 export function useThreads({
   activeWorkspace,
   onWorkspaceConnected,
@@ -1767,16 +1746,6 @@ export function useThreads({
       const target = parseReviewTarget(text);
       markProcessing(threadId, true);
       dispatch({ type: "markReviewing", threadId, isReviewing: true });
-      dispatch({
-        type: "upsertItem",
-        threadId,
-        item: {
-          id: `review-start-${threadId}-${Date.now()}`,
-          kind: "review",
-          state: "started",
-          text: formatReviewLabel(target),
-        },
-      });
       safeMessageActivity();
       onDebug?.({
         id: `${Date.now()}-client-review-start`,
