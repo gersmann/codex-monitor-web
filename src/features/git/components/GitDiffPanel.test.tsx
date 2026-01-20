@@ -64,4 +64,5 @@ describe("GitDiffPanel", () => {
     fireEvent.click(commitButton);
     expect(onCommit).toHaveBeenCalledTimes(1);
   });
+
 });
