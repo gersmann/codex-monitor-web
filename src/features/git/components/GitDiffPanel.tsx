@@ -386,6 +386,18 @@ export function GitDiffPanel({
     setLastClickedFile(null);
   }
 
+  const handleDiffListClick = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(".diff-row")) {
+        return;
+      }
+      setSelectedFiles(new Set());
+      setLastClickedFile(null);
+    },
+    [],
+  );
+
   const ModeIcon = (() => {
     switch (mode) {
       case "log":
@@ -681,7 +693,7 @@ export function GitDiffPanel({
         </div>
       )}
       {mode === "diff" ? (
-        <div className="diff-list">
+        <div className="diff-list" onClick={handleDiffListClick}>
           {error && <div className="diff-error">{error}</div>}
           {showGitRootPanel && (
             <div className="git-root-panel">
@@ -930,7 +942,8 @@ export function GitDiffPanel({
                       const { base, extension } = splitNameAndExtension(name);
                       const statusSymbol = getStatusSymbol(file.status);
                       const statusClass = getStatusClass(file.status);
-                      const isSelected = selectedFiles.has(file.path);
+                      const isSelected =
+                        selectedFiles.size > 1 && selectedFiles.has(file.path);
                       const isActive = selectedPath === file.path;
                       return (
                         <div
@@ -1012,7 +1025,8 @@ export function GitDiffPanel({
                       const { base, extension } = splitNameAndExtension(name);
                       const statusSymbol = getStatusSymbol(file.status);
                       const statusClass = getStatusClass(file.status);
-                      const isSelected = selectedFiles.has(file.path);
+                      const isSelected =
+                        selectedFiles.size > 1 && selectedFiles.has(file.path);
                       const isActive = selectedPath === file.path;
                       return (
                         <div
