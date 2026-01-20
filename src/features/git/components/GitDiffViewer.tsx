@@ -39,6 +39,41 @@ const DIFF_SCROLL_CSS = `
 [data-buffer] {
   background-image: none !important;
 }
+
+[data-diffs-header],
+[data-diffs],
+[data-error-wrapper] {
+  --diffs-light-bg: rgba(255, 255, 255, 0.35);
+  --diffs-dark-bg: rgba(10, 12, 16, 0.35);
+}
+
+[data-diffs-header][data-theme-type='light'],
+[data-diffs][data-theme-type='light'] {
+  --diffs-bg: rgba(255, 255, 255, 0.35);
+}
+
+[data-diffs-header][data-theme-type='dark'],
+[data-diffs][data-theme-type='dark'] {
+  --diffs-bg: rgba(10, 12, 16, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-diffs-header]:not([data-theme-type]),
+  [data-diffs]:not([data-theme-type]),
+  [data-diffs-header][data-theme-type='system'],
+  [data-diffs][data-theme-type='system'] {
+    --diffs-bg: rgba(10, 12, 16, 0.35);
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  [data-diffs-header]:not([data-theme-type]),
+  [data-diffs]:not([data-theme-type]),
+  [data-diffs-header][data-theme-type='system'],
+  [data-diffs][data-theme-type='system'] {
+    --diffs-bg: rgba(255, 255, 255, 0.35);
+  }
+}
 `;
 
 function normalizePatchName(name: string) {
