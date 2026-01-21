@@ -66,6 +66,7 @@ pub fn run() {
             menu::menu_set_accelerators,
             codex::codex_doctor,
             workspaces::list_workspaces,
+            workspaces::is_workspace_path_dir,
             workspaces::add_workspace,
             workspaces::add_clone,
             workspaces::add_worktree,

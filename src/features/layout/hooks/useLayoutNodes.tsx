@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode, RefObject } from "react";
+import type { DragEvent, MouseEvent, ReactNode, RefObject } from "react";
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import { Sidebar } from "../../app/components/Sidebar";
 import { Home } from "../../home/components/Home";
@@ -131,6 +131,13 @@ type LayoutNodesOptions = {
   onDeleteWorktree: (workspaceId: string) => void;
   onLoadOlderThreads: (workspaceId: string) => void;
   onReloadWorkspaceThreads: (workspaceId: string) => void;
+  workspaceDropTargetRef: RefObject<HTMLElement | null>;
+  isWorkspaceDropActive: boolean;
+  workspaceDropText: string;
+  onWorkspaceDragOver: (event: DragEvent<HTMLElement>) => void;
+  onWorkspaceDragEnter: (event: DragEvent<HTMLElement>) => void;
+  onWorkspaceDragLeave: (event: DragEvent<HTMLElement>) => void;
+  onWorkspaceDrop: (event: DragEvent<HTMLElement>) => void;
   updaterState: UpdateState;
   onUpdate: () => void;
   onDismissUpdate: () => void;
@@ -411,6 +418,13 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       onDeleteWorktree={options.onDeleteWorktree}
       onLoadOlderThreads={options.onLoadOlderThreads}
       onReloadWorkspaceThreads={options.onReloadWorkspaceThreads}
+      workspaceDropTargetRef={options.workspaceDropTargetRef}
+      isWorkspaceDropActive={options.isWorkspaceDropActive}
+      workspaceDropText={options.workspaceDropText}
+      onWorkspaceDragOver={options.onWorkspaceDragOver}
+      onWorkspaceDragEnter={options.onWorkspaceDragEnter}
+      onWorkspaceDragLeave={options.onWorkspaceDragLeave}
+      onWorkspaceDrop={options.onWorkspaceDrop}
     />
   );
 

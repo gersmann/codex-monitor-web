@@ -7,6 +7,7 @@ type Params = {
   activeWorkspace: WorkspaceInfo | null;
   isCompact: boolean;
   addWorkspace: () => Promise<WorkspaceInfo | null>;
+  addWorkspaceFromPath: (path: string) => Promise<WorkspaceInfo | null>;
   connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
   startThreadForWorkspace: (workspaceId: string) => Promise<string | null>;
   setActiveThreadId: (threadId: string | null, workspaceId: string) => void;
@@ -23,6 +24,7 @@ export function useWorkspaceActions({
   activeWorkspace,
   isCompact,
   addWorkspace,
+  addWorkspaceFromPath,
   connectWorkspace,
   startThreadForWorkspace,
   setActiveThreadId,
@@ -34,14 +36,21 @@ export function useWorkspaceActions({
   composerInputRef,
   onDebug,
 }: Params) {
+  const handleWorkspaceAdded = useCallback(
+    (workspace: WorkspaceInfo) => {
+      setActiveThreadId(null, workspace.id);
+      if (isCompact) {
+        setActiveTab("codex");
+      }
+    },
+    [isCompact, setActiveTab, setActiveThreadId],
+  );
+
   const handleAddWorkspace = useCallback(async () => {
     try {
       const workspace = await addWorkspace();
       if (workspace) {
-        setActiveThreadId(null, workspace.id);
-        if (isCompact) {
-          setActiveTab("codex");
-        }
+        handleWorkspaceAdded(workspace);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -54,7 +63,29 @@ export function useWorkspaceActions({
       });
       alert(`Failed to add workspace.\n\n${message}`);
     }
-  }, [addWorkspace, isCompact, onDebug, setActiveTab, setActiveThreadId]);
+  }, [addWorkspace, handleWorkspaceAdded, onDebug]);
+
+  const handleAddWorkspaceFromPath = useCallback(
+    async (path: string) => {
+      try {
+        const workspace = await addWorkspaceFromPath(path);
+        if (workspace) {
+          handleWorkspaceAdded(workspace);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        onDebug({
+          id: `${Date.now()}-client-add-workspace-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "workspace/add error",
+          payload: message,
+        });
+        alert(`Failed to add workspace.\n\n${message}`);
+      }
+    },
+    [addWorkspaceFromPath, handleWorkspaceAdded, onDebug],
+  );
 
   const handleAddAgent = useCallback(
     async (workspace: WorkspaceInfo) => {
@@ -107,6 +138,7 @@ export function useWorkspaceActions({
 
   return {
     handleAddWorkspace,
+    handleAddWorkspaceFromPath,
     handleAddAgent,
     handleAddWorktreeAgent,
     handleAddCloneAgent,

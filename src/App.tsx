@@ -30,6 +30,7 @@ import { AppLayout } from "./features/app/components/AppLayout";
 import { AppModals } from "./features/app/components/AppModals";
 import { MainHeaderActions } from "./features/app/components/MainHeaderActions";
 import { useLayoutNodes } from "./features/layout/hooks/useLayoutNodes";
+import { useWorkspaceDropZone } from "./features/workspaces/hooks/useWorkspaceDropZone";
 import { useThreads } from "./features/threads/hooks/useThreads";
 import { useWindowDrag } from "./features/layout/hooks/useWindowDrag";
 import { useGitPanelController } from "./features/app/hooks/useGitPanelController";
@@ -154,6 +155,7 @@ function MainApp() {
     activeWorkspaceId,
     setActiveWorkspaceId,
     addWorkspace,
+    addWorkspaceFromPath,
     addCloneAgent,
     addWorktreeAgent,
     connectWorkspace,
@@ -1040,6 +1042,7 @@ function MainApp() {
 
   const {
     handleAddWorkspace,
+    handleAddWorkspaceFromPath,
     handleAddAgent,
     handleAddWorktreeAgent,
     handleAddCloneAgent,
@@ -1047,6 +1050,7 @@ function MainApp() {
     activeWorkspace,
     isCompact,
     addWorkspace,
+    addWorkspaceFromPath,
     connectWorkspace,
     startThreadForWorkspace,
     setActiveThreadId,
@@ -1057,6 +1061,32 @@ function MainApp() {
     openClonePrompt,
     composerInputRef,
     onDebug: addDebugEntry,
+  });
+
+  const handleDropWorkspacePaths = useCallback(
+    async (paths: string[]) => {
+      const uniquePaths = Array.from(
+        new Set(paths.filter((path) => path.length > 0)),
+      );
+      if (uniquePaths.length === 0) {
+        return;
+      }
+      uniquePaths.forEach((path) => {
+        void handleAddWorkspaceFromPath(path);
+      });
+    },
+    [handleAddWorkspaceFromPath],
+  );
+
+  const {
+    dropTargetRef: workspaceDropTargetRef,
+    isDragOver: isWorkspaceDropActive,
+    handleDragOver: handleWorkspaceDragOver,
+    handleDragEnter: handleWorkspaceDragEnter,
+    handleDragLeave: handleWorkspaceDragLeave,
+    handleDrop: handleWorkspaceDrop,
+  } = useWorkspaceDropZone({
+    onDropPaths: handleDropWorkspacePaths,
   });
 
   const {
@@ -1201,6 +1231,8 @@ function MainApp() {
   useMenuAcceleratorController({ appSettings, onDebug: addDebugEntry });
 
   const isDefaultScale = Math.abs(uiScale - 1) < 0.001;
+  const dropOverlayActive = isWorkspaceDropActive;
+  const dropOverlayText = "Drop Project Here";
   const appClassName = `app ${isCompact ? "layout-compact" : "layout-desktop"}${
     isPhone ? " layout-phone" : ""
   }${isTablet ? " layout-tablet" : ""}${
@@ -1550,6 +1582,13 @@ function MainApp() {
       setCenterMode("chat");
     },
     onGoProjects: () => setActiveTab("projects"),
+    workspaceDropTargetRef,
+    isWorkspaceDropActive: dropOverlayActive,
+    workspaceDropText: dropOverlayText,
+    onWorkspaceDragOver: handleWorkspaceDragOver,
+    onWorkspaceDragEnter: handleWorkspaceDragEnter,
+    onWorkspaceDragLeave: handleWorkspaceDragLeave,
+    onWorkspaceDrop: handleWorkspaceDrop,
   });
 
   const desktopTopbarLeftNodeWithToggle = !isCompact ? (
