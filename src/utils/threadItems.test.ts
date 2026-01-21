@@ -195,7 +195,7 @@ describe("threadItems", () => {
     });
   });
 
-  it("keeps non-adjacent user messages with identical content", () => {
+  it("keeps non-adjacent user messages with identical content when both are remote", () => {
     const remote: ConversationItem[] = [
       {
         id: "remote-1",
@@ -209,16 +209,14 @@ describe("threadItems", () => {
         role: "assistant",
         text: "Reply",
       },
-    ];
-    const local: ConversationItem[] = [
       {
-        id: "1234-user",
+        id: "remote-2",
         kind: "message",
         role: "user",
         text: "Repeat",
       },
     ];
-    const merged = mergeThreadItems(remote, local);
+    const merged = mergeThreadItems(remote, []);
     const userRepeats = merged.filter(
       (item) =>
         item.kind === "message" &&
@@ -255,6 +253,149 @@ describe("threadItems", () => {
     });
   });
 
+  it("dedupes assistant messages with identical content even when separated by tools", () => {
+    const remote: ConversationItem[] = [
+      {
+        id: "assistant-remote",
+        kind: "message",
+        role: "assistant",
+        text: "Same reply",
+      },
+      {
+        id: "tool-1",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command",
+        detail: "",
+        status: "completed",
+        output: "ok",
+      },
+    ];
+    const local: ConversationItem[] = [
+      {
+        id: "assistant-local",
+        kind: "message",
+        role: "assistant",
+        text: "Same reply",
+      },
+    ];
+    const merged = mergeThreadItems(remote, local);
+    const assistantRepeats = merged.filter(
+      (item) =>
+        item.kind === "message" &&
+        item.role === "assistant" &&
+        item.text === "Same reply",
+    );
+    expect(assistantRepeats).toHaveLength(1);
+  });
+
+  it("dedupes assistant messages separated by reasoning items", () => {
+    const remote: ConversationItem[] = [
+      {
+        id: "assistant-remote",
+        kind: "message",
+        role: "assistant",
+        text: "Same reply",
+      },
+      {
+        id: "reasoning-1",
+        kind: "reasoning",
+        summary: "Thinking",
+        content: "Some reasoning",
+      },
+    ];
+    const local: ConversationItem[] = [
+      {
+        id: "assistant-local",
+        kind: "message",
+        role: "assistant",
+        text: "Same reply",
+      },
+    ];
+    const merged = mergeThreadItems(remote, local);
+    const assistantRepeats = merged.filter(
+      (item) =>
+        item.kind === "message" &&
+        item.role === "assistant" &&
+        item.text === "Same reply",
+    );
+    expect(assistantRepeats).toHaveLength(1);
+  });
+
+  it("dedupes assistant messages within a small window even if a review item appears between them", () => {
+    const remote: ConversationItem[] = [
+      {
+        id: "assistant-remote",
+        kind: "message",
+        role: "assistant",
+        text: "Same reply",
+      },
+      {
+        id: "review-1",
+        kind: "review",
+        state: "completed",
+        text: "Same reply",
+      },
+    ];
+    const local: ConversationItem[] = [
+      {
+        id: "assistant-local",
+        kind: "message",
+        role: "assistant",
+        text: "Same reply",
+      },
+    ];
+    const merged = mergeThreadItems(remote, local);
+    const assistantRepeats = merged.filter(
+      (item) =>
+        item.kind === "message" &&
+        item.role === "assistant" &&
+        item.text === "Same reply",
+    );
+    expect(assistantRepeats).toHaveLength(1);
+  });
+
+  it("prefers remote assistant message when non-adjacent duplicate exists", () => {
+    const remote: ConversationItem[] = [
+      {
+        id: "assistant-remote",
+        kind: "message",
+        role: "assistant",
+        text: "Same reply",
+      },
+      {
+        id: "tool-1",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command",
+        detail: "",
+        status: "completed",
+        output: "ok",
+      },
+    ];
+    const local: ConversationItem[] = [
+      {
+        id: "assistant-local",
+        kind: "message",
+        role: "assistant",
+        text: "Same reply",
+      },
+    ];
+    const merged = mergeThreadItems(remote, local);
+    const assistantRepeats = merged.filter(
+      (item) =>
+        item.kind === "message" &&
+        item.role === "assistant" &&
+        item.text === "Same reply",
+    );
+    expect(assistantRepeats).toHaveLength(1);
+    expect(assistantRepeats[0]).toMatchObject({
+      id: "assistant-remote",
+      kind: "message",
+      role: "assistant",
+    });
+  });
+
   it("drops later user duplicates even when a matching remote item is already local", () => {
     const remote: ConversationItem[] = [
       {
@@ -285,6 +426,44 @@ describe("threadItems", () => {
       kind: "message",
       role: "user",
       text: "Hello",
+    });
+  });
+
+  it("dedupes non-adjacent user messages when one is remote and one is local", () => {
+    const remote: ConversationItem[] = [
+      {
+        id: "user-remote",
+        kind: "message",
+        role: "user",
+        text: "Hello world",
+      },
+      {
+        id: "assistant-remote",
+        kind: "message",
+        role: "assistant",
+        text: "Hi!",
+      },
+    ];
+    const local: ConversationItem[] = [
+      {
+        id: "user-local",
+        kind: "message",
+        role: "user",
+        text: "Hello world",
+      },
+    ];
+    const merged = mergeThreadItems(remote, local);
+    const userRepeats = merged.filter(
+      (item) =>
+        item.kind === "message" &&
+        item.role === "user" &&
+        item.text === "Hello world",
+    );
+    expect(userRepeats).toHaveLength(1);
+    expect(userRepeats[0]).toMatchObject({
+      id: "user-remote",
+      kind: "message",
+      role: "user",
     });
   });
 });
