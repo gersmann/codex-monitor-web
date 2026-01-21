@@ -5,7 +5,6 @@
   background-color: transparent;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
   color-scheme: light dark;
   --text-primary: #e6e7ea;
   --text-strong: #ffffff;
