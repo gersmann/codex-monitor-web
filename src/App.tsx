@@ -90,6 +90,7 @@ import { useUiScaleShortcuts } from "./features/layout/hooks/useUiScaleShortcuts
 import { useWorkspaceSelection } from "./features/workspaces/hooks/useWorkspaceSelection";
 import { useLocalUsage } from "./features/home/hooks/useLocalUsage";
 import { useNewAgentShortcut } from "./features/app/hooks/useNewAgentShortcut";
+import { useThreadRows } from "./features/app/hooks/useThreadRows";
 import { useTauriEvent } from "./features/app/hooks/useTauriEvent";
 import { useAgentSoundNotifications } from "./features/notifications/hooks/useAgentSoundNotifications";
 import { useWindowFocusState } from "./features/layout/hooks/useWindowFocusState";
@@ -110,6 +111,10 @@ import {
 } from "./services/tauri";
 import {
   subscribeMenuAddWorkspace,
+  subscribeMenuNextAgent,
+  subscribeMenuPrevAgent,
+  subscribeMenuNextWorkspace,
+  subscribeMenuPrevWorkspace,
   subscribeMenuNewAgent,
   subscribeMenuNewCloneAgent,
   subscribeMenuNewWorktreeAgent,
@@ -763,6 +768,11 @@ function MainApp() {
     customPrompts: prompts,
     onMessageActivity: queueGitStatusRefresh
   });
+  const activeThreadIdRef = useRef<string | null>(activeThreadId ?? null);
+  const { getThreadRows } = useThreadRows(threadParentById);
+  useEffect(() => {
+    activeThreadIdRef.current = activeThreadId ?? null;
+  }, [activeThreadId]);
 
   useAutoExitEmptyDiff({
     centerMode,
@@ -1701,6 +1711,150 @@ function MainApp() {
     onDebug: addDebugEntry,
   });
 
+  const orderedWorkspaceIds = useMemo(() => {
+    const worktreesByParent = new Map<string, WorkspaceInfo[]>();
+    workspaces
+      .filter(
+        (entry) =>
+          (entry.kind ?? "main") === "worktree" && Boolean(entry.parentId),
+      )
+      .forEach((entry) => {
+        const parentId = entry.parentId as string;
+        const list = worktreesByParent.get(parentId) ?? [];
+        list.push(entry);
+        worktreesByParent.set(parentId, list);
+      });
+    worktreesByParent.forEach((entries) => {
+      entries.sort((a, b) => a.name.localeCompare(b.name));
+    });
+
+    const ordered: WorkspaceInfo[] = [];
+    groupedWorkspaces.forEach((group) => {
+      group.workspaces.forEach((workspace) => {
+        ordered.push(workspace);
+        const worktrees = worktreesByParent.get(workspace.id);
+        if (worktrees?.length) {
+          ordered.push(...worktrees);
+        }
+      });
+    });
+
+    const seen = new Set(ordered.map((entry) => entry.id));
+    workspaces.forEach((entry) => {
+      if (!seen.has(entry.id)) {
+        ordered.push(entry);
+      }
+    });
+
+    return ordered.map((entry) => entry.id);
+  }, [groupedWorkspaces, workspaces]);
+
+  const getOrderedThreadIds = useCallback(
+    (workspaceId: string) => {
+      const threads = threadsByWorkspace[workspaceId] ?? [];
+      if (!threads.length) {
+        return [];
+      }
+      const { pinnedRows, unpinnedRows } = getThreadRows(
+        threads,
+        true,
+        workspaceId,
+        getPinTimestamp,
+      );
+      return [...pinnedRows, ...unpinnedRows].map((row) => row.thread.id);
+    },
+    [getPinTimestamp, getThreadRows, threadsByWorkspace],
+  );
+
+  const handleCycleAgent = useCallback(
+    (direction: "next" | "prev") => {
+      const workspaceId = activeWorkspaceIdRef.current;
+      if (!workspaceId) {
+        return;
+      }
+      const orderedThreadIds = getOrderedThreadIds(workspaceId);
+      if (!orderedThreadIds.length) {
+        return;
+      }
+      const currentThreadId = activeThreadIdRef.current;
+      let index = currentThreadId
+        ? orderedThreadIds.indexOf(currentThreadId)
+        : -1;
+      if (index === -1) {
+        index = direction === "next" ? -1 : 0;
+      }
+      const nextIndex =
+        direction === "next"
+          ? (index + 1) % orderedThreadIds.length
+          : (index - 1 + orderedThreadIds.length) % orderedThreadIds.length;
+      const nextThreadId = orderedThreadIds[nextIndex];
+      exitDiffView();
+      resetPullRequestSelection();
+      selectWorkspace(workspaceId);
+      setActiveThreadId(nextThreadId, workspaceId);
+    },
+    [
+      exitDiffView,
+      getOrderedThreadIds,
+      resetPullRequestSelection,
+      selectWorkspace,
+      setActiveThreadId,
+    ],
+  );
+
+  const handleCycleWorkspace = useCallback(
+    (direction: "next" | "prev") => {
+      if (!orderedWorkspaceIds.length) {
+        return;
+      }
+      const currentWorkspaceId = activeWorkspaceIdRef.current;
+      let index = currentWorkspaceId
+        ? orderedWorkspaceIds.indexOf(currentWorkspaceId)
+        : -1;
+      if (index === -1) {
+        index = direction === "next" ? -1 : 0;
+      }
+      const nextIndex =
+        direction === "next"
+          ? (index + 1) % orderedWorkspaceIds.length
+          : (index - 1 + orderedWorkspaceIds.length) % orderedWorkspaceIds.length;
+      const nextWorkspaceId = orderedWorkspaceIds[nextIndex];
+      exitDiffView();
+      resetPullRequestSelection();
+      selectWorkspace(nextWorkspaceId);
+      const orderedThreadIds = getOrderedThreadIds(nextWorkspaceId);
+      if (orderedThreadIds.length > 0) {
+        setActiveThreadId(orderedThreadIds[0], nextWorkspaceId);
+      } else {
+        setActiveThreadId(null, nextWorkspaceId);
+      }
+    },
+    [
+      exitDiffView,
+      getOrderedThreadIds,
+      orderedWorkspaceIds,
+      resetPullRequestSelection,
+      selectWorkspace,
+      setActiveThreadId,
+    ],
+  );
+
+  useTauriEvent(subscribeMenuNextAgent, () => {
+    handleCycleAgent("next");
+  });
+
+  useTauriEvent(subscribeMenuPrevAgent, () => {
+    handleCycleAgent("prev");
+  });
+
+  useTauriEvent(subscribeMenuNextWorkspace, () => {
+    handleCycleWorkspace("next");
+  });
+
+  useTauriEvent(subscribeMenuPrevWorkspace, () => {
+    handleCycleWorkspace("prev");
+  });
+
   useTauriEvent(subscribeMenuToggleDebugPanel, () => {
     handleDebugClick();
   });
@@ -1756,6 +1910,22 @@ function MainApp() {
         shortcut: appSettings.toggleTerminalShortcut,
       },
       {
+        id: "view_next_agent",
+        shortcut: appSettings.cycleAgentNextShortcut,
+      },
+      {
+        id: "view_prev_agent",
+        shortcut: appSettings.cycleAgentPrevShortcut,
+      },
+      {
+        id: "view_next_workspace",
+        shortcut: appSettings.cycleWorkspaceNextShortcut,
+      },
+      {
+        id: "view_prev_workspace",
+        shortcut: appSettings.cycleWorkspacePrevShortcut,
+      },
+      {
         id: "composer_cycle_model",
         shortcut: appSettings.composerModelShortcut,
       },
@@ -1772,6 +1942,10 @@ function MainApp() {
       appSettings.composerAccessShortcut,
       appSettings.composerModelShortcut,
       appSettings.composerReasoningShortcut,
+      appSettings.cycleAgentNextShortcut,
+      appSettings.cycleAgentPrevShortcut,
+      appSettings.cycleWorkspaceNextShortcut,
+      appSettings.cycleWorkspacePrevShortcut,
       appSettings.newAgentShortcut,
       appSettings.newCloneAgentShortcut,
       appSettings.newWorktreeAgentShortcut,

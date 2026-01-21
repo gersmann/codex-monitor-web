@@ -194,10 +194,21 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         MenuItemBuilder::with_id("view_toggle_terminal", "Toggle Terminal")
             .accelerator("CmdOrCtrl+Shift+T")
             .build(handle)?;
+    let next_agent_item = MenuItemBuilder::with_id("view_next_agent", "Next Agent").build(handle)?;
+    let prev_agent_item =
+        MenuItemBuilder::with_id("view_prev_agent", "Previous Agent").build(handle)?;
+    let next_workspace_item =
+        MenuItemBuilder::with_id("view_next_workspace", "Next Workspace").build(handle)?;
+    let prev_workspace_item =
+        MenuItemBuilder::with_id("view_prev_workspace", "Previous Workspace").build(handle)?;
     registry.register("view_toggle_projects_sidebar", &toggle_projects_sidebar_item);
     registry.register("view_toggle_git_sidebar", &toggle_git_sidebar_item);
     registry.register("view_toggle_debug_panel", &toggle_debug_panel_item);
     registry.register("view_toggle_terminal", &toggle_terminal_item);
+    registry.register("view_next_agent", &next_agent_item);
+    registry.register("view_prev_agent", &prev_agent_item);
+    registry.register("view_next_workspace", &next_workspace_item);
+    registry.register("view_prev_workspace", &prev_workspace_item);
 
     #[cfg(target_os = "linux")]
     let view_menu = {
@@ -214,6 +225,11 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
                 &toggle_debug_panel_item,
                 &toggle_terminal_item,
                 &PredefinedMenuItem::separator(handle)?,
+                &next_agent_item,
+                &prev_agent_item,
+                &next_workspace_item,
+                &prev_workspace_item,
+                &PredefinedMenuItem::separator(handle)?,
                 &fullscreen_item,
             ],
         )?
@@ -229,6 +245,11 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
             &PredefinedMenuItem::separator(handle)?,
             &toggle_debug_panel_item,
             &toggle_terminal_item,
+            &PredefinedMenuItem::separator(handle)?,
+            &next_agent_item,
+            &prev_agent_item,
+            &next_workspace_item,
+            &prev_workspace_item,
             &PredefinedMenuItem::separator(handle)?,
             &PredefinedMenuItem::fullscreen(handle, None)?,
         ],
@@ -335,6 +356,10 @@ pub(crate) fn handle_menu_event<R: tauri::Runtime>(
         "view_toggle_git_sidebar" => emit_menu_event(app, "menu-toggle-git-sidebar"),
         "view_toggle_debug_panel" => emit_menu_event(app, "menu-toggle-debug-panel"),
         "view_toggle_terminal" => emit_menu_event(app, "menu-toggle-terminal"),
+        "view_next_agent" => emit_menu_event(app, "menu-next-agent"),
+        "view_prev_agent" => emit_menu_event(app, "menu-prev-agent"),
+        "view_next_workspace" => emit_menu_event(app, "menu-next-workspace"),
+        "view_prev_workspace" => emit_menu_event(app, "menu-prev-workspace"),
         "composer_cycle_model" => emit_menu_event(app, "menu-composer-cycle-model"),
         "composer_cycle_access" => emit_menu_event(app, "menu-composer-cycle-access"),
         "composer_cycle_reasoning" => emit_menu_event(app, "menu-composer-cycle-reasoning"),

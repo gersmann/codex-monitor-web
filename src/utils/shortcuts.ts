@@ -154,7 +154,10 @@ export function toMenuAccelerator(value: string | null | undefined): string | nu
     return null;
   }
   const parts: string[] = [];
-  if (parsed.meta) {
+  if (parsed.meta && parsed.ctrl) {
+    parts.push("Cmd");
+    parts.push("Ctrl");
+  } else if (parsed.meta) {
     parts.push("CmdOrCtrl");
   } else if (parsed.ctrl) {
     parts.push("Ctrl");
