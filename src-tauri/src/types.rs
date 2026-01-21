@@ -280,6 +280,16 @@ pub(crate) struct AppSettings {
     )]
     pub(crate) new_clone_agent_shortcut: Option<String>,
     #[serde(
+        default = "default_toggle_projects_sidebar_shortcut",
+        rename = "toggleProjectsSidebarShortcut"
+    )]
+    pub(crate) toggle_projects_sidebar_shortcut: Option<String>,
+    #[serde(
+        default = "default_toggle_git_sidebar_shortcut",
+        rename = "toggleGitSidebarShortcut"
+    )]
+    pub(crate) toggle_git_sidebar_shortcut: Option<String>,
+    #[serde(
         default = "default_toggle_debug_panel_shortcut",
         rename = "toggleDebugPanelShortcut"
     )]
@@ -388,6 +398,14 @@ fn default_new_clone_agent_shortcut() -> Option<String> {
     Some("cmd+alt+n".to_string())
 }
 
+fn default_toggle_projects_sidebar_shortcut() -> Option<String> {
+    Some("cmd+shift+p".to_string())
+}
+
+fn default_toggle_git_sidebar_shortcut() -> Option<String> {
+    Some("cmd+shift+g".to_string())
+}
+
 fn default_toggle_debug_panel_shortcut() -> Option<String> {
     Some("cmd+shift+d".to_string())
 }
@@ -442,6 +460,8 @@ impl Default for AppSettings {
             new_agent_shortcut: default_new_agent_shortcut(),
             new_worktree_agent_shortcut: default_new_worktree_agent_shortcut(),
             new_clone_agent_shortcut: default_new_clone_agent_shortcut(),
+            toggle_projects_sidebar_shortcut: default_toggle_projects_sidebar_shortcut(),
+            toggle_git_sidebar_shortcut: default_toggle_git_sidebar_shortcut(),
             toggle_debug_panel_shortcut: default_toggle_debug_panel_shortcut(),
             toggle_terminal_shortcut: default_toggle_terminal_shortcut(),
             last_composer_model_id: None,

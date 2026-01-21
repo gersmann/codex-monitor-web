@@ -114,6 +114,8 @@ import {
   subscribeMenuNewCloneAgent,
   subscribeMenuNewWorktreeAgent,
   subscribeMenuOpenSettings,
+  subscribeMenuToggleGitSidebar,
+  subscribeMenuToggleProjectsSidebar,
   subscribeMenuToggleDebugPanel,
   subscribeMenuToggleTerminal,
   subscribeUpdaterCheck,
@@ -1706,6 +1708,22 @@ function MainApp() {
     handleToggleTerminal();
   });
 
+  useTauriEvent(subscribeMenuToggleProjectsSidebar, () => {
+    if (sidebarCollapsed) {
+      expandSidebar();
+    } else {
+      collapseSidebar();
+    }
+  });
+
+  useTauriEvent(subscribeMenuToggleGitSidebar, () => {
+    if (rightPanelCollapsed) {
+      expandRightPanel();
+    } else {
+      collapseRightPanel();
+    }
+  });
+
   const menuAccelerators = useMemo(
     () => [
       {
@@ -1719,6 +1737,14 @@ function MainApp() {
       {
         id: "file_new_clone_agent",
         shortcut: appSettings.newCloneAgentShortcut,
+      },
+      {
+        id: "view_toggle_projects_sidebar",
+        shortcut: appSettings.toggleProjectsSidebarShortcut,
+      },
+      {
+        id: "view_toggle_git_sidebar",
+        shortcut: appSettings.toggleGitSidebarShortcut,
       },
       {
         id: "view_toggle_debug_panel",
@@ -1748,7 +1774,9 @@ function MainApp() {
       appSettings.newAgentShortcut,
       appSettings.newCloneAgentShortcut,
       appSettings.newWorktreeAgentShortcut,
+      appSettings.toggleGitSidebarShortcut,
       appSettings.toggleDebugPanelShortcut,
+      appSettings.toggleProjectsSidebarShortcut,
       appSettings.toggleTerminalShortcut,
     ],
   );

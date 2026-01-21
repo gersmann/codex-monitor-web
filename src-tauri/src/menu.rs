@@ -178,6 +178,12 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         &[&cycle_model_item, &cycle_access_item, &cycle_reasoning_item],
     )?;
 
+    let toggle_projects_sidebar_item =
+        MenuItemBuilder::with_id("view_toggle_projects_sidebar", "Toggle Projects Sidebar")
+            .build(handle)?;
+    let toggle_git_sidebar_item =
+        MenuItemBuilder::with_id("view_toggle_git_sidebar", "Toggle Git Sidebar")
+            .build(handle)?;
     let toggle_debug_panel_item = MenuItemBuilder::with_id(
         "view_toggle_debug_panel",
         "Toggle Debug Panel",
@@ -188,6 +194,8 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         MenuItemBuilder::with_id("view_toggle_terminal", "Toggle Terminal")
             .accelerator("CmdOrCtrl+Shift+T")
             .build(handle)?;
+    registry.register("view_toggle_projects_sidebar", &toggle_projects_sidebar_item);
+    registry.register("view_toggle_git_sidebar", &toggle_git_sidebar_item);
     registry.register("view_toggle_debug_panel", &toggle_debug_panel_item);
     registry.register("view_toggle_terminal", &toggle_terminal_item);
 
@@ -200,6 +208,9 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
             "View",
             true,
             &[
+                &toggle_projects_sidebar_item,
+                &toggle_git_sidebar_item,
+                &PredefinedMenuItem::separator(handle)?,
                 &toggle_debug_panel_item,
                 &toggle_terminal_item,
                 &PredefinedMenuItem::separator(handle)?,
@@ -213,6 +224,9 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
         "View",
         true,
         &[
+            &toggle_projects_sidebar_item,
+            &toggle_git_sidebar_item,
+            &PredefinedMenuItem::separator(handle)?,
             &toggle_debug_panel_item,
             &toggle_terminal_item,
             &PredefinedMenuItem::separator(handle)?,
@@ -317,6 +331,8 @@ pub(crate) fn handle_menu_event<R: tauri::Runtime>(
                 let _ = window.set_fullscreen(!is_fullscreen);
             }
         }
+        "view_toggle_projects_sidebar" => emit_menu_event(app, "menu-toggle-projects-sidebar"),
+        "view_toggle_git_sidebar" => emit_menu_event(app, "menu-toggle-git-sidebar"),
         "view_toggle_debug_panel" => emit_menu_event(app, "menu-toggle-debug-panel"),
         "view_toggle_terminal" => emit_menu_event(app, "menu-toggle-terminal"),
         "composer_cycle_model" => emit_menu_event(app, "menu-composer-cycle-model"),

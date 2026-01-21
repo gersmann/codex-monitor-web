@@ -29,6 +29,8 @@ const baseSettings: AppSettings = {
   newAgentShortcut: null,
   newWorktreeAgentShortcut: null,
   newCloneAgentShortcut: null,
+  toggleProjectsSidebarShortcut: null,
+  toggleGitSidebarShortcut: null,
   toggleDebugPanelShortcut: null,
   toggleTerminalShortcut: null,
   lastComposerModelId: null,

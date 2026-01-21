@@ -120,6 +120,8 @@ export function SettingsView({
     newAgent: appSettings.newAgentShortcut ?? "",
     newWorktreeAgent: appSettings.newWorktreeAgentShortcut ?? "",
     newCloneAgent: appSettings.newCloneAgentShortcut ?? "",
+    projectsSidebar: appSettings.toggleProjectsSidebarShortcut ?? "",
+    gitSidebar: appSettings.toggleGitSidebarShortcut ?? "",
     debugPanel: appSettings.toggleDebugPanelShortcut ?? "",
     terminal: appSettings.toggleTerminalShortcut ?? "",
   });
@@ -162,6 +164,8 @@ export function SettingsView({
       newAgent: appSettings.newAgentShortcut ?? "",
       newWorktreeAgent: appSettings.newWorktreeAgentShortcut ?? "",
       newCloneAgent: appSettings.newCloneAgentShortcut ?? "",
+      projectsSidebar: appSettings.toggleProjectsSidebarShortcut ?? "",
+      gitSidebar: appSettings.toggleGitSidebarShortcut ?? "",
       debugPanel: appSettings.toggleDebugPanelShortcut ?? "",
       terminal: appSettings.toggleTerminalShortcut ?? "",
     });
@@ -172,6 +176,8 @@ export function SettingsView({
     appSettings.newAgentShortcut,
     appSettings.newWorktreeAgentShortcut,
     appSettings.newCloneAgentShortcut,
+    appSettings.toggleProjectsSidebarShortcut,
+    appSettings.toggleGitSidebarShortcut,
     appSettings.toggleDebugPanelShortcut,
     appSettings.toggleTerminalShortcut,
   ]);
@@ -317,6 +323,8 @@ export function SettingsView({
       | "newAgentShortcut"
       | "newWorktreeAgentShortcut"
       | "newCloneAgentShortcut"
+      | "toggleProjectsSidebarShortcut"
+      | "toggleGitSidebarShortcut"
       | "toggleDebugPanelShortcut"
       | "toggleTerminalShortcut",
     value: string | null,
@@ -332,8 +340,12 @@ export function SettingsView({
               ? "newAgent"
               : key === "newWorktreeAgentShortcut"
                 ? "newWorktreeAgent"
-                : key === "newCloneAgentShortcut"
-                  ? "newCloneAgent"
+            : key === "newCloneAgentShortcut"
+              ? "newCloneAgent"
+              : key === "toggleProjectsSidebarShortcut"
+                ? "projectsSidebar"
+                : key === "toggleGitSidebarShortcut"
+                  ? "gitSidebar"
             : key === "toggleDebugPanelShortcut"
               ? "debugPanel"
               : "terminal";
@@ -356,6 +368,8 @@ export function SettingsView({
       | "newAgentShortcut"
       | "newWorktreeAgentShortcut"
       | "newCloneAgentShortcut"
+      | "toggleProjectsSidebarShortcut"
+      | "toggleGitSidebarShortcut"
       | "toggleDebugPanelShortcut"
       | "toggleTerminalShortcut",
   ) => {
@@ -1081,6 +1095,10 @@ export function SettingsView({
                 <div className="settings-section-subtitle">
                   Customize keyboard shortcuts for file actions, composer, and panels.
                 </div>
+                <div className="settings-subsection-title">File</div>
+                <div className="settings-subsection-subtitle">
+                  Create agents and worktrees from the keyboard.
+                </div>
                 <div className="settings-field">
                   <div className="settings-field-label">New Agent</div>
                   <div className="settings-field-row">
@@ -1153,6 +1171,11 @@ export function SettingsView({
                     Default: {formatShortcut("cmd+alt+n")}
                   </div>
                 </div>
+                <div className="settings-divider" />
+                <div className="settings-subsection-title">Composer</div>
+                <div className="settings-subsection-subtitle">
+                  Cycle between model, access, and reasoning modes.
+                </div>
                 <div className="settings-field">
                   <div className="settings-field-label">Cycle model</div>
                   <div className="settings-field-row">
@@ -1223,6 +1246,59 @@ export function SettingsView({
                   </div>
                   <div className="settings-help">
                     Default: {formatShortcut("cmd+shift+r")}
+                  </div>
+                </div>
+                <div className="settings-divider" />
+                <div className="settings-subsection-title">Panels</div>
+                <div className="settings-subsection-subtitle">
+                  Toggle sidebars and panels.
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Toggle projects sidebar</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.projectsSidebar)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "toggleProjectsSidebarShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("toggleProjectsSidebarShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+shift+p")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Toggle git sidebar</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.gitSidebar)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "toggleGitSidebarShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("toggleGitSidebarShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+shift+g")}
                   </div>
                 </div>
                 <div className="settings-field">

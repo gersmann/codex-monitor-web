@@ -86,6 +86,8 @@ const menuNewWorktreeAgentHub = createEventHub<void>("menu-new-worktree-agent");
 const menuNewCloneAgentHub = createEventHub<void>("menu-new-clone-agent");
 const menuAddWorkspaceHub = createEventHub<void>("menu-add-workspace");
 const menuOpenSettingsHub = createEventHub<void>("menu-open-settings");
+const menuToggleProjectsSidebarHub = createEventHub<void>("menu-toggle-projects-sidebar");
+const menuToggleGitSidebarHub = createEventHub<void>("menu-toggle-git-sidebar");
 const menuToggleDebugPanelHub = createEventHub<void>("menu-toggle-debug-panel");
 const menuToggleTerminalHub = createEventHub<void>("menu-toggle-terminal");
 const menuCycleModelHub = createEventHub<void>("menu-composer-cycle-model");
@@ -173,6 +175,24 @@ export function subscribeMenuOpenSettings(
   options?: SubscriptionOptions,
 ): Unsubscribe {
   return menuOpenSettingsHub.subscribe(() => {
+    onEvent();
+  }, options);
+}
+
+export function subscribeMenuToggleProjectsSidebar(
+  onEvent: () => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return menuToggleProjectsSidebarHub.subscribe(() => {
+    onEvent();
+  }, options);
+}
+
+export function subscribeMenuToggleGitSidebar(
+  onEvent: () => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return menuToggleGitSidebarHub.subscribe(() => {
     onEvent();
   }, options);
 }
