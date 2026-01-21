@@ -428,6 +428,7 @@ function MainApp() {
     applyWorktreeChanges: handleApplyWorktreeChanges,
     revertAllGitChanges: handleRevertAllGitChanges,
     revertGitFile: handleRevertGitFile,
+    stageGitAll: handleStageGitAll,
     stageGitFile: handleStageGitFile,
     unstageGitFile: handleUnstageGitFile,
     worktreeApplyError,
@@ -1438,6 +1439,7 @@ function MainApp() {
       void handleSetGitRoot(null);
     },
     onPickGitRoot: handlePickGitRoot,
+    onStageGitAll: handleStageGitAll,
     onStageGitFile: handleStageGitFile,
     onUnstageGitFile: handleUnstageGitFile,
     onRevertGitFile: handleRevertGitFile,
