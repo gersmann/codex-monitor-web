@@ -747,6 +747,7 @@ function MainApp() {
 
   useAutoExitEmptyDiff({
     centerMode,
+    autoExitEnabled: diffSource === "local",
     activeDiffCount: activeDiffs.length,
     activeDiffLoading,
     activeDiffError,
