@@ -1709,6 +1709,18 @@ function MainApp() {
   const menuAccelerators = useMemo(
     () => [
       {
+        id: "file_new_agent",
+        shortcut: appSettings.newAgentShortcut,
+      },
+      {
+        id: "file_new_worktree_agent",
+        shortcut: appSettings.newWorktreeAgentShortcut,
+      },
+      {
+        id: "file_new_clone_agent",
+        shortcut: appSettings.newCloneAgentShortcut,
+      },
+      {
         id: "view_toggle_debug_panel",
         shortcut: appSettings.toggleDebugPanelShortcut,
       },
@@ -1733,6 +1745,9 @@ function MainApp() {
       appSettings.composerAccessShortcut,
       appSettings.composerModelShortcut,
       appSettings.composerReasoningShortcut,
+      appSettings.newAgentShortcut,
+      appSettings.newCloneAgentShortcut,
+      appSettings.newWorktreeAgentShortcut,
       appSettings.toggleDebugPanelShortcut,
       appSettings.toggleTerminalShortcut,
     ],

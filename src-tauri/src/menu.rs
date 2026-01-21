@@ -98,6 +98,10 @@ pub(crate) fn build_menu<R: tauri::Runtime>(
     let add_workspace_item =
         MenuItemBuilder::with_id("file_add_workspace", "Add Workspace...").build(handle)?;
 
+    registry.register("file_new_agent", &new_agent_item);
+    registry.register("file_new_worktree_agent", &new_worktree_agent_item);
+    registry.register("file_new_clone_agent", &new_clone_agent_item);
+
     #[cfg(target_os = "linux")]
     let file_menu = {
         let close_window_item =

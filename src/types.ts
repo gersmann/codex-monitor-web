@@ -82,6 +82,9 @@ export type AppSettings = {
   composerModelShortcut: string | null;
   composerAccessShortcut: string | null;
   composerReasoningShortcut: string | null;
+  newAgentShortcut: string | null;
+  newWorktreeAgentShortcut: string | null;
+  newCloneAgentShortcut: string | null;
   toggleDebugPanelShortcut: string | null;
   toggleTerminalShortcut: string | null;
   lastComposerModelId: string | null;

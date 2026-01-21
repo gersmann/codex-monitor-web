@@ -117,6 +117,9 @@ export function SettingsView({
     model: appSettings.composerModelShortcut ?? "",
     access: appSettings.composerAccessShortcut ?? "",
     reasoning: appSettings.composerReasoningShortcut ?? "",
+    newAgent: appSettings.newAgentShortcut ?? "",
+    newWorktreeAgent: appSettings.newWorktreeAgentShortcut ?? "",
+    newCloneAgent: appSettings.newCloneAgentShortcut ?? "",
     debugPanel: appSettings.toggleDebugPanelShortcut ?? "",
     terminal: appSettings.toggleTerminalShortcut ?? "",
   });
@@ -156,6 +159,9 @@ export function SettingsView({
       model: appSettings.composerModelShortcut ?? "",
       access: appSettings.composerAccessShortcut ?? "",
       reasoning: appSettings.composerReasoningShortcut ?? "",
+      newAgent: appSettings.newAgentShortcut ?? "",
+      newWorktreeAgent: appSettings.newWorktreeAgentShortcut ?? "",
+      newCloneAgent: appSettings.newCloneAgentShortcut ?? "",
       debugPanel: appSettings.toggleDebugPanelShortcut ?? "",
       terminal: appSettings.toggleTerminalShortcut ?? "",
     });
@@ -163,6 +169,9 @@ export function SettingsView({
     appSettings.composerAccessShortcut,
     appSettings.composerModelShortcut,
     appSettings.composerReasoningShortcut,
+    appSettings.newAgentShortcut,
+    appSettings.newWorktreeAgentShortcut,
+    appSettings.newCloneAgentShortcut,
     appSettings.toggleDebugPanelShortcut,
     appSettings.toggleTerminalShortcut,
   ]);
@@ -305,6 +314,9 @@ export function SettingsView({
       | "composerModelShortcut"
       | "composerAccessShortcut"
       | "composerReasoningShortcut"
+      | "newAgentShortcut"
+      | "newWorktreeAgentShortcut"
+      | "newCloneAgentShortcut"
       | "toggleDebugPanelShortcut"
       | "toggleTerminalShortcut",
     value: string | null,
@@ -316,6 +328,12 @@ export function SettingsView({
           ? "access"
           : key === "composerReasoningShortcut"
             ? "reasoning"
+            : key === "newAgentShortcut"
+              ? "newAgent"
+              : key === "newWorktreeAgentShortcut"
+                ? "newWorktreeAgent"
+                : key === "newCloneAgentShortcut"
+                  ? "newCloneAgent"
             : key === "toggleDebugPanelShortcut"
               ? "debugPanel"
               : "terminal";
@@ -335,6 +353,9 @@ export function SettingsView({
       | "composerModelShortcut"
       | "composerAccessShortcut"
       | "composerReasoningShortcut"
+      | "newAgentShortcut"
+      | "newWorktreeAgentShortcut"
+      | "newCloneAgentShortcut"
       | "toggleDebugPanelShortcut"
       | "toggleTerminalShortcut",
   ) => {
@@ -1058,7 +1079,79 @@ export function SettingsView({
               <section className="settings-section">
                 <div className="settings-section-title">Shortcuts</div>
                 <div className="settings-section-subtitle">
-                  Customize keyboard shortcuts for the composer and panels.
+                  Customize keyboard shortcuts for file actions, composer, and panels.
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">New Agent</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.newAgent)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "newAgentShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("newAgentShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+n")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">New Worktree Agent</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.newWorktreeAgent)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "newWorktreeAgentShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("newWorktreeAgentShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+shift+n")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">New Clone Agent</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.newCloneAgent)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "newCloneAgentShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("newCloneAgentShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+alt+n")}
+                  </div>
                 </div>
                 <div className="settings-field">
                   <div className="settings-field-label">Cycle model</div>
