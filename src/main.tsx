@@ -10,6 +10,7 @@ const sentryDsn =
 Sentry.init({
   dsn: sentryDsn,
   enabled: Boolean(sentryDsn),
+  release: __APP_VERSION__,
 });
 
 Sentry.metrics.count("app_open", 1, {
