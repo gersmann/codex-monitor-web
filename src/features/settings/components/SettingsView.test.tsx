@@ -26,6 +26,8 @@ const baseSettings: AppSettings = {
   composerModelShortcut: null,
   composerAccessShortcut: null,
   composerReasoningShortcut: null,
+  toggleDebugPanelShortcut: null,
+  toggleTerminalShortcut: null,
   lastComposerModelId: null,
   lastComposerReasoningEffort: null,
   uiScale: 1,

@@ -117,6 +117,8 @@ export function SettingsView({
     model: appSettings.composerModelShortcut ?? "",
     access: appSettings.composerAccessShortcut ?? "",
     reasoning: appSettings.composerReasoningShortcut ?? "",
+    debugPanel: appSettings.toggleDebugPanelShortcut ?? "",
+    terminal: appSettings.toggleTerminalShortcut ?? "",
   });
   const dictationReady = dictationModelStatus?.state === "ready";
   const dictationProgress = dictationModelStatus?.progress ?? null;
@@ -154,11 +156,15 @@ export function SettingsView({
       model: appSettings.composerModelShortcut ?? "",
       access: appSettings.composerAccessShortcut ?? "",
       reasoning: appSettings.composerReasoningShortcut ?? "",
+      debugPanel: appSettings.toggleDebugPanelShortcut ?? "",
+      terminal: appSettings.toggleTerminalShortcut ?? "",
     });
   }, [
     appSettings.composerAccessShortcut,
     appSettings.composerModelShortcut,
     appSettings.composerReasoningShortcut,
+    appSettings.toggleDebugPanelShortcut,
+    appSettings.toggleTerminalShortcut,
   ]);
 
   useEffect(() => {
@@ -295,16 +301,27 @@ export function SettingsView({
   };
 
   const updateShortcut = async (
-    key: "composerModelShortcut" | "composerAccessShortcut" | "composerReasoningShortcut",
+    key:
+      | "composerModelShortcut"
+      | "composerAccessShortcut"
+      | "composerReasoningShortcut"
+      | "toggleDebugPanelShortcut"
+      | "toggleTerminalShortcut",
     value: string | null,
   ) => {
-    setShortcutDrafts((prev) => ({
-      ...prev,
-      [key === "composerModelShortcut"
+    const draftKey =
+      key === "composerModelShortcut"
         ? "model"
         : key === "composerAccessShortcut"
           ? "access"
-          : "reasoning"]: value ?? "",
+          : key === "composerReasoningShortcut"
+            ? "reasoning"
+            : key === "toggleDebugPanelShortcut"
+              ? "debugPanel"
+              : "terminal";
+    setShortcutDrafts((prev) => ({
+      ...prev,
+      [draftKey]: value ?? "",
     }));
     await onUpdateAppSettings({
       ...appSettings,
@@ -314,7 +331,12 @@ export function SettingsView({
 
   const handleShortcutKeyDown = (
     event: React.KeyboardEvent<HTMLInputElement>,
-    key: "composerModelShortcut" | "composerAccessShortcut" | "composerReasoningShortcut",
+    key:
+      | "composerModelShortcut"
+      | "composerAccessShortcut"
+      | "composerReasoningShortcut"
+      | "toggleDebugPanelShortcut"
+      | "toggleTerminalShortcut",
   ) => {
     if (event.key === "Tab") {
       return;
@@ -1036,7 +1058,7 @@ export function SettingsView({
               <section className="settings-section">
                 <div className="settings-section-title">Shortcuts</div>
                 <div className="settings-section-subtitle">
-                  Customize composer shortcuts for cycling modes.
+                  Customize keyboard shortcuts for the composer and panels.
                 </div>
                 <div className="settings-field">
                   <div className="settings-field-label">Cycle model</div>
@@ -1108,6 +1130,54 @@ export function SettingsView({
                   </div>
                   <div className="settings-help">
                     Default: {formatShortcut("cmd+shift+r")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Toggle debug panel</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.debugPanel)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "toggleDebugPanelShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("toggleDebugPanelShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+shift+d")}
+                  </div>
+                </div>
+                <div className="settings-field">
+                  <div className="settings-field-label">Toggle terminal panel</div>
+                  <div className="settings-field-row">
+                    <input
+                      className="settings-input settings-input--shortcut"
+                      value={formatShortcut(shortcutDrafts.terminal)}
+                      onKeyDown={(event) =>
+                        handleShortcutKeyDown(event, "toggleTerminalShortcut")
+                      }
+                      placeholder="Type shortcut"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      className="ghost settings-button-compact"
+                      onClick={() => void updateShortcut("toggleTerminalShortcut", null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="settings-help">
+                    Default: {formatShortcut("cmd+shift+t")}
                   </div>
                 </div>
               </section>

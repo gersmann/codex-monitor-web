@@ -14,6 +14,8 @@ const defaultSettings: AppSettings = {
   composerModelShortcut: "cmd+shift+m",
   composerAccessShortcut: "cmd+shift+a",
   composerReasoningShortcut: "cmd+shift+r",
+  toggleDebugPanelShortcut: "cmd+shift+d",
+  toggleTerminalShortcut: "cmd+shift+t",
   lastComposerModelId: null,
   lastComposerReasoningEffort: null,
   uiScale: UI_SCALE_DEFAULT,
