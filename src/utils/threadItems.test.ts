@@ -228,6 +228,33 @@ describe("threadItems", () => {
     expect(userRepeats).toHaveLength(2);
   });
 
+  it("dedupes adjacent assistant messages with identical content", () => {
+    const remote: ConversationItem[] = [
+      {
+        id: "assistant-remote",
+        kind: "message",
+        role: "assistant",
+        text: "Same reply",
+      },
+    ];
+    const local: ConversationItem[] = [
+      {
+        id: "assistant-local",
+        kind: "message",
+        role: "assistant",
+        text: "Same reply",
+      },
+    ];
+    const merged = mergeThreadItems(remote, local);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({
+      id: "assistant-remote",
+      kind: "message",
+      role: "assistant",
+      text: "Same reply",
+    });
+  });
+
   it("drops later user duplicates even when a matching remote item is already local", () => {
     const remote: ConversationItem[] = [
       {

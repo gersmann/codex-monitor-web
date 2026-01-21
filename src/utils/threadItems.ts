@@ -433,7 +433,9 @@ function chooseRicherItem(remote: ConversationItem, local: ConversationItem) {
   return remote;
 }
 
-function dedupeAdjacentUserMessages(
+const DEDUPE_MESSAGE_ROLES = new Set(["user", "assistant"]);
+
+function dedupeAdjacentMessageDuplicates(
   items: ConversationItem[],
   remoteIds: Set<string>,
 ) {
@@ -442,9 +444,9 @@ function dedupeAdjacentUserMessages(
     const previous = deduped[deduped.length - 1];
     if (
       item.kind === "message" &&
-      item.role === "user" &&
+      DEDUPE_MESSAGE_ROLES.has(item.role) &&
       previous?.kind === "message" &&
-      previous.role === "user" &&
+      previous.role === item.role &&
       previous.text.trim() === item.text.trim()
     ) {
       const previousIsRemote = remoteIds.has(previous.id);
@@ -477,5 +479,5 @@ export function mergeThreadItems(
       merged.push(item);
     }
   });
-  return dedupeAdjacentUserMessages(merged, remoteIds);
+  return dedupeAdjacentMessageDuplicates(merged, remoteIds);
 }
