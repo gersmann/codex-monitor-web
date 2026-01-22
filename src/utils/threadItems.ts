@@ -456,155 +456,6 @@ function chooseRicherItem(remote: ConversationItem, local: ConversationItem) {
   return remote;
 }
 
-const DEDUPE_MESSAGE_ROLES = new Set(["user", "assistant"]);
-const ASSISTANT_DEDUPE_WINDOW = 6;
-const USER_DEDUPE_WINDOW = 6;
-
-function dedupeAdjacentMessageDuplicates(
-  items: ConversationItem[],
-  localOnlyIds: Set<string>,
-) {
-  const deduped: ConversationItem[] = [];
-  for (const item of items) {
-    const previous = deduped[deduped.length - 1];
-    if (
-      item.kind === "message" &&
-      DEDUPE_MESSAGE_ROLES.has(item.role) &&
-      previous?.kind === "message" &&
-      previous.role === item.role &&
-      previous.text.trim() === item.text.trim()
-    ) {
-      const previousIsLocal = localOnlyIds.has(previous.id);
-      const currentIsLocal = localOnlyIds.has(item.id);
-      if (previousIsLocal === currentIsLocal) {
-        if (currentIsLocal) {
-          deduped[deduped.length - 1] = item;
-          continue;
-        }
-        deduped.push(item);
-        continue;
-      }
-      if (currentIsLocal) {
-        continue;
-      }
-      deduped[deduped.length - 1] = item;
-      continue;
-    }
-    deduped.push(item);
-  }
-  return deduped;
-}
-
-function dedupeAssistantMessagesWithinWindow(
-  items: ConversationItem[],
-  localOnlyIds: Set<string>,
-  windowSize = ASSISTANT_DEDUPE_WINDOW,
-) {
-  const deduped: ConversationItem[] = [];
-  for (const item of items) {
-    if (item.kind !== "message" || item.role !== "assistant") {
-      deduped.push(item);
-      continue;
-    }
-    const trimmed = item.text.trim();
-    if (!trimmed) {
-      deduped.push(item);
-      continue;
-    }
-    let matchedIndex: number | null = null;
-    for (
-      let index = deduped.length - 1;
-      index >= 0 && deduped.length - index <= windowSize;
-      index -= 1
-    ) {
-      const previous = deduped[index];
-      if (
-        previous.kind === "message" &&
-        previous.role === "assistant" &&
-        previous.text.trim() === trimmed
-      ) {
-        matchedIndex = index;
-        break;
-      }
-    }
-    if (matchedIndex === null) {
-      deduped.push(item);
-      continue;
-    }
-    const previous = deduped[matchedIndex];
-    const previousIsLocal = localOnlyIds.has(previous.id);
-    const currentIsLocal = localOnlyIds.has(item.id);
-    if (previousIsLocal === currentIsLocal) {
-      if (currentIsLocal) {
-        deduped[matchedIndex] = item;
-      } else {
-        deduped.push(item);
-      }
-      continue;
-    }
-    if (currentIsLocal) {
-      continue;
-    }
-    deduped[matchedIndex] = item;
-  }
-  return deduped;
-}
-
-function dedupeUserMessagesWithinWindow(
-  items: ConversationItem[],
-  localOnlyIds: Set<string>,
-  windowSize = USER_DEDUPE_WINDOW,
-) {
-  const deduped: ConversationItem[] = [];
-  for (const item of items) {
-    if (item.kind !== "message" || item.role !== "user") {
-      deduped.push(item);
-      continue;
-    }
-    const trimmed = item.text.trim();
-    if (!trimmed) {
-      deduped.push(item);
-      continue;
-    }
-    let matchedIndex: number | null = null;
-    for (
-      let index = deduped.length - 1;
-      index >= 0 && deduped.length - index <= windowSize;
-      index -= 1
-    ) {
-      const previous = deduped[index];
-      if (
-        previous.kind === "message" &&
-        previous.role === "user" &&
-        previous.text.trim() === trimmed
-      ) {
-        matchedIndex = index;
-        break;
-      }
-    }
-    if (matchedIndex === null) {
-      deduped.push(item);
-      continue;
-    }
-    const previous = deduped[matchedIndex];
-    const previousIsLocal = localOnlyIds.has(previous.id);
-    const currentIsLocal = localOnlyIds.has(item.id);
-    if (previousIsLocal === currentIsLocal) {
-      if (currentIsLocal) {
-        deduped[matchedIndex] = item;
-      } else {
-        deduped.push(item);
-      }
-      continue;
-    }
-    if (currentIsLocal) {
-      continue;
-    }
-    deduped[matchedIndex] = item;
-  }
-  return deduped;
-}
-
 export function mergeThreadItems(
   remoteItems: ConversationItem[],
   localItems: ConversationItem[],
@@ -612,10 +463,6 @@ export function mergeThreadItems(
   if (!localItems.length) {
     return remoteItems;
   }
-  const remoteIds = new Set(remoteItems.map((item) => item.id));
-  const localOnlyIds = new Set(
-    localItems.map((item) => item.id).filter((id) => !remoteIds.has(id)),
-  );
   const byId = new Map(remoteItems.map((item) => [item.id, item]));
   const merged = remoteItems.map((item) => {
     const local = localItems.find((entry) => entry.id === item.id);
@@ -626,10 +473,5 @@ export function mergeThreadItems(
       merged.push(item);
     }
   });
-  const dedupedAdjacent = dedupeAdjacentMessageDuplicates(merged, localOnlyIds);
-  const dedupedAssistants = dedupeAssistantMessagesWithinWindow(
-    dedupedAdjacent,
-    localOnlyIds,
-  );
-  return dedupeUserMessagesWithinWindow(dedupedAssistants, localOnlyIds);
+  return merged;
 }
