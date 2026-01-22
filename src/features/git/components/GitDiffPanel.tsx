@@ -564,7 +564,7 @@ export function GitDiffPanel({
   worktreeApplyError = null,
   worktreeApplySuccess = false,
   onApplyWorktreeChanges,
-  onRevertAllChanges,
+  onRevertAllChanges: _onRevertAllChanges,
   branchName,
   totalAdditions,
   totalDeletions,
