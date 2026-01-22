@@ -266,6 +266,16 @@ export function FileTreePanel({
     setPreviewLoading(false);
   }, [workspaceId]);
 
+  const closePreview = useCallback(() => {
+    setPreviewPath(null);
+    setPreviewAnchor(null);
+    setPreviewSelection(null);
+    setPreviewContent("");
+    setPreviewTruncated(false);
+    setPreviewError(null);
+    setPreviewLoading(false);
+  }, []);
+
   useEffect(() => {
     if (!previewPath) {
       return;
@@ -278,7 +288,7 @@ export function FileTreePanel({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [previewPath]);
+  }, [previewPath, closePreview]);
 
   const toggleAllFolders = () => {
     if (!hasFolders) {
@@ -339,16 +349,6 @@ export function FileTreePanel({
     setPreviewPath(path);
     setPreviewAnchor({ top, left, arrowTop, height: maxHeight });
     setPreviewSelection(null);
-  }, []);
-
-  const closePreview = useCallback(() => {
-    setPreviewPath(null);
-    setPreviewAnchor(null);
-    setPreviewSelection(null);
-    setPreviewContent("");
-    setPreviewTruncated(false);
-    setPreviewError(null);
-    setPreviewLoading(false);
   }, []);
 
   useEffect(() => {
