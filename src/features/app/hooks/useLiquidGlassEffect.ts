@@ -28,7 +28,7 @@ export function useLiquidGlassEffect({ reduceTransparency, onDebug }: Params) {
           if (supportedRef.current) {
             await setLiquidGlassEffect({ enabled: false });
           }
-          await window.setEffects(null);
+          await window.setEffects({ effects: [] });
           return;
         }
 
@@ -39,7 +39,7 @@ export function useLiquidGlassEffect({ reduceTransparency, onDebug }: Params) {
           return;
         }
         if (supportedRef.current) {
-          await window.setEffects(null);
+          await window.setEffects({ effects: [] });
           await setLiquidGlassEffect({
             enabled: true,
             cornerRadius: 16,
