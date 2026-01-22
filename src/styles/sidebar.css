@@ -913,7 +913,7 @@
   }
 }
 .app.reduced-transparency .sidebar {
-  background: var(--surface-sidebar);
+  background: var(--surface-sidebar-opaque);
   backdrop-filter: none;
 }
 
