@@ -169,8 +169,18 @@ export function buildConversationItem(
   if (!id || !type) {
     return null;
   }
-  if (type === "agentMessage" || type === "userMessage") {
+  if (type === "agentMessage") {
     return null;
+  }
+  if (type === "userMessage") {
+    const content = Array.isArray(item.content) ? item.content : [];
+    const text = userInputsToText(content);
+    return {
+      id,
+      kind: "message",
+      role: "user",
+      text: text || "[message]",
+    };
   }
   if (type === "reasoning") {
     const summary = asString(item.summary ?? "");
@@ -452,7 +462,7 @@ const USER_DEDUPE_WINDOW = 6;
 
 function dedupeAdjacentMessageDuplicates(
   items: ConversationItem[],
-  remoteIds: Set<string>,
+  localOnlyIds: Set<string>,
 ) {
   const deduped: ConversationItem[] = [];
   for (const item of items) {
@@ -464,11 +474,20 @@ function dedupeAdjacentMessageDuplicates(
       previous.role === item.role &&
       previous.text.trim() === item.text.trim()
     ) {
-      const previousIsRemote = remoteIds.has(previous.id);
-      const currentIsRemote = remoteIds.has(item.id);
-      if (currentIsRemote && !previousIsRemote) {
-        deduped[deduped.length - 1] = item;
+      const previousIsLocal = localOnlyIds.has(previous.id);
+      const currentIsLocal = localOnlyIds.has(item.id);
+      if (previousIsLocal === currentIsLocal) {
+        if (currentIsLocal) {
+          deduped[deduped.length - 1] = item;
+          continue;
+        }
+        deduped.push(item);
+        continue;
       }
+      if (currentIsLocal) {
+        continue;
+      }
+      deduped[deduped.length - 1] = item;
       continue;
     }
     deduped.push(item);
@@ -476,22 +495,9 @@ function dedupeAdjacentMessageDuplicates(
   return deduped;
 }
 
-function choosePreferredMessageDuplicate(
-  previous: ConversationItem,
-  current: ConversationItem,
-  remoteIds: Set<string>,
-) {
-  const previousIsRemote = remoteIds.has(previous.id);
-  const currentIsRemote = remoteIds.has(current.id);
-  if (previousIsRemote !== currentIsRemote) {
-    return currentIsRemote ? current : previous;
-  }
-  return current;
-}
-
 function dedupeAssistantMessagesWithinWindow(
   items: ConversationItem[],
-  remoteIds: Set<string>,
+  localOnlyIds: Set<string>,
   windowSize = ASSISTANT_DEDUPE_WINDOW,
 ) {
   const deduped: ConversationItem[] = [];
@@ -526,17 +532,27 @@ function dedupeAssistantMessagesWithinWindow(
       continue;
     }
     const previous = deduped[matchedIndex];
-    const preferred = choosePreferredMessageDuplicate(previous, item, remoteIds);
-    if (preferred === item) {
-      deduped[matchedIndex] = item;
+    const previousIsLocal = localOnlyIds.has(previous.id);
+    const currentIsLocal = localOnlyIds.has(item.id);
+    if (previousIsLocal === currentIsLocal) {
+      if (currentIsLocal) {
+        deduped[matchedIndex] = item;
+      } else {
+        deduped.push(item);
+      }
+      continue;
     }
+    if (currentIsLocal) {
+      continue;
+    }
+    deduped[matchedIndex] = item;
   }
   return deduped;
 }
 
 function dedupeUserMessagesWithinWindow(
   items: ConversationItem[],
-  remoteIds: Set<string>,
+  localOnlyIds: Set<string>,
   windowSize = USER_DEDUPE_WINDOW,
 ) {
   const deduped: ConversationItem[] = [];
@@ -571,16 +587,20 @@ function dedupeUserMessagesWithinWindow(
       continue;
     }
     const previous = deduped[matchedIndex];
-    const previousIsRemote = remoteIds.has(previous.id);
-    const currentIsRemote = remoteIds.has(item.id);
-    if (previousIsRemote === currentIsRemote) {
-      deduped.push(item);
+    const previousIsLocal = localOnlyIds.has(previous.id);
+    const currentIsLocal = localOnlyIds.has(item.id);
+    if (previousIsLocal === currentIsLocal) {
+      if (currentIsLocal) {
+        deduped[matchedIndex] = item;
+      } else {
+        deduped.push(item);
+      }
       continue;
     }
-    const preferred = choosePreferredMessageDuplicate(previous, item, remoteIds);
-    if (preferred === item) {
-      deduped[matchedIndex] = item;
+    if (currentIsLocal) {
+      continue;
     }
+    deduped[matchedIndex] = item;
   }
   return deduped;
 }
@@ -593,6 +613,9 @@ export function mergeThreadItems(
     return remoteItems;
   }
   const remoteIds = new Set(remoteItems.map((item) => item.id));
+  const localOnlyIds = new Set(
+    localItems.map((item) => item.id).filter((id) => !remoteIds.has(id)),
+  );
   const byId = new Map(remoteItems.map((item) => [item.id, item]));
   const merged = remoteItems.map((item) => {
     const local = localItems.find((entry) => entry.id === item.id);
@@ -603,10 +626,10 @@ export function mergeThreadItems(
       merged.push(item);
     }
   });
-  const dedupedAdjacent = dedupeAdjacentMessageDuplicates(merged, remoteIds);
+  const dedupedAdjacent = dedupeAdjacentMessageDuplicates(merged, localOnlyIds);
   const dedupedAssistants = dedupeAssistantMessagesWithinWindow(
     dedupedAdjacent,
-    remoteIds,
+    localOnlyIds,
   );
-  return dedupeUserMessagesWithinWindow(dedupedAssistants, remoteIds);
+  return dedupeUserMessagesWithinWindow(dedupedAssistants, localOnlyIds);
 }
