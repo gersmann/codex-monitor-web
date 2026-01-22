@@ -40,6 +40,15 @@ const DIFF_SCROLL_CSS = `
   background-image: none !important;
 }
 
+diffs-container,
+[data-diffs],
+[data-diffs-header],
+[data-error-wrapper] {
+  position: relative !important;
+  contain: layout style !important;
+  isolation: isolate !important;
+}
+
 [data-diffs-header],
 [data-diffs],
 [data-error-wrapper] {
