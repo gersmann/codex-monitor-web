@@ -63,6 +63,7 @@ import { useComposerMenuActions } from "./features/composer/hooks/useComposerMen
 import { useComposerEditorState } from "./features/composer/hooks/useComposerEditorState";
 import { useDictationController } from "./features/app/hooks/useDictationController";
 import { useComposerController } from "./features/app/hooks/useComposerController";
+import { useComposerInsert } from "./features/app/hooks/useComposerInsert";
 import { useRenameThreadPrompt } from "./features/threads/hooks/useRenameThreadPrompt";
 import { useWorktreePrompt } from "./features/workspaces/hooks/useWorktreePrompt";
 import { useClonePrompt } from "./features/workspaces/hooks/useClonePrompt";
@@ -873,6 +874,13 @@ function MainApp() {
     startReview,
   });
 
+  const handleInsertComposerText = useComposerInsert({
+    activeThreadId,
+    draftText: activeDraft,
+    onDraftChange: handleDraftChange,
+    textareaRef: composerInputRef,
+  });
+
   const {
     commitMessage,
     commitMessageLoading,
@@ -1578,6 +1586,7 @@ function MainApp() {
     skills,
     prompts,
     files,
+    onInsertComposerText: handleInsertComposerText,
     textareaRef: composerInputRef,
     composerEditorSettings,
     composerEditorExpanded,
