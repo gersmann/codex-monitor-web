@@ -37,6 +37,8 @@ import type {
   ModelOption,
   QueuedMessage,
   RateLimitSnapshot,
+  RequestUserInputRequest,
+  RequestUserInputResponse,
   SkillOption,
   ThreadSummary,
   ThreadTokenUsage,
@@ -101,6 +103,7 @@ type LayoutNodesOptions = {
   activeRateLimits: RateLimitSnapshot | null;
   codeBlockCopyUseModifier: boolean;
   approvals: ApprovalRequest[];
+  userInputRequests: RequestUserInputRequest[];
   handleApprovalDecision: (
     request: ApprovalRequest,
     decision: "accept" | "decline",
@@ -108,6 +111,10 @@ type LayoutNodesOptions = {
   handleApprovalRemember: (
     request: ApprovalRequest,
     command: string[],
+  ) => void;
+  handleUserInputSubmit: (
+    request: RequestUserInputRequest,
+    response: RequestUserInputResponse,
   ) => void;
   onOpenSettings: () => void;
   onOpenDictationSettings?: () => void;
@@ -438,8 +445,11 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
     <Messages
       items={options.activeItems}
       threadId={options.activeThreadId ?? null}
+      workspaceId={options.activeWorkspace?.id ?? null}
       workspacePath={options.activeWorkspace?.path ?? null}
       codeBlockCopyUseModifier={options.codeBlockCopyUseModifier}
+      userInputRequests={options.userInputRequests}
+      onUserInputSubmit={options.handleUserInputSubmit}
       isThinking={
         options.activeThreadId
           ? options.threadStatusById[options.activeThreadId]?.isProcessing ?? false

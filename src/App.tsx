@@ -7,6 +7,7 @@ import "./styles/workspace-home.css";
 import "./styles/main.css";
 import "./styles/messages.css";
 import "./styles/approval-toasts.css";
+import "./styles/request-user-input.css";
 import "./styles/update-toasts.css";
 import "./styles/composer.css";
 import "./styles/diff.css";
@@ -553,6 +554,7 @@ function MainApp() {
     activeThreadId,
     activeItems,
     approvals,
+    userInputRequests,
     threadsByWorkspace,
     threadParentById,
     threadStatusById,
@@ -579,7 +581,8 @@ function MainApp() {
     sendUserMessageToThread,
     startReview,
     handleApprovalDecision,
-    handleApprovalRemember
+    handleApprovalRemember,
+    handleUserInputSubmit
   } = useThreads({
     activeWorkspace,
     onWorkspaceConnected: markWorkspaceConnected,
@@ -1363,8 +1366,10 @@ function MainApp() {
     activeRateLimits,
     codeBlockCopyUseModifier: appSettings.composerCodeBlockCopyUseModifier,
     approvals,
+    userInputRequests,
     handleApprovalDecision,
     handleApprovalRemember,
+    handleUserInputSubmit,
     onOpenSettings: () => openSettings(),
     onOpenDictationSettings: () => openSettings("dictation"),
     onOpenDebug: handleDebugClick,

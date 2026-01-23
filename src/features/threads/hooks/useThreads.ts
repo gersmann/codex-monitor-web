@@ -12,6 +12,7 @@ import { useThreadApprovals } from "./useThreadApprovals";
 import { useThreadRateLimits } from "./useThreadRateLimits";
 import { useThreadSelectors } from "./useThreadSelectors";
 import { useThreadStatus } from "./useThreadStatus";
+import { useThreadUserInput } from "./useThreadUserInput";
 import { makeCustomNameKey, saveCustomName } from "../utils/threadStorage";
 
 type UseThreadsOptions = {
@@ -45,6 +46,7 @@ export function useThreads({
   const pendingInterruptsRef = useRef<Set<string>>(new Set());
   const { approvalAllowlistRef, handleApprovalDecision, handleApprovalRemember } =
     useThreadApprovals({ dispatch, onDebug });
+  const { handleUserInputSubmit } = useThreadUserInput({ dispatch });
   const {
     customNamesRef,
     threadActivityRef,
@@ -249,6 +251,7 @@ export function useThreads({
     setActiveThreadId,
     activeItems,
     approvals: state.approvals,
+    userInputRequests: state.userInputRequests,
     threadsByWorkspace: state.threadsByWorkspace,
     threadParentById: state.threadParentById,
     threadStatusById: state.threadStatusById,
@@ -279,5 +282,6 @@ export function useThreads({
     startReview,
     handleApprovalDecision,
     handleApprovalRemember,
+    handleUserInputSubmit,
   };
 }

@@ -23,6 +23,7 @@ vi.mock("../../app/hooks/useAppServerEvents", () => ({
 
 vi.mock("../../../services/tauri", () => ({
   respondToServerRequest: vi.fn(),
+  respondToUserInputRequest: vi.fn(),
   rememberApprovalRule: vi.fn(),
   sendUserMessage: vi.fn(),
   startReview: vi.fn(),

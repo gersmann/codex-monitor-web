@@ -193,6 +193,18 @@ export async function respondToServerRequest(
   });
 }
 
+export async function respondToUserInputRequest(
+  workspaceId: string,
+  requestId: number,
+  answers: Record<string, { answers: string[] }>,
+) {
+  return invoke("respond_to_server_request", {
+    workspaceId,
+    requestId,
+    result: { answers },
+  });
+}
+
 export async function rememberApprovalRule(
   workspaceId: string,
   command: string[],

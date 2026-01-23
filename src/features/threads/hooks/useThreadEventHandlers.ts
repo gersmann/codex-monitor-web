@@ -4,6 +4,7 @@ import type { AppServerEvent, DebugEntry } from "../../../types";
 import { useThreadApprovalEvents } from "./useThreadApprovalEvents";
 import { useThreadItemEvents } from "./useThreadItemEvents";
 import { useThreadTurnEvents } from "./useThreadTurnEvents";
+import { useThreadUserInputEvents } from "./useThreadUserInputEvents";
 import type { ThreadAction } from "./useThreadsReducer";
 
 type ThreadEventHandlersOptions = {
@@ -50,6 +51,7 @@ export function useThreadEventHandlers({
     dispatch,
     approvalAllowlistRef,
   });
+  const onRequestUserInput = useThreadUserInputEvents({ dispatch });
 
   const {
     onAgentMessageDelta,
@@ -108,6 +110,7 @@ export function useThreadEventHandlers({
     () => ({
       onWorkspaceConnected,
       onApprovalRequest,
+      onRequestUserInput,
       onAppServerEvent,
       onAgentMessageDelta,
       onAgentMessageCompleted,
@@ -128,6 +131,7 @@ export function useThreadEventHandlers({
     [
       onWorkspaceConnected,
       onApprovalRequest,
+      onRequestUserInput,
       onAppServerEvent,
       onAgentMessageDelta,
       onAgentMessageCompleted,
