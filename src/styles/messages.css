@@ -790,6 +790,22 @@
   line-height: 1.35;
 }
 
+.message .markdown-linkblock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  word-break: break-all;
+}
+
+.message .markdown-linkblock a {
+  color: var(--text-accent);
+  text-decoration: underline;
+}
+
+.message .markdown-linkblock a:hover {
+  color: var(--text-strong);
+}
+
 .markdown ul,
 .markdown ol {
   padding-left: 14px;
