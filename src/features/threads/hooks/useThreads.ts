@@ -1126,11 +1126,17 @@ export function useThreads({
           if (shouldReplace) {
             replaceOnResumeRef.current[threadId] = false;
           }
+          const hasOverlap =
+            items.length > 0 &&
+            localItems.length > 0 &&
+            items.some((item) => localItems.some((local) => local.id === item.id));
           const mergedItems =
             items.length > 0
               ? shouldReplace
                 ? items
-                : mergeThreadItems(items, localItems)
+                : localItems.length > 0 && !hasOverlap
+                  ? localItems
+                  : mergeThreadItems(items, localItems)
               : localItems;
           if (mergedItems.length > 0) {
             dispatch({ type: "setThreadItems", threadId, items: mergedItems });

@@ -204,6 +204,75 @@ describe("useThreads UX integration", () => {
     });
   });
 
+  it("keeps local items when resume response does not overlap", async () => {
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          id: "thread-3",
+          preview: "Remote preview",
+          updated_at: 9999,
+          turns: [
+            {
+              items: [
+                {
+                  type: "userMessage",
+                  id: "server-user-1",
+                  content: [{ type: "text", text: "Remote hello" }],
+                },
+                {
+                  type: "agentMessage",
+                  id: "server-assistant-1",
+                  text: "Remote response",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    expect(handlers).not.toBeNull();
+
+    act(() => {
+      handlers?.onAgentMessageCompleted?.({
+        workspaceId: "ws-1",
+        threadId: "thread-3",
+        itemId: "local-assistant-1",
+        text: "Local response",
+      });
+    });
+
+    act(() => {
+      result.current.setActiveThreadId("thread-3");
+    });
+
+    await waitFor(() => {
+      expect(vi.mocked(resumeThread)).toHaveBeenCalledWith("ws-1", "thread-3");
+    });
+
+    await waitFor(() => {
+      const activeItems = result.current.activeItems;
+      const hasLocal = activeItems.some(
+        (item) =>
+          item.kind === "message" &&
+          item.role === "assistant" &&
+          item.id === "local-assistant-1",
+      );
+      const hasRemote = activeItems.some(
+        (item) => item.kind === "message" && item.id === "server-user-1",
+      );
+      expect(hasLocal).toBe(true);
+      expect(hasRemote).toBe(false);
+    });
+  });
+
   it("clears empty plan updates to null", () => {
     const { result } = renderHook(() =>
       useThreads({
