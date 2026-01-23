@@ -621,6 +621,11 @@
   max-width: 110px;
 }
 
+.composer-select--collab {
+  width: 88px;
+  max-width: 88px;
+}
+
 .composer-select--effort {
   width: 60px;
   max-width: 60px;
