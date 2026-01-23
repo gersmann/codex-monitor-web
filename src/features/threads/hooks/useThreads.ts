@@ -855,6 +855,12 @@ export function useThreads({
           hasCustomName,
         });
         dispatch({
+          type: "setThreadTimestamp",
+          workspaceId,
+          threadId,
+          timestamp,
+        });
+        dispatch({
           type: "setLastAgentMessage",
           threadId,
           text,
@@ -1118,6 +1124,7 @@ export function useThreads({
           | Record<string, unknown>
           | null;
         if (thread) {
+          dispatch({ type: "ensureThread", workspaceId, threadId });
           applyCollabThreadLinksFromThread(threadId, thread);
           const items = buildItemsFromThread(thread);
           const localItems = state.itemsByThread[threadId] ?? [];
@@ -1560,7 +1567,14 @@ export function useThreads({
           collaboration_mode: collaborationMode ?? "unknown",
         },
       });
-      recordThreadActivity(workspace.id, threadId);
+      const timestamp = Date.now();
+      recordThreadActivity(workspace.id, threadId, timestamp);
+      dispatch({
+        type: "setThreadTimestamp",
+        workspaceId: workspace.id,
+        threadId,
+        timestamp,
+      });
       markProcessing(threadId, true);
       safeMessageActivity();
       onDebug?.({
