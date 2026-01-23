@@ -993,7 +993,7 @@ impl DaemonState {
     async fn respond_to_server_request(
         &self,
         workspace_id: String,
-        request_id: u64,
+        request_id: Value,
         result: Value,
     ) -> Result<Value, String> {
         let session = self.get_session(&workspace_id).await?;
@@ -1767,7 +1767,8 @@ async fn handle_rpc_request(
             let map = params.as_object().ok_or("missing requestId")?;
             let request_id = map
                 .get("requestId")
-                .and_then(|value| value.as_u64())
+                .cloned()
+                .filter(|value| value.is_number() || value.is_string())
                 .ok_or("missing requestId")?;
             let result = map.get("result").cloned().ok_or("missing `result`")?;
             state

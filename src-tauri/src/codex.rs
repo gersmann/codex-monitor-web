@@ -507,7 +507,7 @@ pub(crate) async fn skills_list(
 #[tauri::command]
 pub(crate) async fn respond_to_server_request(
     workspace_id: String,
-    request_id: u64,
+    request_id: Value,
     result: Value,
     state: State<'_, AppState>,
     app: AppHandle,

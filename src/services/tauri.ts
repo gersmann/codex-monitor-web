@@ -183,7 +183,7 @@ export async function startReview(
 
 export async function respondToServerRequest(
   workspaceId: string,
-  requestId: number,
+  requestId: number | string,
   decision: "accept" | "decline",
 ) {
   return invoke("respond_to_server_request", {
@@ -195,7 +195,7 @@ export async function respondToServerRequest(
 
 export async function respondToUserInputRequest(
   workspaceId: string,
-  requestId: number,
+  requestId: number | string,
   answers: Record<string, { answers: string[] }>,
 ) {
   return invoke("respond_to_server_request", {

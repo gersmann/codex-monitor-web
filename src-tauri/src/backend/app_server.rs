@@ -66,7 +66,7 @@ impl WorkspaceSession {
         self.write_message(value).await
     }
 
-    pub(crate) async fn send_response(&self, id: u64, result: Value) -> Result<(), String> {
+    pub(crate) async fn send_response(&self, id: Value, result: Value) -> Result<(), String> {
         self.write_message(json!({ "id": id, "result": result }))
             .await
     }

@@ -150,7 +150,7 @@ export type CodexDoctorResult = {
 
 export type ApprovalRequest = {
   workspace_id: string;
-  request_id: number;
+  request_id: number | string;
   method: string;
   params: Record<string, unknown>;
 };
@@ -176,7 +176,7 @@ export type RequestUserInputParams = {
 
 export type RequestUserInputRequest = {
   workspace_id: string;
-  request_id: number;
+  request_id: number | string;
   params: RequestUserInputParams;
 };
 

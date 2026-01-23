@@ -78,17 +78,21 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         return;
       }
 
-      if (method.includes("requestApproval") && typeof message.id === "number") {
+      const requestId = message.id;
+      const hasRequestId =
+        typeof requestId === "number" || typeof requestId === "string";
+
+      if (method.includes("requestApproval") && hasRequestId) {
         handlers.onApprovalRequest?.({
           workspace_id,
-          request_id: message.id,
+          request_id: requestId,
           method,
           params: (message.params as Record<string, unknown>) ?? {},
         });
         return;
       }
 
-      if (method === "item/tool/requestUserInput" && typeof message.id === "number") {
+      if (method === "item/tool/requestUserInput" && hasRequestId) {
         const params = (message.params as Record<string, unknown>) ?? {};
         const questionsRaw = Array.isArray(params.questions) ? params.questions : [];
         const questions = questionsRaw
@@ -116,7 +120,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
           .filter((question) => question.id);
         handlers.onRequestUserInput?.({
           workspace_id,
-          request_id: message.id,
+          request_id: requestId,
           params: {
             thread_id: String(params.threadId ?? params.thread_id ?? ""),
             turn_id: String(params.turnId ?? params.turn_id ?? ""),

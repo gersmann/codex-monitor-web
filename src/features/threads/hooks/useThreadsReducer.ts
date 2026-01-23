@@ -203,9 +203,13 @@ export type ThreadAction =
       cursor: string | null;
     }
   | { type: "addApproval"; approval: ApprovalRequest }
-  | { type: "removeApproval"; requestId: number; workspaceId: string }
+  | { type: "removeApproval"; requestId: number | string; workspaceId: string }
   | { type: "addUserInputRequest"; request: RequestUserInputRequest }
-  | { type: "removeUserInputRequest"; requestId: number; workspaceId: string }
+  | {
+      type: "removeUserInputRequest";
+      requestId: number | string;
+      workspaceId: string;
+    }
   | { type: "setThreadTokenUsage"; threadId: string; tokenUsage: ThreadTokenUsage }
   | {
       type: "setRateLimits";
