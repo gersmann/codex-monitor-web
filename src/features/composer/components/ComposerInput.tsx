@@ -44,6 +44,7 @@ type ComposerInputProps = {
   highlightIndex: number;
   onHighlightIndex: (index: number) => void;
   onSelectSuggestion: (item: AutocompleteItem) => void;
+  suggestionsStyle?: React.CSSProperties;
 };
 
 export function ComposerInput({
@@ -80,6 +81,7 @@ export function ComposerInput({
   highlightIndex,
   onHighlightIndex,
   onSelectSuggestion,
+  suggestionsStyle,
 }: ComposerInputProps) {
   const suggestionListRef = useRef<HTMLDivElement | null>(null);
   const suggestionRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -275,6 +277,7 @@ export function ComposerInput({
             className="composer-suggestions popover-surface"
             role="listbox"
             ref={suggestionListRef}
+            style={suggestionsStyle}
           >
             {suggestions.map((item, index) => (
               <button
@@ -321,17 +324,19 @@ export function ComposerInput({
           </div>
         )}
       </div>
-      <button
-        className={`composer-action composer-action--expand${
-          isExpanded ? " is-active" : ""
-        }`}
-        onClick={onToggleExpand}
-        disabled={disabled || !onToggleExpand}
-        aria-label={isExpanded ? "Collapse input" : "Expand input"}
-        title={isExpanded ? "Collapse input" : "Expand input"}
-      >
-        {isExpanded ? <ChevronDown aria-hidden /> : <ChevronUp aria-hidden />}
-      </button>
+      {onToggleExpand && (
+        <button
+          className={`composer-action composer-action--expand${
+            isExpanded ? " is-active" : ""
+          }`}
+          onClick={onToggleExpand}
+          disabled={disabled}
+          aria-label={isExpanded ? "Collapse input" : "Expand input"}
+          title={isExpanded ? "Collapse input" : "Expand input"}
+        >
+          {isExpanded ? <ChevronDown aria-hidden /> : <ChevronUp aria-hidden />}
+        </button>
+      )}
       <button
         className={`composer-action composer-action--mic${
           isDictationBusy ? " is-active" : ""

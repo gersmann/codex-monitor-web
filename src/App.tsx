@@ -3,6 +3,7 @@ import "./styles/base.css";
 import "./styles/buttons.css";
 import "./styles/sidebar.css";
 import "./styles/home.css";
+import "./styles/workspace-home.css";
 import "./styles/main.css";
 import "./styles/messages.css";
 import "./styles/approval-toasts.css";
@@ -83,6 +84,8 @@ import { useLiquidGlassEffect } from "./features/app/hooks/useLiquidGlassEffect"
 import { useCopyThread } from "./features/threads/hooks/useCopyThread";
 import { useTerminalController } from "./features/terminal/hooks/useTerminalController";
 import { useGitCommitController } from "./features/app/hooks/useGitCommitController";
+import { WorkspaceHome } from "./features/workspaces/components/WorkspaceHome";
+import { useWorkspaceHome } from "./features/workspaces/hooks/useWorkspaceHome";
 import { pickWorkspacePath } from "./services/tauri";
 import type {
   AccessMode,
@@ -802,6 +805,7 @@ function MainApp() {
     activePlan && (activePlan.steps.length > 0 || activePlan.explanation)
   );
   const showHome = !activeWorkspace;
+  const showWorkspaceHome = Boolean(activeWorkspace && !activeThreadId);
   const [usageMetric, setUsageMetric] = useState<"tokens" | "time">("tokens");
   const [usageWorkspaceId, setUsageWorkspaceId] = useState<string | null>(null);
   const usageWorkspaceOptions = useMemo(
@@ -882,6 +886,28 @@ function MainApp() {
     draftText: activeDraft,
     onDraftChange: handleDraftChange,
     textareaRef: composerInputRef,
+  });
+
+  const {
+    runs: workspaceRuns,
+    draft: workspacePrompt,
+    runMode: workspaceRunMode,
+    modelSelections: workspaceModelSelections,
+    error: workspaceRunError,
+    isSubmitting: workspaceRunSubmitting,
+    setDraft: setWorkspacePrompt,
+    setRunMode: setWorkspaceRunMode,
+    toggleModelSelection: toggleWorkspaceModelSelection,
+    setModelCount: setWorkspaceModelCount,
+    startRun: startWorkspaceRun,
+  } = useWorkspaceHome({
+    activeWorkspace,
+    models,
+    selectedModelId,
+    addWorktreeAgent,
+    connectWorkspace,
+    startThreadForWorkspace,
+    sendUserMessageToThread,
   });
 
   const {
@@ -1158,6 +1184,26 @@ function MainApp() {
     queueMessage,
   });
 
+  const handleSelectWorkspaceInstance = useCallback(
+    (workspaceId: string, threadId: string) => {
+      exitDiffView();
+      resetPullRequestSelection();
+      selectWorkspace(workspaceId);
+      setActiveThreadId(threadId, workspaceId);
+      if (isCompact) {
+        setActiveTab("codex");
+      }
+    },
+    [
+      exitDiffView,
+      isCompact,
+      resetPullRequestSelection,
+      selectWorkspace,
+      setActiveTab,
+      setActiveThreadId,
+    ],
+  );
+
   const orderValue = (entry: WorkspaceInfo) =>
     typeof entry.settings.sortOrder === "number"
       ? entry.settings.sortOrder
@@ -1208,9 +1254,9 @@ function MainApp() {
     );
   };
 
-  const showComposer = !isCompact
+  const showComposer = (!isCompact
     ? centerMode === "chat" || centerMode === "diff"
-    : (isTablet ? tabletTab : activeTab) === "codex";
+    : (isTablet ? tabletTab : activeTab) === "codex") && !showWorkspaceHome;
   const showGitDetail = Boolean(selectedDiffPath) && isPhone;
   const {
     terminalTabs,
@@ -1332,6 +1378,7 @@ function MainApp() {
       exitDiffView();
       resetPullRequestSelection();
       selectWorkspace(workspaceId);
+      setActiveThreadId(null, workspaceId);
     },
     onConnectWorkspace: async (workspace) => {
       await connectWorkspace(workspace);
@@ -1638,6 +1685,46 @@ function MainApp() {
     onWorkspaceDrop: handleWorkspaceDrop,
   });
 
+  const workspaceHomeNode = activeWorkspace ? (
+    <WorkspaceHome
+      workspace={activeWorkspace}
+      runs={workspaceRuns}
+      prompt={workspacePrompt}
+      onPromptChange={setWorkspacePrompt}
+      onStartRun={startWorkspaceRun}
+      runMode={workspaceRunMode}
+      onRunModeChange={setWorkspaceRunMode}
+      models={models}
+      selectedModelId={selectedModelId}
+      onSelectModel={setSelectedModelId}
+      modelSelections={workspaceModelSelections}
+      onToggleModel={toggleWorkspaceModelSelection}
+      onModelCountChange={setWorkspaceModelCount}
+      error={workspaceRunError}
+      isSubmitting={workspaceRunSubmitting}
+      activeWorkspaceId={activeWorkspaceId}
+      activeThreadId={activeThreadId}
+      threadStatusById={threadStatusById}
+      onSelectInstance={handleSelectWorkspaceInstance}
+      skills={skills}
+      prompts={prompts}
+      files={files}
+      dictationEnabled={appSettings.dictationEnabled && dictationReady}
+      dictationState={dictationState}
+      dictationLevel={dictationLevel}
+      onToggleDictation={handleToggleDictation}
+      onOpenDictationSettings={() => openSettings("dictation")}
+      dictationError={dictationError}
+      onDismissDictationError={clearDictationError}
+      dictationHint={dictationHint}
+      onDismissDictationHint={clearDictationHint}
+      dictationTranscript={dictationTranscript}
+      onDictationTranscriptHandled={clearDictationTranscript}
+    />
+  ) : null;
+
+  const mainMessagesNode = showWorkspaceHome ? workspaceHomeNode : messagesNode;
+
   const desktopTopbarLeftNodeWithToggle = !isCompact ? (
     <div className="topbar-leading">
       <SidebarCollapseButton {...sidebarToggleProps} />
@@ -1696,7 +1783,7 @@ function MainApp() {
         hasActivePlan={hasActivePlan}
         activeWorkspace={Boolean(activeWorkspace)}
         sidebarNode={sidebarNode}
-        messagesNode={messagesNode}
+        messagesNode={mainMessagesNode}
         composerNode={composerNode}
         approvalToastsNode={approvalToastsNode}
         updateToastNode={updateToastNode}
