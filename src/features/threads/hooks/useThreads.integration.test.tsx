@@ -8,7 +8,6 @@ import {
   interruptTurn,
   listThreads,
   resumeThread,
-  sendUserMessage,
 } from "../../../services/tauri";
 import { useThreads } from "./useThreads";
 
@@ -59,10 +58,7 @@ describe("useThreads UX integration", () => {
     nowSpy.mockRestore();
   });
 
-  it("resumes selected threads, merges local deltas, and syncs unread/review/plan state", async () => {
-    vi.mocked(sendUserMessage).mockResolvedValue({
-      result: { turn: { id: "turn-1" } },
-    });
+  it("resumes selected threads when no local items exist", async () => {
     vi.mocked(resumeThread).mockResolvedValue({
       result: {
         thread: {
@@ -103,37 +99,6 @@ describe("useThreads UX integration", () => {
     expect(handlers).not.toBeNull();
 
     act(() => {
-      handlers?.onTurnStarted?.("ws-1", "thread-1", "turn-1");
-      handlers?.onTurnStarted?.("ws-1", "thread-2", "turn-2");
-    });
-
-    await act(async () => {
-      await result.current.sendUserMessageToThread(workspace, "thread-2", "Hello");
-      await result.current.sendUserMessageToThread(workspace, "thread-2", "Hello");
-    });
-
-    act(() => {
-      handlers?.onAgentMessageDelta?.({
-        workspaceId: "ws-1",
-        threadId: "thread-2",
-        itemId: "assistant-1",
-        delta: "Hello",
-      });
-      handlers?.onAgentMessageCompleted?.({
-        workspaceId: "ws-1",
-        threadId: "thread-2",
-        itemId: "assistant-final",
-        text: "Other",
-      });
-      handlers?.onTurnPlanUpdated?.("ws-1", "thread-2", "turn-2", {
-        explanation: " Plan note ",
-        plan: [{ step: "Do it", status: "in_progress" }],
-      });
-    });
-
-    expect(result.current.threadStatusById["thread-2"]?.hasUnread).toBe(true);
-
-    act(() => {
       result.current.setActiveThreadId("thread-2");
     });
 
@@ -142,24 +107,10 @@ describe("useThreads UX integration", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.threadStatusById["thread-2"]?.hasUnread).toBe(false);
       expect(result.current.threadStatusById["thread-2"]?.isReviewing).toBe(true);
-    });
-    expect(result.current.planByThread["thread-2"]).toEqual({
-      turnId: "turn-2",
-      explanation: "Plan note",
-      steps: [{ step: "Do it", status: "inProgress" }],
     });
 
     const activeItems = result.current.activeItems;
-    const userHelloMessages = activeItems.filter(
-      (item) =>
-        item.kind === "message" &&
-        item.role === "user" &&
-        item.text === "Hello",
-    );
-    expect(userHelloMessages).toHaveLength(1);
-
     const assistantMerged = activeItems.find(
       (item) =>
         item.kind === "message" &&

@@ -1135,6 +1135,10 @@ export function useThreads({
           if (shouldReplace) {
             replaceOnResumeRef.current[threadId] = false;
           }
+          if (localItems.length > 0 && !shouldReplace) {
+            loadedThreads.current[threadId] = true;
+            return threadId;
+          }
           const hasOverlap =
             items.length > 0 &&
             localItems.length > 0 &&
