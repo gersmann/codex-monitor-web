@@ -212,8 +212,9 @@ export function useThreads({
       if (!targetId) {
         return;
       }
+      const currentThreadId = state.activeThreadIdByWorkspace[targetId] ?? null;
       dispatch({ type: "setActiveThreadId", workspaceId: targetId, threadId });
-      if (threadId) {
+      if (threadId && currentThreadId !== threadId) {
         Sentry.metrics.count("thread_switched", 1, {
           attributes: {
             workspace_id: targetId,
@@ -221,10 +222,12 @@ export function useThreads({
             reason: "select",
           },
         });
+      }
+      if (threadId) {
         void resumeThreadForWorkspace(targetId, threadId, true);
       }
     },
-    [activeWorkspaceId, resumeThreadForWorkspace],
+    [activeWorkspaceId, resumeThreadForWorkspace, state.activeThreadIdByWorkspace],
   );
 
   const removeThread = useCallback(

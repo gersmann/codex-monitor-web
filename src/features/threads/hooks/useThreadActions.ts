@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import type { Dispatch, MutableRefObject } from "react";
-import * as Sentry from "@sentry/react";
 import type {
   ConversationItem,
   DebugEntry,
@@ -82,13 +81,6 @@ export function useThreadActions({
           dispatch({ type: "ensureThread", workspaceId, threadId });
           if (shouldActivate) {
             dispatch({ type: "setActiveThreadId", workspaceId, threadId });
-            Sentry.metrics.count("thread_switched", 1, {
-              attributes: {
-                workspace_id: workspaceId,
-                thread_id: threadId,
-                reason: "start",
-              },
-            });
           }
           loadedThreadsRef.current[threadId] = true;
           return threadId;
