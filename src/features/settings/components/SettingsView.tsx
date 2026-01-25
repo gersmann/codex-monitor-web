@@ -2250,7 +2250,7 @@ export function SettingsView({
                   <div>
                     <div className="settings-toggle-title">Collaboration modes</div>
                     <div className="settings-toggle-subtitle">
-                      Enable collaboration mode presets (Default, Plan, Pair programming, Execute).
+                      Enable collaboration mode presets (Code, Plan).
                     </div>
                   </div>
                   <button
