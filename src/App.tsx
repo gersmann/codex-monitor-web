@@ -364,6 +364,7 @@ function MainApp() {
     selectedModel,
     selectedModelId,
     setSelectedModelId,
+    reasoningSupported,
     reasoningOptions,
     selectedEffort,
     setSelectedEffort
@@ -404,6 +405,7 @@ function MainApp() {
     reasoningOptions,
     selectedEffort,
     onSelectEffort: setSelectedEffort,
+    reasoningSupported,
   });
 
   useComposerMenuActions({
@@ -418,6 +420,7 @@ function MainApp() {
     reasoningOptions,
     selectedEffort,
     onSelectEffort: setSelectedEffort,
+    reasoningSupported,
     onFocusComposer: () => composerInputRef.current?.focus(),
   });
   const { skills } = useSkills({ activeWorkspace, onDebug: addDebugEntry });
@@ -467,6 +470,7 @@ function MainApp() {
   });
 
   const resolvedModel = selectedModel?.model ?? null;
+  const resolvedEffort = reasoningSupported ? selectedEffort : null;
   const activeGitRoot = activeWorkspace?.settings.gitRoot ?? null;
   const normalizePath = useCallback((value: string) => {
     return value.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -565,7 +569,7 @@ function MainApp() {
   const { collaborationModePayload } = useCollaborationModeSelection({
     selectedCollaborationMode,
     selectedCollaborationModeId,
-    selectedEffort,
+    selectedEffort: resolvedEffort,
     resolvedModel,
   });
 
@@ -608,7 +612,7 @@ function MainApp() {
     onWorkspaceConnected: markWorkspaceConnected,
     onDebug: addDebugEntry,
     model: resolvedModel,
-    effort: selectedEffort,
+    effort: resolvedEffort,
     collaborationMode: collaborationModePayload,
     accessMode,
     steerEnabled: appSettings.experimentalSteerEnabled,
@@ -1713,6 +1717,7 @@ function MainApp() {
     reasoningOptions,
     selectedEffort,
     onSelectEffort: setSelectedEffort,
+    reasoningSupported,
     accessMode,
     onSelectAccessMode: setAccessMode,
     skills,

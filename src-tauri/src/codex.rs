@@ -15,6 +15,7 @@ use crate::backend::app_server::{
     spawn_workspace_session as spawn_workspace_session_inner,
 };
 use crate::codex_args::apply_codex_args;
+use crate::codex_config;
 use crate::codex_home::{resolve_default_codex_home, resolve_workspace_codex_home};
 use crate::event_sink::TauriEventSink;
 use crate::remote_backend;
@@ -593,10 +594,45 @@ pub(crate) async fn remember_approval_rule(
         return Err("empty command".to_string());
     }
 
+    let codex_home = resolve_codex_home_for_workspace(&workspace_id, &state).await?;
+    let rules_path = rules::default_rules_path(&codex_home);
+    rules::append_prefix_rule(&rules_path, &command)?;
+
+    Ok(json!({
+        "ok": true,
+        "rulesPath": rules_path,
+    }))
+}
+
+#[tauri::command]
+pub(crate) async fn get_config_model(
+    workspace_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        return remote_backend::call_remote(
+            &*state,
+            app,
+            "get_config_model",
+            json!({ "workspaceId": workspace_id }),
+        )
+        .await;
+    }
+
+    let codex_home = resolve_codex_home_for_workspace(&workspace_id, &state).await?;
+    let model = codex_config::read_config_model(Some(codex_home))?;
+    Ok(json!({ "model": model }))
+}
+
+async fn resolve_codex_home_for_workspace(
+    workspace_id: &str,
+    state: &State<'_, AppState>,
+) -> Result<PathBuf, String> {
     let (entry, parent_entry) = {
         let workspaces = state.workspaces.lock().await;
         let entry = workspaces
-            .get(&workspace_id)
+            .get(workspace_id)
             .ok_or("workspace not found")?
             .clone();
         let parent_entry = entry
@@ -607,16 +643,9 @@ pub(crate) async fn remember_approval_rule(
         (entry, parent_entry)
     };
 
-    let codex_home = resolve_workspace_codex_home(&entry, parent_entry.as_ref())
+    resolve_workspace_codex_home(&entry, parent_entry.as_ref())
         .or_else(resolve_default_codex_home)
-        .ok_or("Unable to resolve CODEX_HOME".to_string())?;
-    let rules_path = rules::default_rules_path(&codex_home);
-    rules::append_prefix_rule(&rules_path, &command)?;
-
-    Ok(json!({
-        "ok": true,
-        "rulesPath": rules_path,
-    }))
+        .ok_or("Unable to resolve CODEX_HOME".to_string())
 }
 
 /// Generates a commit message in the background without showing in the main chat

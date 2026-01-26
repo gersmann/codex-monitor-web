@@ -390,7 +390,7 @@ export type ModelOption = {
   displayName: string;
   description: string;
   supportedReasoningEfforts: { reasoningEffort: string; description: string }[];
-  defaultReasoningEffort: string;
+  defaultReasoningEffort: string | null;
   isDefault: boolean;
 };
 

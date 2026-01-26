@@ -1181,10 +1181,27 @@ impl DaemonState {
             return Err("empty command".to_string());
         }
 
+        let codex_home = self.resolve_codex_home_for_workspace(&workspace_id).await?;
+        let rules_path = rules::default_rules_path(&codex_home);
+        rules::append_prefix_rule(&rules_path, &command)?;
+
+        Ok(json!({
+            "ok": true,
+            "rulesPath": rules_path,
+        }))
+    }
+
+    async fn get_config_model(&self, workspace_id: String) -> Result<Value, String> {
+        let codex_home = self.resolve_codex_home_for_workspace(&workspace_id).await?;
+        let model = codex_config::read_config_model(Some(codex_home))?;
+        Ok(json!({ "model": model }))
+    }
+
+    async fn resolve_codex_home_for_workspace(&self, workspace_id: &str) -> Result<PathBuf, String> {
         let (entry, parent_entry) = {
             let workspaces = self.workspaces.lock().await;
             let entry = workspaces
-                .get(&workspace_id)
+                .get(workspace_id)
                 .ok_or("workspace not found")?
                 .clone();
             let parent_entry = entry
@@ -1195,16 +1212,9 @@ impl DaemonState {
             (entry, parent_entry)
         };
 
-        let codex_home = codex_home::resolve_workspace_codex_home(&entry, parent_entry.as_ref())
+        codex_home::resolve_workspace_codex_home(&entry, parent_entry.as_ref())
             .or_else(codex_home::resolve_default_codex_home)
-            .ok_or("Unable to resolve CODEX_HOME".to_string())?;
-        let rules_path = rules::default_rules_path(&codex_home);
-        rules::append_prefix_rule(&rules_path, &command)?;
-
-        Ok(json!({
-            "ok": true,
-            "rulesPath": rules_path,
-        }))
+            .ok_or("Unable to resolve CODEX_HOME".to_string())
     }
 }
 
@@ -1855,6 +1865,10 @@ async fn handle_rpc_request(
                 .to_str()
                 .ok_or("Unable to resolve CODEX_HOME".to_string())?;
             Ok(Value::String(path.to_string()))
+        }
+        "get_config_model" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.get_config_model(workspace_id).await
         }
         "start_thread" => {
             let workspace_id = parse_string(&params, "workspaceId")?;

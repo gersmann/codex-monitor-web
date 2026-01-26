@@ -347,6 +347,7 @@ type LayoutNodesOptions = {
   reasoningOptions: string[];
   selectedEffort: string | null;
   onSelectEffort: (effort: string | null) => void;
+  reasoningSupported: boolean;
   accessMode: AccessMode;
   onSelectAccessMode: (mode: AccessMode) => void;
   skills: SkillOption[];
@@ -519,6 +520,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       reasoningOptions={options.reasoningOptions}
       selectedEffort={options.selectedEffort}
       onSelectEffort={options.onSelectEffort}
+      reasoningSupported={options.reasoningSupported}
       accessMode={options.accessMode}
       onSelectAccessMode={options.onSelectAccessMode}
       skills={options.skills}

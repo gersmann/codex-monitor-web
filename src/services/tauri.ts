@@ -53,6 +53,18 @@ export async function getCodexConfigPath(): Promise<string> {
   return invoke<string>("get_codex_config_path");
 }
 
+export async function getConfigModel(workspaceId: string): Promise<string | null> {
+  const response = await invoke<{ model?: string | null }>("get_config_model", {
+    workspaceId,
+  });
+  const model = response?.model;
+  if (typeof model !== "string") {
+    return null;
+  }
+  const trimmed = model.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export async function addWorkspace(
   path: string,
   codex_bin: string | null,
