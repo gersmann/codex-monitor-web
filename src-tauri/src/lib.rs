@@ -2,6 +2,7 @@ use tauri::{Manager, RunEvent, WindowEvent};
 
 mod backend;
 mod codex;
+mod codex_args;
 mod codex_config;
 mod codex_home;
 #[cfg(not(target_os = "windows"))]

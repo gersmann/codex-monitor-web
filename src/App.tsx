@@ -477,7 +477,6 @@ function MainApp() {
         return;
       }
       await updateWorkspaceSettings(activeWorkspace.id, {
-        ...activeWorkspace.settings,
         gitRoot: path,
       });
       clearGitRootCandidates();
@@ -1072,6 +1071,9 @@ function MainApp() {
   const handleRevealGeneralPrompts = useCallback(async () => {
     try {
       const path = await getGlobalPromptsDir();
+      if (!path) {
+        return;
+      }
       await revealItemInDir(path);
     } catch (error) {
       alertError(error);
@@ -1294,7 +1296,6 @@ function MainApp() {
     await Promise.all(
       next.map((entry, idx) =>
         updateWorkspaceSettings(entry.id, {
-          ...entry.settings,
           sortOrder: idx
         })
       )
@@ -1464,7 +1465,6 @@ function MainApp() {
         return;
       }
       void updateWorkspaceSettings(workspaceId, {
-        ...target.settings,
         sidebarCollapsed: collapsed,
       });
     },
@@ -1674,6 +1674,7 @@ function MainApp() {
     onMovePrompt: handleMovePrompt,
     onRevealWorkspacePrompts: handleRevealWorkspacePrompts,
     onRevealGeneralPrompts: handleRevealGeneralPrompts,
+    canRevealGeneralPrompts: Boolean(activeWorkspace),
     onSend: handleComposerSend,
     onQueue: handleComposerQueue,
     onStop: interruptTurn,
@@ -1927,6 +1928,9 @@ function MainApp() {
           onRunDoctor: doctor,
           onUpdateWorkspaceCodexBin: async (id, codexBin) => {
             await updateWorkspaceCodexBin(id, codexBin);
+          },
+          onUpdateWorkspaceSettings: async (id, settings) => {
+            await updateWorkspaceSettings(id, settings);
           },
           scaleShortcutTitle,
           scaleShortcutText,

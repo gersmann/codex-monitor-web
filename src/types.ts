@@ -3,6 +3,8 @@ export type WorkspaceSettings = {
   sortOrder?: number | null;
   groupId?: string | null;
   gitRoot?: string | null;
+  codexHome?: string | null;
+  codexArgs?: string | null;
   launchScript?: string | null;
 };
 
@@ -100,6 +102,7 @@ export type OpenAppTarget = {
 
 export type AppSettings = {
   codexBin: string | null;
+  codexArgs: string | null;
   backendMode: BackendMode;
   remoteBackendHost: string;
   remoteBackendToken: string | null;
