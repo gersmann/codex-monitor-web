@@ -1,4 +1,6 @@
-use tauri::{Manager, RunEvent, WindowEvent};
+use tauri::Manager;
+#[cfg(target_os = "macos")]
+use tauri::{RunEvent, WindowEvent};
 
 mod backend;
 mod codex;
@@ -159,6 +161,7 @@ pub fn run() {
         .expect("error while running tauri application");
 
     app.run(|app_handle, event| {
+        #[cfg(target_os = "macos")]
         if let RunEvent::Reopen { .. } = event {
             if let Some(window) = app_handle.get_webview_window("main") {
                 let _ = window.show();
