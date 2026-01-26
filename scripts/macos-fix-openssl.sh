@@ -3,6 +3,7 @@ set -euo pipefail
 
 app_path="${1:-src-tauri/target/release/bundle/macos/CodexMonitor.app}"
 identity="${CODESIGN_IDENTITY:-}"
+entitlements_path="${ENTITLEMENTS_PATH:-src-tauri/Entitlements.plist}"
 
 if [[ -z "${identity}" ]]; then
   echo "CODESIGN_IDENTITY is required. Example:"
@@ -13,6 +14,14 @@ fi
 if [[ ! -d "${app_path}" ]]; then
   echo "App bundle not found: ${app_path}"
   exit 1
+fi
+
+codesign_entitlements=()
+if [[ -f "${entitlements_path}" ]]; then
+  echo "Using entitlements: ${entitlements_path}"
+  codesign_entitlements=(--entitlements "${entitlements_path}")
+else
+  echo "Warning: entitlements file not found at ${entitlements_path}; signing without entitlements."
 fi
 
 openssl_prefix=""
@@ -81,10 +90,10 @@ fi
 
 codesign --force --options runtime --timestamp --sign "${identity}" "${frameworks_dir}/libcrypto.3.dylib"
 codesign --force --options runtime --timestamp --sign "${identity}" "${frameworks_dir}/libssl.3.dylib"
-codesign --force --options runtime --timestamp --sign "${identity}" "${bin_path}"
+codesign --force --options runtime --timestamp --sign "${identity}" "${codesign_entitlements[@]}" "${bin_path}"
 if [[ -f "${daemon_path}" ]]; then
-  codesign --force --options runtime --timestamp --sign "${identity}" "${daemon_path}"
+  codesign --force --options runtime --timestamp --sign "${identity}" "${codesign_entitlements[@]}" "${daemon_path}"
 fi
-codesign --force --options runtime --timestamp --sign "${identity}" "${app_path}"
+codesign --force --options runtime --timestamp --sign "${identity}" "${codesign_entitlements[@]}" "${app_path}"
 
 echo "Bundled OpenSSL dylibs and re-signed ${app_path}"
