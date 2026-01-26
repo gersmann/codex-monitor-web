@@ -152,10 +152,40 @@ export function useModels({
       payload: { workspaceId },
     });
     try {
-      const [response, configModelFromConfig] = await Promise.all([
+      const [modelListResult, configModelResult] = await Promise.allSettled([
         getModelList(workspaceId),
         getConfigModel(workspaceId),
       ]);
+      const configModelFromConfig =
+        configModelResult.status === "fulfilled"
+          ? configModelResult.value
+          : null;
+      if (configModelResult.status === "rejected") {
+        onDebug?.({
+          id: `${Date.now()}-client-config-model-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "config/model error",
+          payload:
+            configModelResult.reason instanceof Error
+              ? configModelResult.reason.message
+              : String(configModelResult.reason),
+        });
+      }
+      const response =
+        modelListResult.status === "fulfilled" ? modelListResult.value : null;
+      if (modelListResult.status === "rejected") {
+        onDebug?.({
+          id: `${Date.now()}-client-model-list-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "model/list error",
+          payload:
+            modelListResult.reason instanceof Error
+              ? modelListResult.reason.message
+              : String(modelListResult.reason),
+        });
+      }
       onDebug?.({
         id: `${Date.now()}-server-model-list`,
         timestamp: Date.now(),
@@ -164,7 +194,7 @@ export function useModels({
         payload: response,
       });
       setConfigModel(configModelFromConfig);
-      const rawData = response.result?.data ?? response.data ?? [];
+      const rawData = response?.result?.data ?? response?.data ?? [];
       const dataFromServer: ModelOption[] = rawData.map((item: any) => ({
         id: String(item.id ?? item.model ?? ""),
         model: String(item.model ?? item.id ?? ""),
@@ -233,14 +263,6 @@ export function useModels({
           setSelectedEffortState(nextEffort);
         }
       }
-    } catch (error) {
-      onDebug?.({
-        id: `${Date.now()}-client-model-list-error`,
-        timestamp: Date.now(),
-        source: "error",
-        label: "model/list error",
-        payload: error instanceof Error ? error.message : String(error),
-      });
     } finally {
       inFlight.current = false;
     }
