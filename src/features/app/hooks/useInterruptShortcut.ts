@@ -7,6 +7,20 @@ type UseInterruptShortcutOptions = {
   onTrigger: () => void | Promise<void>;
 };
 
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.isContentEditable) {
+    return true;
+  }
+  return Boolean(
+    target.closest(
+      'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="textbox"]',
+    ),
+  );
+}
+
 export function useInterruptShortcut({
   isEnabled,
   shortcut,
@@ -17,15 +31,10 @@ export function useInterruptShortcut({
       return;
     }
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || event.defaultPrevented) {
+      if (event.defaultPrevented || event.repeat) {
         return;
       }
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable ||
-          target.closest("input, textarea, select, [contenteditable='true']"))
-      ) {
+      if (isEditableTarget(event.target)) {
         return;
       }
       if (!matchesShortcut(event, shortcut)) {

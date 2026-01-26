@@ -49,6 +49,7 @@ export function useLayoutController({
     onToggleDebug: handleDebugClick,
     onToggleTerminal: handleToggleTerminal,
     openTerminal,
+    closeTerminal,
   } = usePanelVisibility({
     isCompact,
     activeWorkspaceId,
@@ -88,5 +89,6 @@ export function useLayoutController({
     handleDebugClick,
     handleToggleTerminal,
     openTerminal,
+    closeTerminal,
   };
 }
