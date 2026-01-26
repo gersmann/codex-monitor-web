@@ -9,6 +9,12 @@ import {
   clampCodeFontSize,
   normalizeFontFamily,
 } from "../../../utils/fonts";
+import {
+  DEFAULT_OPEN_APP_ID,
+  DEFAULT_OPEN_APP_TARGETS,
+  OPEN_APP_STORAGE_KEY,
+} from "../../app/constants";
+import { normalizeOpenAppTargets } from "../../app/utils/openApp";
 
 const allowedThemes = new Set(["system", "light", "dark"]);
 
@@ -59,9 +65,31 @@ const defaultSettings: AppSettings = {
   composerListContinuation: false,
   composerCodeBlockCopyUseModifier: false,
   workspaceGroups: [],
+  openAppTargets: DEFAULT_OPEN_APP_TARGETS,
+  selectedOpenAppId: DEFAULT_OPEN_APP_ID,
 };
 
 function normalizeAppSettings(settings: AppSettings): AppSettings {
+  const normalizedTargets =
+    settings.openAppTargets && settings.openAppTargets.length
+      ? normalizeOpenAppTargets(settings.openAppTargets)
+      : DEFAULT_OPEN_APP_TARGETS;
+  const storedOpenAppId =
+    typeof window === "undefined"
+      ? null
+      : window.localStorage.getItem(OPEN_APP_STORAGE_KEY);
+  const hasPersistedSelection = normalizedTargets.some(
+    (target) => target.id === settings.selectedOpenAppId,
+  );
+  const hasStoredSelection =
+    !hasPersistedSelection &&
+    storedOpenAppId !== null &&
+    normalizedTargets.some((target) => target.id === storedOpenAppId);
+  const selectedOpenAppId = hasPersistedSelection
+    ? settings.selectedOpenAppId
+    : hasStoredSelection
+      ? storedOpenAppId
+      : normalizedTargets[0]?.id ?? DEFAULT_OPEN_APP_ID;
   return {
     ...settings,
     uiScale: clampUiScale(settings.uiScale),
@@ -75,6 +103,8 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
       DEFAULT_CODE_FONT_FAMILY,
     ),
     codeFontSize: clampCodeFontSize(settings.codeFontSize),
+    openAppTargets: normalizedTargets,
+    selectedOpenAppId,
   };
 }
 

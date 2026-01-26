@@ -13,10 +13,12 @@ import FileText from "lucide-react/dist/esm/icons/file-text";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import X from "lucide-react/dist/esm/icons/x";
 import FlaskConical from "lucide-react/dist/esm/icons/flask-conical";
+import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import type {
   AppSettings,
   CodexDoctorResult,
   DictationModelStatus,
+  OpenAppTarget,
   WorkspaceGroup,
   WorkspaceInfo,
 } from "../../../types";
@@ -33,6 +35,8 @@ import {
   clampCodeFontSize,
   normalizeFontFamily,
 } from "../../../utils/fonts";
+import { DEFAULT_OPEN_APP_ID, OPEN_APP_STORAGE_KEY } from "../../app/constants";
+import { GENERIC_APP_ICON, getKnownOpenAppIcon } from "../../app/utils/openAppIcons";
 
 const DICTATION_MODELS = [
   { id: "tiny", label: "Tiny", size: "75 MB", note: "Fastest, least accurate." },
@@ -117,6 +121,7 @@ export type SettingsViewProps = {
   reduceTransparency: boolean;
   onToggleTransparency: (value: boolean) => void;
   appSettings: AppSettings;
+  openAppIconById: Record<string, string>;
   onUpdateAppSettings: (next: AppSettings) => Promise<void>;
   onRunDoctor: (codexBin: string | null) => Promise<CodexDoctorResult>;
   onUpdateWorkspaceCodexBin: (id: string, codexBin: string | null) => Promise<void>;
@@ -130,7 +135,13 @@ export type SettingsViewProps = {
   initialSection?: CodexSection;
 };
 
-type SettingsSection = "projects" | "display" | "composer" | "dictation" | "shortcuts";
+type SettingsSection =
+  | "projects"
+  | "display"
+  | "composer"
+  | "dictation"
+  | "shortcuts"
+  | "open-apps";
 type CodexSection = SettingsSection | "codex" | "experimental";
 type ShortcutSettingKey =
   | "composerModelShortcut"
@@ -165,6 +176,8 @@ type ShortcutDraftKey =
   | "cycleWorkspaceNext"
   | "cycleWorkspacePrev";
 
+type OpenAppDraft = OpenAppTarget & { argsText: string };
+
 const shortcutDraftKeyBySetting: Record<ShortcutSettingKey, ShortcutDraftKey> = {
   composerModelShortcut: "model",
   composerAccessShortcut: "access",
@@ -183,6 +196,19 @@ const shortcutDraftKeyBySetting: Record<ShortcutSettingKey, ShortcutDraftKey> = 
   cycleWorkspacePrevShortcut: "cycleWorkspacePrev",
 };
 
+const buildOpenAppDrafts = (targets: OpenAppTarget[]): OpenAppDraft[] =>
+  targets.map((target) => ({
+    ...target,
+    argsText: target.args.join(" "),
+  }));
+
+const createOpenAppId = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `open-app-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
 export function SettingsView({
   workspaceGroups,
   groupedWorkspaces,
@@ -198,6 +224,7 @@ export function SettingsView({
   reduceTransparency,
   onToggleTransparency,
   appSettings,
+  openAppIconById,
   onUpdateAppSettings,
   onRunDoctor,
   onUpdateWorkspaceCodexBin,
@@ -226,6 +253,12 @@ export function SettingsView({
   const [groupDrafts, setGroupDrafts] = useState<Record<string, string>>({});
   const [newGroupName, setNewGroupName] = useState("");
   const [groupError, setGroupError] = useState<string | null>(null);
+  const [openAppDrafts, setOpenAppDrafts] = useState<OpenAppDraft[]>(() =>
+    buildOpenAppDrafts(appSettings.openAppTargets),
+  );
+  const [openAppSelectedId, setOpenAppSelectedId] = useState(
+    appSettings.selectedOpenAppId,
+  );
   const [doctorState, setDoctorState] = useState<{
     status: "idle" | "running" | "done";
     result: CodexDoctorResult | null;
@@ -318,6 +351,11 @@ export function SettingsView({
   useEffect(() => {
     setCodeFontSizeDraft(appSettings.codeFontSize);
   }, [appSettings.codeFontSize]);
+
+  useEffect(() => {
+    setOpenAppDrafts(buildOpenAppDrafts(appSettings.openAppTargets));
+    setOpenAppSelectedId(appSettings.selectedOpenAppId);
+  }, [appSettings.openAppTargets, appSettings.selectedOpenAppId]);
 
   useEffect(() => {
     setShortcutDrafts({
@@ -507,6 +545,122 @@ export function SettingsView({
       ...appSettings,
       codeFontSize: clampedSize,
     });
+  };
+
+  const normalizeOpenAppTargets = useCallback(
+    (drafts: OpenAppDraft[]): OpenAppTarget[] =>
+      drafts.map(({ argsText, ...target }) => ({
+        ...target,
+        label: target.label.trim(),
+        appName: (target.appName?.trim() ?? "") || null,
+        command: (target.command?.trim() ?? "") || null,
+        args: argsText.trim() ? argsText.trim().split(/\s+/) : [],
+      })),
+    [],
+  );
+
+  const handleCommitOpenApps = useCallback(
+    async (drafts: OpenAppDraft[], selectedId = openAppSelectedId) => {
+      const nextTargets = normalizeOpenAppTargets(drafts);
+      const nextSelectedId =
+        nextTargets.find((target) => target.id === selectedId)?.id ??
+        nextTargets[0]?.id ??
+        DEFAULT_OPEN_APP_ID;
+      setOpenAppDrafts(buildOpenAppDrafts(nextTargets));
+      setOpenAppSelectedId(nextSelectedId);
+      await onUpdateAppSettings({
+        ...appSettings,
+        openAppTargets: nextTargets,
+        selectedOpenAppId: nextSelectedId,
+      });
+    },
+    [
+      appSettings,
+      normalizeOpenAppTargets,
+      onUpdateAppSettings,
+      openAppSelectedId,
+    ],
+  );
+
+  const handleOpenAppDraftChange = (
+    index: number,
+    updates: Partial<OpenAppDraft>,
+  ) => {
+    setOpenAppDrafts((prev) => {
+      const next = [...prev];
+      const current = next[index];
+      if (!current) {
+        return prev;
+      }
+      next[index] = { ...current, ...updates };
+      return next;
+    });
+  };
+
+  const handleOpenAppKindChange = (index: number, kind: OpenAppTarget["kind"]) => {
+    setOpenAppDrafts((prev) => {
+      const next = [...prev];
+      const current = next[index];
+      if (!current) {
+        return prev;
+      }
+      next[index] = {
+        ...current,
+        kind,
+        appName: kind === "app" ? current.appName ?? "" : null,
+        command: kind === "command" ? current.command ?? "" : null,
+        argsText: kind === "finder" ? "" : current.argsText,
+      };
+      void handleCommitOpenApps(next);
+      return next;
+    });
+  };
+
+  const handleMoveOpenApp = (index: number, direction: "up" | "down") => {
+    const nextIndex = direction === "up" ? index - 1 : index + 1;
+    if (nextIndex < 0 || nextIndex >= openAppDrafts.length) {
+      return;
+    }
+    const next = [...openAppDrafts];
+    const [moved] = next.splice(index, 1);
+    next.splice(nextIndex, 0, moved);
+    setOpenAppDrafts(next);
+    void handleCommitOpenApps(next);
+  };
+
+  const handleDeleteOpenApp = (index: number) => {
+    if (openAppDrafts.length <= 1) {
+      return;
+    }
+    const removed = openAppDrafts[index];
+    const next = openAppDrafts.filter((_, draftIndex) => draftIndex !== index);
+    const nextSelected =
+      removed?.id === openAppSelectedId ? next[0]?.id ?? DEFAULT_OPEN_APP_ID : openAppSelectedId;
+    setOpenAppDrafts(next);
+    void handleCommitOpenApps(next, nextSelected);
+  };
+
+  const handleAddOpenApp = () => {
+    const newTarget: OpenAppDraft = {
+      id: createOpenAppId(),
+      label: "New App",
+      kind: "app",
+      appName: "",
+      command: null,
+      args: [],
+      argsText: "",
+    };
+    const next = [...openAppDrafts, newTarget];
+    setOpenAppDrafts(next);
+    void handleCommitOpenApps(next, newTarget.id);
+  };
+
+  const handleSelectOpenAppDefault = (id: string) => {
+    setOpenAppSelectedId(id);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(OPEN_APP_STORAGE_KEY, id);
+    }
+    void handleCommitOpenApps(openAppDrafts, id);
   };
 
   const handleComposerPresetChange = (preset: ComposerPreset) => {
@@ -737,6 +891,14 @@ export function SettingsView({
             >
               <Keyboard aria-hidden />
               Shortcuts
+            </button>
+            <button
+              type="button"
+              className={`settings-nav ${activeSection === "open-apps" ? "active" : ""}`}
+              onClick={() => setActiveSection("open-apps")}
+            >
+              <ExternalLink aria-hidden />
+              Open in
             </button>
             <button
               type="button"
@@ -2003,6 +2165,183 @@ export function SettingsView({
                   </div>
                   <div className="settings-help">
                     Default: {formatShortcut("cmd+shift+up")}
+                  </div>
+                </div>
+              </section>
+            )}
+            {activeSection === "open-apps" && (
+              <section className="settings-section">
+                <div className="settings-section-title">Open in</div>
+                <div className="settings-section-subtitle">
+                  Customize the Open in menu shown in the title bar and file previews.
+                </div>
+                <div className="settings-open-apps">
+                  {openAppDrafts.map((target, index) => {
+                    const iconSrc =
+                      getKnownOpenAppIcon(target.id) ??
+                      openAppIconById[target.id] ??
+                      GENERIC_APP_ICON;
+                    return (
+                      <div key={target.id} className="settings-open-app-row">
+                        <div className="settings-open-app-icon-wrap" aria-hidden>
+                          <img
+                            className="settings-open-app-icon"
+                            src={iconSrc}
+                            alt=""
+                            width={18}
+                            height={18}
+                          />
+                        </div>
+                        <div className="settings-open-app-fields">
+                          <label className="settings-open-app-field settings-open-app-field--label">
+                            <span className="settings-visually-hidden">Label</span>
+                            <input
+                              className="settings-input settings-input--compact settings-open-app-input settings-open-app-input--label"
+                              value={target.label}
+                              placeholder="Label"
+                              onChange={(event) =>
+                                handleOpenAppDraftChange(index, {
+                                  label: event.target.value,
+                                })
+                              }
+                              onBlur={() => {
+                                void handleCommitOpenApps(openAppDrafts);
+                              }}
+                              aria-label={`Open app label ${index + 1}`}
+                            />
+                          </label>
+                          <label className="settings-open-app-field settings-open-app-field--type">
+                            <span className="settings-visually-hidden">Type</span>
+                            <select
+                              className="settings-select settings-select--compact settings-open-app-kind"
+                              value={target.kind}
+                              onChange={(event) =>
+                                handleOpenAppKindChange(
+                                  index,
+                                  event.target.value as OpenAppTarget["kind"],
+                                )
+                              }
+                              aria-label={`Open app type ${index + 1}`}
+                            >
+                              <option value="app">App</option>
+                              <option value="command">Command</option>
+                              <option value="finder">Finder</option>
+                            </select>
+                          </label>
+                          {target.kind === "app" && (
+                            <label className="settings-open-app-field settings-open-app-field--appname">
+                              <span className="settings-visually-hidden">App name</span>
+                              <input
+                                className="settings-input settings-input--compact settings-open-app-input settings-open-app-input--appname"
+                                value={target.appName ?? ""}
+                                placeholder="App name"
+                                onChange={(event) =>
+                                  handleOpenAppDraftChange(index, {
+                                    appName: event.target.value,
+                                  })
+                                }
+                                onBlur={() => {
+                                  void handleCommitOpenApps(openAppDrafts);
+                                }}
+                                aria-label={`Open app name ${index + 1}`}
+                              />
+                            </label>
+                          )}
+                          {target.kind === "command" && (
+                            <label className="settings-open-app-field settings-open-app-field--command">
+                              <span className="settings-visually-hidden">Command</span>
+                              <input
+                                className="settings-input settings-input--compact settings-open-app-input settings-open-app-input--command"
+                                value={target.command ?? ""}
+                                placeholder="Command"
+                                onChange={(event) =>
+                                  handleOpenAppDraftChange(index, {
+                                    command: event.target.value,
+                                  })
+                                }
+                                onBlur={() => {
+                                  void handleCommitOpenApps(openAppDrafts);
+                                }}
+                                aria-label={`Open app command ${index + 1}`}
+                              />
+                            </label>
+                          )}
+                          {target.kind !== "finder" && (
+                            <label className="settings-open-app-field settings-open-app-field--args">
+                              <span className="settings-visually-hidden">Args</span>
+                              <input
+                                className="settings-input settings-input--compact settings-open-app-input settings-open-app-input--args"
+                                value={target.argsText}
+                                placeholder="Args"
+                                onChange={(event) =>
+                                  handleOpenAppDraftChange(index, {
+                                    argsText: event.target.value,
+                                  })
+                                }
+                                onBlur={() => {
+                                  void handleCommitOpenApps(openAppDrafts);
+                                }}
+                                aria-label={`Open app args ${index + 1}`}
+                              />
+                            </label>
+                          )}
+                        </div>
+                        <div className="settings-open-app-actions">
+                          <label className="settings-open-app-default">
+                            <input
+                              type="radio"
+                              name="open-app-default"
+                              checked={target.id === openAppSelectedId}
+                              onChange={() => handleSelectOpenAppDefault(target.id)}
+                            />
+                            Default
+                          </label>
+                          <div className="settings-open-app-order">
+                            <button
+                              type="button"
+                              className="ghost icon-button"
+                              onClick={() => handleMoveOpenApp(index, "up")}
+                              disabled={index === 0}
+                              aria-label="Move up"
+                            >
+                              <ChevronUp aria-hidden />
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost icon-button"
+                              onClick={() => handleMoveOpenApp(index, "down")}
+                              disabled={index === openAppDrafts.length - 1}
+                              aria-label="Move down"
+                            >
+                              <ChevronDown aria-hidden />
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            className="ghost icon-button"
+                            onClick={() => handleDeleteOpenApp(index)}
+                            disabled={openAppDrafts.length <= 1}
+                            aria-label="Remove app"
+                            title="Remove app"
+                          >
+                            <Trash2 aria-hidden />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="settings-open-app-footer">
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={handleAddOpenApp}
+                  >
+                    Add app
+                  </button>
+                  <div className="settings-help">
+                    Commands receive the selected path as the final argument. Apps use macOS open
+                    with optional args.
                   </div>
                 </div>
               </section>
