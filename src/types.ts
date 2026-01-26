@@ -51,6 +51,12 @@ export type ConversationItem =
   | { id: string; kind: "review"; state: "started" | "completed"; text: string }
   | {
       id: string;
+      kind: "explore";
+      status: "exploring" | "explored";
+      entries: { kind: "read" | "search" | "list" | "run"; label: string; detail?: string }[];
+    }
+  | {
+      id: string;
       kind: "tool";
       toolType: string;
       title: string;

@@ -493,6 +493,54 @@
   color: var(--text-faint);
 }
 
+.explore-inline .tool-inline-bar-toggle {
+  cursor: default;
+  pointer-events: none;
+}
+
+.explore-inline-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-stronger);
+}
+
+.explore-inline-title {
+  font-weight: 600;
+}
+
+.explore-inline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.explore-inline-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.explore-inline-kind {
+  color: var(--text-subtle);
+  font-weight: 600;
+}
+
+.explore-inline-label {
+  color: var(--text-stronger);
+  min-width: 0;
+}
+
+.explore-inline-detail {
+  color: var(--text-faint);
+  font-size: 11px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .tool-inline-clamp {
   display: -webkit-box;
   -webkit-line-clamp: 3;
