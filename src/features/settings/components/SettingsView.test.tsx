@@ -162,7 +162,13 @@ describe("SettingsView Display", () => {
     if (!row) {
       throw new Error("Expected reduce transparency row");
     }
-    fireEvent.click(within(row).getByRole("button"));
+    const toggle = row.querySelector(
+      "button.settings-toggle",
+    ) as HTMLButtonElement | null;
+    if (!toggle) {
+      throw new Error("Expected reduce transparency toggle");
+    }
+    fireEvent.click(toggle);
 
     expect(onToggleTransparency).toHaveBeenCalledWith(true);
   });

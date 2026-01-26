@@ -1379,7 +1379,6 @@ function MainApp() {
   });
 
   useMenuAcceleratorController({ appSettings, onDebug: addDebugEntry });
-
   const isDefaultScale = Math.abs(uiScale - 1) < 0.001;
   const dropOverlayActive = isWorkspaceDropActive;
   const dropOverlayText = "Drop Project Here";
