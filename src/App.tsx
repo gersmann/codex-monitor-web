@@ -93,6 +93,7 @@ import { useWorktreeSetupScript } from "./features/app/hooks/useWorktreeSetupScr
 import { useGitCommitController } from "./features/app/hooks/useGitCommitController";
 import { WorkspaceHome } from "./features/workspaces/components/WorkspaceHome";
 import { useWorkspaceHome } from "./features/workspaces/hooks/useWorkspaceHome";
+import { useWorkspaceAgentMd } from "./features/workspaces/hooks/useWorkspaceAgentMd";
 import { pickWorkspacePath } from "./services/tauri";
 import type {
   AccessMode,
@@ -1014,6 +1015,21 @@ function MainApp() {
     sendUserMessageToThread,
     onWorktreeCreated: handleWorktreeCreated,
   });
+  const {
+    content: agentMdContent,
+    exists: agentMdExists,
+    truncated: agentMdTruncated,
+    isLoading: agentMdLoading,
+    isSaving: agentMdSaving,
+    error: agentMdError,
+    isDirty: agentMdDirty,
+    setContent: setAgentMdContent,
+    refresh: refreshAgentMd,
+    save: saveAgentMd,
+  } = useWorkspaceAgentMd({
+    activeWorkspace,
+    onDebug: addDebugEntry,
+  });
 
   const {
     commitMessage,
@@ -1840,6 +1856,20 @@ function MainApp() {
       onDismissDictationHint={clearDictationHint}
       dictationTranscript={dictationTranscript}
       onDictationTranscriptHandled={clearDictationTranscript}
+      agentMdContent={agentMdContent}
+      agentMdExists={agentMdExists}
+      agentMdTruncated={agentMdTruncated}
+      agentMdLoading={agentMdLoading}
+      agentMdSaving={agentMdSaving}
+      agentMdError={agentMdError}
+      agentMdDirty={agentMdDirty}
+      onAgentMdChange={setAgentMdContent}
+      onAgentMdRefresh={() => {
+        void refreshAgentMd();
+      }}
+      onAgentMdSave={() => {
+        void saveAgentMd();
+      }}
     />
   ) : null;
 
