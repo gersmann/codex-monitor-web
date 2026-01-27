@@ -532,6 +532,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       prompts={options.prompts}
       files={options.files}
       textareaRef={options.textareaRef}
+      historyKey={options.activeWorkspace?.id ?? null}
       editorSettings={options.composerEditorSettings}
       editorExpanded={options.composerEditorExpanded}
       onToggleEditorExpanded={options.onToggleComposerEditorExpanded}
