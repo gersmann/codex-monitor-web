@@ -1275,11 +1275,17 @@ pub(crate) async fn open_workspace_in(
     args: Vec<String>,
     command: Option<String>,
 ) -> Result<(), String> {
+    let target_label = command
+        .as_ref()
+        .map(|value| format!("command `{value}`"))
+        .or_else(|| app.as_ref().map(|value| format!("app `{value}`")))
+        .unwrap_or_else(|| "target".to_string());
+
     let status = if let Some(command) = command {
         let mut cmd = std::process::Command::new(command);
         cmd.args(args).arg(path);
         cmd.status()
-            .map_err(|error| format!("Failed to open app: {error}"))?
+            .map_err(|error| format!("Failed to open app ({target_label}): {error}"))?
     } else if let Some(app) = app {
         let mut cmd = std::process::Command::new("open");
         cmd.arg("-a").arg(app).arg(path);
@@ -1287,15 +1293,22 @@ pub(crate) async fn open_workspace_in(
             cmd.arg("--args").args(args);
         }
         cmd.status()
-            .map_err(|error| format!("Failed to open app: {error}"))?
+            .map_err(|error| format!("Failed to open app ({target_label}): {error}"))?
     } else {
         return Err("Missing app or command".to_string());
     };
+
     if status.success() {
-        Ok(())
-    } else {
-        Err("Failed to open app".to_string())
+        return Ok(());
     }
+
+    let exit_detail = status
+        .code()
+        .map(|code| format!("exit code {code}"))
+        .unwrap_or_else(|| "terminated by signal".to_string());
+    Err(format!(
+        "Failed to open app ({target_label} returned {exit_detail})."
+    ))
 }
 
 

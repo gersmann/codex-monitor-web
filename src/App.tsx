@@ -7,6 +7,7 @@ import "./styles/workspace-home.css";
 import "./styles/main.css";
 import "./styles/messages.css";
 import "./styles/approval-toasts.css";
+import "./styles/error-toasts.css";
 import "./styles/request-user-input.css";
 import "./styles/update-toasts.css";
 import "./styles/composer.css";
@@ -61,6 +62,7 @@ import {
 } from "./features/layout/components/SidebarToggleControls";
 import { useAppSettingsController } from "./features/app/hooks/useAppSettingsController";
 import { useUpdaterController } from "./features/app/hooks/useUpdaterController";
+import { useErrorToasts } from "./features/notifications/hooks/useErrorToasts";
 import { useComposerShortcuts } from "./features/composer/hooks/useComposerShortcuts";
 import { useComposerMenuActions } from "./features/composer/hooks/useComposerMenuActions";
 import { useComposerEditorState } from "./features/composer/hooks/useComposerEditorState";
@@ -256,6 +258,8 @@ function MainApp() {
     successSoundUrl,
     errorSoundUrl,
   });
+
+  const { errorToasts, dismissErrorToast } = useErrorToasts();
 
   useEffect(() => {
     setAccessMode((prev) =>
@@ -1408,6 +1412,7 @@ function MainApp() {
     composerNode,
     approvalToastsNode,
     updateToastNode,
+    errorToastsNode,
     homeNode,
     mainHeaderNode,
     desktopTopbarLeftNode,
@@ -1524,6 +1529,8 @@ function MainApp() {
     updaterState,
     onUpdate: startUpdate,
     onDismissUpdate: dismissUpdate,
+    errorToasts,
+    onDismissErrorToast: dismissErrorToast,
     latestAgentRuns,
     isLoadingLatestAgents,
     localUsageSnapshot,
@@ -1879,6 +1886,7 @@ function MainApp() {
         composerNode={composerNode}
         approvalToastsNode={approvalToastsNode}
         updateToastNode={updateToastNode}
+        errorToastsNode={errorToastsNode}
         homeNode={homeNode}
         mainHeaderNode={mainHeaderNode}
         desktopTopbarLeftNode={desktopTopbarLeftNodeWithToggle}
