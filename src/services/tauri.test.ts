@@ -7,6 +7,7 @@ import {
   getGitStatus,
   getOpenAppIcon,
   readGlobalAgentsMd,
+  readGlobalCodexConfigToml,
   listWorkspaces,
   openWorkspaceIn,
   readAgentMd,
@@ -16,6 +17,7 @@ import {
   sendUserMessage,
   startReview,
   writeGlobalAgentsMd,
+  writeGlobalCodexConfigToml,
   writeAgentMd,
 } from "./tauri";
 
@@ -178,6 +180,26 @@ describe("tauri invoke wrappers", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("write_global_agents_md", {
       content: "# Global",
+    });
+  });
+
+  it("reads global config.toml", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ exists: true, content: "model = \"gpt-5\"", truncated: false });
+
+    await readGlobalCodexConfigToml();
+
+    expect(invokeMock).toHaveBeenCalledWith("read_global_codex_config");
+  });
+
+  it("writes global config.toml", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await writeGlobalCodexConfigToml("model = \"gpt-5\"");
+
+    expect(invokeMock).toHaveBeenCalledWith("write_global_codex_config", {
+      content: "model = \"gpt-5\"",
     });
   });
 

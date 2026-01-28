@@ -14,9 +14,17 @@ use crate::types::AppSettings;
 use crate::window;
 
 const GLOBAL_AGENTS_FILENAME: &str = "AGENTS.md";
+const GLOBAL_CONFIG_FILENAME: &str = "config.toml";
 
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct GlobalAgentsResponse {
+    pub exists: bool,
+    pub content: String,
+    pub truncated: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub(crate) struct GlobalConfigResponse {
     pub exists: bool,
     pub content: String,
     pub truncated: bool,
@@ -188,4 +196,107 @@ pub(crate) async fn write_global_agents_md(
 
     std::fs::write(&target_path, content)
         .map_err(|err| format!("Failed to write AGENTS.md: {err}"))
+}
+
+#[tauri::command]
+pub(crate) async fn read_global_codex_config(
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<GlobalConfigResponse, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        let response = remote_backend::call_remote(
+            &*state,
+            app,
+            "read_global_codex_config",
+            serde_json::json!({}),
+        )
+        .await?;
+        return serde_json::from_value(response).map_err(|err| err.to_string());
+    }
+
+    let codex_home = resolve_default_codex_home()?;
+    let canonical_home = match canonical_existing_dir(&codex_home)? {
+        Some(path) => path,
+        None => {
+            return Ok(GlobalConfigResponse {
+                exists: false,
+                content: String::new(),
+                truncated: false,
+            })
+        }
+    };
+
+    let config_path = canonical_home.join(GLOBAL_CONFIG_FILENAME);
+    if !config_path.exists() {
+        return Ok(GlobalConfigResponse {
+            exists: false,
+            content: String::new(),
+            truncated: false,
+        });
+    }
+
+    let canonical_config = config_path
+        .canonicalize()
+        .map_err(|err| format!("Failed to open config.toml: {err}"))?;
+    if !canonical_config.starts_with(&canonical_home) {
+        return Err("Invalid config.toml path".to_string());
+    }
+
+    let mut file = File::open(&canonical_config)
+        .map_err(|err| format!("Failed to open config.toml: {err}"))?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)
+        .map_err(|err| format!("Failed to read config.toml: {err}"))?;
+    let content =
+        String::from_utf8(buffer).map_err(|_| "config.toml is not valid UTF-8".to_string())?;
+
+    Ok(GlobalConfigResponse {
+        exists: true,
+        content,
+        truncated: false,
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn write_global_codex_config(
+    content: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        remote_backend::call_remote(
+            &*state,
+            app,
+            "write_global_codex_config",
+            serde_json::json!({ "content": content }),
+        )
+        .await?;
+        return Ok(());
+    }
+
+    let codex_home = resolve_default_codex_home()?;
+    std::fs::create_dir_all(&codex_home)
+        .map_err(|err| format!("Failed to create CODEX_HOME: {err}"))?;
+    let canonical_home = codex_home
+        .canonicalize()
+        .map_err(|err| format!("Failed to resolve CODEX_HOME: {err}"))?;
+    if !canonical_home.is_dir() {
+        return Err("CODEX_HOME is not a directory".to_string());
+    }
+
+    let config_path = canonical_home.join(GLOBAL_CONFIG_FILENAME);
+    let target_path = if config_path.exists() {
+        let canonical_config = config_path
+            .canonicalize()
+            .map_err(|err| format!("Failed to resolve config.toml: {err}"))?;
+        if !canonical_config.starts_with(&canonical_home) {
+            return Err("Invalid config.toml path".to_string());
+        }
+        canonical_config
+    } else {
+        config_path
+    };
+
+    std::fs::write(&target_path, content)
+        .map_err(|err| format!("Failed to write config.toml: {err}"))
 }

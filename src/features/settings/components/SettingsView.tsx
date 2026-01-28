@@ -45,6 +45,7 @@ import {
 import { DEFAULT_OPEN_APP_ID, OPEN_APP_STORAGE_KEY } from "../../app/constants";
 import { GENERIC_APP_ICON, getKnownOpenAppIcon } from "../../app/utils/openAppIcons";
 import { useGlobalAgentsMd } from "../hooks/useGlobalAgentsMd";
+import { useGlobalCodexConfigToml } from "../hooks/useGlobalCodexConfigToml";
 
 const DICTATION_MODELS = [
   { id: "tiny", label: "Tiny", size: "75 MB", note: "Fastest, least accurate." },
@@ -322,6 +323,18 @@ export function SettingsView({
     refresh: refreshGlobalAgents,
     save: saveGlobalAgents,
   } = useGlobalAgentsMd();
+  const {
+    content: globalConfigContent,
+    exists: globalConfigExists,
+    truncated: globalConfigTruncated,
+    isLoading: globalConfigLoading,
+    isSaving: globalConfigSaving,
+    error: globalConfigError,
+    isDirty: globalConfigDirty,
+    setContent: setGlobalConfigContent,
+    refresh: refreshGlobalConfig,
+    save: saveGlobalConfig,
+  } = useGlobalCodexConfigToml();
   const [openConfigError, setOpenConfigError] = useState<string | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [shortcutDrafts, setShortcutDrafts] = useState({
@@ -363,6 +376,24 @@ export function SettingsView({
   const globalAgentsSaveLabel = globalAgentsExists ? "Save" : "Create";
   const globalAgentsSaveDisabled = globalAgentsLoading || globalAgentsSaving || !globalAgentsDirty;
   const globalAgentsRefreshDisabled = globalAgentsLoading || globalAgentsSaving;
+  const globalConfigStatus = globalConfigLoading
+    ? "Loading…"
+    : globalConfigSaving
+      ? "Saving…"
+      : globalConfigExists
+        ? ""
+        : "Not found";
+  const globalConfigMetaParts: string[] = [];
+  if (globalConfigStatus) {
+    globalConfigMetaParts.push(globalConfigStatus);
+  }
+  if (globalConfigTruncated) {
+    globalConfigMetaParts.push("Truncated");
+  }
+  const globalConfigMeta = globalConfigMetaParts.join(" · ");
+  const globalConfigSaveLabel = globalConfigExists ? "Save" : "Create";
+  const globalConfigSaveDisabled = globalConfigLoading || globalConfigSaving || !globalConfigDirty;
+  const globalConfigRefreshDisabled = globalConfigLoading || globalConfigSaving;
   const selectedDictationModel = useMemo(() => {
     return (
       DICTATION_MODELS.find(
@@ -2613,59 +2644,6 @@ export function SettingsView({
                 )}
               </div>
 
-              <div className="settings-field settings-agents">
-                <div className="settings-agents-header">
-                  <div className="settings-field-label">Global AGENTS.md</div>
-                  <div className="settings-agents-actions">
-                    {globalAgentsMeta && (
-                      <div className="settings-help settings-help-inline">{globalAgentsMeta}</div>
-                    )}
-                    <button
-                      type="button"
-                      className="ghost settings-icon-button"
-                      onClick={() => {
-                        void refreshGlobalAgents();
-                      }}
-                      disabled={globalAgentsRefreshDisabled}
-                      aria-label="Refresh global AGENTS.md"
-                      title="Refresh"
-                    >
-                      <RefreshCw aria-hidden />
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost settings-icon-button"
-                      onClick={() => {
-                        void saveGlobalAgents();
-                      }}
-                      disabled={globalAgentsSaveDisabled}
-                      aria-label={
-                        globalAgentsSaveLabel === "Create"
-                          ? "Create global AGENTS.md"
-                          : "Save global AGENTS.md"
-                      }
-                      title={globalAgentsSaveLabel}
-                    >
-                      <Save aria-hidden />
-                    </button>
-                  </div>
-                </div>
-                {globalAgentsError && (
-                  <div className="settings-agents-error">{globalAgentsError}</div>
-                )}
-                <textarea
-                  className="settings-agents-textarea"
-                  value={globalAgentsContent}
-                  onChange={(event) => setGlobalAgentsContent(event.target.value)}
-                  placeholder="Add global instructions for Codex agents…"
-                  spellCheck={false}
-                  disabled={globalAgentsLoading}
-                />
-                <div className="settings-help">
-                  Stored at <code>~/.codex/AGENTS.md</code>.
-                </div>
-              </div>
-
                 <div className="settings-field">
                   <label className="settings-field-label" htmlFor="default-access">
                     Default access mode
@@ -2753,6 +2731,116 @@ export function SettingsView({
                     </div>
                   </div>
                 )}
+
+                <div className="settings-field settings-agents">
+                  <div className="settings-agents-header">
+                    <div className="settings-field-label">Global AGENTS.md</div>
+                    <div className="settings-agents-actions">
+                      {globalAgentsMeta && (
+                        <div className="settings-help settings-help-inline">
+                          {globalAgentsMeta}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="ghost settings-icon-button"
+                        onClick={() => {
+                          void refreshGlobalAgents();
+                        }}
+                        disabled={globalAgentsRefreshDisabled}
+                        aria-label="Refresh global AGENTS.md"
+                        title="Refresh"
+                      >
+                        <RefreshCw aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost settings-icon-button"
+                        onClick={() => {
+                          void saveGlobalAgents();
+                        }}
+                        disabled={globalAgentsSaveDisabled}
+                        aria-label={
+                          globalAgentsSaveLabel === "Create"
+                            ? "Create global AGENTS.md"
+                            : "Save global AGENTS.md"
+                        }
+                        title={globalAgentsSaveLabel}
+                      >
+                        <Save aria-hidden />
+                      </button>
+                    </div>
+                  </div>
+                  {globalAgentsError && (
+                    <div className="settings-agents-error">{globalAgentsError}</div>
+                  )}
+                  <textarea
+                    className="settings-agents-textarea"
+                    value={globalAgentsContent}
+                    onChange={(event) => setGlobalAgentsContent(event.target.value)}
+                    placeholder="Add global instructions for Codex agents…"
+                    spellCheck={false}
+                    disabled={globalAgentsLoading}
+                  />
+                  <div className="settings-help">
+                    Stored at <code>~/.codex/AGENTS.md</code>.
+                  </div>
+                </div>
+
+                <div className="settings-field settings-agents">
+                  <div className="settings-agents-header">
+                    <div className="settings-field-label">Global config.toml</div>
+                    <div className="settings-agents-actions">
+                      {globalConfigMeta && (
+                        <div className="settings-help settings-help-inline">
+                          {globalConfigMeta}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="ghost settings-icon-button"
+                        onClick={() => {
+                          void refreshGlobalConfig();
+                        }}
+                        disabled={globalConfigRefreshDisabled}
+                        aria-label="Refresh global config.toml"
+                        title="Refresh"
+                      >
+                        <RefreshCw aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost settings-icon-button"
+                        onClick={() => {
+                          void saveGlobalConfig();
+                        }}
+                        disabled={globalConfigSaveDisabled}
+                        aria-label={
+                          globalConfigSaveLabel === "Create"
+                            ? "Create global config.toml"
+                            : "Save global config.toml"
+                        }
+                        title={globalConfigSaveLabel}
+                      >
+                        <Save aria-hidden />
+                      </button>
+                    </div>
+                  </div>
+                  {globalConfigError && (
+                    <div className="settings-agents-error">{globalConfigError}</div>
+                  )}
+                  <textarea
+                    className="settings-agents-textarea"
+                    value={globalConfigContent}
+                    onChange={(event) => setGlobalConfigContent(event.target.value)}
+                    placeholder="Edit the global Codex config.toml…"
+                    spellCheck={false}
+                    disabled={globalConfigLoading}
+                  />
+                  <div className="settings-help">
+                    Stored at <code>~/.codex/config.toml</code>.
+                  </div>
+                </div>
 
                 <div className="settings-field">
                   <div className="settings-field-label">Workspace overrides</div>

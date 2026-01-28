@@ -119,6 +119,13 @@ struct GlobalAgentsResponse {
     truncated: bool,
 }
 
+#[derive(Serialize, Deserialize)]
+struct GlobalConfigResponse {
+    exists: bool,
+    content: String,
+    truncated: bool,
+}
+
 impl DaemonState {
     fn load(config: &DaemonConfig, event_sink: DaemonEventSink) -> Self {
         let storage_path = config.data_dir.join("workspaces.json");
@@ -1129,6 +1136,14 @@ impl DaemonState {
         write_global_agents_md_inner(&content)
     }
 
+    async fn read_global_codex_config(&self) -> Result<GlobalConfigResponse, String> {
+        read_global_codex_config_inner()
+    }
+
+    async fn write_global_codex_config(&self, content: String) -> Result<(), String> {
+        write_global_codex_config_inner(&content)
+    }
+
     async fn start_thread(&self, workspace_id: String) -> Result<Value, String> {
         let session = self.get_session(&workspace_id).await?;
         let params = json!({
@@ -1523,6 +1538,7 @@ fn write_agent_md_inner(root: &PathBuf, content: &str) -> Result<(), String> {
 }
 
 const GLOBAL_AGENTS_FILENAME: &str = "AGENTS.md";
+const GLOBAL_CONFIG_FILENAME: &str = "config.toml";
 
 fn resolve_default_codex_home() -> Result<PathBuf, String> {
     codex_home::resolve_default_codex_home()
@@ -1612,6 +1628,78 @@ fn write_global_agents_md_inner(content: &str) -> Result<(), String> {
 
     std::fs::write(&target_path, content)
         .map_err(|err| format!("Failed to write AGENTS.md: {err}"))
+}
+
+fn read_global_codex_config_inner() -> Result<GlobalConfigResponse, String> {
+    let codex_home = resolve_default_codex_home()?;
+    let canonical_home = match canonical_existing_dir(&codex_home)? {
+        Some(path) => path,
+        None => {
+            return Ok(GlobalConfigResponse {
+                exists: false,
+                content: String::new(),
+                truncated: false,
+            })
+        }
+    };
+
+    let config_path = canonical_home.join(GLOBAL_CONFIG_FILENAME);
+    if !config_path.exists() {
+        return Ok(GlobalConfigResponse {
+            exists: false,
+            content: String::new(),
+            truncated: false,
+        });
+    }
+
+    let canonical_config = config_path
+        .canonicalize()
+        .map_err(|err| format!("Failed to open config.toml: {err}"))?;
+    if !canonical_config.starts_with(&canonical_home) {
+        return Err("Invalid config.toml path".to_string());
+    }
+
+    let mut file = File::open(&canonical_config)
+        .map_err(|err| format!("Failed to open config.toml: {err}"))?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)
+        .map_err(|err| format!("Failed to read config.toml: {err}"))?;
+    let content =
+        String::from_utf8(buffer).map_err(|_| "config.toml is not valid UTF-8".to_string())?;
+
+    Ok(GlobalConfigResponse {
+        exists: true,
+        content,
+        truncated: false,
+    })
+}
+
+fn write_global_codex_config_inner(content: &str) -> Result<(), String> {
+    let codex_home = resolve_default_codex_home()?;
+    std::fs::create_dir_all(&codex_home)
+        .map_err(|err| format!("Failed to create CODEX_HOME: {err}"))?;
+    let canonical_home = codex_home
+        .canonicalize()
+        .map_err(|err| format!("Failed to resolve CODEX_HOME: {err}"))?;
+    if !canonical_home.is_dir() {
+        return Err("CODEX_HOME is not a directory".to_string());
+    }
+
+    let config_path = canonical_home.join(GLOBAL_CONFIG_FILENAME);
+    let target_path = if config_path.exists() {
+        let canonical_config = config_path
+            .canonicalize()
+            .map_err(|err| format!("Failed to resolve config.toml: {err}"))?;
+        if !canonical_config.starts_with(&canonical_home) {
+            return Err("Invalid config.toml path".to_string());
+        }
+        canonical_config
+    } else {
+        config_path
+    };
+
+    std::fs::write(&target_path, content)
+        .map_err(|err| format!("Failed to write config.toml: {err}"))
 }
 
 async fn run_git_command(repo_path: &PathBuf, args: &[&str]) -> Result<String, String> {
@@ -2190,6 +2278,15 @@ async fn handle_rpc_request(
                 .to_str()
                 .ok_or("Unable to resolve CODEX_HOME".to_string())?;
             Ok(Value::String(path.to_string()))
+        }
+        "read_global_codex_config" => {
+            let response = state.read_global_codex_config().await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "write_global_codex_config" => {
+            let content = parse_string(&params, "content")?;
+            state.write_global_codex_config(content).await?;
+            serde_json::to_value(json!({ "ok": true })).map_err(|err| err.to_string())
         }
         "read_global_agents_md" => {
             let response = state.read_global_agents_md().await?;

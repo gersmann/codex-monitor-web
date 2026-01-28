@@ -80,6 +80,8 @@ pub fn run() {
             settings::get_codex_config_path,
             settings::read_global_agents_md,
             settings::write_global_agents_md,
+            settings::read_global_codex_config,
+            settings::write_global_codex_config,
             codex::get_config_model,
             menu::menu_set_accelerators,
             codex::codex_doctor,

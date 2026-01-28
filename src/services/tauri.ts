@@ -77,12 +77,26 @@ export type GlobalAgentsResponse = {
   truncated: boolean;
 };
 
+export type GlobalCodexConfigResponse = {
+  exists: boolean;
+  content: string;
+  truncated: boolean;
+};
+
 export async function readGlobalAgentsMd(): Promise<GlobalAgentsResponse> {
   return invoke<GlobalAgentsResponse>("read_global_agents_md");
 }
 
 export async function writeGlobalAgentsMd(content: string): Promise<void> {
   return invoke("write_global_agents_md", { content });
+}
+
+export async function readGlobalCodexConfigToml(): Promise<GlobalCodexConfigResponse> {
+  return invoke<GlobalCodexConfigResponse>("read_global_codex_config");
+}
+
+export async function writeGlobalCodexConfigToml(content: string): Promise<void> {
+  return invoke("write_global_codex_config", { content });
 }
 
 export async function getConfigModel(workspaceId: string): Promise<string | null> {
