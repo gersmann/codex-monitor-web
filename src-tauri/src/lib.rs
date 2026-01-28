@@ -7,6 +7,10 @@ mod codex;
 mod codex_args;
 mod codex_config;
 mod codex_home;
+mod file_io;
+mod file_ops;
+mod file_policy;
+mod files;
 #[cfg(not(target_os = "windows"))]
 #[path = "dictation.rs"]
 mod dictation;
@@ -78,10 +82,8 @@ pub fn run() {
             settings::get_app_settings,
             settings::update_app_settings,
             settings::get_codex_config_path,
-            settings::read_global_agents_md,
-            settings::write_global_agents_md,
-            settings::read_global_codex_config,
-            settings::write_global_codex_config,
+            files::file_read,
+            files::file_write,
             codex::get_config_model,
             menu::menu_set_accelerators,
             codex::codex_doctor,
@@ -134,8 +136,6 @@ pub fn run() {
             git::get_github_pull_request_comments,
             workspaces::list_workspace_files,
             workspaces::read_workspace_file,
-            workspaces::read_agent_md,
-            workspaces::write_agent_md,
             workspaces::open_workspace_in,
             workspaces::get_open_app_icon,
             git::list_git_branches,

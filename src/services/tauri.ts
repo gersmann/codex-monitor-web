@@ -71,32 +71,50 @@ export async function getCodexConfigPath(): Promise<string> {
   return invoke<string>("get_codex_config_path");
 }
 
-export type GlobalAgentsResponse = {
+export type TextFileResponse = {
   exists: boolean;
   content: string;
   truncated: boolean;
 };
 
-export type GlobalCodexConfigResponse = {
-  exists: boolean;
-  content: string;
-  truncated: boolean;
-};
+export type GlobalAgentsResponse = TextFileResponse;
+export type GlobalCodexConfigResponse = TextFileResponse;
+export type AgentMdResponse = TextFileResponse;
+
+type FileScope = "workspace" | "global";
+type FileKind = "agents" | "config";
+
+async function fileRead(
+  scope: FileScope,
+  kind: FileKind,
+  workspaceId?: string,
+): Promise<TextFileResponse> {
+  return invoke<TextFileResponse>("file_read", { scope, kind, workspaceId });
+}
+
+async function fileWrite(
+  scope: FileScope,
+  kind: FileKind,
+  content: string,
+  workspaceId?: string,
+): Promise<void> {
+  return invoke("file_write", { scope, kind, workspaceId, content });
+}
 
 export async function readGlobalAgentsMd(): Promise<GlobalAgentsResponse> {
-  return invoke<GlobalAgentsResponse>("read_global_agents_md");
+  return fileRead("global", "agents");
 }
 
 export async function writeGlobalAgentsMd(content: string): Promise<void> {
-  return invoke("write_global_agents_md", { content });
+  return fileWrite("global", "agents", content);
 }
 
 export async function readGlobalCodexConfigToml(): Promise<GlobalCodexConfigResponse> {
-  return invoke<GlobalCodexConfigResponse>("read_global_codex_config");
+  return fileRead("global", "config");
 }
 
 export async function writeGlobalCodexConfigToml(content: string): Promise<void> {
-  return invoke("write_global_codex_config", { content });
+  return fileWrite("global", "config", content);
 }
 
 export async function getConfigModel(workspaceId: string): Promise<string | null> {
@@ -558,18 +576,12 @@ export async function readWorkspaceFile(
   });
 }
 
-export type AgentMdResponse = {
-  exists: boolean;
-  content: string;
-  truncated: boolean;
-};
-
 export async function readAgentMd(workspaceId: string): Promise<AgentMdResponse> {
-  return invoke<AgentMdResponse>("read_agent_md", { workspaceId });
+  return fileRead("workspace", "agents", workspaceId);
 }
 
 export async function writeAgentMd(workspaceId: string, content: string): Promise<void> {
-  return invoke("write_agent_md", { workspaceId, content });
+  return fileWrite("workspace", "agents", content, workspaceId);
 }
 
 export async function listGitBranches(workspaceId: string) {

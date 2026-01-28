@@ -7,6 +7,12 @@ mod codex_args;
 mod codex_home;
 #[path = "../codex_config.rs"]
 mod codex_config;
+#[path = "../file_io.rs"]
+mod file_io;
+#[path = "../file_ops.rs"]
+mod file_ops;
+#[path = "../file_policy.rs"]
+mod file_policy;
 #[path = "../rules.rs"]
 mod rules;
 #[path = "../storage.rs"]
@@ -101,27 +107,6 @@ struct DaemonState {
 
 #[derive(Serialize, Deserialize)]
 struct WorkspaceFileResponse {
-    content: String,
-    truncated: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-struct AgentMdResponse {
-    exists: bool,
-    content: String,
-    truncated: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-struct GlobalAgentsResponse {
-    exists: bool,
-    content: String,
-    truncated: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-struct GlobalConfigResponse {
-    exists: bool,
     content: String,
     truncated: bool,
 }
@@ -1102,46 +1087,59 @@ impl DaemonState {
         read_workspace_file_inner(&root, &path)
     }
 
-    async fn read_agent_md(&self, workspace_id: String) -> Result<AgentMdResponse, String> {
+    async fn resolve_workspace_root(&self, workspace_id: &str) -> Result<PathBuf, String> {
         let entry = {
             let workspaces = self.workspaces.lock().await;
             workspaces
-                .get(&workspace_id)
+                .get(workspace_id)
                 .cloned()
                 .ok_or("workspace not found")?
         };
 
-        let root = PathBuf::from(entry.path);
-        read_agent_md_inner(&root)
+        Ok(PathBuf::from(entry.path))
     }
 
-    async fn write_agent_md(&self, workspace_id: String, content: String) -> Result<(), String> {
-        let entry = {
-            let workspaces = self.workspaces.lock().await;
-            workspaces
-                .get(&workspace_id)
-                .cloned()
-                .ok_or("workspace not found")?
-        };
-
-        let root = PathBuf::from(entry.path);
-        write_agent_md_inner(&root, &content)
+    fn resolve_default_codex_home(&self) -> Result<PathBuf, String> {
+        codex_home::resolve_default_codex_home()
+            .ok_or_else(|| "Unable to resolve CODEX_HOME".to_string())
     }
 
-    async fn read_global_agents_md(&self) -> Result<GlobalAgentsResponse, String> {
-        read_global_agents_md_inner()
+    async fn resolve_root(
+        &self,
+        scope: file_policy::FileScope,
+        workspace_id: Option<&str>,
+    ) -> Result<PathBuf, String> {
+        match scope {
+            file_policy::FileScope::Global => self.resolve_default_codex_home(),
+            file_policy::FileScope::Workspace => {
+                let workspace_id =
+                    workspace_id.ok_or_else(|| "workspaceId is required".to_string())?;
+                self.resolve_workspace_root(workspace_id).await
+            }
+        }
     }
 
-    async fn write_global_agents_md(&self, content: String) -> Result<(), String> {
-        write_global_agents_md_inner(&content)
+    async fn file_read(
+        &self,
+        scope: file_policy::FileScope,
+        kind: file_policy::FileKind,
+        workspace_id: Option<String>,
+    ) -> Result<file_io::TextFileResponse, String> {
+        let policy = file_policy::policy_for(scope, kind)?;
+        let root = self.resolve_root(scope, workspace_id.as_deref()).await?;
+        file_ops::read_with_policy(&root, policy)
     }
 
-    async fn read_global_codex_config(&self) -> Result<GlobalConfigResponse, String> {
-        read_global_codex_config_inner()
-    }
-
-    async fn write_global_codex_config(&self, content: String) -> Result<(), String> {
-        write_global_codex_config_inner(&content)
+    async fn file_write(
+        &self,
+        scope: file_policy::FileScope,
+        kind: file_policy::FileKind,
+        workspace_id: Option<String>,
+        content: String,
+    ) -> Result<(), String> {
+        let policy = file_policy::policy_for(scope, kind)?;
+        let root = self.resolve_root(scope, workspace_id.as_deref()).await?;
+        file_ops::write_with_policy(&root, policy, &content)
     }
 
     async fn start_thread(&self, workspace_id: String) -> Result<Value, String> {
@@ -1473,233 +1471,6 @@ fn read_workspace_file_inner(
     let content =
         String::from_utf8(buffer).map_err(|_| "File is not valid UTF-8".to_string())?;
     Ok(WorkspaceFileResponse { content, truncated })
-}
-
-const AGENT_MD_FILENAME: &str = "AGENTS.md";
-
-fn canonical_root(root: &PathBuf) -> Result<PathBuf, String> {
-    root.canonicalize()
-        .map_err(|err| format!("Failed to resolve workspace root: {err}"))
-}
-
-fn read_agent_md_inner(root: &PathBuf) -> Result<AgentMdResponse, String> {
-    let canonical_root = canonical_root(root)?;
-    let agent_path = canonical_root.join(AGENT_MD_FILENAME);
-
-    if !agent_path.exists() {
-        return Ok(AgentMdResponse {
-            exists: false,
-            content: String::new(),
-            truncated: false,
-        });
-    }
-
-    let canonical_path = agent_path
-        .canonicalize()
-        .map_err(|err| format!("Failed to open file: {err}"))?;
-    if !canonical_path.starts_with(&canonical_root) {
-        return Err("Invalid file path".to_string());
-    }
-
-    let mut file =
-        File::open(&canonical_path).map_err(|err| format!("Failed to open file: {err}"))?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)
-        .map_err(|err| format!("Failed to read file: {err}"))?;
-
-    let content =
-        String::from_utf8(buffer).map_err(|_| "File is not valid UTF-8".to_string())?;
-    Ok(AgentMdResponse {
-        exists: true,
-        content,
-        truncated: false,
-    })
-}
-
-fn write_agent_md_inner(root: &PathBuf, content: &str) -> Result<(), String> {
-    let canonical_root = canonical_root(root)?;
-    let agent_path = canonical_root.join(AGENT_MD_FILENAME);
-    if !agent_path.starts_with(&canonical_root) {
-        return Err("Invalid file path".to_string());
-    }
-    let target_path = if agent_path.exists() {
-        let canonical_path = agent_path
-            .canonicalize()
-            .map_err(|err| format!("Failed to resolve AGENTS.md: {err}"))?;
-        if !canonical_path.starts_with(&canonical_root) {
-            return Err("Invalid file path".to_string());
-        }
-        canonical_path
-    } else {
-        agent_path
-    };
-    std::fs::write(&target_path, content)
-        .map_err(|err| format!("Failed to write AGENTS.md: {err}"))
-}
-
-const GLOBAL_AGENTS_FILENAME: &str = "AGENTS.md";
-const GLOBAL_CONFIG_FILENAME: &str = "config.toml";
-
-fn resolve_default_codex_home() -> Result<PathBuf, String> {
-    codex_home::resolve_default_codex_home()
-        .ok_or("Unable to resolve CODEX_HOME".to_string())
-}
-
-fn canonical_existing_dir(path: &PathBuf) -> Result<Option<PathBuf>, String> {
-    if !path.exists() {
-        return Ok(None);
-    }
-    let canonical = path
-        .canonicalize()
-        .map_err(|err| format!("Failed to resolve CODEX_HOME: {err}"))?;
-    if !canonical.is_dir() {
-        return Err("CODEX_HOME is not a directory".to_string());
-    }
-    Ok(Some(canonical))
-}
-
-fn read_global_agents_md_inner() -> Result<GlobalAgentsResponse, String> {
-    let codex_home = resolve_default_codex_home()?;
-    let canonical_home = match canonical_existing_dir(&codex_home)? {
-        Some(path) => path,
-        None => {
-            return Ok(GlobalAgentsResponse {
-                exists: false,
-                content: String::new(),
-                truncated: false,
-            })
-        }
-    };
-
-    let agents_path = canonical_home.join(GLOBAL_AGENTS_FILENAME);
-    if !agents_path.exists() {
-        return Ok(GlobalAgentsResponse {
-            exists: false,
-            content: String::new(),
-            truncated: false,
-        });
-    }
-
-    let canonical_agents = agents_path
-        .canonicalize()
-        .map_err(|err| format!("Failed to open AGENTS.md: {err}"))?;
-    if !canonical_agents.starts_with(&canonical_home) {
-        return Err("Invalid AGENTS.md path".to_string());
-    }
-
-    let mut file =
-        File::open(&canonical_agents).map_err(|err| format!("Failed to open AGENTS.md: {err}"))?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)
-        .map_err(|err| format!("Failed to read AGENTS.md: {err}"))?;
-    let content =
-        String::from_utf8(buffer).map_err(|_| "AGENTS.md is not valid UTF-8".to_string())?;
-
-    Ok(GlobalAgentsResponse {
-        exists: true,
-        content,
-        truncated: false,
-    })
-}
-
-fn write_global_agents_md_inner(content: &str) -> Result<(), String> {
-    let codex_home = resolve_default_codex_home()?;
-    std::fs::create_dir_all(&codex_home)
-        .map_err(|err| format!("Failed to create CODEX_HOME: {err}"))?;
-    let canonical_home = codex_home
-        .canonicalize()
-        .map_err(|err| format!("Failed to resolve CODEX_HOME: {err}"))?;
-    if !canonical_home.is_dir() {
-        return Err("CODEX_HOME is not a directory".to_string());
-    }
-
-    let agents_path = canonical_home.join(GLOBAL_AGENTS_FILENAME);
-    let target_path = if agents_path.exists() {
-        let canonical_agents = agents_path
-            .canonicalize()
-            .map_err(|err| format!("Failed to resolve AGENTS.md: {err}"))?;
-        if !canonical_agents.starts_with(&canonical_home) {
-            return Err("Invalid AGENTS.md path".to_string());
-        }
-        canonical_agents
-    } else {
-        agents_path
-    };
-
-    std::fs::write(&target_path, content)
-        .map_err(|err| format!("Failed to write AGENTS.md: {err}"))
-}
-
-fn read_global_codex_config_inner() -> Result<GlobalConfigResponse, String> {
-    let codex_home = resolve_default_codex_home()?;
-    let canonical_home = match canonical_existing_dir(&codex_home)? {
-        Some(path) => path,
-        None => {
-            return Ok(GlobalConfigResponse {
-                exists: false,
-                content: String::new(),
-                truncated: false,
-            })
-        }
-    };
-
-    let config_path = canonical_home.join(GLOBAL_CONFIG_FILENAME);
-    if !config_path.exists() {
-        return Ok(GlobalConfigResponse {
-            exists: false,
-            content: String::new(),
-            truncated: false,
-        });
-    }
-
-    let canonical_config = config_path
-        .canonicalize()
-        .map_err(|err| format!("Failed to open config.toml: {err}"))?;
-    if !canonical_config.starts_with(&canonical_home) {
-        return Err("Invalid config.toml path".to_string());
-    }
-
-    let mut file = File::open(&canonical_config)
-        .map_err(|err| format!("Failed to open config.toml: {err}"))?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)
-        .map_err(|err| format!("Failed to read config.toml: {err}"))?;
-    let content =
-        String::from_utf8(buffer).map_err(|_| "config.toml is not valid UTF-8".to_string())?;
-
-    Ok(GlobalConfigResponse {
-        exists: true,
-        content,
-        truncated: false,
-    })
-}
-
-fn write_global_codex_config_inner(content: &str) -> Result<(), String> {
-    let codex_home = resolve_default_codex_home()?;
-    std::fs::create_dir_all(&codex_home)
-        .map_err(|err| format!("Failed to create CODEX_HOME: {err}"))?;
-    let canonical_home = codex_home
-        .canonicalize()
-        .map_err(|err| format!("Failed to resolve CODEX_HOME: {err}"))?;
-    if !canonical_home.is_dir() {
-        return Err("CODEX_HOME is not a directory".to_string());
-    }
-
-    let config_path = canonical_home.join(GLOBAL_CONFIG_FILENAME);
-    let target_path = if config_path.exists() {
-        let canonical_config = config_path
-            .canonicalize()
-            .map_err(|err| format!("Failed to resolve config.toml: {err}"))?;
-        if !canonical_config.starts_with(&canonical_home) {
-            return Err("Invalid config.toml path".to_string());
-        }
-        canonical_config
-    } else {
-        config_path
-    };
-
-    std::fs::write(&target_path, content)
-        .map_err(|err| format!("Failed to write config.toml: {err}"))
 }
 
 async fn run_git_command(repo_path: &PathBuf, args: &[&str]) -> Result<String, String> {
@@ -2131,6 +1902,31 @@ fn parse_optional_value(value: &Value, key: &str) -> Option<Value> {
     }
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FileReadRequest {
+    scope: file_policy::FileScope,
+    kind: file_policy::FileKind,
+    workspace_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FileWriteRequest {
+    scope: file_policy::FileScope,
+    kind: file_policy::FileKind,
+    workspace_id: Option<String>,
+    content: String,
+}
+
+fn parse_file_read_request(params: &Value) -> Result<FileReadRequest, String> {
+    serde_json::from_value(params.clone()).map_err(|err| err.to_string())
+}
+
+fn parse_file_write_request(params: &Value) -> Result<FileWriteRequest, String> {
+    serde_json::from_value(params.clone()).map_err(|err| err.to_string())
+}
+
 async fn handle_rpc_request(
     state: &DaemonState,
     method: &str,
@@ -2232,15 +2028,23 @@ async fn handle_rpc_request(
             let response = state.read_workspace_file(workspace_id, path).await?;
             serde_json::to_value(response).map_err(|err| err.to_string())
         }
-        "read_agent_md" => {
-            let workspace_id = parse_string(&params, "workspaceId")?;
-            let response = state.read_agent_md(workspace_id).await?;
+        "file_read" => {
+            let request = parse_file_read_request(&params)?;
+            let response = state
+                .file_read(request.scope, request.kind, request.workspace_id)
+                .await?;
             serde_json::to_value(response).map_err(|err| err.to_string())
         }
-        "write_agent_md" => {
-            let workspace_id = parse_string(&params, "workspaceId")?;
-            let content = parse_string(&params, "content")?;
-            state.write_agent_md(workspace_id, content).await?;
+        "file_write" => {
+            let request = parse_file_write_request(&params)?;
+            state
+                .file_write(
+                    request.scope,
+                    request.kind,
+                    request.workspace_id,
+                    request.content,
+                )
+                .await?;
             serde_json::to_value(json!({ "ok": true })).map_err(|err| err.to_string())
         }
         "get_app_settings" => {
@@ -2278,24 +2082,6 @@ async fn handle_rpc_request(
                 .to_str()
                 .ok_or("Unable to resolve CODEX_HOME".to_string())?;
             Ok(Value::String(path.to_string()))
-        }
-        "read_global_codex_config" => {
-            let response = state.read_global_codex_config().await?;
-            serde_json::to_value(response).map_err(|err| err.to_string())
-        }
-        "write_global_codex_config" => {
-            let content = parse_string(&params, "content")?;
-            state.write_global_codex_config(content).await?;
-            serde_json::to_value(json!({ "ok": true })).map_err(|err| err.to_string())
-        }
-        "read_global_agents_md" => {
-            let response = state.read_global_agents_md().await?;
-            serde_json::to_value(response).map_err(|err| err.to_string())
-        }
-        "write_global_agents_md" => {
-            let content = parse_string(&params, "content")?;
-            state.write_global_agents_md(content).await?;
-            serde_json::to_value(json!({ "ok": true })).map_err(|err| err.to_string())
         }
         "get_config_model" => {
             let workspace_id = parse_string(&params, "workspaceId")?;

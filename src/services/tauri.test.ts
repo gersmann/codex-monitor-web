@@ -146,7 +146,9 @@ describe("tauri invoke wrappers", () => {
 
     await readAgentMd("ws-agent");
 
-    expect(invokeMock).toHaveBeenCalledWith("read_agent_md", {
+    expect(invokeMock).toHaveBeenCalledWith("file_read", {
+      scope: "workspace",
+      kind: "agents",
       workspaceId: "ws-agent",
     });
   });
@@ -157,7 +159,9 @@ describe("tauri invoke wrappers", () => {
 
     await writeAgentMd("ws-agent", "# Agent");
 
-    expect(invokeMock).toHaveBeenCalledWith("write_agent_md", {
+    expect(invokeMock).toHaveBeenCalledWith("file_write", {
+      scope: "workspace",
+      kind: "agents",
       workspaceId: "ws-agent",
       content: "# Agent",
     });
@@ -169,7 +173,11 @@ describe("tauri invoke wrappers", () => {
 
     await readGlobalAgentsMd();
 
-    expect(invokeMock).toHaveBeenCalledWith("read_global_agents_md");
+    expect(invokeMock).toHaveBeenCalledWith("file_read", {
+      scope: "global",
+      kind: "agents",
+      workspaceId: undefined,
+    });
   });
 
   it("writes global AGENTS.md", async () => {
@@ -178,7 +186,10 @@ describe("tauri invoke wrappers", () => {
 
     await writeGlobalAgentsMd("# Global");
 
-    expect(invokeMock).toHaveBeenCalledWith("write_global_agents_md", {
+    expect(invokeMock).toHaveBeenCalledWith("file_write", {
+      scope: "global",
+      kind: "agents",
+      workspaceId: undefined,
       content: "# Global",
     });
   });
@@ -189,7 +200,11 @@ describe("tauri invoke wrappers", () => {
 
     await readGlobalCodexConfigToml();
 
-    expect(invokeMock).toHaveBeenCalledWith("read_global_codex_config");
+    expect(invokeMock).toHaveBeenCalledWith("file_read", {
+      scope: "global",
+      kind: "config",
+      workspaceId: undefined,
+    });
   });
 
   it("writes global config.toml", async () => {
@@ -198,7 +213,10 @@ describe("tauri invoke wrappers", () => {
 
     await writeGlobalCodexConfigToml("model = \"gpt-5\"");
 
-    expect(invokeMock).toHaveBeenCalledWith("write_global_codex_config", {
+    expect(invokeMock).toHaveBeenCalledWith("file_write", {
+      scope: "global",
+      kind: "config",
+      workspaceId: undefined,
       content: "model = \"gpt-5\"",
     });
   });
