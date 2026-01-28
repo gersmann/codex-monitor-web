@@ -226,7 +226,9 @@ function findPathTokens(tokens: string[]) {
 
 function normalizeCommandStatus(status?: string) {
   const normalized = (status ?? "").toLowerCase();
-  return /(pending|running|processing|started|in_progress)/.test(normalized)
+  return /(pending|running|processing|started|in[_ -]?progress|inprogress)/.test(
+    normalized,
+  )
     ? "exploring"
     : "explored";
 }
