@@ -49,6 +49,7 @@ describe("useAppServerEvents", () => {
       onWorkspaceConnected: vi.fn(),
       onAgentMessageDelta: vi.fn(),
       onReasoningSummaryBoundary: vi.fn(),
+      onContextCompacted: vi.fn(),
       onApprovalRequest: vi.fn(),
       onRequestUserInput: vi.fn(),
       onItemCompleted: vi.fn(),
@@ -92,6 +93,21 @@ describe("useAppServerEvents", () => {
       "ws-1",
       "thread-1",
       "reasoning-1",
+    );
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "thread/compacted",
+          params: { threadId: "thread-1", turnId: "turn-7" },
+        },
+      });
+    });
+    expect(handlers.onContextCompacted).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "turn-7",
     );
 
     act(() => {

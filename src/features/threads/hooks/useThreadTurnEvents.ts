@@ -16,6 +16,7 @@ type UseThreadTurnEventsOptions = {
   pendingInterruptsRef: MutableRefObject<Set<string>>;
   pushThreadErrorMessage: (threadId: string, message: string) => void;
   safeMessageActivity: () => void;
+  recordThreadActivity: (workspaceId: string, threadId: string, timestamp?: number) => void;
 };
 
 export function useThreadTurnEvents({
@@ -26,6 +27,7 @@ export function useThreadTurnEvents({
   pendingInterruptsRef,
   pushThreadErrorMessage,
   safeMessageActivity,
+  recordThreadActivity,
 }: UseThreadTurnEventsOptions) {
   const onTurnStarted = useCallback(
     (workspaceId: string, threadId: string, turnId: string) => {
@@ -129,6 +131,20 @@ export function useThreadTurnEvents({
     ],
   );
 
+  const onContextCompacted = useCallback(
+    (workspaceId: string, threadId: string, turnId: string) => {
+      dispatch({ type: "ensureThread", workspaceId, threadId });
+      if (!turnId) {
+        return;
+      }
+      dispatch({ type: "appendContextCompacted", threadId, turnId });
+      const timestamp = Date.now();
+      recordThreadActivity(workspaceId, threadId, timestamp);
+      safeMessageActivity();
+    },
+    [dispatch, recordThreadActivity, safeMessageActivity],
+  );
+
   return {
     onTurnStarted,
     onTurnCompleted,
@@ -136,5 +152,6 @@ export function useThreadTurnEvents({
     onThreadTokenUsageUpdated,
     onAccountRateLimitsUpdated,
     onTurnError,
+    onContextCompacted,
   };
 }
