@@ -71,6 +71,20 @@ export async function getCodexConfigPath(): Promise<string> {
   return invoke<string>("get_codex_config_path");
 }
 
+export type GlobalAgentsResponse = {
+  exists: boolean;
+  content: string;
+  truncated: boolean;
+};
+
+export async function readGlobalAgentsMd(): Promise<GlobalAgentsResponse> {
+  return invoke<GlobalAgentsResponse>("read_global_agents_md");
+}
+
+export async function writeGlobalAgentsMd(content: string): Promise<void> {
+  return invoke("write_global_agents_md", { content });
+}
+
 export async function getConfigModel(workspaceId: string): Promise<string | null> {
   const response = await invoke<{ model?: string | null }>("get_config_model", {
     workspaceId,

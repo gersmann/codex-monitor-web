@@ -6,6 +6,7 @@ import {
   getGitLog,
   getGitStatus,
   getOpenAppIcon,
+  readGlobalAgentsMd,
   listWorkspaces,
   openWorkspaceIn,
   readAgentMd,
@@ -14,6 +15,7 @@ import {
   respondToUserInputRequest,
   sendUserMessage,
   startReview,
+  writeGlobalAgentsMd,
   writeAgentMd,
 } from "./tauri";
 
@@ -156,6 +158,26 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("write_agent_md", {
       workspaceId: "ws-agent",
       content: "# Agent",
+    });
+  });
+
+  it("reads global AGENTS.md", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ exists: true, content: "# Global", truncated: false });
+
+    await readGlobalAgentsMd();
+
+    expect(invokeMock).toHaveBeenCalledWith("read_global_agents_md");
+  });
+
+  it("writes global AGENTS.md", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await writeGlobalAgentsMd("# Global");
+
+    expect(invokeMock).toHaveBeenCalledWith("write_global_agents_md", {
+      content: "# Global",
     });
   });
 

@@ -14,6 +14,8 @@ import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import X from "lucide-react/dist/esm/icons/x";
 import FlaskConical from "lucide-react/dist/esm/icons/flask-conical";
 import ExternalLink from "lucide-react/dist/esm/icons/external-link";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import Save from "lucide-react/dist/esm/icons/save";
 import type {
   AppSettings,
   CodexDoctorResult,
@@ -42,6 +44,7 @@ import {
 } from "../../../utils/fonts";
 import { DEFAULT_OPEN_APP_ID, OPEN_APP_STORAGE_KEY } from "../../app/constants";
 import { GENERIC_APP_ICON, getKnownOpenAppIcon } from "../../app/utils/openAppIcons";
+import { useGlobalAgentsMd } from "../hooks/useGlobalAgentsMd";
 
 const DICTATION_MODELS = [
   { id: "tiny", label: "Tiny", size: "75 MB", note: "Fastest, least accurate." },
@@ -307,6 +310,18 @@ export function SettingsView({
     status: "idle" | "running" | "done";
     result: CodexDoctorResult | null;
   }>({ status: "idle", result: null });
+  const {
+    content: globalAgentsContent,
+    exists: globalAgentsExists,
+    truncated: globalAgentsTruncated,
+    isLoading: globalAgentsLoading,
+    isSaving: globalAgentsSaving,
+    error: globalAgentsError,
+    isDirty: globalAgentsDirty,
+    setContent: setGlobalAgentsContent,
+    refresh: refreshGlobalAgents,
+    save: saveGlobalAgents,
+  } = useGlobalAgentsMd();
   const [openConfigError, setOpenConfigError] = useState<string | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [shortcutDrafts, setShortcutDrafts] = useState({
@@ -330,6 +345,24 @@ export function SettingsView({
   });
   const dictationReady = dictationModelStatus?.state === "ready";
   const dictationProgress = dictationModelStatus?.progress ?? null;
+  const globalAgentsStatus = globalAgentsLoading
+    ? "Loading…"
+    : globalAgentsSaving
+      ? "Saving…"
+      : globalAgentsExists
+        ? ""
+        : "Not found";
+  const globalAgentsMetaParts: string[] = [];
+  if (globalAgentsStatus) {
+    globalAgentsMetaParts.push(globalAgentsStatus);
+  }
+  if (globalAgentsTruncated) {
+    globalAgentsMetaParts.push("Truncated");
+  }
+  const globalAgentsMeta = globalAgentsMetaParts.join(" · ");
+  const globalAgentsSaveLabel = globalAgentsExists ? "Save" : "Create";
+  const globalAgentsSaveDisabled = globalAgentsLoading || globalAgentsSaving || !globalAgentsDirty;
+  const globalAgentsRefreshDisabled = globalAgentsLoading || globalAgentsSaving;
   const selectedDictationModel = useMemo(() => {
     return (
       DICTATION_MODELS.find(
@@ -2578,6 +2611,59 @@ export function SettingsView({
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div className="settings-field settings-agents">
+                <div className="settings-agents-header">
+                  <div className="settings-field-label">Global AGENTS.md</div>
+                  <div className="settings-agents-actions">
+                    {globalAgentsMeta && (
+                      <div className="settings-help settings-help-inline">{globalAgentsMeta}</div>
+                    )}
+                    <button
+                      type="button"
+                      className="ghost settings-icon-button"
+                      onClick={() => {
+                        void refreshGlobalAgents();
+                      }}
+                      disabled={globalAgentsRefreshDisabled}
+                      aria-label="Refresh global AGENTS.md"
+                      title="Refresh"
+                    >
+                      <RefreshCw aria-hidden />
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost settings-icon-button"
+                      onClick={() => {
+                        void saveGlobalAgents();
+                      }}
+                      disabled={globalAgentsSaveDisabled}
+                      aria-label={
+                        globalAgentsSaveLabel === "Create"
+                          ? "Create global AGENTS.md"
+                          : "Save global AGENTS.md"
+                      }
+                      title={globalAgentsSaveLabel}
+                    >
+                      <Save aria-hidden />
+                    </button>
+                  </div>
+                </div>
+                {globalAgentsError && (
+                  <div className="settings-agents-error">{globalAgentsError}</div>
+                )}
+                <textarea
+                  className="settings-agents-textarea"
+                  value={globalAgentsContent}
+                  onChange={(event) => setGlobalAgentsContent(event.target.value)}
+                  placeholder="Add global instructions for Codex agents…"
+                  spellCheck={false}
+                  disabled={globalAgentsLoading}
+                />
+                <div className="settings-help">
+                  Stored at <code>~/.codex/AGENTS.md</code>.
+                </div>
               </div>
 
                 <div className="settings-field">

@@ -112,6 +112,13 @@ struct AgentMdResponse {
     truncated: bool,
 }
 
+#[derive(Serialize, Deserialize)]
+struct GlobalAgentsResponse {
+    exists: bool,
+    content: String,
+    truncated: bool,
+}
+
 impl DaemonState {
     fn load(config: &DaemonConfig, event_sink: DaemonEventSink) -> Self {
         let storage_path = config.data_dir.join("workspaces.json");
@@ -1114,6 +1121,14 @@ impl DaemonState {
         write_agent_md_inner(&root, &content)
     }
 
+    async fn read_global_agents_md(&self) -> Result<GlobalAgentsResponse, String> {
+        read_global_agents_md_inner()
+    }
+
+    async fn write_global_agents_md(&self, content: String) -> Result<(), String> {
+        write_global_agents_md_inner(&content)
+    }
+
     async fn start_thread(&self, workspace_id: String) -> Result<Value, String> {
         let session = self.get_session(&workspace_id).await?;
         let params = json!({
@@ -1503,6 +1518,98 @@ fn write_agent_md_inner(root: &PathBuf, content: &str) -> Result<(), String> {
     } else {
         agent_path
     };
+    std::fs::write(&target_path, content)
+        .map_err(|err| format!("Failed to write AGENTS.md: {err}"))
+}
+
+const GLOBAL_AGENTS_FILENAME: &str = "AGENTS.md";
+
+fn resolve_default_codex_home() -> Result<PathBuf, String> {
+    codex_home::resolve_default_codex_home()
+        .ok_or("Unable to resolve CODEX_HOME".to_string())
+}
+
+fn canonical_existing_dir(path: &PathBuf) -> Result<Option<PathBuf>, String> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let canonical = path
+        .canonicalize()
+        .map_err(|err| format!("Failed to resolve CODEX_HOME: {err}"))?;
+    if !canonical.is_dir() {
+        return Err("CODEX_HOME is not a directory".to_string());
+    }
+    Ok(Some(canonical))
+}
+
+fn read_global_agents_md_inner() -> Result<GlobalAgentsResponse, String> {
+    let codex_home = resolve_default_codex_home()?;
+    let canonical_home = match canonical_existing_dir(&codex_home)? {
+        Some(path) => path,
+        None => {
+            return Ok(GlobalAgentsResponse {
+                exists: false,
+                content: String::new(),
+                truncated: false,
+            })
+        }
+    };
+
+    let agents_path = canonical_home.join(GLOBAL_AGENTS_FILENAME);
+    if !agents_path.exists() {
+        return Ok(GlobalAgentsResponse {
+            exists: false,
+            content: String::new(),
+            truncated: false,
+        });
+    }
+
+    let canonical_agents = agents_path
+        .canonicalize()
+        .map_err(|err| format!("Failed to open AGENTS.md: {err}"))?;
+    if !canonical_agents.starts_with(&canonical_home) {
+        return Err("Invalid AGENTS.md path".to_string());
+    }
+
+    let mut file =
+        File::open(&canonical_agents).map_err(|err| format!("Failed to open AGENTS.md: {err}"))?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)
+        .map_err(|err| format!("Failed to read AGENTS.md: {err}"))?;
+    let content =
+        String::from_utf8(buffer).map_err(|_| "AGENTS.md is not valid UTF-8".to_string())?;
+
+    Ok(GlobalAgentsResponse {
+        exists: true,
+        content,
+        truncated: false,
+    })
+}
+
+fn write_global_agents_md_inner(content: &str) -> Result<(), String> {
+    let codex_home = resolve_default_codex_home()?;
+    std::fs::create_dir_all(&codex_home)
+        .map_err(|err| format!("Failed to create CODEX_HOME: {err}"))?;
+    let canonical_home = codex_home
+        .canonicalize()
+        .map_err(|err| format!("Failed to resolve CODEX_HOME: {err}"))?;
+    if !canonical_home.is_dir() {
+        return Err("CODEX_HOME is not a directory".to_string());
+    }
+
+    let agents_path = canonical_home.join(GLOBAL_AGENTS_FILENAME);
+    let target_path = if agents_path.exists() {
+        let canonical_agents = agents_path
+            .canonicalize()
+            .map_err(|err| format!("Failed to resolve AGENTS.md: {err}"))?;
+        if !canonical_agents.starts_with(&canonical_home) {
+            return Err("Invalid AGENTS.md path".to_string());
+        }
+        canonical_agents
+    } else {
+        agents_path
+    };
+
     std::fs::write(&target_path, content)
         .map_err(|err| format!("Failed to write AGENTS.md: {err}"))
 }
@@ -2083,6 +2190,15 @@ async fn handle_rpc_request(
                 .to_str()
                 .ok_or("Unable to resolve CODEX_HOME".to_string())?;
             Ok(Value::String(path.to_string()))
+        }
+        "read_global_agents_md" => {
+            let response = state.read_global_agents_md().await?;
+            serde_json::to_value(response).map_err(|err| err.to_string())
+        }
+        "write_global_agents_md" => {
+            let content = parse_string(&params, "content")?;
+            state.write_global_agents_md(content).await?;
+            serde_json::to_value(json!({ "ok": true })).map_err(|err| err.to_string())
         }
         "get_config_model" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
