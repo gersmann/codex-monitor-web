@@ -57,6 +57,7 @@
   --border-accent: rgba(100, 200, 255, 0.6);
   --border-accent-soft: rgba(100, 200, 255, 0.3);
   --text-accent: rgba(164, 195, 255, 0.7);
+  --message-link-color: rgba(196, 154, 255, 0.96);
   --shadow-accent: rgba(92, 168, 255, 0.28);
   --titlebar-inset-left: 72px;
   --titlebar-height: 24px;
@@ -153,6 +154,7 @@
   --border-accent: rgba(77, 153, 255, 0.5);
   --border-accent-soft: rgba(77, 153, 255, 0.28);
   --text-accent: rgba(45, 93, 170, 0.7);
+  --message-link-color: rgba(109, 40, 217, 1);
   --shadow-accent: rgba(90, 140, 210, 0.18);
   --status-success: rgba(30, 155, 110, 0.9);
   --status-warning: rgba(215, 120, 20, 0.9);
@@ -237,6 +239,7 @@
     --border-accent: rgba(77, 153, 255, 0.5);
     --border-accent-soft: rgba(77, 153, 255, 0.28);
     --text-accent: rgba(45, 93, 170, 0.7);
+    --message-link-color: rgba(109, 40, 217, 1);
     --shadow-accent: rgba(90, 140, 210, 0.18);
     --status-success: rgba(30, 155, 110, 0.9);
     --status-warning: rgba(215, 120, 20, 0.9);
