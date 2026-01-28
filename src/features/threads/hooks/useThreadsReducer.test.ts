@@ -291,6 +291,32 @@ describe("threadReducer", () => {
     }
   });
 
+  it("inserts a reasoning summary boundary between sections", () => {
+    const withSummary = threadReducer(initialState, {
+      type: "appendReasoningSummary",
+      threadId: "thread-1",
+      itemId: "reasoning-1",
+      delta: "Exploring files",
+    });
+    const withBoundary = threadReducer(withSummary, {
+      type: "appendReasoningSummaryBoundary",
+      threadId: "thread-1",
+      itemId: "reasoning-1",
+    });
+    const withSecondSummary = threadReducer(withBoundary, {
+      type: "appendReasoningSummary",
+      threadId: "thread-1",
+      itemId: "reasoning-1",
+      delta: "Searching for routes",
+    });
+
+    const item = withSecondSummary.itemsByThread["thread-1"]?.[0];
+    expect(item?.kind).toBe("reasoning");
+    if (item?.kind === "reasoning") {
+      expect(item.summary).toBe("Exploring files\n\nSearching for routes");
+    }
+  });
+
   it("ignores tool output deltas when the item is not a tool", () => {
     const message: ConversationItem = {
       id: "tool-1",

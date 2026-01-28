@@ -195,4 +195,18 @@ describe("useThreadItemEvents", () => {
 
     nowSpy.mockRestore();
   });
+
+  it("dispatches reasoning summary boundaries", () => {
+    const { result, dispatch } = makeOptions();
+
+    act(() => {
+      result.current.onReasoningSummaryBoundary("ws-1", "thread-1", "reasoning-1");
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "appendReasoningSummaryBoundary",
+      threadId: "thread-1",
+      itemId: "reasoning-1",
+    });
+  });
 });

@@ -48,6 +48,7 @@ describe("useAppServerEvents", () => {
       onAppServerEvent: vi.fn(),
       onWorkspaceConnected: vi.fn(),
       onAgentMessageDelta: vi.fn(),
+      onReasoningSummaryBoundary: vi.fn(),
       onApprovalRequest: vi.fn(),
       onRequestUserInput: vi.fn(),
       onItemCompleted: vi.fn(),
@@ -77,6 +78,21 @@ describe("useAppServerEvents", () => {
       itemId: "item-1",
       delta: "Hello",
     });
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "item/reasoning/summaryPartAdded",
+          params: { threadId: "thread-1", itemId: "reasoning-1", summaryIndex: 1 },
+        },
+      });
+    });
+    expect(handlers.onReasoningSummaryBoundary).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "reasoning-1",
+    );
 
     act(() => {
       listener?.({

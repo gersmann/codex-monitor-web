@@ -194,6 +194,13 @@ export function useThreadItemEvents({
     [dispatch],
   );
 
+  const onReasoningSummaryBoundary = useCallback(
+    (_workspaceId: string, threadId: string, itemId: string) => {
+      dispatch({ type: "appendReasoningSummaryBoundary", threadId, itemId });
+    },
+    [dispatch],
+  );
+
   const onReasoningTextDelta = useCallback(
     (_workspaceId: string, threadId: string, itemId: string, delta: string) => {
       dispatch({ type: "appendReasoningContent", threadId, itemId, delta });
@@ -228,6 +235,7 @@ export function useThreadItemEvents({
     onItemStarted,
     onItemCompleted,
     onReasoningSummaryDelta,
+    onReasoningSummaryBoundary,
     onReasoningTextDelta,
     onCommandOutputDelta,
     onTerminalInteraction,
