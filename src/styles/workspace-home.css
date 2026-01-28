@@ -152,6 +152,11 @@
   border-radius: 8px;
 }
 
+.workspace-home-icon-button svg {
+  width: 14px;
+  height: 14px;
+}
+
 .workspace-home-control .open-app-button {
   border-color: var(--border-muted);
   background: var(--surface-card);

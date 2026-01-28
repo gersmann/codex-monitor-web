@@ -30,11 +30,10 @@ import Laptop from "lucide-react/dist/esm/icons/laptop";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
-import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
-import Save from "lucide-react/dist/esm/icons/save";
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { getCaretPosition } from "../../../utils/caretPosition";
 import { isComposingEvent } from "../../../utils/keys";
+import { FileEditorCard } from "../../shared/components/FileEditorCard";
 
 type ThreadStatus = {
   isProcessing: boolean;
@@ -675,48 +674,36 @@ export function WorkspaceHome({
       </div>
 
       <div className="workspace-home-agent">
-        <div className="workspace-home-section-header">
-          <div className="workspace-home-section-title">AGENTS.md</div>
-          <div className="workspace-home-section-actions">
-            {agentMdMeta && <div className="workspace-home-section-meta">{agentMdMeta}</div>}
-            <button
-              type="button"
-              className="ghost workspace-home-icon-button"
-              onClick={onAgentMdRefresh}
-              disabled={agentMdRefreshDisabled}
-              aria-label="Refresh AGENTS.md"
-              title="Refresh"
-            >
-              <RefreshCw size={14} aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="ghost workspace-home-icon-button"
-              onClick={onAgentMdSave}
-              disabled={agentMdSaveDisabled}
-              aria-label={agentMdSaveLabel === "Create" ? "Create AGENTS.md" : "Save AGENTS.md"}
-              title={agentMdSaveLabel}
-            >
-              <Save size={14} aria-hidden />
-            </button>
+        {agentMdTruncated && (
+          <div className="workspace-home-agent-warning">
+            Showing the first part of a large file.
           </div>
-        </div>
-        <div className="workspace-home-agent-card">
-          {agentMdTruncated && (
-            <div className="workspace-home-agent-warning">
-              Showing the first part of a large file.
-            </div>
-          )}
-          {agentMdError && <div className="workspace-home-error">{agentMdError}</div>}
-          <textarea
-            className="workspace-home-agent-textarea"
-            value={agentMdContent}
-            onChange={(event) => onAgentMdChange(event.target.value)}
-            placeholder="Add workspace instructions for the agent…"
-            spellCheck={false}
-            disabled={agentMdLoading}
-          />
-        </div>
+        )}
+        <FileEditorCard
+          title="AGENTS.md"
+          meta={agentMdMeta}
+          error={agentMdError}
+          value={agentMdContent}
+          placeholder="Add workspace instructions for the agent…"
+          disabled={agentMdLoading}
+          refreshDisabled={agentMdRefreshDisabled}
+          saveDisabled={agentMdSaveDisabled}
+          saveLabel={agentMdSaveLabel}
+          onChange={onAgentMdChange}
+          onRefresh={onAgentMdRefresh}
+          onSave={onAgentMdSave}
+          classNames={{
+            container: "workspace-home-agent-card",
+            header: "workspace-home-section-header",
+            title: "workspace-home-section-title",
+            actions: "workspace-home-section-actions",
+            meta: "workspace-home-section-meta",
+            iconButton: "ghost workspace-home-icon-button",
+            error: "workspace-home-error",
+            textarea: "workspace-home-agent-textarea",
+            help: "workspace-home-section-meta",
+          }}
+        />
       </div>
 
       <div className="workspace-home-runs">

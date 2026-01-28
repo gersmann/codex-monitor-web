@@ -1,58 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback } from "react";
 import type { DebugEntry, WorkspaceInfo } from "../../../types";
 import { readAgentMd, writeAgentMd } from "../../../services/tauri";
-import { pushErrorToast } from "../../../services/toasts";
+import { useFileEditor, type FileEditorResponse } from "../../shared/hooks/useFileEditor";
 
 type UseWorkspaceAgentMdOptions = {
   activeWorkspace: WorkspaceInfo | null;
   onDebug?: (entry: DebugEntry) => void;
 };
 
-type AgentMdState = {
-  content: string;
-  exists: boolean;
-  truncated: boolean;
-  isLoading: boolean;
-  isSaving: boolean;
-  error: string | null;
-};
-
-const EMPTY_STATE: AgentMdState = {
-  content: "",
-  exists: false,
-  truncated: false,
-  isLoading: false,
-  isSaving: false,
-  error: null,
-};
-
 export function useWorkspaceAgentMd({ activeWorkspace, onDebug }: UseWorkspaceAgentMdOptions) {
-  const [state, setState] = useState<AgentMdState>(EMPTY_STATE);
-  const lastLoadedContentRef = useRef<string>("");
-  const inFlightWorkspaceIdRef = useRef<string | null>(null);
-  const latestWorkspaceIdRef = useRef<string | null>(null);
-
   const workspaceId = activeWorkspace?.id ?? null;
 
-  useEffect(() => {
-    latestWorkspaceIdRef.current = workspaceId;
-  }, [workspaceId]);
-
-  const refresh = useCallback(async () => {
+  const readWithDebug = useCallback(async (): Promise<FileEditorResponse> => {
     if (!workspaceId) {
-      return;
+      return { exists: false, content: "", truncated: false };
     }
-    if (inFlightWorkspaceIdRef.current === workspaceId) {
-      return;
-    }
-    inFlightWorkspaceIdRef.current = workspaceId;
     const requestWorkspaceId = workspaceId;
-    setState((prev) => ({ ...prev, isLoading: true, error: null }));
     onDebug?.({
       id: `${Date.now()}-client-agent-md-read`,
       timestamp: Date.now(),
       source: "client",
-      label: "agent.md/read",
+      label: "agents.md/read",
       payload: { workspaceId: requestWorkspaceId },
     });
     try {
@@ -61,57 +29,33 @@ export function useWorkspaceAgentMd({ activeWorkspace, onDebug }: UseWorkspaceAg
         id: `${Date.now()}-server-agent-md-read`,
         timestamp: Date.now(),
         source: "server",
-        label: "agent.md/read response",
+        label: "agents.md/read response",
         payload: response,
       });
-      if (requestWorkspaceId !== latestWorkspaceIdRef.current) {
-        return;
-      }
-      lastLoadedContentRef.current = response.content;
-      setState({
-        content: response.content,
-        exists: response.exists,
-        truncated: response.truncated,
-        isLoading: false,
-        isSaving: false,
-        error: null,
-      });
+      return response;
     } catch (error) {
-      if (requestWorkspaceId !== latestWorkspaceIdRef.current) {
-        return;
-      }
       const message = error instanceof Error ? error.message : String(error);
       onDebug?.({
         id: `${Date.now()}-client-agent-md-read-error`,
         timestamp: Date.now(),
         source: "error",
-        label: "agent.md/read error",
+        label: "agents.md/read error",
         payload: message,
       });
-      setState((prev) => ({ ...prev, isLoading: false, error: message }));
-      pushErrorToast({
-        title: "Couldn’t load agent.md",
-        message,
-      });
-    } finally {
-      if (inFlightWorkspaceIdRef.current === requestWorkspaceId) {
-        inFlightWorkspaceIdRef.current = null;
-      }
+      throw error;
     }
   }, [onDebug, workspaceId]);
 
-  const save = useCallback(async () => {
+  const writeWithDebug = useCallback(async (content: string) => {
     if (!workspaceId) {
-      return false;
+      return;
     }
     const requestWorkspaceId = workspaceId;
-    const content = state.content;
-    setState((prev) => ({ ...prev, isSaving: true, error: null }));
     onDebug?.({
       id: `${Date.now()}-client-agent-md-write`,
       timestamp: Date.now(),
       source: "client",
-      label: "agent.md/write",
+      label: "agents.md/write",
       payload: { workspaceId: requestWorkspaceId },
     });
     try {
@@ -120,66 +64,27 @@ export function useWorkspaceAgentMd({ activeWorkspace, onDebug }: UseWorkspaceAg
         id: `${Date.now()}-server-agent-md-write`,
         timestamp: Date.now(),
         source: "server",
-        label: "agent.md/write response",
+        label: "agents.md/write response",
         payload: { ok: true },
       });
-      if (requestWorkspaceId !== latestWorkspaceIdRef.current) {
-        return false;
-      }
-      lastLoadedContentRef.current = content;
-      setState((prev) => ({
-        ...prev,
-        exists: true,
-        truncated: false,
-        isSaving: false,
-        error: null,
-      }));
-      return true;
     } catch (error) {
-      if (requestWorkspaceId !== latestWorkspaceIdRef.current) {
-        return false;
-      }
       const message = error instanceof Error ? error.message : String(error);
       onDebug?.({
         id: `${Date.now()}-client-agent-md-write-error`,
         timestamp: Date.now(),
         source: "error",
-        label: "agent.md/write error",
+        label: "agents.md/write error",
         payload: message,
       });
-      setState((prev) => ({ ...prev, isSaving: false, error: message }));
-      pushErrorToast({
-        title: "Couldn’t save agent.md",
-        message,
-      });
-      return false;
+      throw error;
     }
-  }, [onDebug, state.content, workspaceId]);
+  }, [onDebug, workspaceId]);
 
-  const setContent = useCallback((value: string) => {
-    setState((prev) => ({ ...prev, content: value }));
-  }, []);
-
-  useEffect(() => {
-    setState(EMPTY_STATE);
-    lastLoadedContentRef.current = "";
-    inFlightWorkspaceIdRef.current = null;
-  }, [workspaceId]);
-
-  useEffect(() => {
-    if (!workspaceId) {
-      return;
-    }
-    refresh().catch(() => {});
-  }, [refresh, workspaceId]);
-
-  const isDirty = useMemo(() => state.content !== lastLoadedContentRef.current, [state.content]);
-
-  return {
-    ...state,
-    isDirty,
-    setContent,
-    refresh,
-    save,
-  };
+  return useFileEditor({
+    key: workspaceId,
+    read: readWithDebug,
+    write: writeWithDebug,
+    readErrorTitle: "Couldn’t load AGENTS.md",
+    writeErrorTitle: "Couldn’t save AGENTS.md",
+  });
 }
