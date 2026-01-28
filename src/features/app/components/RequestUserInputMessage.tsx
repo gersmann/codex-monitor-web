@@ -76,9 +76,10 @@ export function RequestUserInputMessage({
       const answerList: string[] = [];
       const key = question.id || `question-${index}`;
       const selectedIndex = selections[key];
-      const treatAsFreeform = Boolean(question.isOther);
-      if (!treatAsFreeform && question.options?.length && selectedIndex !== null) {
-        const selected = question.options[selectedIndex];
+      const options = question.options ?? [];
+      const hasOptions = options.length > 0;
+      if (hasOptions && selectedIndex !== null) {
+        const selected = options[selectedIndex];
         const selectedValue =
           selected?.label?.trim() || selected?.description?.trim() || "";
         if (selectedValue) {
@@ -87,7 +88,7 @@ export function RequestUserInputMessage({
       }
       const note = (notes[key] ?? "").trim();
       if (note) {
-        if (!treatAsFreeform && question.options?.length) {
+        if (hasOptions) {
           answerList.push(`user_note: ${note}`);
         } else {
           answerList.push(note);
