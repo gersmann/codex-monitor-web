@@ -101,6 +101,7 @@ pub fn run() {
             codex::generate_commit_message,
             codex::generate_run_metadata,
             codex::resume_thread,
+            codex::fork_thread,
             codex::list_threads,
             codex::archive_thread,
             codex::collaboration_mode_list,

@@ -243,6 +243,10 @@ export async function startThread(workspaceId: string) {
   return invoke<any>("start_thread", { workspaceId });
 }
 
+export async function forkThread(workspaceId: string, threadId: string) {
+  return invoke<any>("fork_thread", { workspaceId, threadId });
+}
+
 export async function sendUserMessage(
   workspaceId: string,
   threadId: string,

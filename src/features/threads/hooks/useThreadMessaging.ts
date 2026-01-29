@@ -61,6 +61,8 @@ type UseThreadMessagingOptions = {
   ensureThreadForActiveWorkspace: () => Promise<string | null>;
   ensureThreadForWorkspace: (workspaceId: string) => Promise<string | null>;
   refreshThread: (workspaceId: string, threadId: string) => Promise<string | null>;
+  forkThreadForWorkspace: (workspaceId: string, threadId: string) => Promise<string | null>;
+  updateThreadParent: (parentId: string, childIds: string[]) => void;
 };
 
 export function useThreadMessaging({
@@ -88,6 +90,8 @@ export function useThreadMessaging({
   ensureThreadForActiveWorkspace,
   ensureThreadForWorkspace,
   refreshThread,
+  forkThreadForWorkspace,
+  updateThreadParent,
 }: UseThreadMessagingOptions) {
   const sendMessageToThread = useCallback(
     async (
@@ -610,6 +614,31 @@ export function useThreadMessaging({
     ],
   );
 
+  const startFork = useCallback(
+    async (text: string) => {
+      if (!activeWorkspace || !activeThreadId) {
+        return;
+      }
+      const trimmed = text.trim();
+      const rest = trimmed.replace(/^\/fork\b/i, "").trim();
+      const threadId = await forkThreadForWorkspace(activeWorkspace.id, activeThreadId);
+      if (!threadId) {
+        return;
+      }
+      updateThreadParent(activeThreadId, [threadId]);
+      if (rest) {
+        await sendMessageToThread(activeWorkspace, threadId, rest, []);
+      }
+    },
+    [
+      activeThreadId,
+      activeWorkspace,
+      forkThreadForWorkspace,
+      sendMessageToThread,
+      updateThreadParent,
+    ],
+  );
+
   const startResume = useCallback(
     async (_text: string) => {
       if (!activeWorkspace) {
@@ -639,6 +668,7 @@ export function useThreadMessaging({
     interruptTurn,
     sendUserMessage,
     sendUserMessageToThread,
+    startFork,
     startReview,
     startResume,
     startStatus,

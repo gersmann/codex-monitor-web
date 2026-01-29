@@ -183,6 +183,26 @@ pub(crate) async fn resume_thread(
 }
 
 #[tauri::command]
+pub(crate) async fn fork_thread(
+    workspace_id: String,
+    thread_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        return remote_backend::call_remote(
+            &*state,
+            app,
+            "fork_thread",
+            json!({ "workspaceId": workspace_id, "threadId": thread_id }),
+        )
+        .await;
+    }
+
+    codex_core::fork_thread_core(&state.sessions, workspace_id, thread_id).await
+}
+
+#[tauri::command]
 pub(crate) async fn list_threads(
     workspace_id: String,
     cursor: Option<String>,

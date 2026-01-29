@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem, WorkspaceInfo } from "../../../types";
 import {
   archiveThread,
+  forkThread,
   listThreads,
   resumeThread,
   startThread,
@@ -26,6 +27,7 @@ vi.mock("@sentry/react", () => ({
 
 vi.mock("../../../services/tauri", () => ({
   startThread: vi.fn(),
+  forkThread: vi.fn(),
   resumeThread: vi.fn(),
   listThreads: vi.fn(),
   archiveThread: vi.fn(),
@@ -119,6 +121,33 @@ describe("useThreadActions", () => {
       threadId: "thread-1",
     });
     expect(loadedThreadsRef.current["thread-1"]).toBe(true);
+  });
+
+  it("forks a thread and activates the fork", async () => {
+    vi.mocked(forkThread).mockResolvedValue({
+      result: { thread: { id: "thread-fork-1" } },
+    });
+
+    const { result, dispatch, loadedThreadsRef } = renderActions();
+
+    let threadId: string | null = null;
+    await act(async () => {
+      threadId = await result.current.forkThreadForWorkspace("ws-1", "thread-1");
+    });
+
+    expect(threadId).toBe("thread-fork-1");
+    expect(forkThread).toHaveBeenCalledWith("ws-1", "thread-1");
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "thread-fork-1",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setActiveThreadId",
+      workspaceId: "ws-1",
+      threadId: "thread-fork-1",
+    });
+    expect(loadedThreadsRef.current["thread-fork-1"]).toBe(true);
   });
 
   it("starts a thread without activating when requested", async () => {

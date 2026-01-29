@@ -506,6 +506,10 @@ impl DaemonState {
         codex_core::resume_thread_core(&self.sessions, workspace_id, thread_id).await
     }
 
+    async fn fork_thread(&self, workspace_id: String, thread_id: String) -> Result<Value, String> {
+        codex_core::fork_thread_core(&self.sessions, workspace_id, thread_id).await
+    }
+
     async fn list_threads(
         &self,
         workspace_id: String,
@@ -1069,6 +1073,11 @@ async fn handle_rpc_request(
             let workspace_id = parse_string(&params, "workspaceId")?;
             let thread_id = parse_string(&params, "threadId")?;
             state.resume_thread(workspace_id, thread_id).await
+        }
+        "fork_thread" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let thread_id = parse_string(&params, "threadId")?;
+            state.fork_thread(workspace_id, thread_id).await
         }
         "list_threads" => {
             let workspace_id = parse_string(&params, "workspaceId")?;

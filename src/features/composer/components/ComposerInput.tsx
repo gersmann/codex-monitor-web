@@ -7,6 +7,7 @@ import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import Mic from "lucide-react/dist/esm/icons/mic";
 import Square from "lucide-react/dist/esm/icons/square";
 import Brain from "lucide-react/dist/esm/icons/brain";
+import GitFork from "lucide-react/dist/esm/icons/git-fork";
 import PlusCircle from "lucide-react/dist/esm/icons/plus-circle";
 import Info from "lucide-react/dist/esm/icons/info";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
@@ -143,6 +144,9 @@ export function ComposerInput({
     }
     if (item.id === "review") {
       return Brain;
+    }
+    if (item.id === "fork") {
+      return GitFork;
     }
     if (item.id === "new") {
       return PlusCircle;

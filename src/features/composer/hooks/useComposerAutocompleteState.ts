@@ -124,6 +124,12 @@ export function useComposerAutocompleteState({
   const slashCommandItems = useMemo<AutocompleteItem[]>(() => {
     const commands: AutocompleteItem[] = [
       {
+        id: "fork",
+        label: "fork",
+        description: "branch into a new thread",
+        insertText: "fork",
+      },
+      {
         id: "new",
         label: "new",
         description: "start a new chat",

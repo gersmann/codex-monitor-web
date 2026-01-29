@@ -8,6 +8,7 @@ import type {
 } from "../../../types";
 import {
   archiveThread as archiveThreadService,
+  forkThread as forkThreadService,
   listThreads as listThreadsService,
   resumeThread as resumeThreadService,
   startThread as startThreadService,
@@ -58,6 +59,11 @@ export function useThreadActions({
   replaceOnResumeRef,
   applyCollabThreadLinksFromThread,
 }: UseThreadActionsOptions) {
+  const extractThreadId = useCallback((response: Record<string, any>) => {
+    const thread = response.result?.thread ?? response.thread ?? null;
+    return String(thread?.id ?? "");
+  }, []);
+
   const startThreadForWorkspace = useCallback(
     async (workspaceId: string, options?: { activate?: boolean }) => {
       const shouldActivate = options?.activate !== false;
@@ -77,8 +83,7 @@ export function useThreadActions({
           label: "thread/start response",
           payload: response,
         });
-        const thread = response.result?.thread ?? response.thread;
-        const threadId = String(thread?.id ?? "");
+        const threadId = extractThreadId(response);
         if (threadId) {
           dispatch({ type: "ensureThread", workspaceId, threadId });
           if (shouldActivate) {
@@ -99,7 +104,7 @@ export function useThreadActions({
         throw error;
       }
     },
-    [dispatch, loadedThreadsRef, onDebug],
+    [dispatch, extractThreadId, loadedThreadsRef, onDebug],
   );
 
   const resumeThreadForWorkspace = useCallback(
@@ -236,6 +241,54 @@ export function useThreadActions({
       replaceOnResumeRef,
       threadStatusById,
     ],
+  );
+
+  const forkThreadForWorkspace = useCallback(
+    async (workspaceId: string, threadId: string) => {
+      if (!threadId) {
+        return null;
+      }
+      onDebug?.({
+        id: `${Date.now()}-client-thread-fork`,
+        timestamp: Date.now(),
+        source: "client",
+        label: "thread/fork",
+        payload: { workspaceId, threadId },
+      });
+      try {
+        const response = await forkThreadService(workspaceId, threadId);
+        onDebug?.({
+          id: `${Date.now()}-server-thread-fork`,
+          timestamp: Date.now(),
+          source: "server",
+          label: "thread/fork response",
+          payload: response,
+        });
+        const forkedThreadId = extractThreadId(response);
+        if (!forkedThreadId) {
+          return null;
+        }
+        dispatch({ type: "ensureThread", workspaceId, threadId: forkedThreadId });
+        dispatch({
+          type: "setActiveThreadId",
+          workspaceId,
+          threadId: forkedThreadId,
+        });
+        loadedThreadsRef.current[forkedThreadId] = false;
+        await resumeThreadForWorkspace(workspaceId, forkedThreadId, true, true);
+        return forkedThreadId;
+      } catch (error) {
+        onDebug?.({
+          id: `${Date.now()}-client-thread-fork-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread/fork error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      }
+    },
+    [dispatch, extractThreadId, loadedThreadsRef, onDebug, resumeThreadForWorkspace],
   );
 
   const refreshThread = useCallback(
@@ -583,6 +636,7 @@ export function useThreadActions({
 
   return {
     startThreadForWorkspace,
+    forkThreadForWorkspace,
     resumeThreadForWorkspace,
     refreshThread,
     resetWorkspaceThreads,

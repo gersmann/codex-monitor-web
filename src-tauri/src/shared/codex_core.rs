@@ -81,6 +81,16 @@ pub(crate) async fn resume_thread_core(
     session.send_request("thread/resume", params).await
 }
 
+pub(crate) async fn fork_thread_core(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    workspace_id: String,
+    thread_id: String,
+) -> Result<Value, String> {
+    let session = get_session_clone(sessions, &workspace_id).await?;
+    let params = json!({ "threadId": thread_id });
+    session.send_request("thread/fork", params).await
+}
+
 pub(crate) async fn list_threads_core(
     sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
     workspace_id: String,
