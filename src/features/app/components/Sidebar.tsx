@@ -47,6 +47,7 @@ type SidebarProps = {
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   accountRateLimits: RateLimitSnapshot | null;
+  usageShowRemaining: boolean;
   onOpenSettings: () => void;
   onOpenDebug: () => void;
   showDebugButton: boolean;
@@ -93,6 +94,7 @@ export function Sidebar({
   activeWorkspaceId,
   activeThreadId,
   accountRateLimits,
+  usageShowRemaining,
   onOpenSettings,
   onOpenDebug,
   showDebugButton,
@@ -160,7 +162,7 @@ export function Sidebar({
     weeklyResetLabel,
     creditsLabel,
     showWeekly,
-  } = getUsageLabels(accountRateLimits);
+  } = getUsageLabels(accountRateLimits, usageShowRemaining);
   const normalizedQuery = debouncedQuery.trim().toLowerCase();
 
   const isWorkspaceMatch = useCallback(

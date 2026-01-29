@@ -109,6 +109,7 @@ type LayoutNodesOptions = {
   activeThreadId: string | null;
   activeItems: ConversationItem[];
   activeRateLimits: RateLimitSnapshot | null;
+  usageShowRemaining: boolean;
   codeBlockCopyUseModifier: boolean;
   openAppTargets: OpenAppTarget[];
   openAppIconById: Record<string, string>;
@@ -435,6 +436,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       activeWorkspaceId={options.activeWorkspaceId}
       activeThreadId={options.activeThreadId}
       accountRateLimits={options.activeRateLimits}
+      usageShowRemaining={options.usageShowRemaining}
       onOpenSettings={options.onOpenSettings}
       onOpenDebug={options.onOpenDebug}
       showDebugButton={options.showDebugButton}
