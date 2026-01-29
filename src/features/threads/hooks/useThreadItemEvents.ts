@@ -156,7 +156,6 @@ export function useThreadItemEvents({
         text,
         timestamp,
       });
-      markProcessing(threadId, false);
       recordThreadActivity(workspaceId, threadId, timestamp);
       safeMessageActivity();
       if (threadId !== activeThreadId) {
@@ -167,7 +166,6 @@ export function useThreadItemEvents({
       activeThreadId,
       dispatch,
       getCustomName,
-      markProcessing,
       recordThreadActivity,
       safeMessageActivity,
     ],

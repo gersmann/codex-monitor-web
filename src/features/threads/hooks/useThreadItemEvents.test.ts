@@ -146,7 +146,7 @@ describe("useThreadItemEvents", () => {
 
   it("completes agent messages and updates thread activity", () => {
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1234);
-    const { result, dispatch, markProcessing, recordThreadActivity, safeMessageActivity } = makeOptions({
+    const { result, dispatch, recordThreadActivity, safeMessageActivity } = makeOptions({
       activeThreadId: "thread-2",
     });
 
@@ -184,7 +184,6 @@ describe("useThreadItemEvents", () => {
       text: "Done",
       timestamp: 1234,
     });
-    expect(markProcessing).toHaveBeenCalledWith("thread-1", false);
     expect(recordThreadActivity).toHaveBeenCalledWith("ws-1", "thread-1", 1234);
     expect(safeMessageActivity).toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith({
