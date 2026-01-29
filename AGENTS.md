@@ -6,24 +6,56 @@ CodexMonitor is a Tauri app that orchestrates Codex agents across local workspac
 - Frontend: React + Vite
 - Backend (app): Tauri Rust process
 - Backend (daemon): `src-tauri/src/bin/codex_monitor_daemon.rs`
-- Core idea: shared backend domain logic lives under `src-tauri/src/shared/`
+- Shared backend domain logic: `src-tauri/src/shared/*`
 
-## State-of-the-Art Backend Architecture
+## Backend Architecture
 
-The backend now has a clear separation between shared domain logic and environment wiring.
+The backend separates shared domain logic from environment wiring.
 
 - Shared domain/core logic: `src-tauri/src/shared/*`
-- App wiring and platform concerns: `src-tauri/src/*.rs` and `src-tauri/src/workspaces/*`
+- App wiring and platform concerns: feature folders + adapters
 - Daemon wiring and transport concerns: `src-tauri/src/bin/codex_monitor_daemon.rs`
 
-### Shared Core Modules (Source of Truth)
+## Feature Folders
 
-These modules are the primary place for backend logic that must work in both the app and the daemon.
+### Codex
+
+- `src-tauri/src/codex/mod.rs`
+- `src-tauri/src/codex/args.rs`
+- `src-tauri/src/codex/home.rs`
+- `src-tauri/src/codex/config.rs`
+
+### Files
+
+- `src-tauri/src/files/mod.rs`
+- `src-tauri/src/files/io.rs`
+- `src-tauri/src/files/ops.rs`
+- `src-tauri/src/files/policy.rs`
+
+### Dictation
+
+- `src-tauri/src/dictation/mod.rs`
+- `src-tauri/src/dictation/real.rs`
+- `src-tauri/src/dictation/stub.rs`
+
+### Workspaces
+
+- `src-tauri/src/workspaces/*`
+
+### Shared Core Layer
+
+- `src-tauri/src/shared/*`
+
+Root-level single-file features remain at `src-tauri/src/*.rs` (for example: `menu.rs`, `prompts.rs`, `terminal.rs`, `remote_backend.rs`).
+
+## Shared Core Modules (Source of Truth)
+
+Shared logic that must work in both the app and the daemon lives under `src-tauri/src/shared/`.
 
 - `src-tauri/src/shared/codex_core.rs`
   - Threads, approvals, login/cancel, account, skills, config model
 - `src-tauri/src/shared/workspaces_core.rs`
-  - Workspace/worktree operations, persistence, sorting, and git command helpers
+  - Workspace/worktree operations, persistence, sorting, git command helpers
 - `src-tauri/src/shared/settings_core.rs`
   - App settings load/update, Codex config path
 - `src-tauri/src/shared/files_core.rs`
@@ -35,7 +67,7 @@ These modules are the primary place for backend logic that must work in both the
 - `src-tauri/src/shared/account.rs`
   - Account helper utilities and tests
 
-### App/Daemon Pattern
+## App/Daemon Pattern
 
 Use this mental model when changing backend code:
 
@@ -43,7 +75,18 @@ Use this mental model when changing backend code:
 2. Keep app and daemon code as thin adapters.
 3. Pass environment-specific behavior via closures or small adapter helpers.
 
-The app and daemon should not re-implement domain logic.
+The app and daemon do not re-implement domain logic.
+
+## Daemon Module Wrappers
+
+The daemon defines wrapper modules named `codex` and `files` inside `src-tauri/src/bin/codex_monitor_daemon.rs`.
+
+These wrappers re-export the daemon’s local modules:
+
+- Codex: `codex_args`, `codex_home`, `codex_config`
+- Files: `file_io`, `file_ops`, `file_policy`
+
+Shared cores use `crate::codex::*` and `crate::files::*` paths. The daemon wrappers satisfy those paths without importing app-only modules.
 
 ## Key Paths
 
@@ -60,16 +103,17 @@ The app and daemon should not re-implement domain logic.
 ### Backend (App)
 
 - Tauri command registry: `src-tauri/src/lib.rs`
-- Codex commands adapter: `src-tauri/src/codex.rs`
-- Settings adapter: `src-tauri/src/settings.rs`
-- Files adapter: `src-tauri/src/files.rs`
+- Codex adapters: `src-tauri/src/codex/*`
+- Files adapters: `src-tauri/src/files/*`
+- Dictation adapters: `src-tauri/src/dictation/*`
 - Workspaces adapters: `src-tauri/src/workspaces/*`
-- Top-level git features: `src-tauri/src/git.rs`
+- Shared core layer: `src-tauri/src/shared/*`
+- Git feature: `src-tauri/src/git/mod.rs`
 
 ### Backend (Daemon)
 
 - Daemon entrypoint: `src-tauri/src/bin/codex_monitor_daemon.rs`
-- Daemon uses shared cores via `#[path = "../shared/mod.rs"] mod shared;`
+- Daemon imports shared cores via `#[path = "../shared/mod.rs"] mod shared;`
 
 ## Architecture Guidelines
 
@@ -92,25 +136,24 @@ Keep `src/App.tsx` lean:
 ### Backend Guidelines
 
 - Shared logic goes in `src-tauri/src/shared/` first.
-- App and daemon should be thin adapters around shared cores.
+- App and daemon are thin adapters around shared cores.
 - Avoid duplicating git/worktree/codex/settings/files logic in adapters.
 - Prefer explicit, readable adapter helpers over clever abstractions.
+- Do not folderize single-file features unless you are splitting them.
 
-## Daemon: How and When to Add Code (No Duplication)
+## Daemon: How and When to Add Code
 
-The daemon exists to run backend logic outside the Tauri app. It must not become a second implementation.
+The daemon runs backend logic outside the Tauri app.
 
 ### When to Update the Daemon
 
 Update the daemon when one of these is true:
 
-- A Tauri command is also used in remote mode.
-- The daemon needs to expose the same behavior over its JSON-RPC transport.
+- A Tauri command is used in remote mode.
+- The daemon exposes the same behavior over its JSON-RPC transport.
 - Shared core behavior changes and the daemon wiring must pass new inputs.
 
-### Where Code Should Go
-
-Use this decision rule:
+### Where Code Goes
 
 1. Shared behavior or domain logic:
    - Add or update code in `src-tauri/src/shared/*.rs`.
@@ -119,12 +162,9 @@ Use this decision rule:
 3. Daemon-only transport/wiring behavior:
    - Update `src-tauri/src/bin/codex_monitor_daemon.rs`.
 
-### How to Add a New Backend Command (Correctly)
-
-Follow this order to avoid duplication:
+### How to Add a New Backend Command
 
 1. Implement the core logic in a shared module.
-   - Usually `codex_core.rs`, `workspaces_core.rs`, `settings_core.rs`, or `files_core.rs`.
 2. Wire it in the app.
    - Add a Tauri command in `src-tauri/src/lib.rs`.
    - Call the shared core from the appropriate adapter.
@@ -135,16 +175,16 @@ Follow this order to avoid duplication:
 
 ### Adapter Patterns to Reuse
 
-Prefer these existing patterns:
-
 - Shared git unit wrapper:
   - `workspaces_core::run_git_command_unit(...)`
 - App spawn adapter:
   - `spawn_with_app(...)` in `src-tauri/src/workspaces/commands.rs`
 - Daemon spawn adapter:
   - `spawn_with_client(...)` in `src-tauri/src/bin/codex_monitor_daemon.rs`
+- Daemon wrapper modules:
+  - `mod codex { ... }` and `mod files { ... }` in `codex_monitor_daemon.rs`
 
-If you find yourself copying logic between app and daemon, stop and extract it into `src-tauri/src/shared/`.
+If you find yourself copying logic between app and daemon, extract it into `src-tauri/src/shared/`.
 
 ## App-Server Flow
 
@@ -192,14 +232,14 @@ The app uses a shared event hub so each native event has one `listen` and many s
   - Daemon wiring: `src-tauri/src/bin/codex_monitor_daemon.rs`
 - Settings and Codex config:
   - Shared core: `src-tauri/src/shared/settings_core.rs`
-  - App adapter: `src-tauri/src/settings.rs`
+  - App adapters: `src-tauri/src/codex/config.rs`, `src-tauri/src/settings/mod.rs`
   - Daemon wiring: `src-tauri/src/bin/codex_monitor_daemon.rs`
 - Files:
   - Shared core: `src-tauri/src/shared/files_core.rs`
-  - App adapter: `src-tauri/src/files.rs`
+  - App adapters: `src-tauri/src/files/*`
 - Codex threads/approvals/login:
   - Shared core: `src-tauri/src/shared/codex_core.rs`
-  - App adapter: `src-tauri/src/codex.rs`
+  - App adapters: `src-tauri/src/codex/*`
   - Daemon wiring: `src-tauri/src/bin/codex_monitor_daemon.rs`
 
 ## Threads Feature Split (Frontend)
