@@ -186,11 +186,61 @@ export function useThreads({
     return threadId;
   }, [activeWorkspace, activeThreadId, resumeThreadForWorkspace, startThreadForWorkspace]);
 
+  const ensureThreadForWorkspace = useCallback(
+    async (workspaceId: string) => {
+      const currentActiveThreadId = state.activeThreadIdByWorkspace[workspaceId] ?? null;
+      const shouldActivate = workspaceId === activeWorkspaceId;
+      let threadId = currentActiveThreadId;
+      if (!threadId) {
+        threadId = await startThreadForWorkspace(workspaceId, {
+          activate: shouldActivate,
+        });
+        if (!threadId) {
+          return null;
+        }
+      } else if (!loadedThreadsRef.current[threadId]) {
+        await resumeThreadForWorkspace(workspaceId, threadId);
+      }
+      if (shouldActivate && currentActiveThreadId !== threadId) {
+        dispatch({ type: "setActiveThreadId", workspaceId, threadId });
+      }
+      return threadId;
+    },
+    [
+      activeWorkspaceId,
+      dispatch,
+      loadedThreadsRef,
+      resumeThreadForWorkspace,
+      startThreadForWorkspace,
+      state.activeThreadIdByWorkspace,
+    ],
+  );
+
   const {
     interruptTurn,
     sendUserMessage,
     sendUserMessageToThread,
     startReview,
+    reviewPrompt,
+    openReviewPrompt,
+    closeReviewPrompt,
+    showPresetStep,
+    choosePreset,
+    highlightedPresetIndex,
+    setHighlightedPresetIndex,
+    highlightedBranchIndex,
+    setHighlightedBranchIndex,
+    highlightedCommitIndex,
+    setHighlightedCommitIndex,
+    handleReviewPromptKeyDown,
+    confirmBranch,
+    selectBranch,
+    selectBranchAtIndex,
+    selectCommit,
+    selectCommitAtIndex,
+    confirmCommit,
+    updateCustomInstructions,
+    confirmCustom,
   } = useThreadMessaging({
     activeWorkspace,
     activeThreadId,
@@ -213,6 +263,7 @@ export function useThreads({
     onDebug,
     pushThreadErrorMessage,
     ensureThreadForActiveWorkspace,
+    ensureThreadForWorkspace,
   });
 
   const setActiveThreadId = useCallback(
@@ -294,6 +345,26 @@ export function useThreads({
     sendUserMessage,
     sendUserMessageToThread,
     startReview,
+    reviewPrompt,
+    openReviewPrompt,
+    closeReviewPrompt,
+    showPresetStep,
+    choosePreset,
+    highlightedPresetIndex,
+    setHighlightedPresetIndex,
+    highlightedBranchIndex,
+    setHighlightedBranchIndex,
+    highlightedCommitIndex,
+    setHighlightedCommitIndex,
+    handleReviewPromptKeyDown,
+    confirmBranch,
+    selectBranch,
+    selectBranchAtIndex,
+    selectCommit,
+    selectCommitAtIndex,
+    confirmCommit,
+    updateCustomInstructions,
+    confirmCustom,
     handleApprovalDecision,
     handleApprovalRemember,
     handleUserInputSubmit,

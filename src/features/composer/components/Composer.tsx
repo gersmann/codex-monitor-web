@@ -6,6 +6,10 @@ import type {
   QueuedMessage,
   ThreadTokenUsage,
 } from "../../../types";
+import type {
+  ReviewPromptState,
+  ReviewPromptStep,
+} from "../../threads/hooks/useReviewPrompt";
 import { computeDictationInsertion } from "../../../utils/dictation";
 import { isComposingEvent } from "../../../utils/keys";
 import {
@@ -76,6 +80,31 @@ type ComposerProps = {
   onDismissDictationError?: () => void;
   dictationHint?: string | null;
   onDismissDictationHint?: () => void;
+  reviewPrompt?: ReviewPromptState;
+  onReviewPromptClose?: () => void;
+  onReviewPromptShowPreset?: () => void;
+  onReviewPromptChoosePreset?: (
+    preset: Exclude<ReviewPromptStep, "preset"> | "uncommitted",
+  ) => void;
+  highlightedPresetIndex?: number;
+  onReviewPromptHighlightPreset?: (index: number) => void;
+  highlightedBranchIndex?: number;
+  onReviewPromptHighlightBranch?: (index: number) => void;
+  highlightedCommitIndex?: number;
+  onReviewPromptHighlightCommit?: (index: number) => void;
+  onReviewPromptKeyDown?: (event: {
+    key: string;
+    shiftKey?: boolean;
+    preventDefault: () => void;
+  }) => boolean;
+  onReviewPromptSelectBranch?: (value: string) => void;
+  onReviewPromptSelectBranchAtIndex?: (index: number) => void;
+  onReviewPromptConfirmBranch?: () => Promise<void>;
+  onReviewPromptSelectCommit?: (sha: string, title: string) => void;
+  onReviewPromptSelectCommitAtIndex?: (index: number) => void;
+  onReviewPromptConfirmCommit?: () => Promise<void>;
+  onReviewPromptUpdateCustomInstructions?: (value: string) => void;
+  onReviewPromptConfirmCustom?: () => Promise<void>;
 };
 
 const DEFAULT_EDITOR_SETTINGS: ComposerEditorSettings = {
@@ -143,6 +172,25 @@ export function Composer({
   onDismissDictationError,
   dictationHint = null,
   onDismissDictationHint,
+  reviewPrompt,
+  onReviewPromptClose,
+  onReviewPromptShowPreset,
+  onReviewPromptChoosePreset,
+  highlightedPresetIndex,
+  onReviewPromptHighlightPreset,
+  highlightedBranchIndex,
+  onReviewPromptHighlightBranch,
+  highlightedCommitIndex,
+  onReviewPromptHighlightCommit,
+  onReviewPromptKeyDown,
+  onReviewPromptSelectBranch,
+  onReviewPromptSelectBranchAtIndex,
+  onReviewPromptConfirmBranch,
+  onReviewPromptSelectCommit,
+  onReviewPromptSelectCommitAtIndex,
+  onReviewPromptConfirmCommit,
+  onReviewPromptUpdateCustomInstructions,
+  onReviewPromptConfirmCustom,
 }: ComposerProps) {
   const [text, setText] = useState(draftText);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
@@ -193,6 +241,9 @@ export function Composer({
     setText: setComposerText,
     setSelectionStart,
   });
+  const reviewPromptOpen = Boolean(reviewPrompt);
+  const suggestionsOpen = reviewPromptOpen || isAutocompleteOpen;
+  const suggestions = reviewPromptOpen ? [] : autocompleteMatches;
 
   const {
     handleHistoryKeyDown,
@@ -204,7 +255,7 @@ export function Composer({
     text,
     hasAttachments: attachedImages.length > 0,
     disabled,
-    isAutocompleteOpen,
+    isAutocompleteOpen: suggestionsOpen,
     textareaRef,
     setText: setComposerText,
     setSelectionStart,
@@ -500,7 +551,7 @@ export function Composer({
             }
           }
           if (event.key === "Enter" && event.shiftKey) {
-            if (continueListOnShiftEnter && !isAutocompleteOpen) {
+            if (continueListOnShiftEnter && !suggestionsOpen) {
               const textarea = textareaRef.current;
               if (textarea) {
                 const start = textarea.selectionStart ?? text.length;
@@ -536,11 +587,17 @@ export function Composer({
             !event.shiftKey &&
             steerEnabled &&
             isProcessing &&
-            !isAutocompleteOpen
+            !suggestionsOpen
           ) {
             event.preventDefault();
             handleQueue();
             return;
+          }
+          if (reviewPromptOpen && onReviewPromptKeyDown) {
+            const handled = onReviewPromptKeyDown(event);
+            if (handled) {
+              return;
+            }
           }
           handleInputKeyDown(event);
           if (event.defaultPrevented) {
@@ -567,11 +624,29 @@ export function Composer({
           }
         }}
         textareaRef={textareaRef}
-        suggestionsOpen={isAutocompleteOpen}
-        suggestions={autocompleteMatches}
+        suggestionsOpen={suggestionsOpen}
+        suggestions={suggestions}
         highlightIndex={highlightIndex}
         onHighlightIndex={setHighlightIndex}
         onSelectSuggestion={applyAutocomplete}
+        reviewPrompt={reviewPrompt}
+        onReviewPromptClose={onReviewPromptClose}
+        onReviewPromptShowPreset={onReviewPromptShowPreset}
+        onReviewPromptChoosePreset={onReviewPromptChoosePreset}
+        highlightedPresetIndex={highlightedPresetIndex}
+        onReviewPromptHighlightPreset={onReviewPromptHighlightPreset}
+        highlightedBranchIndex={highlightedBranchIndex}
+        onReviewPromptHighlightBranch={onReviewPromptHighlightBranch}
+        highlightedCommitIndex={highlightedCommitIndex}
+        onReviewPromptHighlightCommit={onReviewPromptHighlightCommit}
+        onReviewPromptSelectBranch={onReviewPromptSelectBranch}
+        onReviewPromptSelectBranchAtIndex={onReviewPromptSelectBranchAtIndex}
+        onReviewPromptConfirmBranch={onReviewPromptConfirmBranch}
+        onReviewPromptSelectCommit={onReviewPromptSelectCommit}
+        onReviewPromptSelectCommitAtIndex={onReviewPromptSelectCommitAtIndex}
+        onReviewPromptConfirmCommit={onReviewPromptConfirmCommit}
+        onReviewPromptUpdateCustomInstructions={onReviewPromptUpdateCustomInstructions}
+        onReviewPromptConfirmCustom={onReviewPromptConfirmCustom}
       />
       <ComposerMetaBar
         disabled={disabled}

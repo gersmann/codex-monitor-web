@@ -9,6 +9,8 @@ import Square from "lucide-react/dist/esm/icons/square";
 import { useComposerImageDrop } from "../hooks/useComposerImageDrop";
 import { ComposerAttachments } from "./ComposerAttachments";
 import { DictationWaveform } from "../../dictation/components/DictationWaveform";
+import { ReviewInlinePrompt } from "./ReviewInlinePrompt";
+import type { ReviewPromptState, ReviewPromptStep } from "../../threads/hooks/useReviewPrompt";
 
 type ComposerInputProps = {
   text: string;
@@ -45,6 +47,26 @@ type ComposerInputProps = {
   onHighlightIndex: (index: number) => void;
   onSelectSuggestion: (item: AutocompleteItem) => void;
   suggestionsStyle?: React.CSSProperties;
+  reviewPrompt?: ReviewPromptState;
+  onReviewPromptClose?: () => void;
+  onReviewPromptShowPreset?: () => void;
+  onReviewPromptChoosePreset?: (
+    preset: Exclude<ReviewPromptStep, "preset"> | "uncommitted",
+  ) => void;
+  highlightedPresetIndex?: number;
+  onReviewPromptHighlightPreset?: (index: number) => void;
+  highlightedBranchIndex?: number;
+  onReviewPromptHighlightBranch?: (index: number) => void;
+  highlightedCommitIndex?: number;
+  onReviewPromptHighlightCommit?: (index: number) => void;
+  onReviewPromptSelectBranch?: (value: string) => void;
+  onReviewPromptSelectBranchAtIndex?: (index: number) => void;
+  onReviewPromptConfirmBranch?: () => Promise<void>;
+  onReviewPromptSelectCommit?: (sha: string, title: string) => void;
+  onReviewPromptSelectCommitAtIndex?: (index: number) => void;
+  onReviewPromptConfirmCommit?: () => Promise<void>;
+  onReviewPromptUpdateCustomInstructions?: (value: string) => void;
+  onReviewPromptConfirmCustom?: () => Promise<void>;
 };
 
 export function ComposerInput({
@@ -82,11 +104,30 @@ export function ComposerInput({
   onHighlightIndex,
   onSelectSuggestion,
   suggestionsStyle,
+  reviewPrompt,
+  onReviewPromptClose,
+  onReviewPromptShowPreset,
+  onReviewPromptChoosePreset,
+  highlightedPresetIndex,
+  onReviewPromptHighlightPreset,
+  highlightedBranchIndex,
+  onReviewPromptHighlightBranch,
+  highlightedCommitIndex,
+  onReviewPromptHighlightCommit,
+  onReviewPromptSelectBranch,
+  onReviewPromptSelectBranchAtIndex,
+  onReviewPromptConfirmBranch,
+  onReviewPromptSelectCommit,
+  onReviewPromptSelectCommitAtIndex,
+  onReviewPromptConfirmCommit,
+  onReviewPromptUpdateCustomInstructions,
+  onReviewPromptConfirmCustom,
 }: ComposerInputProps) {
   const suggestionListRef = useRef<HTMLDivElement | null>(null);
   const suggestionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const minTextareaHeight = isExpanded ? 180 : 60;
   const maxTextareaHeight = isExpanded ? 320 : 120;
+  const reviewPromptOpen = Boolean(reviewPrompt);
   const isFileSuggestion = (item: AutocompleteItem) =>
     item.label.includes("/") || item.label.includes("\\");
   const fileTitle = (path: string) => {
@@ -108,7 +149,7 @@ export function ComposerInput({
   });
 
   useEffect(() => {
-    if (!suggestionsOpen) {
+    if (!suggestionsOpen || suggestions.length === 0) {
       return;
     }
     const list = suggestionListRef.current;
@@ -274,53 +315,96 @@ export function ComposerInput({
         )}
         {suggestionsOpen && (
           <div
-            className="composer-suggestions popover-surface"
+            className={`composer-suggestions popover-surface${
+              reviewPromptOpen ? " review-inline-suggestions" : ""
+            }`}
             role="listbox"
             ref={suggestionListRef}
             style={suggestionsStyle}
           >
-            {suggestions.map((item, index) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`composer-suggestion${
-                  index === highlightIndex ? " is-active" : ""
-                }`}
-                role="option"
-                aria-selected={index === highlightIndex}
-                ref={(node) => {
-                  suggestionRefs.current[index] = node;
-                }}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => onSelectSuggestion(item)}
-                onMouseEnter={() => onHighlightIndex(index)}
-              >
-                {isFileSuggestion(item) ? (
-                  <>
-                    <span className="composer-suggestion-title">
-                      {fileTitle(item.label)}
-                    </span>
-                    <span className="composer-suggestion-description">
-                      {item.label}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="composer-suggestion-title">{item.label}</span>
-                    {item.description && (
-                      <span className="composer-suggestion-description">
-                        {item.description}
+            {reviewPromptOpen &&
+            reviewPrompt &&
+            onReviewPromptClose &&
+            onReviewPromptShowPreset &&
+            onReviewPromptChoosePreset &&
+            highlightedPresetIndex !== undefined &&
+            onReviewPromptHighlightPreset &&
+            highlightedBranchIndex !== undefined &&
+            onReviewPromptHighlightBranch &&
+            highlightedCommitIndex !== undefined &&
+            onReviewPromptHighlightCommit &&
+            onReviewPromptSelectBranch &&
+            onReviewPromptSelectBranchAtIndex &&
+            onReviewPromptConfirmBranch &&
+            onReviewPromptSelectCommit &&
+            onReviewPromptSelectCommitAtIndex &&
+            onReviewPromptConfirmCommit &&
+            onReviewPromptUpdateCustomInstructions &&
+            onReviewPromptConfirmCustom ? (
+              <ReviewInlinePrompt
+                reviewPrompt={reviewPrompt}
+                onClose={onReviewPromptClose}
+                onShowPreset={onReviewPromptShowPreset}
+                onChoosePreset={onReviewPromptChoosePreset}
+                highlightedPresetIndex={highlightedPresetIndex}
+                onHighlightPreset={onReviewPromptHighlightPreset}
+                highlightedBranchIndex={highlightedBranchIndex}
+                onHighlightBranch={onReviewPromptHighlightBranch}
+                highlightedCommitIndex={highlightedCommitIndex}
+                onHighlightCommit={onReviewPromptHighlightCommit}
+                onSelectBranch={onReviewPromptSelectBranch}
+                onSelectBranchAtIndex={onReviewPromptSelectBranchAtIndex}
+                onConfirmBranch={onReviewPromptConfirmBranch}
+                onSelectCommit={onReviewPromptSelectCommit}
+                onSelectCommitAtIndex={onReviewPromptSelectCommitAtIndex}
+                onConfirmCommit={onReviewPromptConfirmCommit}
+                onUpdateCustomInstructions={onReviewPromptUpdateCustomInstructions}
+                onConfirmCustom={onReviewPromptConfirmCustom}
+              />
+            ) : (
+              suggestions.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`composer-suggestion${
+                    index === highlightIndex ? " is-active" : ""
+                  }`}
+                  role="option"
+                  aria-selected={index === highlightIndex}
+                  ref={(node) => {
+                    suggestionRefs.current[index] = node;
+                  }}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onSelectSuggestion(item)}
+                  onMouseEnter={() => onHighlightIndex(index)}
+                >
+                  {isFileSuggestion(item) ? (
+                    <>
+                      <span className="composer-suggestion-title">
+                        {fileTitle(item.label)}
                       </span>
-                    )}
-                    {item.hint && (
                       <span className="composer-suggestion-description">
-                        {item.hint}
+                        {item.label}
                       </span>
-                    )}
-                  </>
-                )}
-              </button>
-            ))}
+                    </>
+                  ) : (
+                    <>
+                      <span className="composer-suggestion-title">{item.label}</span>
+                      {item.description && (
+                        <span className="composer-suggestion-description">
+                          {item.description}
+                        </span>
+                      )}
+                      {item.hint && (
+                        <span className="composer-suggestion-description">
+                          {item.hint}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </button>
+              ))
+            )}
           </div>
         )}
       </div>

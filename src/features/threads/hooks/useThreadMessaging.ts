@@ -5,6 +5,7 @@ import type {
   AccessMode,
   CustomPromptOption,
   DebugEntry,
+  ReviewTarget,
   WorkspaceInfo,
 } from "../../../types";
 import {
@@ -19,6 +20,7 @@ import {
   parseReviewTarget,
 } from "../utils/threadNormalize";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
+import { useReviewPrompt } from "./useReviewPrompt";
 
 type SendMessageOptions = {
   skipPromptExpansion?: boolean;
@@ -54,6 +56,7 @@ type UseThreadMessagingOptions = {
   onDebug?: (entry: DebugEntry) => void;
   pushThreadErrorMessage: (threadId: string, message: string) => void;
   ensureThreadForActiveWorkspace: () => Promise<string | null>;
+  ensureThreadForWorkspace: (workspaceId: string) => Promise<string | null>;
 };
 
 export function useThreadMessaging({
@@ -78,6 +81,7 @@ export function useThreadMessaging({
   onDebug,
   pushThreadErrorMessage,
   ensureThreadForActiveWorkspace,
+  ensureThreadForWorkspace,
 }: UseThreadMessagingOptions) {
   const sendMessageToThread = useCallback(
     async (
@@ -374,17 +378,19 @@ export function useThreadMessaging({
     setActiveTurnId,
   ]);
 
-  const startReview = useCallback(
-    async (text: string) => {
-      if (!activeWorkspace || !text.trim()) {
-        return;
+  const startReviewTarget = useCallback(
+    async (target: ReviewTarget, workspaceIdOverride?: string): Promise<boolean> => {
+      const workspaceId = workspaceIdOverride ?? activeWorkspace?.id ?? null;
+      if (!workspaceId) {
+        return false;
       }
-      const threadId = await ensureThreadForActiveWorkspace();
+      const threadId = workspaceIdOverride
+        ? await ensureThreadForWorkspace(workspaceId)
+        : await ensureThreadForActiveWorkspace();
       if (!threadId) {
-        return;
+        return false;
       }
 
-      const target = parseReviewTarget(text);
       markProcessing(threadId, true);
       markReviewing(threadId, true);
       safeMessageActivity();
@@ -394,14 +400,14 @@ export function useThreadMessaging({
         source: "client",
         label: "review/start",
         payload: {
-          workspaceId: activeWorkspace.id,
+          workspaceId,
           threadId,
           target,
         },
       });
       try {
         const response = await startReviewService(
-          activeWorkspace.id,
+          workspaceId,
           threadId,
           target,
           "inline",
@@ -420,8 +426,9 @@ export function useThreadMessaging({
           setActiveTurnId(threadId, null);
           pushThreadErrorMessage(threadId, `Review failed to start: ${rpcError}`);
           safeMessageActivity();
-          return;
+          return false;
         }
+        return true;
       } catch (error) {
         markProcessing(threadId, false);
         markReviewing(threadId, false);
@@ -437,11 +444,13 @@ export function useThreadMessaging({
           error instanceof Error ? error.message : String(error),
         );
         safeMessageActivity();
+        return false;
       }
     },
     [
       activeWorkspace,
       ensureThreadForActiveWorkspace,
+      ensureThreadForWorkspace,
       markProcessing,
       markReviewing,
       onDebug,
@@ -451,10 +460,80 @@ export function useThreadMessaging({
     ],
   );
 
+  const {
+    reviewPrompt,
+    openReviewPrompt,
+    closeReviewPrompt,
+    showPresetStep,
+    choosePreset,
+    highlightedPresetIndex,
+    setHighlightedPresetIndex,
+    highlightedBranchIndex,
+    setHighlightedBranchIndex,
+    highlightedCommitIndex,
+    setHighlightedCommitIndex,
+    handleReviewPromptKeyDown,
+    confirmBranch,
+    selectBranch,
+    selectBranchAtIndex,
+    selectCommit,
+    selectCommitAtIndex,
+    confirmCommit,
+    updateCustomInstructions,
+    confirmCustom,
+  } = useReviewPrompt({
+    activeWorkspace,
+    activeThreadId,
+    onDebug,
+    startReviewTarget,
+  });
+
+  const startReview = useCallback(
+    async (text: string) => {
+      if (!activeWorkspace || !text.trim()) {
+        return;
+      }
+      const trimmed = text.trim();
+      const rest = trimmed.replace(/^\/review\b/i, "").trim();
+      if (!rest) {
+        openReviewPrompt();
+        return;
+      }
+
+      const target = parseReviewTarget(trimmed);
+      await startReviewTarget(target);
+    },
+    [
+      activeWorkspace,
+      openReviewPrompt,
+      startReviewTarget,
+    ],
+  );
+
   return {
     interruptTurn,
     sendUserMessage,
     sendUserMessageToThread,
     startReview,
+    reviewPrompt,
+    openReviewPrompt,
+    closeReviewPrompt,
+    showPresetStep,
+    choosePreset,
+    highlightedPresetIndex,
+    setHighlightedPresetIndex,
+    highlightedBranchIndex,
+    setHighlightedBranchIndex,
+    highlightedCommitIndex,
+    setHighlightedCommitIndex,
+    handleReviewPromptKeyDown,
+    confirmBranch,
+    selectBranch,
+    selectBranchAtIndex,
+    selectCommit,
+    selectCommitAtIndex,
+    confirmCommit,
+    updateCustomInstructions,
+    confirmCustom,
   };
 }
