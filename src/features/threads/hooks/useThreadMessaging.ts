@@ -13,6 +13,7 @@ import {
   sendUserMessage as sendUserMessageService,
   startReview as startReviewService,
   interruptTurn as interruptTurnService,
+  listMcpServerStatus as listMcpServerStatusService,
 } from "../../../services/tauri";
 import { expandCustomPromptText } from "../../../utils/customPrompts";
 import {
@@ -614,6 +615,109 @@ export function useThreadMessaging({
     ],
   );
 
+  const startMcp = useCallback(
+    async (_text: string) => {
+      if (!activeWorkspace) {
+        return;
+      }
+      const threadId = await ensureThreadForActiveWorkspace();
+      if (!threadId) {
+        return;
+      }
+
+      try {
+        const response = (await listMcpServerStatusService(
+          activeWorkspace.id,
+          null,
+          null,
+        )) as Record<string, unknown> | null;
+        const result = (response?.result ?? response) as
+          | Record<string, unknown>
+          | null;
+        const data = Array.isArray(result?.data)
+          ? (result?.data as Array<Record<string, unknown>>)
+          : [];
+
+        const lines: string[] = ["MCP tools:"];
+        if (data.length === 0) {
+          lines.push("- No MCP servers configured.");
+        } else {
+          const servers = [...data].sort((a, b) =>
+            String(a.name ?? "").localeCompare(String(b.name ?? "")),
+          );
+          for (const server of servers) {
+            const name = String(server.name ?? "unknown");
+            const authStatus = server.authStatus ?? server.auth_status ?? null;
+            const authLabel =
+              typeof authStatus === "string"
+                ? authStatus
+                : authStatus &&
+                    typeof authStatus === "object" &&
+                    "status" in authStatus
+                  ? String((authStatus as { status?: unknown }).status ?? "")
+                  : "";
+            lines.push(`- ${name}${authLabel ? ` (auth: ${authLabel})` : ""}`);
+
+            const toolsRecord =
+              server.tools && typeof server.tools === "object"
+                ? (server.tools as Record<string, unknown>)
+                : {};
+            const prefix = `mcp__${name}__`;
+            const toolNames = Object.keys(toolsRecord)
+              .map((toolName) =>
+                toolName.startsWith(prefix)
+                  ? toolName.slice(prefix.length)
+                  : toolName,
+              )
+              .sort((a, b) => a.localeCompare(b));
+            lines.push(
+              toolNames.length > 0
+                ? `  tools: ${toolNames.join(", ")}`
+                : "  tools: none",
+            );
+
+            const resources = Array.isArray(server.resources)
+              ? server.resources.length
+              : 0;
+            const templates = Array.isArray(server.resourceTemplates)
+              ? server.resourceTemplates.length
+              : Array.isArray(server.resource_templates)
+                ? server.resource_templates.length
+                : 0;
+            if (resources > 0 || templates > 0) {
+              lines.push(`  resources: ${resources}, templates: ${templates}`);
+            }
+          }
+        }
+
+        const timestamp = Date.now();
+        recordThreadActivity(activeWorkspace.id, threadId, timestamp);
+        dispatch({
+          type: "addAssistantMessage",
+          threadId,
+          text: lines.join("\n"),
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to load MCP status.";
+        dispatch({
+          type: "addAssistantMessage",
+          threadId,
+          text: `MCP tools:\n- ${message}`,
+        });
+      } finally {
+        safeMessageActivity();
+      }
+    },
+    [
+      activeWorkspace,
+      dispatch,
+      ensureThreadForActiveWorkspace,
+      recordThreadActivity,
+      safeMessageActivity,
+    ],
+  );
+
   const startFork = useCallback(
     async (text: string) => {
       if (!activeWorkspace || !activeThreadId) {
@@ -671,6 +775,7 @@ export function useThreadMessaging({
     startFork,
     startReview,
     startResume,
+    startMcp,
     startStatus,
     reviewPrompt,
     openReviewPrompt,

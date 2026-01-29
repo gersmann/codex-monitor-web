@@ -17,6 +17,7 @@ export function useComposerController({
   startFork,
   startReview,
   startResume,
+  startMcp,
   startStatus,
 }: {
   activeThreadId: string | null;
@@ -40,6 +41,7 @@ export function useComposerController({
   startFork: (text: string) => Promise<void>;
   startReview: (text: string) => Promise<void>;
   startResume: (text: string) => Promise<void>;
+  startMcp: (text: string) => Promise<void>;
   startStatus: (text: string) => Promise<void>;
 }) {
   const [composerDraftsByThread, setComposerDraftsByThread] = useState<
@@ -78,6 +80,7 @@ export function useComposerController({
     startFork,
     startReview,
     startResume,
+    startMcp,
     startStatus,
     clearActiveImages,
   });

@@ -711,6 +711,14 @@ export async function listThreads(
   return invoke<any>("list_threads", { workspaceId, cursor, limit });
 }
 
+export async function listMcpServerStatus(
+  workspaceId: string,
+  cursor?: string | null,
+  limit?: number | null,
+) {
+  return invoke<any>("list_mcp_server_status", { workspaceId, cursor, limit });
+}
+
 export async function resumeThread(workspaceId: string, threadId: string) {
   return invoke<any>("resume_thread", { workspaceId, threadId });
 }

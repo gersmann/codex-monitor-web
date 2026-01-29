@@ -618,6 +618,7 @@ function MainApp() {
     startFork,
     startReview,
     startResume,
+    startMcp,
     startStatus,
     reviewPrompt,
     closeReviewPrompt,
@@ -1030,6 +1031,7 @@ function MainApp() {
     startFork,
     startReview,
     startResume,
+    startMcp,
     startStatus,
   });
 

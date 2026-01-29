@@ -7,6 +7,7 @@ import {
   getGitLog,
   getGitStatus,
   getOpenAppIcon,
+  listMcpServerStatus,
   readGlobalAgentsMd,
   readGlobalCodexConfigToml,
   listWorkspaces,
@@ -111,6 +112,19 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("fork_thread", {
       workspaceId: "ws-9",
       threadId: "thread-9",
+    });
+  });
+
+  it("maps workspaceId/cursor/limit for list_mcp_server_status", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await listMcpServerStatus("ws-10", "cursor-1", 25);
+
+    expect(invokeMock).toHaveBeenCalledWith("list_mcp_server_status", {
+      workspaceId: "ws-10",
+      cursor: "cursor-1",
+      limit: 25,
     });
   });
 

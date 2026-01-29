@@ -130,6 +130,12 @@ export function useComposerAutocompleteState({
         insertText: "fork",
       },
       {
+        id: "mcp",
+        label: "mcp",
+        description: "list configured MCP tools",
+        insertText: "mcp",
+      },
+      {
         id: "new",
         label: "new",
         description: "start a new chat",

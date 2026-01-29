@@ -27,6 +27,7 @@ const makeOptions = (
   startFork: vi.fn().mockResolvedValue(undefined),
   startReview: vi.fn().mockResolvedValue(undefined),
   startResume: vi.fn().mockResolvedValue(undefined),
+  startMcp: vi.fn().mockResolvedValue(undefined),
   startStatus: vi.fn().mockResolvedValue(undefined),
   clearActiveImages: vi.fn(),
   ...overrides,
@@ -287,6 +288,22 @@ describe("useQueuedSend", () => {
     });
 
     expect(startStatus).toHaveBeenCalledWith("/status now");
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(options.startReview).not.toHaveBeenCalled();
+  });
+
+  it("routes /mcp to the MCP handler", async () => {
+    const startMcp = vi.fn().mockResolvedValue(undefined);
+    const options = makeOptions({ startMcp });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/mcp now", ["img-1"]);
+    });
+
+    expect(startMcp).toHaveBeenCalledWith("/mcp now");
     expect(options.sendUserMessage).not.toHaveBeenCalled();
     expect(options.startReview).not.toHaveBeenCalled();
   });

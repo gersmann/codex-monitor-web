@@ -14,6 +14,7 @@ import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import ScrollText from "lucide-react/dist/esm/icons/scroll-text";
 import Wrench from "lucide-react/dist/esm/icons/wrench";
 import FileText from "lucide-react/dist/esm/icons/file-text";
+import Plug from "lucide-react/dist/esm/icons/plug";
 import { useComposerImageDrop } from "../hooks/useComposerImageDrop";
 import { ComposerAttachments } from "./ComposerAttachments";
 import { DictationWaveform } from "../../dictation/components/DictationWaveform";
@@ -147,6 +148,9 @@ export function ComposerInput({
     }
     if (item.id === "fork") {
       return GitFork;
+    }
+    if (item.id === "mcp") {
+      return Plug;
     }
     if (item.id === "new") {
       return PlusCircle;
