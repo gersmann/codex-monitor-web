@@ -9,6 +9,7 @@ import { useThreadEventHandlers } from "./useThreadEventHandlers";
 import { useThreadActions } from "./useThreadActions";
 import { useThreadMessaging } from "./useThreadMessaging";
 import { useThreadApprovals } from "./useThreadApprovals";
+import { useThreadAccountInfo } from "./useThreadAccountInfo";
 import { useThreadRateLimits } from "./useThreadRateLimits";
 import { useThreadSelectors } from "./useThreadSelectors";
 import { useThreadStatus } from "./useThreadStatus";
@@ -73,6 +74,12 @@ export function useThreads({
     dispatch,
     onDebug,
   });
+  const { refreshAccountInfo } = useThreadAccountInfo({
+    activeWorkspaceId,
+    activeWorkspaceConnected: activeWorkspace?.connected,
+    dispatch,
+    onDebug,
+  });
 
   const { markProcessing, markReviewing, setActiveTurnId } = useThreadStatus({
     dispatch,
@@ -109,8 +116,9 @@ export function useThreads({
     (workspaceId: string) => {
       onWorkspaceConnected(workspaceId);
       void refreshAccountRateLimits(workspaceId);
+      void refreshAccountInfo(workspaceId);
     },
-    [onWorkspaceConnected, refreshAccountRateLimits],
+    [onWorkspaceConnected, refreshAccountRateLimits, refreshAccountInfo],
   );
 
   const handlers = useThreadEventHandlers({
@@ -265,9 +273,11 @@ export function useThreads({
     activeTurnIdByThread: state.activeTurnIdByThread,
     tokenUsageByThread: state.tokenUsageByThread,
     rateLimitsByWorkspace: state.rateLimitsByWorkspace,
+    accountByWorkspace: state.accountByWorkspace,
     planByThread: state.planByThread,
     lastAgentMessageByThread: state.lastAgentMessageByThread,
     refreshAccountRateLimits,
+    refreshAccountInfo,
     interruptTurn,
     removeThread,
     pinThread,

@@ -104,6 +104,7 @@ import type {
 import { OPEN_APP_STORAGE_KEY } from "./features/app/constants";
 import { useOpenAppIcons } from "./features/app/hooks/useOpenAppIcons";
 import { useCodeCssVars } from "./features/app/hooks/useCodeCssVars";
+import { useAccountSwitching } from "./features/app/hooks/useAccountSwitching";
 
 const AboutView = lazy(() =>
   import("./features/about/components/AboutView").then((module) => ({
@@ -596,6 +597,7 @@ function MainApp() {
     threadListCursorByWorkspace,
     tokenUsageByThread,
     rateLimitsByWorkspace,
+    accountByWorkspace,
     planByThread,
     lastAgentMessageByThread,
     interruptTurn,
@@ -616,6 +618,8 @@ function MainApp() {
     handleApprovalDecision,
     handleApprovalRemember,
     handleUserInputSubmit,
+    refreshAccountInfo,
+    refreshAccountRateLimits,
   } = useThreads({
     activeWorkspace,
     onWorkspaceConnected: markWorkspaceConnected,
@@ -627,6 +631,18 @@ function MainApp() {
     steerEnabled: appSettings.experimentalSteerEnabled,
     customPrompts: prompts,
     onMessageActivity: queueGitStatusRefresh
+  });
+  const {
+    activeAccount,
+    accountSwitching,
+    handleSwitchAccount,
+    handleCancelSwitchAccount,
+  } = useAccountSwitching({
+    activeWorkspaceId,
+    accountByWorkspace,
+    refreshAccountInfo,
+    refreshAccountRateLimits,
+    alertError,
   });
   const activeThreadIdRef = useRef<string | null>(activeThreadId ?? null);
   const { getThreadRows } = useThreadRows(threadParentById);
@@ -1532,6 +1548,10 @@ function MainApp() {
     activeItems,
     activeRateLimits,
     usageShowRemaining: appSettings.usageShowRemaining,
+    accountInfo: activeAccount,
+    onSwitchAccount: handleSwitchAccount,
+    onCancelSwitchAccount: handleCancelSwitchAccount,
+    accountSwitching,
     codeBlockCopyUseModifier: appSettings.composerCodeBlockCopyUseModifier,
     openAppTargets: appSettings.openAppTargets,
     openAppIconById,

@@ -394,6 +394,13 @@ export type RateLimitSnapshot = {
   planType: string | null;
 };
 
+export type AccountSnapshot = {
+  type: "chatgpt" | "apikey" | "unknown";
+  email: string | null;
+  planType: string | null;
+  requiresOpenaiAuth: boolean | null;
+};
+
 export type QueuedMessage = {
   id: string;
   text: string;

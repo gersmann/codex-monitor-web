@@ -1,4 +1,5 @@
 import type {
+  AccountSnapshot,
   ApprovalRequest,
   ConversationItem,
   RateLimitSnapshot,
@@ -129,6 +130,7 @@ export type ThreadState = {
   userInputRequests: RequestUserInputRequest[];
   tokenUsageByThread: Record<string, ThreadTokenUsage>;
   rateLimitsByWorkspace: Record<string, RateLimitSnapshot | null>;
+  accountByWorkspace: Record<string, AccountSnapshot | null>;
   planByThread: Record<string, TurnPlan | null>;
   lastAgentMessageByThread: Record<string, { text: string; timestamp: number }>;
 };
@@ -226,6 +228,11 @@ export type ThreadAction =
       workspaceId: string;
       rateLimits: RateLimitSnapshot | null;
     }
+  | {
+      type: "setAccountInfo";
+      workspaceId: string;
+      account: AccountSnapshot | null;
+    }
   | { type: "setActiveTurnId"; threadId: string; turnId: string | null }
   | { type: "setThreadPlan"; threadId: string; plan: TurnPlan | null }
   | { type: "clearThreadPlan"; threadId: string }
@@ -252,6 +259,7 @@ export const initialState: ThreadState = {
   userInputRequests: [],
   tokenUsageByThread: {},
   rateLimitsByWorkspace: {},
+  accountByWorkspace: {},
   planByThread: {},
   lastAgentMessageByThread: {},
 };
@@ -975,6 +983,14 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         rateLimitsByWorkspace: {
           ...state.rateLimitsByWorkspace,
           [action.workspaceId]: action.rateLimits,
+        },
+      };
+    case "setAccountInfo":
+      return {
+        ...state,
+        accountByWorkspace: {
+          ...state.accountByWorkspace,
+          [action.workspaceId]: action.account,
         },
       };
     case "setThreadPlan":
