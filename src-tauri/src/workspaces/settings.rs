@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
-use crate::types::{WorkspaceEntry, WorkspaceInfo, WorkspaceSettings};
+use crate::types::{WorkspaceEntry, WorkspaceSettings};
+#[cfg(test)]
+use crate::types::WorkspaceInfo;
 
+#[cfg(test)]
 pub(crate) fn sort_workspaces(list: &mut Vec<WorkspaceInfo>) {
     list.sort_by(|a, b| {
         let a_order = a.settings.sort_order.unwrap_or(u32::MAX);

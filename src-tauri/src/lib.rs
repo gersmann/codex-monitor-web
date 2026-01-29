@@ -28,6 +28,7 @@ mod rules;
 mod settings;
 mod state;
 mod storage;
+mod shared;
 mod terminal;
 mod types;
 mod utils;

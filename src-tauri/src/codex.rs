@@ -1,17 +1,12 @@
-use base64::Engine;
 use serde_json::{json, Map, Value};
-use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
-use std::process::Stdio;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use tauri::{AppHandle, State};
-use tokio::io::AsyncReadExt;
 use tokio::process::Command;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 use tokio::time::timeout;
 
 pub(crate) use crate::backend::app_server::WorkspaceSession;
@@ -19,12 +14,10 @@ use crate::backend::app_server::{
     build_codex_command_with_bin, build_codex_path_env, check_codex_installation,
     spawn_workspace_session as spawn_workspace_session_inner,
 };
-use crate::codex_args::{apply_codex_args, resolve_workspace_codex_args};
-use crate::codex_config;
-use crate::codex_home::{resolve_default_codex_home, resolve_workspace_codex_home};
+use crate::codex_args::apply_codex_args;
 use crate::event_sink::TauriEventSink;
 use crate::remote_backend;
-use crate::rules;
+use crate::shared::codex_core;
 use crate::state::AppState;
 use crate::types::WorkspaceEntry;
 
@@ -162,15 +155,7 @@ pub(crate) async fn start_thread(
         .await;
     }
 
-    let sessions = state.sessions.lock().await;
-    let session = sessions
-        .get(&workspace_id)
-        .ok_or("workspace not connected")?;
-    let params = json!({
-        "cwd": session.entry.path,
-        "approvalPolicy": "on-request"
-    });
-    session.send_request("thread/start", params).await
+    codex_core::start_thread_core(&state.sessions, workspace_id).await
 }
 
 #[tauri::command]
@@ -190,14 +175,7 @@ pub(crate) async fn resume_thread(
         .await;
     }
 
-    let sessions = state.sessions.lock().await;
-    let session = sessions
-        .get(&workspace_id)
-        .ok_or("workspace not connected")?;
-    let params = json!({
-        "threadId": thread_id
-    });
-    session.send_request("thread/resume", params).await
+    codex_core::resume_thread_core(&state.sessions, workspace_id, thread_id).await
 }
 
 #[tauri::command]
@@ -218,15 +196,7 @@ pub(crate) async fn list_threads(
         .await;
     }
 
-    let sessions = state.sessions.lock().await;
-    let session = sessions
-        .get(&workspace_id)
-        .ok_or("workspace not connected")?;
-    let params = json!({
-        "cursor": cursor,
-        "limit": limit,
-    });
-    session.send_request("thread/list", params).await
+    codex_core::list_threads_core(&state.sessions, workspace_id, cursor, limit).await
 }
 
 #[tauri::command]
@@ -246,14 +216,7 @@ pub(crate) async fn archive_thread(
         .await;
     }
 
-    let sessions = state.sessions.lock().await;
-    let session = sessions
-        .get(&workspace_id)
-        .ok_or("workspace not connected")?;
-    let params = json!({
-        "threadId": thread_id
-    });
-    session.send_request("thread/archive", params).await
+    codex_core::archive_thread_core(&state.sessions, workspace_id, thread_id).await
 }
 
 #[tauri::command]
@@ -298,72 +261,18 @@ pub(crate) async fn send_user_message(
         .await;
     }
 
-    let sessions = state.sessions.lock().await;
-    let session = sessions
-        .get(&workspace_id)
-        .ok_or("workspace not connected")?;
-    let access_mode = access_mode.unwrap_or_else(|| "current".to_string());
-    let sandbox_policy = match access_mode.as_str() {
-        "full-access" => json!({
-            "type": "dangerFullAccess"
-        }),
-        "read-only" => json!({
-            "type": "readOnly"
-        }),
-        _ => json!({
-            "type": "workspaceWrite",
-            "writableRoots": [session.entry.path],
-            "networkAccess": true
-        }),
-    };
-
-    let approval_policy = if access_mode == "full-access" {
-        "never"
-    } else {
-        "on-request"
-    };
-
-    let trimmed_text = text.trim();
-    let mut input: Vec<Value> = Vec::new();
-    if !trimmed_text.is_empty() {
-        input.push(json!({ "type": "text", "text": trimmed_text }));
-    }
-    if let Some(paths) = images {
-        for path in paths {
-            let trimmed = path.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            if trimmed.starts_with("data:")
-                || trimmed.starts_with("http://")
-                || trimmed.starts_with("https://")
-            {
-                input.push(json!({ "type": "image", "url": trimmed }));
-            } else {
-                input.push(json!({ "type": "localImage", "path": trimmed }));
-            }
-        }
-    }
-    if input.is_empty() {
-        return Err("empty user message".to_string());
-    }
-
-    let mut params = Map::new();
-    params.insert("threadId".to_string(), json!(thread_id));
-    params.insert("input".to_string(), json!(input));
-    params.insert("cwd".to_string(), json!(session.entry.path));
-    params.insert("approvalPolicy".to_string(), json!(approval_policy));
-    params.insert("sandboxPolicy".to_string(), json!(sandbox_policy));
-    params.insert("model".to_string(), json!(model));
-    params.insert("effort".to_string(), json!(effort));
-    if let Some(mode) = collaboration_mode {
-        if !mode.is_null() {
-            params.insert("collaborationMode".to_string(), mode);
-        }
-    }
-    session
-        .send_request("turn/start", Value::Object(params))
-        .await
+    codex_core::send_user_message_core(
+        &state.sessions,
+        workspace_id,
+        thread_id,
+        text,
+        model,
+        effort,
+        access_mode,
+        images,
+        collaboration_mode,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -382,13 +291,7 @@ pub(crate) async fn collaboration_mode_list(
         .await;
     }
 
-    let sessions = state.sessions.lock().await;
-    let session = sessions
-        .get(&workspace_id)
-        .ok_or("workspace not connected")?;
-    session
-        .send_request("collaborationMode/list", json!({}))
-        .await
+    codex_core::collaboration_mode_list_core(&state.sessions, workspace_id).await
 }
 
 #[tauri::command]
@@ -409,15 +312,7 @@ pub(crate) async fn turn_interrupt(
         .await;
     }
 
-    let sessions = state.sessions.lock().await;
-    let session = sessions
-        .get(&workspace_id)
-        .ok_or("workspace not connected")?;
-    let params = json!({
-        "threadId": thread_id,
-        "turnId": turn_id,
-    });
-    session.send_request("turn/interrupt", params).await
+    codex_core::turn_interrupt_core(&state.sessions, workspace_id, thread_id, turn_id).await
 }
 
 #[tauri::command]
@@ -444,19 +339,7 @@ pub(crate) async fn start_review(
         .await;
     }
 
-    let sessions = state.sessions.lock().await;
-    let session = sessions
-        .get(&workspace_id)
-        .ok_or("workspace not connected")?;
-    let mut params = Map::new();
-    params.insert("threadId".to_string(), json!(thread_id));
-    params.insert("target".to_string(), target);
-    if let Some(delivery) = delivery {
-        params.insert("delivery".to_string(), json!(delivery));
-    }
-    session
-        .send_request("review/start", Value::Object(params))
-        .await
+    codex_core::start_review_core(&state.sessions, workspace_id, thread_id, target, delivery).await
 }
 
 #[tauri::command]
@@ -475,12 +358,7 @@ pub(crate) async fn model_list(
         .await;
     }
 
-    let sessions = state.sessions.lock().await;
-    let session = sessions
-        .get(&workspace_id)
-        .ok_or("workspace not connected")?;
-    let params = json!({});
-    session.send_request("model/list", params).await
+    codex_core::model_list_core(&state.sessions, workspace_id).await
 }
 
 #[tauri::command]
@@ -499,13 +377,7 @@ pub(crate) async fn account_rate_limits(
         .await;
     }
 
-    let sessions = state.sessions.lock().await;
-    let session = sessions
-        .get(&workspace_id)
-        .ok_or("workspace not connected")?;
-    session
-        .send_request("account/rateLimits/read", Value::Null)
-        .await
+    codex_core::account_rate_limits_core(&state.sessions, workspace_id).await
 }
 
 #[tauri::command]
@@ -524,34 +396,7 @@ pub(crate) async fn account_read(
         .await;
     }
 
-    let session = {
-        let sessions = state.sessions.lock().await;
-        sessions.get(&workspace_id).cloned()
-    };
-    let response = if let Some(session) = session {
-        session.send_request("account/read", Value::Null).await.ok()
-    } else {
-        None
-    };
-
-    let (entry, parent_entry) = {
-        let workspaces = state.workspaces.lock().await;
-        let entry = workspaces
-            .get(&workspace_id)
-            .ok_or("workspace not found")?
-            .clone();
-        let parent_entry = entry
-            .parent_id
-            .as_ref()
-            .and_then(|parent_id| workspaces.get(parent_id))
-            .cloned();
-        (entry, parent_entry)
-    };
-    let codex_home = resolve_workspace_codex_home(&entry, parent_entry.as_ref())
-        .or_else(resolve_default_codex_home);
-    let fallback = read_auth_account(codex_home);
-
-    Ok(build_account_response(response, fallback))
+    codex_core::account_read_core(&state.sessions, &state.workspaces, workspace_id).await
 }
 
 #[tauri::command]
@@ -570,145 +415,13 @@ pub(crate) async fn codex_login(
         .await;
     }
 
-    let (entry, parent_entry, settings) = {
-        let workspaces = state.workspaces.lock().await;
-        let entry = workspaces
-            .get(&workspace_id)
-            .ok_or("workspace not found")?
-            .clone();
-        let parent_entry = entry
-            .parent_id
-            .as_ref()
-            .and_then(|parent_id| workspaces.get(parent_id))
-            .cloned();
-        let settings = state.app_settings.lock().await.clone();
-        (entry, parent_entry, settings)
-    };
-
-    let codex_bin = entry
-        .codex_bin
-        .clone()
-        .filter(|value| !value.trim().is_empty())
-        .or(settings.codex_bin.clone());
-    let codex_args = resolve_workspace_codex_args(&entry, parent_entry.as_ref(), Some(&settings));
-    let codex_home = resolve_workspace_codex_home(&entry, parent_entry.as_ref())
-        .or_else(resolve_default_codex_home);
-
-    let mut command = build_codex_command_with_bin(codex_bin);
-    if let Some(ref codex_home) = codex_home {
-        command.env("CODEX_HOME", codex_home);
-    }
-    apply_codex_args(&mut command, codex_args.as_deref())?;
-    command.arg("login");
-    command.stdout(Stdio::piped());
-    command.stderr(Stdio::piped());
-
-    let mut child = command.spawn().map_err(|error| error.to_string())?;
-    let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
-    {
-        let mut cancels = state.codex_login_cancels.lock().await;
-        if let Some(existing) = cancels.remove(&workspace_id) {
-            let _ = existing.send(());
-        }
-        cancels.insert(workspace_id.clone(), cancel_tx);
-    }
-    let pid = child.id();
-    let canceled = Arc::new(AtomicBool::new(false));
-    let canceled_for_task = Arc::clone(&canceled);
-    let cancel_task = tokio::spawn(async move {
-        if cancel_rx.await.is_ok() {
-            canceled_for_task.store(true, Ordering::Relaxed);
-            if let Some(pid) = pid {
-                #[cfg(not(target_os = "windows"))]
-                unsafe {
-                    libc::kill(pid as i32, libc::SIGKILL);
-                }
-                #[cfg(target_os = "windows")]
-                {
-                    let _ = Command::new("taskkill")
-                        .args(["/PID", &pid.to_string(), "/T", "/F"])
-                        .status()
-                        .await;
-                }
-            }
-        }
-    });
-    let stdout_pipe = child.stdout.take();
-    let stderr_pipe = child.stderr.take();
-
-    let stdout_task = tokio::spawn(async move {
-        let mut buffer = Vec::new();
-        if let Some(mut stdout) = stdout_pipe {
-            let _ = stdout.read_to_end(&mut buffer).await;
-        }
-        buffer
-    });
-    let stderr_task = tokio::spawn(async move {
-        let mut buffer = Vec::new();
-        if let Some(mut stderr) = stderr_pipe {
-            let _ = stderr.read_to_end(&mut buffer).await;
-        }
-        buffer
-    });
-
-    let status = match timeout(Duration::from_secs(120), child.wait()).await {
-        Ok(result) => result.map_err(|error| error.to_string())?,
-        Err(_) => {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
-            cancel_task.abort();
-            {
-                let mut cancels = state.codex_login_cancels.lock().await;
-                cancels.remove(&workspace_id);
-            }
-            return Err("Codex login timed out.".to_string());
-        }
-    };
-
-    cancel_task.abort();
-    {
-        let mut cancels = state.codex_login_cancels.lock().await;
-        cancels.remove(&workspace_id);
-    }
-
-    if canceled.load(Ordering::Relaxed) {
-        return Err("Codex login canceled.".to_string());
-    }
-
-    let stdout_bytes = match stdout_task.await {
-        Ok(bytes) => bytes,
-        Err(_) => Vec::new(),
-    };
-    let stderr_bytes = match stderr_task.await {
-        Ok(bytes) => bytes,
-        Err(_) => Vec::new(),
-    };
-
-    let stdout = String::from_utf8_lossy(&stdout_bytes);
-    let stderr = String::from_utf8_lossy(&stderr_bytes);
-    let detail = if stderr.trim().is_empty() {
-        stdout.trim()
-    } else {
-        stderr.trim()
-    };
-    let combined = if stdout.trim().is_empty() {
-        stderr.trim().to_string()
-    } else if stderr.trim().is_empty() {
-        stdout.trim().to_string()
-    } else {
-        format!("{}\n{}", stdout.trim(), stderr.trim())
-    };
-    let limited = combined.chars().take(4000).collect::<String>();
-
-    if !status.success() {
-        return Err(if detail.is_empty() {
-            "Codex login failed.".to_string()
-        } else {
-            format!("Codex login failed: {detail}")
-        });
-    }
-
-    Ok(json!({ "output": limited }))
+    codex_core::codex_login_core(
+        &state.workspaces,
+        &state.app_settings,
+        &state.codex_login_cancels,
+        workspace_id,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -727,17 +440,7 @@ pub(crate) async fn codex_login_cancel(
         .await;
     }
 
-    let cancel_tx = {
-        let mut cancels = state.codex_login_cancels.lock().await;
-        cancels.remove(&workspace_id)
-    };
-    let canceled = if let Some(tx) = cancel_tx {
-        let _ = tx.send(());
-        true
-    } else {
-        false
-    };
-    Ok(json!({ "canceled": canceled }))
+    codex_core::codex_login_cancel_core(&state.codex_login_cancels, workspace_id).await
 }
 
 #[tauri::command]
@@ -756,14 +459,7 @@ pub(crate) async fn skills_list(
         .await;
     }
 
-    let sessions = state.sessions.lock().await;
-    let session = sessions
-        .get(&workspace_id)
-        .ok_or("workspace not connected")?;
-    let params = json!({
-        "cwd": session.entry.path
-    });
-    session.send_request("skills/list", params).await
+    codex_core::skills_list_core(&state.sessions, workspace_id).await
 }
 
 #[tauri::command]
@@ -785,11 +481,8 @@ pub(crate) async fn respond_to_server_request(
         return Ok(());
     }
 
-    let sessions = state.sessions.lock().await;
-    let session = sessions
-        .get(&workspace_id)
-        .ok_or("workspace not connected")?;
-    session.send_response(request_id, result).await
+    codex_core::respond_to_server_request_core(&state.sessions, workspace_id, request_id, result)
+        .await
 }
 
 /// Gets the diff content for commit message generation
@@ -822,23 +515,7 @@ pub(crate) async fn remember_approval_rule(
     command: Vec<String>,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    let command = command
-        .into_iter()
-        .map(|item| item.trim().to_string())
-        .filter(|item| !item.is_empty())
-        .collect::<Vec<_>>();
-    if command.is_empty() {
-        return Err("empty command".to_string());
-    }
-
-    let codex_home = resolve_codex_home_for_workspace(&workspace_id, &state).await?;
-    let rules_path = rules::default_rules_path(&codex_home);
-    rules::append_prefix_rule(&rules_path, &command)?;
-
-    Ok(json!({
-        "ok": true,
-        "rulesPath": rules_path,
-    }))
+    codex_core::remember_approval_rule_core(&state.workspaces, workspace_id, command).await
 }
 
 #[tauri::command]
@@ -857,32 +534,7 @@ pub(crate) async fn get_config_model(
         .await;
     }
 
-    let codex_home = resolve_codex_home_for_workspace(&workspace_id, &state).await?;
-    let model = codex_config::read_config_model(Some(codex_home))?;
-    Ok(json!({ "model": model }))
-}
-
-async fn resolve_codex_home_for_workspace(
-    workspace_id: &str,
-    state: &State<'_, AppState>,
-) -> Result<PathBuf, String> {
-    let (entry, parent_entry) = {
-        let workspaces = state.workspaces.lock().await;
-        let entry = workspaces
-            .get(workspace_id)
-            .ok_or("workspace not found")?
-            .clone();
-        let parent_entry = entry
-            .parent_id
-            .as_ref()
-            .and_then(|parent_id| workspaces.get(parent_id))
-            .cloned();
-        (entry, parent_entry)
-    };
-
-    resolve_workspace_codex_home(&entry, parent_entry.as_ref())
-        .or_else(resolve_default_codex_home)
-        .ok_or("Unable to resolve CODEX_HOME".to_string())
+    codex_core::get_config_model_core(&state.workspaces, workspace_id).await
 }
 
 /// Generates a commit message in the background without showing in the main chat
@@ -1284,211 +936,4 @@ fn sanitize_run_worktree_name(value: &str) -> String {
         }
     }
     format!("feat/{}", cleaned.trim_start_matches('/'))
-}
-
-struct AuthAccount {
-    email: Option<String>,
-    plan_type: Option<String>,
-}
-
-fn build_account_response(response: Option<Value>, fallback: Option<AuthAccount>) -> Value {
-    let mut account = response
-        .as_ref()
-        .and_then(extract_account_map)
-        .unwrap_or_default();
-    if let Some(fallback) = fallback {
-        let account_type = account
-            .get("type")
-            .and_then(|value| value.as_str())
-            .map(|value| value.to_ascii_lowercase());
-        let allow_fallback = account.is_empty()
-            || matches!(account_type.as_deref(), None | Some("chatgpt") | Some("unknown"));
-        if allow_fallback {
-            if !account.contains_key("email") {
-                if let Some(email) = fallback.email {
-                    account.insert("email".to_string(), Value::String(email));
-                }
-            }
-            if !account.contains_key("planType") {
-                if let Some(plan) = fallback.plan_type {
-                    account.insert("planType".to_string(), Value::String(plan));
-                }
-            }
-            if !account.contains_key("type") {
-                account.insert("type".to_string(), Value::String("chatgpt".to_string()));
-            }
-        }
-    }
-
-    let account_value = if account.is_empty() {
-        Value::Null
-    } else {
-        Value::Object(account)
-    };
-    let mut result = Map::new();
-    result.insert("account".to_string(), account_value);
-    if let Some(requires_openai_auth) = response
-        .as_ref()
-        .and_then(extract_requires_openai_auth)
-    {
-        result.insert(
-            "requiresOpenaiAuth".to_string(),
-            Value::Bool(requires_openai_auth),
-        );
-    }
-    Value::Object(result)
-}
-
-fn extract_account_map(value: &Value) -> Option<Map<String, Value>> {
-    let account = value
-        .get("account")
-        .or_else(|| value.get("result").and_then(|result| result.get("account")))
-        .and_then(|value| value.as_object().cloned());
-    if account.is_some() {
-        return account;
-    }
-    let root = value.as_object()?;
-    if root.contains_key("email") || root.contains_key("planType") || root.contains_key("type") {
-        return Some(root.clone());
-    }
-    None
-}
-
-fn extract_requires_openai_auth(value: &Value) -> Option<bool> {
-    value
-        .get("requiresOpenaiAuth")
-        .or_else(|| value.get("requires_openai_auth"))
-        .or_else(|| {
-            value
-                .get("result")
-                .and_then(|result| result.get("requiresOpenaiAuth"))
-        })
-        .or_else(|| {
-            value
-                .get("result")
-                .and_then(|result| result.get("requires_openai_auth"))
-        })
-        .and_then(|value| value.as_bool())
-}
-
-fn read_auth_account(codex_home: Option<PathBuf>) -> Option<AuthAccount> {
-    let codex_home = codex_home?;
-    let auth_path = codex_home.join("auth.json");
-    let data = fs::read(auth_path).ok()?;
-    let auth_value: Value = serde_json::from_slice(&data).ok()?;
-    let tokens = auth_value.get("tokens")?;
-    let id_token = tokens
-        .get("idToken")
-        .or_else(|| tokens.get("id_token"))
-        .and_then(|value| value.as_str())?;
-    let payload = decode_jwt_payload(id_token)?;
-
-    let auth_dict = payload
-        .get("https://api.openai.com/auth")
-        .and_then(|value| value.as_object());
-    let profile_dict = payload
-        .get("https://api.openai.com/profile")
-        .and_then(|value| value.as_object());
-    let plan = normalize_string(
-        auth_dict
-            .and_then(|dict| dict.get("chatgpt_plan_type"))
-            .or_else(|| payload.get("chatgpt_plan_type")),
-    );
-    let email = normalize_string(
-        payload
-            .get("email")
-            .or_else(|| profile_dict.and_then(|dict| dict.get("email"))),
-    );
-
-    if email.is_none() && plan.is_none() {
-        return None;
-    }
-
-    Some(AuthAccount {
-        email,
-        plan_type: plan,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    fn fallback_account() -> AuthAccount {
-        AuthAccount {
-            email: Some("chatgpt@example.com".to_string()),
-            plan_type: Some("plus".to_string()),
-        }
-    }
-
-    fn result_account_map(value: &Value) -> Map<String, Value> {
-        value
-            .get("account")
-            .and_then(Value::as_object)
-            .cloned()
-            .unwrap_or_default()
-    }
-
-    #[test]
-    fn build_account_response_does_not_fallback_for_apikey() {
-        let response = Some(json!({
-            "account": {
-                "type": "apikey"
-            }
-        }));
-        let result = build_account_response(response, Some(fallback_account()));
-        let account = result_account_map(&result);
-
-        assert_eq!(account.get("type").and_then(Value::as_str), Some("apikey"));
-        assert!(!account.contains_key("email"));
-        assert!(!account.contains_key("planType"));
-    }
-
-    #[test]
-    fn build_account_response_falls_back_when_account_missing() {
-        let result = build_account_response(None, Some(fallback_account()));
-        let account = result_account_map(&result);
-
-        assert_eq!(
-            account.get("email").and_then(Value::as_str),
-            Some("chatgpt@example.com"),
-        );
-        assert_eq!(account.get("planType").and_then(Value::as_str), Some("plus"));
-        assert_eq!(account.get("type").and_then(Value::as_str), Some("chatgpt"));
-    }
-
-    #[test]
-    fn build_account_response_allows_fallback_for_chatgpt_type() {
-        let response = Some(json!({
-            "account": {
-                "type": "chatgpt"
-            }
-        }));
-        let result = build_account_response(response, Some(fallback_account()));
-        let account = result_account_map(&result);
-
-        assert_eq!(account.get("type").and_then(Value::as_str), Some("chatgpt"));
-        assert_eq!(
-            account.get("email").and_then(Value::as_str),
-            Some("chatgpt@example.com"),
-        );
-        assert_eq!(account.get("planType").and_then(Value::as_str), Some("plus"));
-    }
-}
-
-fn decode_jwt_payload(token: &str) -> Option<Value> {
-    let payload = token.split('.').nth(1)?;
-    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(payload.as_bytes())
-        .or_else(|_| base64::engine::general_purpose::URL_SAFE.decode(payload.as_bytes()))
-        .ok()?;
-    serde_json::from_slice(&decoded).ok()
-}
-
-fn normalize_string(value: Option<&Value>) -> Option<String> {
-    value
-        .and_then(|value| value.as_str())
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
 }

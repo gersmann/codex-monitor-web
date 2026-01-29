@@ -1,41 +1,11 @@
-use std::path::PathBuf;
-
 use serde_json::json;
 use tauri::{AppHandle, State};
 
-use crate::codex_home;
 use crate::file_io::TextFileResponse;
-use crate::file_ops::{read_with_policy, write_with_policy};
-use crate::file_policy::{policy_for, FileKind, FileScope};
+use crate::file_policy::{FileKind, FileScope};
 use crate::remote_backend;
+use crate::shared::files_core::{file_read_core, file_write_core};
 use crate::state::AppState;
-
-fn resolve_default_codex_home() -> Result<PathBuf, String> {
-    codex_home::resolve_default_codex_home()
-        .ok_or_else(|| "Unable to resolve CODEX_HOME".to_string())
-}
-
-async fn resolve_workspace_root(workspace_id: &str, state: &AppState) -> Result<PathBuf, String> {
-    let workspaces = state.workspaces.lock().await;
-    let entry = workspaces
-        .get(workspace_id)
-        .ok_or_else(|| "workspace not found".to_string())?;
-    Ok(PathBuf::from(&entry.path))
-}
-
-async fn resolve_root(
-    scope: FileScope,
-    workspace_id: Option<&str>,
-    state: &AppState,
-) -> Result<PathBuf, String> {
-    match scope {
-        FileScope::Global => resolve_default_codex_home(),
-        FileScope::Workspace => {
-            let workspace_id = workspace_id.ok_or_else(|| "workspaceId is required".to_string())?;
-            resolve_workspace_root(workspace_id, state).await
-        }
-    }
-}
 
 async fn file_read_impl(
     scope: FileScope,
@@ -55,9 +25,7 @@ async fn file_read_impl(
         return serde_json::from_value(response).map_err(|err| err.to_string());
     }
 
-    let policy = policy_for(scope, kind)?;
-    let root = resolve_root(scope, workspace_id.as_deref(), state).await?;
-    read_with_policy(&root, policy)
+    file_read_core(&state.workspaces, scope, kind, workspace_id).await
 }
 
 async fn file_write_impl(
@@ -84,9 +52,7 @@ async fn file_write_impl(
         return Ok(());
     }
 
-    let policy = policy_for(scope, kind)?;
-    let root = resolve_root(scope, workspace_id.as_deref(), state).await?;
-    write_with_policy(&root, policy, &content)
+    file_write_core(&state.workspaces, scope, kind, workspace_id, content).await
 }
 
 #[tauri::command]

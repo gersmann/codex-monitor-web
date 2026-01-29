@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::Arc;
 
 use serde_json::json;
 use tauri::{AppHandle, Manager, State};
@@ -13,46 +14,36 @@ use super::files::{list_workspace_files_inner, read_workspace_file_inner, Worksp
 use super::git::{
     git_branch_exists, git_find_remote_for_branch, git_get_origin_url, git_remote_branch_exists,
     git_remote_exists, is_missing_worktree_error, run_git_command, run_git_command_bytes,
-    run_git_diff, unique_branch_name,
+    run_git_command_owned, run_git_diff, unique_branch_name,
 };
-use super::settings::{apply_workspace_settings_update, sort_workspaces};
+use super::settings::apply_workspace_settings_update;
 use super::worktree::{
     build_clone_destination_path, null_device_path, sanitize_worktree_name, unique_worktree_path,
     unique_worktree_path_for_rename,
 };
 
+use crate::backend::app_server::WorkspaceSession;
 use crate::codex::spawn_workspace_session;
 use crate::codex_args::resolve_workspace_codex_args;
 use crate::codex_home::resolve_workspace_codex_home;
 use crate::git_utils::resolve_git_root;
 use crate::remote_backend;
+use crate::shared::workspaces_core;
 use crate::state::AppState;
 use crate::storage::write_workspaces;
 use crate::types::{
-    WorkspaceEntry, WorkspaceInfo, WorkspaceKind, WorkspaceSettings, WorktreeInfo,
-    WorktreeSetupStatus,
+    WorkspaceEntry, WorkspaceInfo, WorkspaceKind, WorkspaceSettings, WorktreeSetupStatus,
 };
 use crate::utils::{git_env_path, resolve_git_binary};
 
-const WORKTREE_SETUP_MARKERS_DIR: &str = "worktree-setup";
-const WORKTREE_SETUP_MARKER_EXT: &str = "ran";
-
-fn worktree_setup_marker_path(app: &AppHandle, workspace_id: &str) -> Result<PathBuf, String> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|err| format!("Failed to resolve app data dir: {err}"))?;
-    Ok(app_data_dir
-        .join(WORKTREE_SETUP_MARKERS_DIR)
-        .join(format!("{workspace_id}.{WORKTREE_SETUP_MARKER_EXT}")))
-}
-
-fn normalize_setup_script(script: Option<String>) -> Option<String> {
-    match script {
-        Some(value) if value.trim().is_empty() => None,
-        Some(value) => Some(value),
-        None => None,
-    }
+fn spawn_with_app(
+    app: &AppHandle,
+    entry: WorkspaceEntry,
+    default_bin: Option<String>,
+    codex_args: Option<String>,
+    codex_home: Option<PathBuf>,
+) -> impl std::future::Future<Output = Result<Arc<WorkspaceSession>, String>> {
+    spawn_workspace_session(entry, default_bin, codex_args, app.clone(), codex_home)
 }
 
 #[tauri::command]
@@ -73,12 +64,13 @@ pub(crate) async fn read_workspace_file(
         return serde_json::from_value(response).map_err(|err| err.to_string());
     }
 
-    let workspaces = state.workspaces.lock().await;
-    let entry = workspaces
-        .get(&workspace_id)
-        .ok_or("workspace not found")?;
-    let root = PathBuf::from(&entry.path);
-    read_workspace_file_inner(&root, &path)
+    workspaces_core::read_workspace_file_core(
+        &state.workspaces,
+        &workspace_id,
+        &path,
+        |root, rel_path| read_workspace_file_inner(root, rel_path),
+    )
+    .await
 }
 
 
@@ -92,24 +84,7 @@ pub(crate) async fn list_workspaces(
         return serde_json::from_value(response).map_err(|err| err.to_string());
     }
 
-    let workspaces = state.workspaces.lock().await;
-    let sessions = state.sessions.lock().await;
-    let mut result = Vec::new();
-    for entry in workspaces.values() {
-        result.push(WorkspaceInfo {
-            id: entry.id.clone(),
-            name: entry.name.clone(),
-            path: entry.path.clone(),
-            codex_bin: entry.codex_bin.clone(),
-            connected: sessions.contains_key(&entry.id),
-            kind: entry.kind.clone(),
-            parent_id: entry.parent_id.clone(),
-            worktree: entry.worktree.clone(),
-            settings: entry.settings.clone(),
-        });
-    }
-    sort_workspaces(&mut result);
-    Ok(result)
+    Ok(workspaces_core::list_workspaces_core(&state.workspaces, &state.sessions).await)
 }
 
 
@@ -129,7 +104,7 @@ pub(crate) async fn is_workspace_path_dir(
         .await?;
         return serde_json::from_value(response).map_err(|err| err.to_string());
     }
-    Ok(PathBuf::from(&path).is_dir())
+    Ok(workspaces_core::is_workspace_path_dir_core(&path))
 }
 
 
@@ -153,69 +128,18 @@ pub(crate) async fn add_workspace(
         return serde_json::from_value(response).map_err(|err| err.to_string());
     }
 
-    if !PathBuf::from(&path).is_dir() {
-        return Err("Workspace path must be a folder.".to_string());
-    }
-
-    let name = PathBuf::from(&path)
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("Workspace")
-        .to_string();
-    let entry = WorkspaceEntry {
-        id: Uuid::new_v4().to_string(),
-        name: name.clone(),
-        path: path.clone(),
+    workspaces_core::add_workspace_core(
+        path,
         codex_bin,
-        kind: WorkspaceKind::Main,
-        parent_id: None,
-        worktree: None,
-        settings: WorkspaceSettings::default(),
-    };
-
-    let (default_bin, codex_args) = {
-        let settings = state.app_settings.lock().await;
-        (
-            settings.codex_bin.clone(),
-            resolve_workspace_codex_args(&entry, None, Some(&settings)),
-        )
-    };
-    let codex_home = resolve_workspace_codex_home(&entry, None);
-    let session =
-        spawn_workspace_session(entry.clone(), default_bin, codex_args, app, codex_home).await?;
-
-    if let Err(error) = {
-        let mut workspaces = state.workspaces.lock().await;
-        workspaces.insert(entry.id.clone(), entry.clone());
-        let list: Vec<_> = workspaces.values().cloned().collect();
-        write_workspaces(&state.storage_path, &list)
-    } {
-        {
-            let mut workspaces = state.workspaces.lock().await;
-            workspaces.remove(&entry.id);
-        }
-        let mut child = session.child.lock().await;
-        let _ = child.kill().await;
-        return Err(error);
-    }
-
-    state
-        .sessions
-        .lock()
-        .await
-        .insert(entry.id.clone(), session);
-
-    Ok(WorkspaceInfo {
-        id: entry.id,
-        name: entry.name,
-        path: entry.path,
-        codex_bin: entry.codex_bin,
-        connected: true,
-        kind: entry.kind,
-        parent_id: entry.parent_id,
-        worktree: entry.worktree,
-        settings: entry.settings,
-    })
+        &state.workspaces,
+        &state.sessions,
+        &state.app_settings,
+        &state.storage_path,
+        |entry, default_bin, codex_args, codex_home| {
+            spawn_with_app(&app, entry, default_bin, codex_args, codex_home)
+        },
+    )
+    .await
 }
 
 
@@ -374,102 +298,37 @@ pub(crate) async fn add_worktree(
         return serde_json::from_value(response).map_err(|err| err.to_string());
     }
 
-    let branch = branch.trim();
-    if branch.is_empty() {
-        return Err("Branch name is required.".to_string());
-    }
-
-    let parent_entry = {
-        let workspaces = state.workspaces.lock().await;
-        workspaces
-            .get(&parent_id)
-            .cloned()
-            .ok_or("parent workspace not found")?
-    };
-
-    if parent_entry.kind.is_worktree() {
-        return Err("Cannot create a worktree from another worktree.".to_string());
-    }
-
-    let worktree_root = app
+    let data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {e}"))?
-        .join("worktrees")
-        .join(&parent_entry.id);
-    std::fs::create_dir_all(&worktree_root)
-        .map_err(|e| format!("Failed to create worktree directory: {e}"))?;
+        .map_err(|err| format!("Failed to resolve app data dir: {err}"))?;
 
-    let safe_name = sanitize_worktree_name(branch);
-    let worktree_path = unique_worktree_path(&worktree_root, &safe_name);
-    let worktree_path_string = worktree_path.to_string_lossy().to_string();
-
-    let branch_exists = git_branch_exists(&PathBuf::from(&parent_entry.path), branch).await?;
-    if branch_exists {
-        run_git_command(
-            &PathBuf::from(&parent_entry.path),
-            &["worktree", "add", &worktree_path_string, branch],
-        )
-        .await?;
-    } else {
-        run_git_command(
-            &PathBuf::from(&parent_entry.path),
-            &["worktree", "add", "-b", branch, &worktree_path_string],
-        )
-        .await?;
-    }
-
-    let entry = WorkspaceEntry {
-        id: Uuid::new_v4().to_string(),
-        name: branch.to_string(),
-        path: worktree_path_string,
-        codex_bin: parent_entry.codex_bin.clone(),
-        kind: WorkspaceKind::Worktree,
-        parent_id: Some(parent_entry.id.clone()),
-        worktree: Some(WorktreeInfo {
-            branch: branch.to_string(),
-        }),
-        settings: WorkspaceSettings {
-            worktree_setup_script: normalize_setup_script(
-                parent_entry.settings.worktree_setup_script.clone(),
-            ),
-            ..WorkspaceSettings::default()
+    workspaces_core::add_worktree_core(
+        parent_id,
+        branch,
+        &data_dir,
+        &state.workspaces,
+        &state.sessions,
+        &state.app_settings,
+        &state.storage_path,
+        |value| sanitize_worktree_name(value),
+        |root, name| Ok(unique_worktree_path(root, name)),
+        |root, branch| {
+            let root = root.clone();
+            let branch = branch.to_string();
+            async move { git_branch_exists(&root, &branch).await }
         },
-    };
-
-    let (default_bin, codex_args) = {
-        let settings = state.app_settings.lock().await;
-        (
-            settings.codex_bin.clone(),
-            resolve_workspace_codex_args(&entry, Some(&parent_entry), Some(&settings)),
-        )
-    };
-    let codex_home = resolve_workspace_codex_home(&entry, Some(&parent_entry));
-    let session =
-        spawn_workspace_session(entry.clone(), default_bin, codex_args, app, codex_home).await?;
-    {
-        let mut workspaces = state.workspaces.lock().await;
-        workspaces.insert(entry.id.clone(), entry.clone());
-        let list: Vec<_> = workspaces.values().cloned().collect();
-        write_workspaces(&state.storage_path, &list)?;
-    }
-    state
-        .sessions
-        .lock()
-        .await
-        .insert(entry.id.clone(), session);
-
-    Ok(WorkspaceInfo {
-        id: entry.id,
-        name: entry.name,
-        path: entry.path,
-        codex_bin: entry.codex_bin,
-        connected: true,
-        kind: entry.kind,
-        parent_id: entry.parent_id,
-        worktree: entry.worktree,
-        settings: entry.settings,
-    })
+        None::<fn(&PathBuf, &str) -> std::future::Ready<Result<Option<String>, String>>>,
+        |root, args| {
+            workspaces_core::run_git_command_unit(root, args, |repo, args_owned| {
+                run_git_command_owned(repo, args_owned)
+            })
+        },
+        |entry, default_bin, codex_args, codex_home| {
+            spawn_with_app(&app, entry, default_bin, codex_args, codex_home)
+        },
+    )
+    .await
 }
 
 #[tauri::command]
@@ -489,25 +348,11 @@ pub(crate) async fn worktree_setup_status(
         return serde_json::from_value(response).map_err(|err| err.to_string());
     }
 
-    let entry = {
-        let workspaces = state.workspaces.lock().await;
-        workspaces
-            .get(&workspace_id)
-            .cloned()
-            .ok_or_else(|| "workspace not found".to_string())?
-    };
-
-    let script = normalize_setup_script(entry.settings.worktree_setup_script.clone());
-    let marker_exists = if entry.kind.is_worktree() {
-        worktree_setup_marker_path(&app, &entry.id)
-            .map(|path| path.exists())
-            .unwrap_or(false)
-    } else {
-        false
-    };
-    let should_run = entry.kind.is_worktree() && script.is_some() && !marker_exists;
-
-    Ok(WorktreeSetupStatus { should_run, script })
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|err| format!("Failed to resolve app data dir: {err}"))?;
+    workspaces_core::worktree_setup_status_core(&state.workspaces, &workspace_id, &data_dir).await
 }
 
 #[tauri::command]
@@ -527,28 +372,12 @@ pub(crate) async fn worktree_setup_mark_ran(
         return Ok(());
     }
 
-    let entry = {
-        let workspaces = state.workspaces.lock().await;
-        workspaces
-            .get(&workspace_id)
-            .cloned()
-            .ok_or_else(|| "workspace not found".to_string())?
-    };
-    if !entry.kind.is_worktree() {
-        return Err("Not a worktree workspace.".to_string());
-    }
-    let marker_path = worktree_setup_marker_path(&app, &entry.id)?;
-    if let Some(parent) = marker_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|err| format!("Failed to prepare worktree marker directory: {err}"))?;
-    }
-    let ran_at = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0);
-    std::fs::write(&marker_path, format!("ran_at={ran_at}\n"))
-        .map_err(|err| format!("Failed to write worktree setup marker: {err}"))?;
-    Ok(())
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|err| format!("Failed to resolve app data dir: {err}"))?;
+    workspaces_core::worktree_setup_mark_ran_core(&state.workspaces, &workspace_id, &data_dir)
+        .await
 }
 
 
@@ -563,67 +392,25 @@ pub(crate) async fn remove_workspace(
         return Ok(());
     }
 
-    let (entry, child_worktrees) = {
-        let workspaces = state.workspaces.lock().await;
-        let entry = workspaces
-            .get(&id)
-            .cloned()
-            .ok_or("workspace not found")?;
-        if entry.kind.is_worktree() {
-            return Err("Use remove_worktree for worktree agents.".to_string());
-        }
-        let children = workspaces
-            .values()
-            .filter(|workspace| workspace.parent_id.as_deref() == Some(&id))
-            .cloned()
-            .collect::<Vec<_>>();
-        (entry, children)
-    };
-
-    let parent_path = PathBuf::from(&entry.path);
-    for child in &child_worktrees {
-        if let Some(session) = state.sessions.lock().await.remove(&child.id) {
-            let mut child_process = session.child.lock().await;
-            let _ = child_process.kill().await;
-        }
-        let child_path = PathBuf::from(&child.path);
-        if child_path.exists() {
-            if let Err(error) = run_git_command(
-                &parent_path,
-                &["worktree", "remove", "--force", &child.path],
-            )
-            .await
-            {
-                if is_missing_worktree_error(&error) {
-                    if child_path.exists() {
-                        std::fs::remove_dir_all(&child_path).map_err(|err| {
-                            format!("Failed to remove worktree folder: {err}")
-                        })?;
-                    }
-                } else {
-                    return Err(error);
-                }
-            }
-        }
-    }
-    let _ = run_git_command(&parent_path, &["worktree", "prune", "--expire", "now"]).await;
-
-    if let Some(session) = state.sessions.lock().await.remove(&id) {
-        let mut child = session.child.lock().await;
-        let _ = child.kill().await;
-    }
-
-    {
-        let mut workspaces = state.workspaces.lock().await;
-        workspaces.remove(&id);
-        for child in child_worktrees {
-            workspaces.remove(&child.id);
-        }
-        let list: Vec<_> = workspaces.values().cloned().collect();
-        write_workspaces(&state.storage_path, &list)?;
-    }
-
-    Ok(())
+    workspaces_core::remove_workspace_core(
+        id,
+        &state.workspaces,
+        &state.sessions,
+        &state.storage_path,
+        |root, args| {
+            workspaces_core::run_git_command_unit(root, args, |repo, args_owned| {
+                run_git_command_owned(repo, args_owned)
+            })
+        },
+        |error| is_missing_worktree_error(error),
+        |path| {
+            std::fs::remove_dir_all(path)
+                .map_err(|err| format!("Failed to remove worktree folder: {err}"))
+        },
+        true,
+        true,
+    )
+    .await
 }
 
 
@@ -638,61 +425,23 @@ pub(crate) async fn remove_worktree(
         return Ok(());
     }
 
-    let (entry, parent) = {
-        let workspaces = state.workspaces.lock().await;
-        let entry = workspaces
-            .get(&id)
-            .cloned()
-            .ok_or("workspace not found")?;
-        if !entry.kind.is_worktree() {
-            return Err("Not a worktree workspace.".to_string());
-        }
-        let parent_id = entry
-            .parent_id
-            .clone()
-            .ok_or("worktree parent not found")?;
-        let parent = workspaces
-            .get(&parent_id)
-            .cloned()
-            .ok_or("worktree parent not found")?;
-        (entry, parent)
-    };
-
-    if let Some(session) = state.sessions.lock().await.remove(&entry.id) {
-        let mut child = session.child.lock().await;
-        let _ = child.kill().await;
-    }
-
-    let parent_path = PathBuf::from(&parent.path);
-    let entry_path = PathBuf::from(&entry.path);
-    if entry_path.exists() {
-        if let Err(error) = run_git_command(
-            &parent_path,
-            &["worktree", "remove", "--force", &entry.path],
-        )
-        .await
-        {
-            if is_missing_worktree_error(&error) {
-                if entry_path.exists() {
-                    std::fs::remove_dir_all(&entry_path).map_err(|err| {
-                        format!("Failed to remove worktree folder: {err}")
-                    })?;
-                }
-            } else {
-                return Err(error);
-            }
-        }
-    }
-    let _ = run_git_command(&parent_path, &["worktree", "prune", "--expire", "now"]).await;
-
-    {
-        let mut workspaces = state.workspaces.lock().await;
-        workspaces.remove(&entry.id);
-        let list: Vec<_> = workspaces.values().cloned().collect();
-        write_workspaces(&state.storage_path, &list)?;
-    }
-
-    Ok(())
+    workspaces_core::remove_worktree_core(
+        id,
+        &state.workspaces,
+        &state.sessions,
+        &state.storage_path,
+        |root, args| {
+            workspaces_core::run_git_command_unit(root, args, |repo, args_owned| {
+                run_git_command_owned(repo, args_owned)
+            })
+        },
+        |error| is_missing_worktree_error(error),
+        |path| {
+            std::fs::remove_dir_all(path)
+                .map_err(|err| format!("Failed to remove worktree folder: {err}"))
+        },
+    )
+    .await
 }
 
 
@@ -714,158 +463,41 @@ pub(crate) async fn rename_worktree(
         return serde_json::from_value(response).map_err(|err| err.to_string());
     }
 
-    let trimmed = branch.trim();
-    if trimmed.is_empty() {
-        return Err("Branch name is required.".to_string());
-    }
-
-    let (entry, parent) = {
-        let workspaces = state.workspaces.lock().await;
-        let entry = workspaces
-            .get(&id)
-            .cloned()
-            .ok_or("workspace not found")?;
-        if !entry.kind.is_worktree() {
-            return Err("Not a worktree workspace.".to_string());
-        }
-        let parent_id = entry
-            .parent_id
-            .clone()
-            .ok_or("worktree parent not found")?;
-        let parent = workspaces
-            .get(&parent_id)
-            .cloned()
-            .ok_or("worktree parent not found")?;
-        (entry, parent)
-    };
-
-    let old_branch = entry
-        .worktree
-        .as_ref()
-        .map(|worktree| worktree.branch.clone())
-        .ok_or("worktree metadata missing")?;
-    if old_branch == trimmed {
-        return Err("Branch name is unchanged.".to_string());
-    }
-
-    let parent_root = resolve_git_root(&parent)?;
-    let (final_branch, _was_suffixed) =
-        unique_branch_name(&parent_root, trimmed, None).await?;
-    if final_branch == old_branch {
-        return Err("Branch name is unchanged.".to_string());
-    }
-
-    run_git_command(
-        &parent_root,
-        &["branch", "-m", &old_branch, &final_branch],
-    )
-    .await?;
-
-    let worktree_root = app
+    let data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {e}"))?
-        .join("worktrees")
-        .join(&parent.id);
-    std::fs::create_dir_all(&worktree_root)
-        .map_err(|e| format!("Failed to create worktree directory: {e}"))?;
+        .map_err(|err| format!("Failed to resolve app data dir: {err}"))?;
 
-    let safe_name = sanitize_worktree_name(&final_branch);
-    let current_path = PathBuf::from(&entry.path);
-    let next_path =
-        unique_worktree_path_for_rename(&worktree_root, &safe_name, &current_path)?;
-    let next_path_string = next_path.to_string_lossy().to_string();
-    if next_path_string != entry.path {
-        if let Err(error) = run_git_command(
-            &parent_root,
-            &["worktree", "move", &entry.path, &next_path_string],
-        )
-        .await
-        {
-            let _ = run_git_command(
-                &parent_root,
-                &["branch", "-m", &final_branch, &old_branch],
-            )
-            .await;
-            return Err(error);
-        }
-    }
-
-    let (entry_snapshot, list) = {
-        let mut workspaces = state.workspaces.lock().await;
-        let entry = match workspaces.get_mut(&id) {
-            Some(entry) => entry,
-            None => return Err("workspace not found".to_string()),
-        };
-        entry.name = final_branch.clone();
-        entry.path = next_path_string.clone();
-        match entry.worktree.as_mut() {
-            Some(worktree) => {
-                worktree.branch = final_branch.clone();
-            }
-            None => {
-                entry.worktree = Some(WorktreeInfo {
-                    branch: final_branch.clone(),
-                });
-            }
-        }
-        let snapshot = entry.clone();
-        let list: Vec<_> = workspaces.values().cloned().collect();
-        (snapshot, list)
-    };
-    write_workspaces(&state.storage_path, &list)?;
-
-    let was_connected = state.sessions.lock().await.contains_key(&entry_snapshot.id);
-    if was_connected {
-        if let Some(session) = state.sessions.lock().await.remove(&entry_snapshot.id) {
-            let mut child = session.child.lock().await;
-            let _ = child.kill().await;
-        }
-        let (default_bin, codex_args) = {
-            let settings = state.app_settings.lock().await;
-            (
-                settings.codex_bin.clone(),
-                resolve_workspace_codex_args(&entry_snapshot, Some(&parent), Some(&settings)),
-            )
-        };
-        let codex_home = resolve_workspace_codex_home(&entry_snapshot, Some(&parent));
-        match spawn_workspace_session(
-            entry_snapshot.clone(),
-            default_bin,
-            codex_args,
-            app,
-            codex_home,
-        )
-        .await
-        {
-            Ok(session) => {
-                state
-                    .sessions
-                    .lock()
+    workspaces_core::rename_worktree_core(
+        id,
+        branch,
+        &data_dir,
+        &state.workspaces,
+        &state.sessions,
+        &state.app_settings,
+        &state.storage_path,
+        |entry| resolve_git_root(entry),
+        |root, name| {
+            let root = root.clone();
+            let name = name.to_string();
+            async move {
+                unique_branch_name(&root, &name, None)
                     .await
-                    .insert(entry_snapshot.id.clone(), session);
+                    .map(|(branch, _was_suffixed)| branch)
             }
-            Err(error) => {
-                eprintln!(
-                    "rename_worktree: respawn failed for {} after rename: {error}",
-                    entry_snapshot.id
-                );
-            }
-        }
-    }
-
-    let connected = state.sessions.lock().await.contains_key(&entry_snapshot.id);
-    Ok(WorkspaceInfo {
-        id: entry_snapshot.id,
-        name: entry_snapshot.name,
-        path: entry_snapshot.path,
-        codex_bin: entry_snapshot.codex_bin,
-        connected,
-        kind: entry_snapshot.kind,
-        parent_id: entry_snapshot.parent_id,
-        worktree: entry_snapshot.worktree,
-        settings: entry_snapshot.settings,
-    })
+        },
+        |value| sanitize_worktree_name(value),
+        |root, name, current| unique_worktree_path_for_rename(root, name, current),
+        |root, args| {
+            workspaces_core::run_git_command_unit(root, args, |repo, args_owned| {
+                run_git_command_owned(repo, args_owned)
+            })
+        },
+        |entry, default_bin, codex_args, codex_home| {
+            spawn_with_app(&app, entry, default_bin, codex_args, codex_home)
+        },
+    )
+    .await
 }
 
 
@@ -888,87 +520,40 @@ pub(crate) async fn rename_worktree_upstream(
         return Ok(());
     }
 
-    let old_branch = old_branch.trim();
-    let new_branch = new_branch.trim();
-    if old_branch.is_empty() || new_branch.is_empty() {
-        return Err("Branch name is required.".to_string());
-    }
-    if old_branch == new_branch {
-        return Err("Branch name is unchanged.".to_string());
-    }
-
-    let (_entry, parent) = {
-        let workspaces = state.workspaces.lock().await;
-        let entry = workspaces
-            .get(&id)
-            .cloned()
-            .ok_or("workspace not found")?;
-        if !entry.kind.is_worktree() {
-            return Err("Not a worktree workspace.".to_string());
-        }
-        let parent_id = entry
-            .parent_id
-            .clone()
-            .ok_or("worktree parent not found")?;
-        let parent = workspaces
-            .get(&parent_id)
-            .cloned()
-            .ok_or("worktree parent not found")?;
-        (entry, parent)
-    };
-
-    let parent_root = resolve_git_root(&parent)?;
-    if !git_branch_exists(&parent_root, new_branch).await? {
-        return Err("Local branch not found.".to_string());
-    }
-
-    let remote_for_old = git_find_remote_for_branch(&parent_root, old_branch).await?;
-    let remote_name = match remote_for_old.as_ref() {
-        Some(remote) => remote.clone(),
-        None => {
-            if git_remote_exists(&parent_root, "origin").await? {
-                "origin".to_string()
-            } else {
-                return Err("No git remote configured for this worktree.".to_string());
-            }
-        }
-    };
-
-    if git_remote_branch_exists(&parent_root, &remote_name, new_branch).await? {
-        return Err("Remote branch already exists.".to_string());
-    }
-
-    if remote_for_old.is_some() {
-        run_git_command(
-            &parent_root,
-            &[
-                "push",
-                &remote_name,
-                &format!("{new_branch}:{new_branch}"),
-            ],
-        )
-        .await?;
-        run_git_command(
-            &parent_root,
-            &["push", &remote_name, &format!(":{old_branch}")],
-        )
-        .await?;
-    } else {
-        run_git_command(&parent_root, &["push", &remote_name, new_branch]).await?;
-    }
-
-    run_git_command(
-        &parent_root,
-        &[
-            "branch",
-            "--set-upstream-to",
-            &format!("{remote_name}/{new_branch}"),
-            new_branch,
-        ],
+    workspaces_core::rename_worktree_upstream_core(
+        id,
+        old_branch,
+        new_branch,
+        &state.workspaces,
+        |entry| resolve_git_root(entry),
+        |root, branch| {
+            let root = root.clone();
+            let branch = branch.to_string();
+            async move { git_branch_exists(&root, &branch).await }
+        },
+        |root, branch| {
+            let root = root.clone();
+            let branch = branch.to_string();
+            async move { git_find_remote_for_branch(&root, &branch).await }
+        },
+        |root, remote| {
+            let root = root.clone();
+            let remote = remote.to_string();
+            async move { git_remote_exists(&root, &remote).await }
+        },
+        |root, remote, branch| {
+            let root = root.clone();
+            let remote = remote.to_string();
+            let branch = branch.to_string();
+            async move { git_remote_branch_exists(&root, &remote, &branch).await }
+        },
+        |root, args| {
+            workspaces_core::run_git_command_unit(root, args, |repo, args_owned| {
+                run_git_command_owned(repo, args_owned)
+            })
+        },
     )
-    .await?;
-
-    Ok(())
+    .await
 }
 
 
@@ -1120,166 +705,21 @@ pub(crate) async fn update_workspace_settings(
         return serde_json::from_value(response).map_err(|err| err.to_string());
     }
 
-    let mut settings = settings;
-    settings.worktree_setup_script = normalize_setup_script(settings.worktree_setup_script);
-
-    let (
-        previous_entry,
-        entry_snapshot,
-        parent_entry,
-        previous_codex_home,
-        previous_codex_args,
-        previous_worktree_setup_script,
-        child_entries,
-    ) = {
-        let mut workspaces = state.workspaces.lock().await;
-        let previous_entry = workspaces
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| "workspace not found".to_string())?;
-        let previous_codex_home = previous_entry.settings.codex_home.clone();
-        let previous_codex_args = previous_entry.settings.codex_args.clone();
-        let previous_worktree_setup_script = previous_entry.settings.worktree_setup_script.clone();
-        let entry_snapshot = apply_workspace_settings_update(&mut workspaces, &id, settings)?;
-        let parent_entry = entry_snapshot
-            .parent_id
-            .as_ref()
-            .and_then(|parent_id| workspaces.get(parent_id))
-            .cloned();
-        let child_entries = workspaces
-            .values()
-            .filter(|entry| entry.parent_id.as_deref() == Some(&id))
-            .cloned()
-            .collect::<Vec<_>>();
-        (
-            previous_entry,
-            entry_snapshot,
-            parent_entry,
-            previous_codex_home,
-            previous_codex_args,
-            previous_worktree_setup_script,
-            child_entries,
-        )
-    };
-
-    let codex_home_changed = previous_codex_home != entry_snapshot.settings.codex_home;
-    let codex_args_changed = previous_codex_args != entry_snapshot.settings.codex_args;
-    let worktree_setup_script_changed =
-        previous_worktree_setup_script != entry_snapshot.settings.worktree_setup_script;
-    let connected = state.sessions.lock().await.contains_key(&id);
-    if connected && (codex_home_changed || codex_args_changed) {
-        let rollback_entry = previous_entry.clone();
-        let (default_bin, codex_args) = {
-            let settings = state.app_settings.lock().await;
-            (
-                settings.codex_bin.clone(),
-                resolve_workspace_codex_args(&entry_snapshot, parent_entry.as_ref(), Some(&settings)),
-            )
-        };
-        let codex_home = resolve_workspace_codex_home(&entry_snapshot, parent_entry.as_ref());
-        let new_session = match spawn_workspace_session(
-            entry_snapshot.clone(),
-            default_bin,
-            codex_args,
-            app.clone(),
-            codex_home,
-        )
-        .await
-        {
-            Ok(session) => session,
-            Err(error) => {
-                let mut workspaces = state.workspaces.lock().await;
-                workspaces.insert(rollback_entry.id.clone(), rollback_entry);
-                return Err(error);
-            }
-        };
-        if let Some(old_session) = state
-            .sessions
-            .lock()
-            .await
-            .insert(entry_snapshot.id.clone(), new_session)
-        {
-            let mut child = old_session.child.lock().await;
-            let _ = child.kill().await;
-        }
-    }
-    if codex_home_changed || codex_args_changed {
-        let app_settings = state.app_settings.lock().await.clone();
-        let default_bin = app_settings.codex_bin.clone();
-        for child in &child_entries {
-            let connected = state.sessions.lock().await.contains_key(&child.id);
-            if !connected {
-                continue;
-            }
-            let previous_child_home = resolve_workspace_codex_home(&child, Some(&previous_entry));
-            let next_child_home = resolve_workspace_codex_home(&child, Some(&entry_snapshot));
-            let previous_child_args =
-                resolve_workspace_codex_args(&child, Some(&previous_entry), Some(&app_settings));
-            let next_child_args =
-                resolve_workspace_codex_args(&child, Some(&entry_snapshot), Some(&app_settings));
-            if previous_child_home == next_child_home && previous_child_args == next_child_args {
-                continue;
-            }
-            let new_session = match spawn_workspace_session(
-                child.clone(),
-                default_bin.clone(),
-                next_child_args,
-                app.clone(),
-                next_child_home,
-            )
-            .await
-            {
-                Ok(session) => session,
-                Err(error) => {
-                    eprintln!(
-                        "update_workspace_settings: respawn failed for worktree {} after parent override change: {error}",
-                        child.id
-                    );
-                    continue;
-                }
-            };
-            if let Some(old_session) = state
-                .sessions
-                .lock()
-                .await
-                .insert(child.id.clone(), new_session)
-            {
-                let mut child = old_session.child.lock().await;
-                let _ = child.kill().await;
-            }
-        }
-    }
-    if worktree_setup_script_changed && !entry_snapshot.kind.is_worktree() {
-        let child_ids = child_entries
-            .iter()
-            .map(|child| child.id.clone())
-            .collect::<Vec<_>>();
-        if !child_ids.is_empty() {
-            let mut workspaces = state.workspaces.lock().await;
-            for child_id in child_ids {
-                if let Some(child) = workspaces.get_mut(&child_id) {
-                    child.settings.worktree_setup_script =
-                        entry_snapshot.settings.worktree_setup_script.clone();
-                }
-            }
-        }
-    }
-    let list: Vec<_> = {
-        let workspaces = state.workspaces.lock().await;
-        workspaces.values().cloned().collect()
-    };
-    write_workspaces(&state.storage_path, &list)?;
-    Ok(WorkspaceInfo {
-        id: entry_snapshot.id,
-        name: entry_snapshot.name,
-        path: entry_snapshot.path,
-        codex_bin: entry_snapshot.codex_bin,
-        connected,
-        kind: entry_snapshot.kind,
-        parent_id: entry_snapshot.parent_id,
-        worktree: entry_snapshot.worktree,
-        settings: entry_snapshot.settings,
-    })
+    workspaces_core::update_workspace_settings_core(
+        id,
+        settings,
+        &state.workspaces,
+        &state.sessions,
+        &state.app_settings,
+        &state.storage_path,
+        |workspaces, workspace_id, next_settings| {
+            apply_workspace_settings_update(workspaces, workspace_id, next_settings)
+        },
+        |entry, default_bin, codex_args, codex_home| {
+            spawn_with_app(&app, entry, default_bin, codex_args, codex_home)
+        },
+    )
+    .await
 }
 
 
@@ -1302,32 +742,14 @@ pub(crate) async fn update_workspace_codex_bin(
         return serde_json::from_value(response).map_err(|err| err.to_string());
     }
 
-    let (entry_snapshot, list) = {
-        let mut workspaces = state.workspaces.lock().await;
-        let entry_snapshot = match workspaces.get_mut(&id) {
-            Some(entry) => {
-                entry.codex_bin = codex_bin.clone();
-                entry.clone()
-            }
-            None => return Err("workspace not found".to_string()),
-        };
-        let list: Vec<_> = workspaces.values().cloned().collect();
-        (entry_snapshot, list)
-    };
-    write_workspaces(&state.storage_path, &list)?;
-
-    let connected = state.sessions.lock().await.contains_key(&id);
-    Ok(WorkspaceInfo {
-        id: entry_snapshot.id,
-        name: entry_snapshot.name,
-        path: entry_snapshot.path,
-        codex_bin: entry_snapshot.codex_bin,
-        connected,
-        kind: entry_snapshot.kind,
-        parent_id: entry_snapshot.parent_id,
-        worktree: entry_snapshot.worktree,
-        settings: entry_snapshot.settings,
-    })
+    workspaces_core::update_workspace_codex_bin_core(
+        id,
+        codex_bin,
+        &state.workspaces,
+        &state.sessions,
+        &state.storage_path,
+    )
+    .await
 }
 
 
@@ -1343,34 +765,16 @@ pub(crate) async fn connect_workspace(
         return Ok(());
     }
 
-    let (entry, parent_entry) = {
-        let workspaces = state.workspaces.lock().await;
-        workspaces
-            .get(&id)
-            .cloned()
-            .map(|entry| {
-                let parent_entry = entry
-                    .parent_id
-                    .as_ref()
-                    .and_then(|parent_id| workspaces.get(parent_id))
-                    .cloned();
-                (entry, parent_entry)
-            })
-            .ok_or("workspace not found")?
-    };
-
-    let (default_bin, codex_args) = {
-        let settings = state.app_settings.lock().await;
-        (
-            settings.codex_bin.clone(),
-            resolve_workspace_codex_args(&entry, parent_entry.as_ref(), Some(&settings)),
-        )
-    };
-    let codex_home = resolve_workspace_codex_home(&entry, parent_entry.as_ref());
-    let session =
-        spawn_workspace_session(entry.clone(), default_bin, codex_args, app, codex_home).await?;
-    state.sessions.lock().await.insert(entry.id, session);
-    Ok(())
+    workspaces_core::connect_workspace_core(
+        id,
+        &state.workspaces,
+        &state.sessions,
+        &state.app_settings,
+        |entry, default_bin, codex_args, codex_home| {
+            spawn_with_app(&app, entry, default_bin, codex_args, codex_home)
+        },
+    )
+    .await
 }
 
 
@@ -1391,12 +795,10 @@ pub(crate) async fn list_workspace_files(
         return serde_json::from_value(response).map_err(|err| err.to_string());
     }
 
-    let workspaces = state.workspaces.lock().await;
-    let entry = workspaces
-        .get(&workspace_id)
-        .ok_or("workspace not found")?;
-    let root = PathBuf::from(&entry.path);
-    Ok(list_workspace_files_inner(&root, usize::MAX))
+    workspaces_core::list_workspace_files_core(&state.workspaces, &workspace_id, |root| {
+        list_workspace_files_inner(root, usize::MAX)
+    })
+    .await
 }
 
 
