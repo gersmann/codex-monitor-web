@@ -1,4 +1,4 @@
-# App-Server Events Reference (Codex `3878c3dc7c88f356e3ec983dae30a01902a3ec53`)
+# App-Server Events Reference (Codex `b4b47630098b6d1ae89f6b2873dd313859b38ec5`)
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
@@ -98,6 +98,28 @@ Use this workflow to update the lists above:
    - `rg -n \"method === \\\"\" src/features/app/hooks/useAppServerEvents.ts`
 4. Update the Supported and Missing sections.
 
+## Schema Drift Workflow (Best)
+
+Use this when the method list is unchanged but behavior looks off.
+
+1. Confirm the current Codex hash:
+   - `git -C ../codex rev-parse HEAD`
+2. Inspect the authoritative notification structs:
+   - `rg -n \"struct .*Notification\" ../codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
+3. For a specific method, jump to its struct definition:
+   - Example: `rg -n \"struct TurnPlanUpdatedNotification|struct ThreadTokenUsageUpdatedNotification|struct AccountRateLimitsUpdatedNotification|struct ItemStartedNotification|struct ItemCompletedNotification\" ../codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
+4. Compare payload shapes to the router expectations:
+   - Router: `src/features/app/hooks/useAppServerEvents.ts`
+   - Turn/plan/token/rate-limit normalization: `src/features/threads/utils/threadNormalize.ts`
+   - Item shaping for display: `src/utils/threadItems.ts`
+5. Verify the ThreadItem schema (many UI issues start here):
+   - `rg -n \"enum ThreadItem|CommandExecution|FileChange|McpToolCall|EnteredReviewMode|ExitedReviewMode|ContextCompaction\" ../codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
+6. Check for camelCase vs snake_case mismatches:
+   - The protocol uses `#[serde(rename_all = \"camelCase\")]`, but fields are often declared in snake_case.
+   - CodexMonitor generally defends against this by checking both forms (for example in `threadNormalize.ts` and `useAppServerEvents.ts`).
+7. If a schema change is found, fix it at the edges first:
+   - Prefer updating `useAppServerEvents.ts` and `threadNormalize.ts` rather than spreading conditionals into components.
+
 ## Notes
 
 - Not all missing events must be surfaced in the conversation view; some may
@@ -107,4 +129,5 @@ Use this workflow to update the lists above:
   - Handle in `useThreadTurnEvents.ts` or `useThreadItemEvents.ts`
   - Update state in `useThreadsReducer.ts`
   - Render in `Messages.tsx`
-
+- `turn/diff/updated` is routed in `useAppServerEvents.ts` but currently has no
+  downstream handler wired in `useThreadEventHandlers.ts`.
