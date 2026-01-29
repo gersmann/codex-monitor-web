@@ -20,6 +20,7 @@ type UseQueuedSendOptions = {
     images?: string[],
   ) => Promise<void>;
   startReview: (text: string) => Promise<void>;
+  startStatus: (text: string) => Promise<void>;
   clearActiveImages: () => void;
 };
 
@@ -30,6 +31,21 @@ type UseQueuedSendResult = {
   queueMessage: (text: string, images?: string[]) => Promise<void>;
   removeQueuedMessage: (threadId: string, messageId: string) => void;
 };
+
+type SlashCommandKind = "review" | "new" | "status";
+
+function parseSlashCommand(text: string): SlashCommandKind | null {
+  if (/^\/review\b/i.test(text)) {
+    return "review";
+  }
+  if (/^\/new\b/i.test(text)) {
+    return "new";
+  }
+  if (/^\/status\b/i.test(text)) {
+    return "status";
+  }
+  return null;
+}
 
 export function useQueuedSend({
   activeThreadId,
@@ -42,6 +58,7 @@ export function useQueuedSend({
   sendUserMessage,
   sendUserMessageToThread,
   startReview,
+  startStatus,
   clearActiveImages,
 }: UseQueuedSendOptions): UseQueuedSendResult {
   const [queuedByThread, setQueuedByThread] = useState<
@@ -85,13 +102,38 @@ export function useQueuedSend({
     }));
   }, []);
 
+  const runSlashCommand = useCallback(
+    async (command: SlashCommandKind, trimmed: string) => {
+      if (command === "review") {
+        await startReview(trimmed);
+        return;
+      }
+      if (command === "status") {
+        await startStatus(trimmed);
+        return;
+      }
+      if (command === "new" && activeWorkspace) {
+        const threadId = await startThreadForWorkspace(activeWorkspace.id);
+        const rest = trimmed.replace(/^\/new\b/i, "").trim();
+        if (threadId && rest) {
+          await sendUserMessageToThread(activeWorkspace, threadId, rest, []);
+        }
+      }
+    },
+    [
+      activeWorkspace,
+      sendUserMessageToThread,
+      startReview,
+      startStatus,
+      startThreadForWorkspace,
+    ],
+  );
+
   const handleSend = useCallback(
     async (text: string, images: string[] = []) => {
       const trimmed = text.trim();
-      const isReviewCommand = /^\/review\b/i.test(trimmed);
-      const isNewCommand = /^\/new\b/i.test(trimmed);
-      const shouldIgnoreImages = isReviewCommand || isNewCommand;
-      const nextImages = shouldIgnoreImages ? [] : images;
+      const command = parseSlashCommand(trimmed);
+      const nextImages = command ? [] : images;
       if (!trimmed && nextImages.length === 0) {
         return;
       }
@@ -112,17 +154,8 @@ export function useQueuedSend({
       if (activeWorkspace && !activeWorkspace.connected) {
         await connectWorkspace(activeWorkspace);
       }
-      if (isReviewCommand) {
-        await startReview(trimmed);
-        clearActiveImages();
-        return;
-      }
-      if (isNewCommand && activeWorkspace) {
-        const threadId = await startThreadForWorkspace(activeWorkspace.id);
-        const rest = trimmed.replace(/^\/new\b/i, "").trim();
-        if (threadId && rest) {
-          await sendUserMessageToThread(activeWorkspace, threadId, rest, []);
-        }
+      if (command) {
+        await runSlashCommand(command, trimmed);
         clearActiveImages();
         return;
       }
@@ -138,20 +171,16 @@ export function useQueuedSend({
       isProcessing,
       isReviewing,
       steerEnabled,
+      runSlashCommand,
       sendUserMessage,
-      sendUserMessageToThread,
-      startThreadForWorkspace,
-      startReview,
     ],
   );
 
   const queueMessage = useCallback(
     async (text: string, images: string[] = []) => {
       const trimmed = text.trim();
-      const isReviewCommand = /^\/review\b/i.test(trimmed);
-      const isNewCommand = /^\/new\b/i.test(trimmed);
-      const shouldIgnoreImages = isReviewCommand || isNewCommand;
-      const nextImages = shouldIgnoreImages ? [] : images;
+      const command = parseSlashCommand(trimmed);
+      const nextImages = command ? [] : images;
       if (!trimmed && nextImages.length === 0) {
         return;
       }
@@ -224,14 +253,9 @@ export function useQueuedSend({
     (async () => {
       try {
         const trimmed = nextItem.text.trim();
-        if (/^\/review\b/i.test(trimmed)) {
-          await startReview(trimmed);
-        } else if (/^\/new\b/i.test(trimmed) && activeWorkspace) {
-          const threadId = await startThreadForWorkspace(activeWorkspace.id);
-          const rest = trimmed.replace(/^\/new\b/i, "").trim();
-          if (threadId && rest) {
-            await sendUserMessageToThread(activeWorkspace, threadId, rest, []);
-          }
+        const command = parseSlashCommand(trimmed);
+        if (command) {
+          await runSlashCommand(command, trimmed);
         } else {
           await sendUserMessage(nextItem.text, nextItem.images ?? []);
         }
@@ -242,17 +266,14 @@ export function useQueuedSend({
       }
     })();
   }, [
-    activeWorkspace,
     activeThreadId,
     inFlightByThread,
     isProcessing,
     isReviewing,
     prependQueuedMessage,
     queuedByThread,
+    runSlashCommand,
     sendUserMessage,
-    sendUserMessageToThread,
-    startThreadForWorkspace,
-    startReview,
   ]);
 
   return {

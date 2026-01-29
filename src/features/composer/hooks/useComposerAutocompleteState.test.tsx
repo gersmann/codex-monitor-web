@@ -37,7 +37,7 @@ describe("useComposerAutocompleteState file mentions", () => {
 });
 
 describe("useComposerAutocompleteState slash commands", () => {
-  it("includes /new in slash autocomplete matches", () => {
+  it("includes built-in slash commands in alphabetical order", () => {
     const text = "/";
     const selectionStart = text.length;
     const textareaRef = createRef<HTMLTextAreaElement>();
@@ -61,7 +61,7 @@ describe("useComposerAutocompleteState slash commands", () => {
     );
 
     const labels = result.current.autocompleteMatches.map((item) => item.label);
-    expect(labels).toContain("review");
-    expect(labels).toContain("new");
+    expect(labels).toEqual(expect.arrayContaining(["new", "review", "status"]));
+    expect(labels.slice(0, 3)).toEqual(["new", "review", "status"]);
   });
 });

@@ -616,6 +616,7 @@ function MainApp() {
     sendUserMessage,
     sendUserMessageToThread,
     startReview,
+    startStatus,
     reviewPrompt,
     closeReviewPrompt,
     showPresetStep,
@@ -1025,6 +1026,7 @@ function MainApp() {
     sendUserMessage,
     sendUserMessageToThread,
     startReview,
+    startStatus,
   });
 
   const handleInsertComposerText = useComposerInsert({

@@ -121,8 +121,8 @@ export function useComposerAutocompleteState({
     [prompts],
   );
 
-  const slashCommandItems = useMemo<AutocompleteItem[]>(
-    () => [
+  const slashCommandItems = useMemo<AutocompleteItem[]>(() => {
+    const commands: AutocompleteItem[] = [
       {
         id: "new",
         label: "new",
@@ -135,9 +135,15 @@ export function useComposerAutocompleteState({
         description: "start a code review",
         insertText: "review",
       },
-    ],
-    [],
-  );
+      {
+        id: "status",
+        label: "status",
+        description: "show session status",
+        insertText: "status",
+      },
+    ];
+    return commands.sort((a, b) => a.label.localeCompare(b.label));
+  }, []);
 
   const slashItems = useMemo<AutocompleteItem[]>(
     () => [...slashCommandItems, ...promptItems],

@@ -3,6 +3,7 @@ import type { Dispatch, MutableRefObject } from "react";
 import * as Sentry from "@sentry/react";
 import type {
   AccessMode,
+  RateLimitSnapshot,
   CustomPromptOption,
   DebugEntry,
   ReviewTarget,
@@ -21,6 +22,7 @@ import {
 } from "../utils/threadNormalize";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 import { useReviewPrompt } from "./useReviewPrompt";
+import { formatRelativeTime } from "../../../utils/time";
 
 type SendMessageOptions = {
   skipPromptExpansion?: boolean;
@@ -41,6 +43,7 @@ type UseThreadMessagingOptions = {
   customPrompts: CustomPromptOption[];
   threadStatusById: ThreadState["threadStatusById"];
   activeTurnIdByThread: ThreadState["activeTurnIdByThread"];
+  rateLimitsByWorkspace: Record<string, RateLimitSnapshot | null>;
   pendingInterruptsRef: MutableRefObject<Set<string>>;
   dispatch: Dispatch<ThreadAction>;
   getCustomName: (workspaceId: string, threadId: string) => string | undefined;
@@ -70,6 +73,7 @@ export function useThreadMessaging({
   customPrompts,
   threadStatusById,
   activeTurnIdByThread,
+  rateLimitsByWorkspace,
   pendingInterruptsRef,
   dispatch,
   getCustomName,
@@ -510,11 +514,106 @@ export function useThreadMessaging({
     ],
   );
 
+  const startStatus = useCallback(
+    async (_text: string) => {
+      if (!activeWorkspace) {
+        return;
+      }
+      const threadId = await ensureThreadForActiveWorkspace();
+      if (!threadId) {
+        return;
+      }
+
+      const rateLimits = rateLimitsByWorkspace[activeWorkspace.id] ?? null;
+      const primaryUsed = rateLimits?.primary?.usedPercent;
+      const secondaryUsed = rateLimits?.secondary?.usedPercent;
+      const primaryReset = rateLimits?.primary?.resetsAt;
+      const secondaryReset = rateLimits?.secondary?.resetsAt;
+      const credits = rateLimits?.credits ?? null;
+
+      const normalizeReset = (value?: number | null) => {
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+          return null;
+        }
+        return value > 1_000_000_000_000 ? value : value * 1000;
+      };
+
+      const resetLabel = (value?: number | null) => {
+        const resetAt = normalizeReset(value);
+        return resetAt ? formatRelativeTime(resetAt) : null;
+      };
+
+      const collabId =
+        collaborationMode &&
+        typeof collaborationMode === "object" &&
+        "settings" in collaborationMode &&
+        collaborationMode.settings &&
+        typeof collaborationMode.settings === "object" &&
+        "id" in collaborationMode.settings
+          ? String(collaborationMode.settings.id ?? "")
+          : "";
+
+      const lines = [
+        "Session status:",
+        `- Model: ${model ?? "default"}`,
+        `- Reasoning effort: ${effort ?? "default"}`,
+        `- Access: ${accessMode ?? "current"}`,
+        `- Collaboration: ${collabId || "off"}`,
+      ];
+
+      if (typeof primaryUsed === "number") {
+        const reset = resetLabel(primaryReset);
+        lines.push(
+          `- Session usage: ${Math.round(primaryUsed)}%${
+            reset ? ` (resets ${reset})` : ""
+          }`,
+        );
+      }
+      if (typeof secondaryUsed === "number") {
+        const reset = resetLabel(secondaryReset);
+        lines.push(
+          `- Weekly usage: ${Math.round(secondaryUsed)}%${
+            reset ? ` (resets ${reset})` : ""
+          }`,
+        );
+      }
+      if (credits?.hasCredits) {
+        if (credits.unlimited) {
+          lines.push("- Credits: unlimited");
+        } else if (credits.balance) {
+          lines.push(`- Credits: ${credits.balance}`);
+        }
+      }
+
+      const timestamp = Date.now();
+      recordThreadActivity(activeWorkspace.id, threadId, timestamp);
+      dispatch({
+        type: "addAssistantMessage",
+        threadId,
+        text: lines.join("\n"),
+      });
+      safeMessageActivity();
+    },
+    [
+      accessMode,
+      activeWorkspace,
+      collaborationMode,
+      dispatch,
+      effort,
+      ensureThreadForActiveWorkspace,
+      model,
+      rateLimitsByWorkspace,
+      recordThreadActivity,
+      safeMessageActivity,
+    ],
+  );
+
   return {
     interruptTurn,
     sendUserMessage,
     sendUserMessageToThread,
     startReview,
+    startStatus,
     reviewPrompt,
     openReviewPrompt,
     closeReviewPrompt,

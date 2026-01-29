@@ -25,6 +25,7 @@ const makeOptions = (
   sendUserMessage: vi.fn().mockResolvedValue(undefined),
   sendUserMessageToThread: vi.fn().mockResolvedValue(undefined),
   startReview: vi.fn().mockResolvedValue(undefined),
+  startStatus: vi.fn().mockResolvedValue(undefined),
   clearActiveImages: vi.fn(),
   ...overrides,
 });
@@ -270,6 +271,22 @@ describe("useQueuedSend", () => {
     expect(startThreadForWorkspace).toHaveBeenCalledWith("workspace-1");
     expect(sendUserMessageToThread).not.toHaveBeenCalled();
     expect(options.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("routes /status to the local status handler", async () => {
+    const startStatus = vi.fn().mockResolvedValue(undefined);
+    const options = makeOptions({ startStatus });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/status now", ["img-1"]);
+    });
+
+    expect(startStatus).toHaveBeenCalledWith("/status now");
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(options.startReview).not.toHaveBeenCalled();
   });
 
   it("does not send when reviewing even if steer is enabled", async () => {

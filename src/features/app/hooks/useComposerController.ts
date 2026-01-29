@@ -15,6 +15,7 @@ export function useComposerController({
   sendUserMessage,
   sendUserMessageToThread,
   startReview,
+  startStatus,
 }: {
   activeThreadId: string | null;
   activeWorkspaceId: string | null;
@@ -35,6 +36,7 @@ export function useComposerController({
     images?: string[],
   ) => Promise<void>;
   startReview: (text: string) => Promise<void>;
+  startStatus: (text: string) => Promise<void>;
 }) {
   const [composerDraftsByThread, setComposerDraftsByThread] = useState<
     Record<string, string>
@@ -70,6 +72,7 @@ export function useComposerController({
     sendUserMessage,
     sendUserMessageToThread,
     startReview,
+    startStatus,
     clearActiveImages,
   });
 
