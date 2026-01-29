@@ -59,12 +59,12 @@ fn write_feature_flag(key: &str, enabled: bool) -> Result<(), String> {
 }
 
 pub(crate) fn config_toml_path() -> Option<PathBuf> {
-    crate::codex_home::resolve_default_codex_home().map(|home| home.join("config.toml"))
+    crate::codex::home::resolve_default_codex_home().map(|home| home.join("config.toml"))
 }
 
 pub(crate) fn read_config_model(codex_home: Option<PathBuf>) -> Result<Option<String>, String> {
     let path = codex_home
-        .or_else(crate::codex_home::resolve_default_codex_home)
+        .or_else(crate::codex::home::resolve_default_codex_home)
         .map(|home| home.join("config.toml"));
     let Some(path) = path else {
         return Err("Unable to resolve CODEX_HOME".to_string());

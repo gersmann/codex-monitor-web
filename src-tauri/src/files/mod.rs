@@ -1,11 +1,15 @@
 use serde_json::json;
 use tauri::{AppHandle, State};
 
-use crate::file_io::TextFileResponse;
-use crate::file_policy::{FileKind, FileScope};
 use crate::remote_backend;
 use crate::shared::files_core::{file_read_core, file_write_core};
 use crate::state::AppState;
+use self::io::TextFileResponse;
+use self::policy::{FileKind, FileScope};
+
+pub(crate) mod io;
+pub(crate) mod ops;
+pub(crate) mod policy;
 
 async fn file_read_impl(
     scope: FileScope,

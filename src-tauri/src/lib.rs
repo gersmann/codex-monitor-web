@@ -4,18 +4,7 @@ use tauri::{RunEvent, WindowEvent};
 
 mod backend;
 mod codex;
-mod codex_args;
-mod codex_config;
-mod codex_home;
-mod file_io;
-mod file_ops;
-mod file_policy;
 mod files;
-#[cfg(not(target_os = "windows"))]
-#[path = "dictation.rs"]
-mod dictation;
-#[cfg(target_os = "windows")]
-#[path = "dictation_stub.rs"]
 mod dictation;
 mod event_sink;
 mod git;

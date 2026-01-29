@@ -9,17 +9,21 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
+pub(crate) mod args;
+pub(crate) mod config;
+pub(crate) mod home;
+
 pub(crate) use crate::backend::app_server::WorkspaceSession;
 use crate::backend::app_server::{
     build_codex_command_with_bin, build_codex_path_env, check_codex_installation,
     spawn_workspace_session as spawn_workspace_session_inner,
 };
-use crate::codex_args::apply_codex_args;
 use crate::event_sink::TauriEventSink;
 use crate::remote_backend;
 use crate::shared::codex_core;
 use crate::state::AppState;
 use crate::types::WorkspaceEntry;
+use self::args::apply_codex_args;
 
 pub(crate) async fn spawn_workspace_session(
     entry: WorkspaceEntry,

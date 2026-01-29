@@ -24,8 +24,8 @@ use super::worktree::{
 
 use crate::backend::app_server::WorkspaceSession;
 use crate::codex::spawn_workspace_session;
-use crate::codex_args::resolve_workspace_codex_args;
-use crate::codex_home::resolve_workspace_codex_home;
+use crate::codex::args::resolve_workspace_codex_args;
+use crate::codex::home::resolve_workspace_codex_home;
 use crate::git_utils::resolve_git_root;
 use crate::remote_backend;
 use crate::shared::workspaces_core;

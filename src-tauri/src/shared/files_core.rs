@@ -3,10 +3,10 @@ use std::path::PathBuf;
 
 use tokio::sync::Mutex;
 
-use crate::codex_home;
-use crate::file_io::TextFileResponse;
-use crate::file_ops::{read_with_policy, write_with_policy};
-use crate::file_policy::{policy_for, FileKind, FileScope};
+use crate::codex::home as codex_home;
+use crate::files::io::TextFileResponse;
+use crate::files::ops::{read_with_policy, write_with_policy};
+use crate::files::policy::{policy_for, FileKind, FileScope};
 use crate::types::WorkspaceEntry;
 
 fn resolve_default_codex_home() -> Result<PathBuf, String> {

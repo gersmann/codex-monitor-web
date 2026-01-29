@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use crate::file_io::{read_text_file_within, write_text_file_within, TextFileResponse};
-use crate::file_policy::FilePolicy;
+use crate::files::io::{read_text_file_within, write_text_file_within, TextFileResponse};
+use crate::files::policy::FilePolicy;
 
 pub(crate) fn read_with_policy(root: &PathBuf, policy: FilePolicy) -> Result<TextFileResponse, String> {
     read_text_file_within(
@@ -34,7 +34,7 @@ mod tests {
 
     use uuid::Uuid;
 
-    use crate::file_policy::{policy_for, FileKind, FileScope};
+    use crate::files::policy::{policy_for, FileKind, FileScope};
 
     use super::{read_with_policy, write_with_policy};
 

@@ -6,8 +6,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::backend::app_server::WorkspaceSession;
-use crate::codex_args::resolve_workspace_codex_args;
-use crate::codex_home::resolve_workspace_codex_home;
+use crate::codex::args::resolve_workspace_codex_args;
+use crate::codex::home::resolve_workspace_codex_home;
 use crate::storage::write_workspaces;
 use crate::types::{
     AppSettings, WorkspaceEntry, WorkspaceInfo, WorkspaceKind, WorkspaceSettings, WorktreeInfo,

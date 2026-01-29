@@ -1,17 +1,17 @@
 #[allow(dead_code)]
 #[path = "../backend/mod.rs"]
 mod backend;
-#[path = "../codex_args.rs"]
+#[path = "../codex/args.rs"]
 mod codex_args;
-#[path = "../codex_home.rs"]
+#[path = "../codex/home.rs"]
 mod codex_home;
-#[path = "../codex_config.rs"]
+#[path = "../codex/config.rs"]
 mod codex_config;
-#[path = "../file_io.rs"]
+#[path = "../files/io.rs"]
 mod file_io;
-#[path = "../file_ops.rs"]
+#[path = "../files/ops.rs"]
 mod file_ops;
-#[path = "../file_policy.rs"]
+#[path = "../files/policy.rs"]
 mod file_policy;
 #[path = "../rules.rs"]
 mod rules;
@@ -26,6 +26,31 @@ mod workspace_settings;
 #[allow(dead_code)]
 #[path = "../types.rs"]
 mod types;
+
+// Provide feature-style module paths for shared cores when compiled in the daemon.
+mod codex {
+    pub(crate) mod args {
+        pub(crate) use crate::codex_args::*;
+    }
+    pub(crate) mod config {
+        pub(crate) use crate::codex_config::*;
+    }
+    pub(crate) mod home {
+        pub(crate) use crate::codex_home::*;
+    }
+}
+
+mod files {
+    pub(crate) mod io {
+        pub(crate) use crate::file_io::*;
+    }
+    pub(crate) mod ops {
+        pub(crate) use crate::file_ops::*;
+    }
+    pub(crate) mod policy {
+        pub(crate) use crate::file_policy::*;
+    }
+}
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

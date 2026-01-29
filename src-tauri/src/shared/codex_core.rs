@@ -14,9 +14,9 @@ use tokio::time::timeout;
 use tokio::process::Command;
 
 use crate::backend::app_server::{build_codex_command_with_bin, WorkspaceSession};
-use crate::codex_args::{apply_codex_args, resolve_workspace_codex_args};
-use crate::codex_config;
-use crate::codex_home::{resolve_default_codex_home, resolve_workspace_codex_home};
+use crate::codex::args::{apply_codex_args, resolve_workspace_codex_args};
+use crate::codex::config as codex_config;
+use crate::codex::home::{resolve_default_codex_home, resolve_workspace_codex_home};
 use crate::rules;
 use crate::shared::account::{build_account_response, read_auth_account};
 use crate::types::{AppSettings, WorkspaceEntry};

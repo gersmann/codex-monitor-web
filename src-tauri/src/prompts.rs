@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use tokio::task;
 use tauri::State;
 
-use crate::codex_home::{resolve_default_codex_home, resolve_workspace_codex_home};
+use crate::codex::home::{resolve_default_codex_home, resolve_workspace_codex_home};
 use crate::state::AppState;
 use crate::types::WorkspaceEntry;
 

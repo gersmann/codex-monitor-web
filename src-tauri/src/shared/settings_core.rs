@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use tokio::sync::Mutex;
 
-use crate::codex_config;
+use crate::codex::config as codex_config;
 use crate::storage::write_settings;
 use crate::types::AppSettings;
 
