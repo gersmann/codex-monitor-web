@@ -20,6 +20,7 @@ type UseQueuedSendOptions = {
     images?: string[],
   ) => Promise<void>;
   startReview: (text: string) => Promise<void>;
+  startResume: (text: string) => Promise<void>;
   startStatus: (text: string) => Promise<void>;
   clearActiveImages: () => void;
 };
@@ -32,7 +33,7 @@ type UseQueuedSendResult = {
   removeQueuedMessage: (threadId: string, messageId: string) => void;
 };
 
-type SlashCommandKind = "review" | "new" | "status";
+type SlashCommandKind = "new" | "resume" | "review" | "status";
 
 function parseSlashCommand(text: string): SlashCommandKind | null {
   if (/^\/review\b/i.test(text)) {
@@ -40,6 +41,9 @@ function parseSlashCommand(text: string): SlashCommandKind | null {
   }
   if (/^\/new\b/i.test(text)) {
     return "new";
+  }
+  if (/^\/resume\b/i.test(text)) {
+    return "resume";
   }
   if (/^\/status\b/i.test(text)) {
     return "status";
@@ -58,6 +62,7 @@ export function useQueuedSend({
   sendUserMessage,
   sendUserMessageToThread,
   startReview,
+  startResume,
   startStatus,
   clearActiveImages,
 }: UseQueuedSendOptions): UseQueuedSendResult {
@@ -108,6 +113,10 @@ export function useQueuedSend({
         await startReview(trimmed);
         return;
       }
+      if (command === "resume") {
+        await startResume(trimmed);
+        return;
+      }
       if (command === "status") {
         await startStatus(trimmed);
         return;
@@ -124,6 +133,7 @@ export function useQueuedSend({
       activeWorkspace,
       sendUserMessageToThread,
       startReview,
+      startResume,
       startStatus,
       startThreadForWorkspace,
     ],

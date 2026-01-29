@@ -60,6 +60,7 @@ type UseThreadMessagingOptions = {
   pushThreadErrorMessage: (threadId: string, message: string) => void;
   ensureThreadForActiveWorkspace: () => Promise<string | null>;
   ensureThreadForWorkspace: (workspaceId: string) => Promise<string | null>;
+  refreshThread: (workspaceId: string, threadId: string) => Promise<string | null>;
 };
 
 export function useThreadMessaging({
@@ -86,6 +87,7 @@ export function useThreadMessaging({
   pushThreadErrorMessage,
   ensureThreadForActiveWorkspace,
   ensureThreadForWorkspace,
+  refreshThread,
 }: UseThreadMessagingOptions) {
   const sendMessageToThread = useCallback(
     async (
@@ -608,11 +610,37 @@ export function useThreadMessaging({
     ],
   );
 
+  const startResume = useCallback(
+    async (_text: string) => {
+      if (!activeWorkspace) {
+        return;
+      }
+      if (activeThreadId && threadStatusById[activeThreadId]?.isProcessing) {
+        return;
+      }
+      const threadId = activeThreadId ?? (await ensureThreadForActiveWorkspace());
+      if (!threadId) {
+        return;
+      }
+      await refreshThread(activeWorkspace.id, threadId);
+      safeMessageActivity();
+    },
+    [
+      activeThreadId,
+      activeWorkspace,
+      ensureThreadForActiveWorkspace,
+      refreshThread,
+      safeMessageActivity,
+      threadStatusById,
+    ],
+  );
+
   return {
     interruptTurn,
     sendUserMessage,
     sendUserMessageToThread,
     startReview,
+    startResume,
     startStatus,
     reviewPrompt,
     openReviewPrompt,

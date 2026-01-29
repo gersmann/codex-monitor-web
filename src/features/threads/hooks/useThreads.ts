@@ -221,6 +221,7 @@ export function useThreads({
     sendUserMessage,
     sendUserMessageToThread,
     startReview,
+    startResume,
     startStatus,
     reviewPrompt,
     openReviewPrompt,
@@ -266,6 +267,7 @@ export function useThreads({
     pushThreadErrorMessage,
     ensureThreadForActiveWorkspace,
     ensureThreadForWorkspace,
+    refreshThread,
   });
 
   const setActiveThreadId = useCallback(
@@ -347,6 +349,7 @@ export function useThreads({
     sendUserMessage,
     sendUserMessageToThread,
     startReview,
+    startResume,
     startStatus,
     reviewPrompt,
     openReviewPrompt,

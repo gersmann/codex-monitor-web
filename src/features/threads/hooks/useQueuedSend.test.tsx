@@ -25,6 +25,7 @@ const makeOptions = (
   sendUserMessage: vi.fn().mockResolvedValue(undefined),
   sendUserMessageToThread: vi.fn().mockResolvedValue(undefined),
   startReview: vi.fn().mockResolvedValue(undefined),
+  startResume: vi.fn().mockResolvedValue(undefined),
   startStatus: vi.fn().mockResolvedValue(undefined),
   clearActiveImages: vi.fn(),
   ...overrides,
@@ -285,6 +286,22 @@ describe("useQueuedSend", () => {
     });
 
     expect(startStatus).toHaveBeenCalledWith("/status now");
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(options.startReview).not.toHaveBeenCalled();
+  });
+
+  it("routes /resume to the resume handler", async () => {
+    const startResume = vi.fn().mockResolvedValue(undefined);
+    const options = makeOptions({ startResume });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/resume now", ["img-1"]);
+    });
+
+    expect(startResume).toHaveBeenCalledWith("/resume now");
     expect(options.sendUserMessage).not.toHaveBeenCalled();
     expect(options.startReview).not.toHaveBeenCalled();
   });

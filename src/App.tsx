@@ -616,6 +616,7 @@ function MainApp() {
     sendUserMessage,
     sendUserMessageToThread,
     startReview,
+    startResume,
     startStatus,
     reviewPrompt,
     closeReviewPrompt,
@@ -1026,6 +1027,7 @@ function MainApp() {
     sendUserMessage,
     sendUserMessageToThread,
     startReview,
+    startResume,
     startStatus,
   });
 

@@ -9,6 +9,7 @@ import Square from "lucide-react/dist/esm/icons/square";
 import Brain from "lucide-react/dist/esm/icons/brain";
 import PlusCircle from "lucide-react/dist/esm/icons/plus-circle";
 import Info from "lucide-react/dist/esm/icons/info";
+import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import ScrollText from "lucide-react/dist/esm/icons/scroll-text";
 import Wrench from "lucide-react/dist/esm/icons/wrench";
 import FileText from "lucide-react/dist/esm/icons/file-text";
@@ -145,6 +146,9 @@ export function ComposerInput({
     }
     if (item.id === "new") {
       return PlusCircle;
+    }
+    if (item.id === "resume") {
+      return RotateCcw;
     }
     if (item.id === "status") {
       return Info;

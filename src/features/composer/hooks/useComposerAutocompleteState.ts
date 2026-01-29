@@ -136,6 +136,12 @@ export function useComposerAutocompleteState({
         insertText: "review",
       },
       {
+        id: "resume",
+        label: "resume",
+        description: "refresh the active thread",
+        insertText: "resume",
+      },
+      {
         id: "status",
         label: "status",
         description: "show session status",
