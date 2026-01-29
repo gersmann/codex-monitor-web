@@ -8,7 +8,17 @@ type UseQueuedSendOptions = {
   steerEnabled: boolean;
   activeWorkspace: WorkspaceInfo | null;
   connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
+  startThreadForWorkspace: (
+    workspaceId: string,
+    options?: { activate?: boolean },
+  ) => Promise<string | null>;
   sendUserMessage: (text: string, images?: string[]) => Promise<void>;
+  sendUserMessageToThread: (
+    workspace: WorkspaceInfo,
+    threadId: string,
+    text: string,
+    images?: string[],
+  ) => Promise<void>;
   startReview: (text: string) => Promise<void>;
   clearActiveImages: () => void;
 };
@@ -28,7 +38,9 @@ export function useQueuedSend({
   steerEnabled,
   activeWorkspace,
   connectWorkspace,
+  startThreadForWorkspace,
   sendUserMessage,
+  sendUserMessageToThread,
   startReview,
   clearActiveImages,
 }: UseQueuedSendOptions): UseQueuedSendResult {
@@ -76,7 +88,9 @@ export function useQueuedSend({
   const handleSend = useCallback(
     async (text: string, images: string[] = []) => {
       const trimmed = text.trim();
-      const shouldIgnoreImages = trimmed.startsWith("/review");
+      const isReviewCommand = /^\/review\b/i.test(trimmed);
+      const isNewCommand = /^\/new\b/i.test(trimmed);
+      const shouldIgnoreImages = isReviewCommand || isNewCommand;
       const nextImages = shouldIgnoreImages ? [] : images;
       if (!trimmed && nextImages.length === 0) {
         return;
@@ -98,8 +112,17 @@ export function useQueuedSend({
       if (activeWorkspace && !activeWorkspace.connected) {
         await connectWorkspace(activeWorkspace);
       }
-      if (trimmed.startsWith("/review")) {
+      if (isReviewCommand) {
         await startReview(trimmed);
+        clearActiveImages();
+        return;
+      }
+      if (isNewCommand && activeWorkspace) {
+        const threadId = await startThreadForWorkspace(activeWorkspace.id);
+        const rest = trimmed.replace(/^\/new\b/i, "").trim();
+        if (threadId && rest) {
+          await sendUserMessageToThread(activeWorkspace, threadId, rest, []);
+        }
         clearActiveImages();
         return;
       }
@@ -116,6 +139,8 @@ export function useQueuedSend({
       isReviewing,
       steerEnabled,
       sendUserMessage,
+      sendUserMessageToThread,
+      startThreadForWorkspace,
       startReview,
     ],
   );
@@ -123,7 +148,9 @@ export function useQueuedSend({
   const queueMessage = useCallback(
     async (text: string, images: string[] = []) => {
       const trimmed = text.trim();
-      const shouldIgnoreImages = trimmed.startsWith("/review");
+      const isReviewCommand = /^\/review\b/i.test(trimmed);
+      const isNewCommand = /^\/new\b/i.test(trimmed);
+      const shouldIgnoreImages = isReviewCommand || isNewCommand;
       const nextImages = shouldIgnoreImages ? [] : images;
       if (!trimmed && nextImages.length === 0) {
         return;
@@ -196,8 +223,15 @@ export function useQueuedSend({
     }));
     (async () => {
       try {
-        if (nextItem.text.trim().startsWith("/review")) {
-          await startReview(nextItem.text);
+        const trimmed = nextItem.text.trim();
+        if (/^\/review\b/i.test(trimmed)) {
+          await startReview(trimmed);
+        } else if (/^\/new\b/i.test(trimmed) && activeWorkspace) {
+          const threadId = await startThreadForWorkspace(activeWorkspace.id);
+          const rest = trimmed.replace(/^\/new\b/i, "").trim();
+          if (threadId && rest) {
+            await sendUserMessageToThread(activeWorkspace, threadId, rest, []);
+          }
         } else {
           await sendUserMessage(nextItem.text, nextItem.images ?? []);
         }
@@ -208,6 +242,7 @@ export function useQueuedSend({
       }
     })();
   }, [
+    activeWorkspace,
     activeThreadId,
     inFlightByThread,
     isProcessing,
@@ -215,6 +250,8 @@ export function useQueuedSend({
     prependQueuedMessage,
     queuedByThread,
     sendUserMessage,
+    sendUserMessageToThread,
+    startThreadForWorkspace,
     startReview,
   ]);
 

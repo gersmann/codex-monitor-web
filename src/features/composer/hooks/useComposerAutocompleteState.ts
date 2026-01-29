@@ -121,8 +121,14 @@ export function useComposerAutocompleteState({
     [prompts],
   );
 
-  const reviewItems = useMemo<AutocompleteItem[]>(
+  const slashCommandItems = useMemo<AutocompleteItem[]>(
     () => [
+      {
+        id: "new",
+        label: "new",
+        description: "start a new chat",
+        insertText: "new",
+      },
       {
         id: "review",
         label: "review",
@@ -134,8 +140,8 @@ export function useComposerAutocompleteState({
   );
 
   const slashItems = useMemo<AutocompleteItem[]>(
-    () => [...reviewItems, ...promptItems],
-    [promptItems, reviewItems],
+    () => [...slashCommandItems, ...promptItems],
+    [promptItems, slashCommandItems],
   );
 
   const triggers = useMemo(

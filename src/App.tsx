@@ -1021,7 +1021,9 @@ function MainApp() {
     isReviewing,
     steerEnabled: appSettings.experimentalSteerEnabled,
     connectWorkspace,
+    startThreadForWorkspace,
     sendUserMessage,
+    sendUserMessageToThread,
     startReview,
   });
 

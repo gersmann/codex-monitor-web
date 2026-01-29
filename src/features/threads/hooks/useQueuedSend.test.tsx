@@ -21,7 +21,9 @@ const makeOptions = (
   steerEnabled: false,
   activeWorkspace: workspace,
   connectWorkspace: vi.fn().mockResolvedValue(undefined),
+  startThreadForWorkspace: vi.fn().mockResolvedValue("thread-1"),
   sendUserMessage: vi.fn().mockResolvedValue(undefined),
+  sendUserMessageToThread: vi.fn().mockResolvedValue(undefined),
   startReview: vi.fn().mockResolvedValue(undefined),
   clearActiveImages: vi.fn(),
   ...overrides,
@@ -229,6 +231,45 @@ describe("useQueuedSend", () => {
 
     expect(options.sendUserMessage).toHaveBeenCalledTimes(1);
     expect(options.sendUserMessage).toHaveBeenCalledWith("After review", []);
+  });
+
+  it("starts a new thread for /new and sends the remaining text there", async () => {
+    const startThreadForWorkspace = vi.fn().mockResolvedValue("thread-2");
+    const sendUserMessageToThread = vi.fn().mockResolvedValue(undefined);
+    const options = makeOptions({ startThreadForWorkspace, sendUserMessageToThread });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/new hello there", ["img-1"]);
+    });
+
+    expect(startThreadForWorkspace).toHaveBeenCalledWith("workspace-1");
+    expect(sendUserMessageToThread).toHaveBeenCalledWith(
+      workspace,
+      "thread-2",
+      "hello there",
+      [],
+    );
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("starts a new thread for bare /new without sending a message", async () => {
+    const startThreadForWorkspace = vi.fn().mockResolvedValue("thread-3");
+    const sendUserMessageToThread = vi.fn().mockResolvedValue(undefined);
+    const options = makeOptions({ startThreadForWorkspace, sendUserMessageToThread });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/new");
+    });
+
+    expect(startThreadForWorkspace).toHaveBeenCalledWith("workspace-1");
+    expect(sendUserMessageToThread).not.toHaveBeenCalled();
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
   });
 
   it("does not send when reviewing even if steer is enabled", async () => {

@@ -35,3 +35,33 @@ describe("useComposerAutocompleteState file mentions", () => {
     );
   });
 });
+
+describe("useComposerAutocompleteState slash commands", () => {
+  it("includes /new in slash autocomplete matches", () => {
+    const text = "/";
+    const selectionStart = text.length;
+    const textareaRef = createRef<HTMLTextAreaElement>();
+    textareaRef.current = {
+      focus: vi.fn(),
+      setSelectionRange: vi.fn(),
+    } as unknown as HTMLTextAreaElement;
+
+    const { result } = renderHook(() =>
+      useComposerAutocompleteState({
+        text,
+        selectionStart,
+        disabled: false,
+        skills: [],
+        prompts: [],
+        files: [],
+        textareaRef,
+        setText: vi.fn(),
+        setSelectionStart: vi.fn(),
+      }),
+    );
+
+    const labels = result.current.autocompleteMatches.map((item) => item.label);
+    expect(labels).toContain("review");
+    expect(labels).toContain("new");
+  });
+});
