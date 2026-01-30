@@ -403,6 +403,91 @@ img {
   letter-spacing: 0.22em;
 }
 
+.testimonies-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.testimony-card {
+  padding: 22px;
+  display: grid;
+  gap: 16px;
+}
+
+.testimony-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.testimony-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.testimony-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 24px rgba(6, 12, 26, 0.45);
+}
+
+.testimony-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.testimony-meta {
+  display: grid;
+  line-height: 1.2;
+}
+
+.testimony-name {
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-weight: 600;
+}
+
+.testimony-handle {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.testimony-handle:hover {
+  color: var(--ink);
+}
+
+.testimony-view {
+  font-size: 0.85rem;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.testimony-view:hover {
+  color: var(--ink);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.testimony-quote {
+  color: var(--ink);
+  font-size: 1.02rem;
+}
+
+@media (max-width: 900px) {
+  .testimonies-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .cta {
   padding: 36px;
   display: flex;
@@ -454,6 +539,12 @@ img {
   margin-top: 24px;
   color: var(--muted);
   font-size: 0.9rem;
+  display: grid;
+  gap: 6px;
+}
+
+.footer-meta p {
+  margin: 0;
 }
 
 .footer-meta a {
