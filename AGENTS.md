@@ -1,5 +1,7 @@
 # CodexMonitor Agent Guide
 
+All docs must canonical, no past commentary, only live state.
+
 ## Project Summary
 CodexMonitor is a Tauri app that orchestrates Codex agents across local workspaces.
 
