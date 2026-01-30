@@ -1,5 +1,11 @@
-import { useEffect, useRef } from "react";
-import type { ClipboardEvent, KeyboardEvent, RefObject } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import type {
+  ChangeEvent,
+  ClipboardEvent,
+  KeyboardEvent,
+  RefObject,
+  SyntheticEvent,
+} from "react";
 import type { AutocompleteItem } from "../hooks/useComposerAutocomplete";
 import ImagePlus from "lucide-react/dist/esm/icons/image-plus";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
@@ -78,6 +84,43 @@ type ComposerInputProps = {
   onReviewPromptConfirmCustom?: () => Promise<void>;
 };
 
+const isFileSuggestion = (item: AutocompleteItem) =>
+  item.label.includes("/") || item.label.includes("\\");
+
+const suggestionIcon = (item: AutocompleteItem) => {
+  if (isFileSuggestion(item)) {
+    return FileText;
+  }
+  if (item.id === "review") {
+    return Brain;
+  }
+  if (item.id === "fork") {
+    return GitFork;
+  }
+  if (item.id === "mcp") {
+    return Plug;
+  }
+  if (item.id === "new") {
+    return PlusCircle;
+  }
+  if (item.id === "resume") {
+    return RotateCcw;
+  }
+  if (item.id === "status") {
+    return Info;
+  }
+  if (item.id.startsWith("prompt:")) {
+    return ScrollText;
+  }
+  return Wrench;
+};
+
+const fileTitle = (path: string) => {
+  const normalized = path.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : path;
+};
+
 export function ComposerInput({
   text,
   disabled,
@@ -137,40 +180,6 @@ export function ComposerInput({
   const minTextareaHeight = isExpanded ? 180 : 60;
   const maxTextareaHeight = isExpanded ? 320 : 120;
   const reviewPromptOpen = Boolean(reviewPrompt);
-  const isFileSuggestion = (item: AutocompleteItem) =>
-    item.label.includes("/") || item.label.includes("\\");
-  const suggestionIcon = (item: AutocompleteItem) => {
-    if (isFileSuggestion(item)) {
-      return FileText;
-    }
-    if (item.id === "review") {
-      return Brain;
-    }
-    if (item.id === "fork") {
-      return GitFork;
-    }
-    if (item.id === "mcp") {
-      return Plug;
-    }
-    if (item.id === "new") {
-      return PlusCircle;
-    }
-    if (item.id === "resume") {
-      return RotateCcw;
-    }
-    if (item.id === "status") {
-      return Info;
-    }
-    if (item.id.startsWith("prompt:")) {
-      return ScrollText;
-    }
-    return Wrench;
-  };
-  const fileTitle = (path: string) => {
-    const normalized = path.replace(/\\/g, "/");
-    const parts = normalized.split("/").filter(Boolean);
-    return parts.length ? parts[parts.length - 1] : path;
-  };
   const {
     dropTargetRef,
     isDragOver,
@@ -221,13 +230,13 @@ export function ComposerInput({
       textarea.scrollHeight > maxTextareaHeight ? "auto" : "hidden";
   }, [maxTextareaHeight, minTextareaHeight, text, textareaRef]);
 
-  const handleActionClick = () => {
+  const handleActionClick = useCallback(() => {
     if (canStop) {
       onStop();
     } else {
       onSend();
     }
-  };
+  }, [canStop, onSend, onStop]);
   const isDictating = dictationState === "listening";
   const isDictationBusy = dictationState !== "idle";
   const allowOpenDictationSettings = Boolean(
@@ -249,7 +258,7 @@ export function ComposerInput({
       : isDictating
         ? "Stop dictation"
         : "Start dictation";
-  const handleMicClick = () => {
+  const handleMicClick = useCallback(() => {
     if (allowOpenDictationSettings) {
       onOpenDictationSettings?.();
       return;
@@ -258,7 +267,36 @@ export function ComposerInput({
       return;
     }
     onToggleDictation();
-  };
+  }, [
+    allowOpenDictationSettings,
+    micDisabled,
+    onOpenDictationSettings,
+    onToggleDictation,
+  ]);
+
+  const handleTextareaChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => {
+      onTextChange(event.target.value, event.target.selectionStart);
+    },
+    [onTextChange],
+  );
+
+  const handleTextareaSelect = useCallback(
+    (event: SyntheticEvent<HTMLTextAreaElement>) => {
+      onSelectionChange((event.target as HTMLTextAreaElement).selectionStart);
+    },
+    [onSelectionChange],
+  );
+
+  const handleTextareaPaste = useCallback(
+    (event: ClipboardEvent<HTMLTextAreaElement>) => {
+      void handlePaste(event);
+      if (!event.defaultPrevented) {
+        onTextPaste?.(event);
+      }
+    },
+    [handlePaste, onTextPaste],
+  );
 
   return (
     <div className="composer-input">
@@ -294,26 +332,15 @@ export function ComposerInput({
                 : "Ask Codex to do something..."
             }
             value={text}
-            onChange={(event) =>
-              onTextChange(event.target.value, event.target.selectionStart)
-            }
-            onSelect={(event) =>
-              onSelectionChange(
-                (event.target as HTMLTextAreaElement).selectionStart,
-              )
-            }
+            onChange={handleTextareaChange}
+            onSelect={handleTextareaSelect}
             disabled={disabled}
             onKeyDown={onKeyDown}
             onDragOver={handleDragOver}
             onDragEnter={handleDragEnter}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            onPaste={(event) => {
-              void handlePaste(event);
-              if (!event.defaultPrevented) {
-                onTextPaste?.(event);
-              }
-            }}
+            onPaste={handleTextareaPaste}
           />
         </div>
         {isDictationBusy && (

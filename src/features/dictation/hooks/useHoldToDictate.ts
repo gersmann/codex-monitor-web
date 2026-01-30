@@ -28,6 +28,51 @@ export function useHoldToDictate({
   const holdDictationActive = useRef(false);
   const holdDictationStopPending = useRef(false);
   const holdDictationStopTimeout = useRef<number | null>(null);
+  const enabledRef = useRef(enabled);
+  const readyRef = useRef(ready);
+  const stateRef = useRef(state);
+  const preferredLanguageRef = useRef(preferredLanguage);
+  const holdKeyRef = useRef(holdKey.toLowerCase());
+  const startDictationRef = useRef(startDictation);
+  const stopDictationRef = useRef(stopDictation);
+  const cancelDictationRef = useRef(cancelDictation);
+
+  useEffect(() => {
+    enabledRef.current = enabled;
+    readyRef.current = ready;
+    stateRef.current = state;
+    preferredLanguageRef.current = preferredLanguage;
+    holdKeyRef.current = holdKey.toLowerCase();
+    startDictationRef.current = startDictation;
+    stopDictationRef.current = stopDictation;
+    cancelDictationRef.current = cancelDictation;
+  }, [
+    cancelDictation,
+    enabled,
+    holdKey,
+    preferredLanguage,
+    ready,
+    startDictation,
+    state,
+    stopDictation,
+  ]);
+
+  useEffect(() => {
+    if (holdDictationStopPending.current && state === "listening") {
+      holdDictationStopPending.current = false;
+      if (holdDictationStopTimeout.current !== null) {
+        window.clearTimeout(holdDictationStopTimeout.current);
+        holdDictationStopTimeout.current = null;
+      }
+      try {
+        void Promise.resolve(stopDictationRef.current()).catch(() => {
+          // Errors are surfaced through dictation events.
+        });
+      } catch {
+        // Errors are surfaced through dictation events.
+      }
+    }
+  }, [state]);
 
   useEffect(() => {
     const safeInvoke = (action: () => void | Promise<void>) => {
@@ -40,28 +85,15 @@ export function useHoldToDictate({
       }
     };
 
-    const normalizedHoldKey = holdKey.toLowerCase();
-    if (!normalizedHoldKey) {
-      return;
-    }
-
-    if (holdDictationStopPending.current && state === "listening") {
-      holdDictationStopPending.current = false;
-      if (holdDictationStopTimeout.current !== null) {
-        window.clearTimeout(holdDictationStopTimeout.current);
-        holdDictationStopTimeout.current = null;
-      }
-      safeInvoke(stopDictation);
-    }
-
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!matchesHoldKey(event, normalizedHoldKey) || event.repeat) {
+      const normalizedHoldKey = holdKeyRef.current;
+      if (!normalizedHoldKey || !matchesHoldKey(event, normalizedHoldKey) || event.repeat) {
         return;
       }
-      if (!enabled || !ready) {
+      if (!enabledRef.current || !readyRef.current) {
         return;
       }
-      if (state !== "idle") {
+      if (stateRef.current !== "idle") {
         return;
       }
       holdDictationActive.current = true;
@@ -70,11 +102,12 @@ export function useHoldToDictate({
         window.clearTimeout(holdDictationStopTimeout.current);
         holdDictationStopTimeout.current = null;
       }
-      safeInvoke(() => startDictation(preferredLanguage));
+      safeInvoke(() => startDictationRef.current(preferredLanguageRef.current));
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      if (!matchesHoldKey(event, normalizedHoldKey)) {
+      const normalizedHoldKey = holdKeyRef.current;
+      if (!normalizedHoldKey || !matchesHoldKey(event, normalizedHoldKey)) {
         return;
       }
       if (!holdDictationActive.current) {
@@ -89,13 +122,13 @@ export function useHoldToDictate({
         holdDictationStopPending.current = false;
         holdDictationStopTimeout.current = null;
       }, HOLD_STOP_GRACE_MS);
-      if (state === "listening") {
+      if (stateRef.current === "listening") {
         holdDictationStopPending.current = false;
         if (holdDictationStopTimeout.current !== null) {
           window.clearTimeout(holdDictationStopTimeout.current);
           holdDictationStopTimeout.current = null;
         }
-        safeInvoke(stopDictation);
+        safeInvoke(stopDictationRef.current);
       }
     };
 
@@ -109,8 +142,8 @@ export function useHoldToDictate({
         window.clearTimeout(holdDictationStopTimeout.current);
         holdDictationStopTimeout.current = null;
       }
-      if (state === "listening") {
-        safeInvoke(cancelDictation);
+      if (stateRef.current === "listening") {
+        safeInvoke(cancelDictationRef.current);
       }
     };
 
@@ -126,14 +159,5 @@ export function useHoldToDictate({
         holdDictationStopTimeout.current = null;
       }
     };
-  }, [
-    cancelDictation,
-    enabled,
-    holdKey,
-    preferredLanguage,
-    ready,
-    startDictation,
-    state,
-    stopDictation,
-  ]);
+  }, []);
 }

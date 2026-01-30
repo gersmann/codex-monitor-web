@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Check from "lucide-react/dist/esm/icons/check";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
@@ -104,20 +104,26 @@ export function MainHeader({
   const renameConfirmRef = useRef<HTMLButtonElement | null>(null);
   const renameOnCancel = worktreeRename?.onCancel;
 
-  const recentBranches = branches;
   const trimmedQuery = branchQuery.trim();
   const lowercaseQuery = trimmedQuery.toLowerCase();
-  const filteredBranches =
-    trimmedQuery.length > 0
-      ? recentBranches.filter((branch) =>
-          branch.name.toLowerCase().includes(lowercaseQuery),
-        )
-      : recentBranches.slice(0, 12);
-  const exactMatch = trimmedQuery
-    ? recentBranches.find((branch) => branch.name === trimmedQuery) ?? null
-    : null;
+  const filteredBranches = useMemo(
+    () =>
+      trimmedQuery.length > 0
+        ? branches.filter((branch) =>
+            branch.name.toLowerCase().includes(lowercaseQuery),
+          )
+        : branches.slice(0, 12),
+    [branches, lowercaseQuery, trimmedQuery],
+  );
+  const exactMatch = useMemo(
+    () =>
+      trimmedQuery
+        ? branches.find((branch) => branch.name === trimmedQuery) ?? null
+        : null,
+    [branches, trimmedQuery],
+  );
   const canCreate = trimmedQuery.length > 0 && !exactMatch;
-  const branchValidationMessage = (() => {
+  const branchValidationMessage = useMemo(() => {
     if (trimmedQuery.length === 0) {
       return null;
     }
@@ -147,13 +153,20 @@ export function MainHeader({
       return "Branch name cannot end with '.'.";
     }
     return null;
-  })();
+  }, [trimmedQuery]);
   const resolvedWorktreePath = worktreePath ?? workspace.path;
-  const relativeWorktreePath =
-    parentPath && resolvedWorktreePath.startsWith(`${parentPath}/`)
+  const relativeWorktreePath = useMemo(() => {
+    if (!parentPath) {
+      return resolvedWorktreePath;
+    }
+    return resolvedWorktreePath.startsWith(`${parentPath}/`)
       ? resolvedWorktreePath.slice(parentPath.length + 1)
       : resolvedWorktreePath;
-  const cdCommand = `cd "${relativeWorktreePath}"`;
+  }, [parentPath, resolvedWorktreePath]);
+  const cdCommand = useMemo(
+    () => `cd "${relativeWorktreePath}"`,
+    [relativeWorktreePath],
+  );
 
   useEffect(() => {
     if (!menuOpen && !infoOpen) {

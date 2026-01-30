@@ -8,19 +8,30 @@ const TWITTER_URL = "https://x.com/dimillian";
 export function AboutView() {
   const [version, setVersion] = useState<string | null>(null);
 
+  const handleOpenGitHub = () => {
+    void openUrl(GITHUB_URL);
+  };
+
+  const handleOpenTwitter = () => {
+    void openUrl(TWITTER_URL);
+  };
+
   useEffect(() => {
     let active = true;
-    getVersion()
-      .then((value) => {
+    const fetchVersion = async () => {
+      try {
+        const value = await getVersion();
         if (active) {
           setVersion(value);
         }
-      })
-      .catch(() => {
+      } catch {
         if (active) {
           setVersion(null);
         }
-      });
+      }
+    };
+
+    void fetchVersion();
     return () => {
       active = false;
     };
@@ -48,7 +59,7 @@ export function AboutView() {
           <button
             type="button"
             className="about-link"
-            onClick={() => openUrl(GITHUB_URL)}
+            onClick={handleOpenGitHub}
           >
             GitHub
           </button>
@@ -56,7 +67,7 @@ export function AboutView() {
           <button
             type="button"
             className="about-link"
-            onClick={() => openUrl(TWITTER_URL)}
+            onClick={handleOpenTwitter}
           >
             Twitter
           </button>

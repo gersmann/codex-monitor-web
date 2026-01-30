@@ -23,6 +23,7 @@ export function useCollaborationModes({
   const lastFetchedWorkspaceId = useRef<string | null>(null);
   const previousWorkspaceId = useRef<string | null>(null);
   const inFlight = useRef(false);
+  const selectedModeIdRef = useRef<string | null>(null);
 
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
@@ -114,15 +115,16 @@ export function useCollaborationModes({
         data.find((mode) => mode.mode === "code" || mode.id === "code")?.id ??
         data[0]?.id ??
         null;
-      if (!selectedModeId) {
-        if (preferredModeId) {
-          setSelectedModeId(preferredModeId);
+      setSelectedModeId((currentSelection) => {
+        const selection = currentSelection ?? selectedModeIdRef.current;
+        if (!selection) {
+          return preferredModeId;
         }
-        return;
-      }
-      if (!data.some((mode) => mode.id === selectedModeId)) {
-        setSelectedModeId(preferredModeId);
-      }
+        if (!data.some((mode) => mode.id === selection)) {
+          return preferredModeId;
+        }
+        return selection;
+      });
     } catch (error) {
       onDebug?.({
         id: `${Date.now()}-client-collaboration-mode-list-error`,
@@ -134,7 +136,11 @@ export function useCollaborationModes({
     } finally {
       inFlight.current = false;
     }
-  }, [enabled, isConnected, onDebug, selectedModeId, workspaceId]);
+  }, [enabled, isConnected, onDebug, workspaceId]);
+
+  useEffect(() => {
+    selectedModeIdRef.current = selectedModeId;
+  }, [selectedModeId]);
 
   useEffect(() => {
     if (previousWorkspaceId.current !== workspaceId) {
@@ -156,7 +162,8 @@ export function useCollaborationModes({
       lastFetchedWorkspaceId.current = null;
       return;
     }
-    if (lastFetchedWorkspaceId.current === workspaceId) {
+    const alreadyFetchedForWorkspace = lastFetchedWorkspaceId.current === workspaceId;
+    if (alreadyFetchedForWorkspace) {
       return;
     }
     refreshModes();
