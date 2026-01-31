@@ -661,13 +661,13 @@
 }
 
 .composer-select--collab {
-  width: 88px;
-  max-width: 88px;
+  width: 110px;
+  max-width: 110px;
 }
 
 .composer-select--effort {
-  width: 60px;
-  max-width: 60px;
+  width: 80px;
+  max-width: 80px;
 }
 
 .composer-select--approval {

@@ -1059,6 +1059,8 @@ function MainApp() {
     activeWorkspace,
     models,
     selectedModelId,
+    effort: resolvedEffort,
+    collaborationMode: collaborationModePayload,
     addWorktreeAgent,
     connectWorkspace,
     startThreadForWorkspace,
@@ -1962,6 +1964,13 @@ function MainApp() {
       modelSelections={workspaceModelSelections}
       onToggleModel={toggleWorkspaceModelSelection}
       onModelCountChange={setWorkspaceModelCount}
+      collaborationModes={collaborationModes}
+      selectedCollaborationModeId={selectedCollaborationModeId}
+      onSelectCollaborationMode={setSelectedCollaborationModeId}
+      reasoningOptions={reasoningOptions}
+      selectedEffort={selectedEffort}
+      onSelectEffort={setSelectedEffort}
+      reasoningSupported={reasoningSupported}
       error={workspaceRunError}
       isSubmitting={workspaceRunSubmitting}
       activeWorkspaceId={activeWorkspaceId}
