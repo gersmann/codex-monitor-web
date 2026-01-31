@@ -8,6 +8,7 @@ import SlidersHorizontal from "lucide-react/dist/esm/icons/sliders-horizontal";
 import Mic from "lucide-react/dist/esm/icons/mic";
 import Keyboard from "lucide-react/dist/esm/icons/keyboard";
 import Stethoscope from "lucide-react/dist/esm/icons/stethoscope";
+import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
 import FileText from "lucide-react/dist/esm/icons/file-text";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
@@ -174,7 +175,8 @@ type SettingsSection =
   | "composer"
   | "dictation"
   | "shortcuts"
-  | "open-apps";
+  | "open-apps"
+  | "git";
 type CodexSection = SettingsSection | "codex" | "experimental";
 type ShortcutSettingKey =
   | "composerModelShortcut"
@@ -1035,6 +1037,14 @@ export function SettingsView({
             >
               <ExternalLink aria-hidden />
               Open in
+            </button>
+            <button
+              type="button"
+              className={`settings-nav ${activeSection === "git" ? "active" : ""}`}
+              onClick={() => setActiveSection("git")}
+            >
+              <GitBranch aria-hidden />
+              Git
             </button>
             <button
               type="button"
@@ -2553,6 +2563,35 @@ export function SettingsView({
                     Commands receive the selected path as the final argument. Apps use macOS open
                     with optional args.
                   </div>
+                </div>
+              </section>
+            )}
+            {activeSection === "git" && (
+              <section className="settings-section">
+                <div className="settings-section-title">Git</div>
+                <div className="settings-section-subtitle">
+                  Manage how diffs are loaded in the Git sidebar.
+                </div>
+                <div className="settings-toggle-row">
+                  <div>
+                    <div className="settings-toggle-title">Preload git diffs</div>
+                    <div className="settings-toggle-subtitle">
+                      Make viewing git diff faster.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`settings-toggle ${appSettings.preloadGitDiffs ? "on" : ""}`}
+                    onClick={() =>
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        preloadGitDiffs: !appSettings.preloadGitDiffs,
+                      })
+                    }
+                    aria-pressed={appSettings.preloadGitDiffs}
+                  >
+                    <span className="settings-toggle-knob" />
+                  </button>
                 </div>
               </section>
             )}

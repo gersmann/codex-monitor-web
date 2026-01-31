@@ -341,6 +341,7 @@ function MainApp() {
     activeWorkspaceRef,
   } = useGitPanelController({
     activeWorkspace,
+    gitDiffPreloadEnabled: appSettings.preloadGitDiffs,
     isCompact,
     isTablet,
     activeTab,

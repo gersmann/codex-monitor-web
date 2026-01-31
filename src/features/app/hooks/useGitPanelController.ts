@@ -7,6 +7,7 @@ import { useGitCommitDiffs } from "../../git/hooks/useGitCommitDiffs";
 
 export function useGitPanelController({
   activeWorkspace,
+  gitDiffPreloadEnabled,
   isCompact,
   isTablet,
   activeTab,
@@ -17,6 +18,7 @@ export function useGitPanelController({
   prDiffsError,
 }: {
   activeWorkspace: WorkspaceInfo | null;
+  gitDiffPreloadEnabled: boolean;
   isCompact: boolean;
   isTablet: boolean;
   activeTab: "projects" | "codex" | "git" | "log";
@@ -94,10 +96,18 @@ export function useGitPanelController({
     centerMode === "diff" ||
     (isCompact ? compactTab === "git" : gitPanelMode === "diff");
   const shouldPreloadDiffs = Boolean(
-    activeWorkspace && !preloadedWorkspaceIdsRef.current.has(activeWorkspace.id),
+    gitDiffPreloadEnabled &&
+      activeWorkspace &&
+      !preloadedWorkspaceIdsRef.current.has(activeWorkspace.id),
   );
+  const shouldLoadLocalDiffs =
+    Boolean(activeWorkspace) &&
+    (shouldPreloadDiffs ||
+      diffUiVisible ||
+      Boolean(selectedDiffPath));
   const shouldLoadDiffs =
-    Boolean(activeWorkspace) && (diffUiVisible || shouldPreloadDiffs);
+    Boolean(activeWorkspace) &&
+    (diffSource === "local" ? shouldLoadLocalDiffs : diffUiVisible);
   const shouldLoadGitLog = gitPanelMode === "log" && Boolean(activeWorkspace);
 
   const {
@@ -105,7 +115,7 @@ export function useGitPanelController({
     isLoading: isDiffLoading,
     error: diffError,
     refresh: refreshGitDiffs,
-  } = useGitDiffs(activeWorkspace, gitStatus.files, shouldLoadDiffs);
+  } = useGitDiffs(activeWorkspace, gitStatus.files, shouldLoadLocalDiffs);
 
   useEffect(() => {
     if (!activeWorkspace || !shouldPreloadDiffs) {

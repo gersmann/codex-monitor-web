@@ -406,6 +406,8 @@ pub(crate) struct AppSettings {
         rename = "notificationSoundsEnabled"
     )]
     pub(crate) notification_sounds_enabled: bool,
+    #[serde(default = "default_preload_git_diffs", rename = "preloadGitDiffs")]
+    pub(crate) preload_git_diffs: bool,
     #[serde(
         default = "default_experimental_collab_enabled",
         rename = "experimentalCollabEnabled"
@@ -592,6 +594,10 @@ fn default_notification_sounds_enabled() -> bool {
     true
 }
 
+fn default_preload_git_diffs() -> bool {
+    true
+}
+
 fn default_experimental_collab_enabled() -> bool {
     false
 }
@@ -752,6 +758,7 @@ impl Default for AppSettings {
             code_font_family: default_code_font_family(),
             code_font_size: default_code_font_size(),
             notification_sounds_enabled: true,
+            preload_git_diffs: default_preload_git_diffs(),
             experimental_collab_enabled: false,
             experimental_collaboration_modes_enabled: false,
             experimental_steer_enabled: false,
@@ -849,6 +856,7 @@ mod tests {
         assert!(settings.code_font_family.contains("SF Mono"));
         assert_eq!(settings.code_font_size, 11);
         assert!(settings.notification_sounds_enabled);
+        assert!(settings.preload_git_diffs);
         assert!(!settings.experimental_steer_enabled);
         assert!(!settings.dictation_enabled);
         assert_eq!(settings.dictation_model_id, "base");
