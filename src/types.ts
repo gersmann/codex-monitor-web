@@ -6,7 +6,32 @@ export type WorkspaceSettings = {
   codexHome?: string | null;
   codexArgs?: string | null;
   launchScript?: string | null;
+  launchScripts?: LaunchScriptEntry[] | null;
   worktreeSetupScript?: string | null;
+};
+
+export type LaunchScriptIconId =
+  | "play"
+  | "build"
+  | "debug"
+  | "wrench"
+  | "terminal"
+  | "code"
+  | "server"
+  | "database"
+  | "package"
+  | "test"
+  | "lint"
+  | "dev"
+  | "git"
+  | "config"
+  | "logs";
+
+export type LaunchScriptEntry = {
+  id: string;
+  script: string;
+  icon: LaunchScriptIconId;
+  label?: string | null;
 };
 
 export type WorkspaceGroup = {
