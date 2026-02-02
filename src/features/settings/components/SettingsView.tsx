@@ -3130,7 +3130,7 @@ export function SettingsView({
                 </div>
                 {hasCodexHomeOverrides && (
                   <div className="settings-help">
-                    Experimental flags are stored in the default CODEX_HOME config.toml.
+                    Experimental settings are stored in the default CODEX_HOME config.toml.
                     <br />
                     Workspace overrides are not updated.
                   </div>
@@ -3149,6 +3149,31 @@ export function SettingsView({
                 {openConfigError && (
                   <div className="settings-help">{openConfigError}</div>
                 )}
+                <div className="settings-toggle-row">
+                  <div>
+                    <div className="settings-toggle-title">Personality</div>
+                    <div className="settings-toggle-subtitle">
+                      Choose Codex communication style (writes top-level{" "}
+                      <code>personality</code> in config.toml).
+                    </div>
+                  </div>
+                  <select
+                    id="experimental-personality-select"
+                    className="settings-select"
+                    value={appSettings.experimentalPersonality}
+                    onChange={(event) =>
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        experimentalPersonality: event.target.value as AppSettings["experimentalPersonality"],
+                      })
+                    }
+                    aria-label="Personality"
+                  >
+                    <option value="default">Default (unset)</option>
+                    <option value="friendly">Friendly</option>
+                    <option value="pragmatic">Pragmatic</option>
+                  </select>
+                </div>
                 <div className="settings-toggle-row">
                   <div>
                     <div className="settings-toggle-title">Multi-agent</div>

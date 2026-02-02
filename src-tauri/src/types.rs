@@ -446,6 +446,11 @@ pub(crate) struct AppSettings {
         rename = "experimentalUnifiedExecEnabled"
     )]
     pub(crate) experimental_unified_exec_enabled: bool,
+    #[serde(
+        default = "default_experimental_personality",
+        rename = "experimentalPersonality"
+    )]
+    pub(crate) experimental_personality: String,
     #[serde(default = "default_dictation_enabled", rename = "dictationEnabled")]
     pub(crate) dictation_enabled: bool,
     #[serde(
@@ -640,6 +645,10 @@ fn default_experimental_unified_exec_enabled() -> bool {
     false
 }
 
+fn default_experimental_personality() -> String {
+    "default".to_string()
+}
+
 fn default_dictation_enabled() -> bool {
     false
 }
@@ -791,6 +800,7 @@ impl Default for AppSettings {
             experimental_collaboration_modes_enabled: false,
             experimental_steer_enabled: false,
             experimental_unified_exec_enabled: false,
+            experimental_personality: default_experimental_personality(),
             dictation_enabled: false,
             dictation_model_id: default_dictation_model_id(),
             dictation_preferred_language: None,
@@ -888,6 +898,7 @@ mod tests {
         assert!(settings.system_notifications_enabled);
         assert!(settings.preload_git_diffs);
         assert!(!settings.experimental_steer_enabled);
+        assert_eq!(settings.experimental_personality, "default");
         assert!(!settings.dictation_enabled);
         assert_eq!(settings.dictation_model_id, "base");
         assert!(settings.dictation_preferred_language.is_none());
