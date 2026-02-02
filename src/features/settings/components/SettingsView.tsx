@@ -2826,6 +2826,30 @@ export function SettingsView({
                     <option value="full-access">Full access</option>
                   </select>
                 </div>
+                <div className="settings-field">
+                  <label className="settings-field-label" htmlFor="review-delivery">
+                    Review mode
+                  </label>
+                  <select
+                    id="review-delivery"
+                    className="settings-select"
+                    value={appSettings.reviewDeliveryMode}
+                    onChange={(event) =>
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        reviewDeliveryMode:
+                          event.target.value as AppSettings["reviewDeliveryMode"],
+                      })
+                    }
+                  >
+                    <option value="inline">Inline (same thread)</option>
+                    <option value="detached">Detached (new review thread)</option>
+                  </select>
+                  <div className="settings-help">
+                    Choose whether <code>/review</code> runs in the current thread or a detached
+                    review thread.
+                  </div>
+                </div>
 
                 <div className="settings-field">
                   <label className="settings-field-label" htmlFor="backend-mode">

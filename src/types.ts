@@ -145,6 +145,7 @@ export type AppSettings = {
   remoteBackendHost: string;
   remoteBackendToken: string | null;
   defaultAccessMode: AccessMode;
+  reviewDeliveryMode: "inline" | "detached";
   composerModelShortcut: string | null;
   composerAccessShortcut: string | null;
   composerReasoningShortcut: string | null;

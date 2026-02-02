@@ -663,6 +663,7 @@ function MainApp() {
     effort: resolvedEffort,
     collaborationMode: collaborationModePayload,
     accessMode,
+    reviewDeliveryMode: appSettings.reviewDeliveryMode,
     steerEnabled: appSettings.experimentalSteerEnabled,
     customPrompts: prompts,
     onMessageActivity: queueGitStatusRefresh

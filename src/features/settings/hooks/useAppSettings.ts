@@ -26,6 +26,7 @@ const defaultSettings: AppSettings = {
   remoteBackendHost: "127.0.0.1:4732",
   remoteBackendToken: null,
   defaultAccessMode: "current",
+  reviewDeliveryMode: "inline",
   composerModelShortcut: "cmd+shift+m",
   composerAccessShortcut: "cmd+shift+a",
   composerReasoningShortcut: "cmd+shift+r",
@@ -112,6 +113,8 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
       DEFAULT_CODE_FONT_FAMILY,
     ),
     codeFontSize: clampCodeFontSize(settings.codeFontSize),
+    reviewDeliveryMode:
+      settings.reviewDeliveryMode === "detached" ? "detached" : "inline",
     openAppTargets: normalizedTargets,
     selectedOpenAppId,
   };

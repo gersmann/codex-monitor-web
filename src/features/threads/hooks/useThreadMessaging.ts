@@ -40,6 +40,7 @@ type UseThreadMessagingOptions = {
   model?: string | null;
   effort?: string | null;
   collaborationMode?: Record<string, unknown> | null;
+  reviewDeliveryMode?: "inline" | "detached";
   steerEnabled: boolean;
   customPrompts: CustomPromptOption[];
   threadStatusById: ThreadState["threadStatusById"];
@@ -73,6 +74,7 @@ export function useThreadMessaging({
   model,
   effort,
   collaborationMode,
+  reviewDeliveryMode = "inline",
   steerEnabled,
   customPrompts,
   threadStatusById,
@@ -421,7 +423,7 @@ export function useThreadMessaging({
           workspaceId,
           threadId,
           target,
-          "inline",
+          reviewDeliveryMode,
         );
         onDebug?.({
           id: `${Date.now()}-server-review-start`,
@@ -468,6 +470,7 @@ export function useThreadMessaging({
       pushThreadErrorMessage,
       safeMessageActivity,
       setActiveTurnId,
+      reviewDeliveryMode,
     ],
   );
 

@@ -317,6 +317,8 @@ pub(crate) struct AppSettings {
     pub(crate) remote_backend_token: Option<String>,
     #[serde(default = "default_access_mode", rename = "defaultAccessMode")]
     pub(crate) default_access_mode: String,
+    #[serde(default = "default_review_delivery_mode", rename = "reviewDeliveryMode")]
+    pub(crate) review_delivery_mode: String,
     #[serde(
         default = "default_composer_model_shortcut",
         rename = "composerModelShortcut"
@@ -502,6 +504,10 @@ impl Default for BackendMode {
 
 fn default_access_mode() -> String {
     "current".to_string()
+}
+
+fn default_review_delivery_mode() -> String {
+    "inline".to_string()
 }
 
 fn default_remote_backend_host() -> String {
@@ -752,6 +758,7 @@ impl Default for AppSettings {
             remote_backend_host: default_remote_backend_host(),
             remote_backend_token: None,
             default_access_mode: "current".to_string(),
+            review_delivery_mode: default_review_delivery_mode(),
             composer_model_shortcut: default_composer_model_shortcut(),
             composer_access_shortcut: default_composer_access_shortcut(),
             composer_reasoning_shortcut: default_composer_reasoning_shortcut(),
@@ -818,6 +825,7 @@ mod tests {
         assert_eq!(settings.remote_backend_host, "127.0.0.1:4732");
         assert!(settings.remote_backend_token.is_none());
         assert_eq!(settings.default_access_mode, "current");
+        assert_eq!(settings.review_delivery_mode, "inline");
         assert_eq!(
             settings.composer_model_shortcut.as_deref(),
             Some("cmd+shift+m")

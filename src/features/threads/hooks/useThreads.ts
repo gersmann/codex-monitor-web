@@ -24,6 +24,7 @@ type UseThreadsOptions = {
   effort?: string | null;
   collaborationMode?: Record<string, unknown> | null;
   accessMode?: "read-only" | "current" | "full-access";
+  reviewDeliveryMode?: "inline" | "detached";
   steerEnabled?: boolean;
   customPrompts?: CustomPromptOption[];
   onMessageActivity?: () => void;
@@ -37,6 +38,7 @@ export function useThreads({
   effort,
   collaborationMode,
   accessMode,
+  reviewDeliveryMode = "inline",
   steerEnabled = false,
   customPrompts = [],
   onMessageActivity,
@@ -284,6 +286,7 @@ export function useThreads({
     model,
     effort,
     collaborationMode,
+    reviewDeliveryMode,
     steerEnabled,
     customPrompts,
     threadStatusById: state.threadStatusById,
