@@ -123,6 +123,7 @@ export type ThreadState = {
   hiddenThreadIdsByWorkspace: Record<string, Record<string, true>>;
   threadParentById: Record<string, string>;
   threadStatusById: Record<string, ThreadActivityStatus>;
+  threadResumeLoadingById: Record<string, boolean>;
   threadListLoadingByWorkspace: Record<string, boolean>;
   threadListPagingByWorkspace: Record<string, boolean>;
   threadListCursorByWorkspace: Record<string, string | null>;
@@ -208,6 +209,11 @@ export type ThreadAction =
       isLoading: boolean;
     }
   | {
+      type: "setThreadResumeLoading";
+      threadId: string;
+      isLoading: boolean;
+    }
+  | {
       type: "setThreadListPaging";
       workspaceId: string;
       isLoading: boolean;
@@ -255,6 +261,7 @@ export const initialState: ThreadState = {
   hiddenThreadIdsByWorkspace: {},
   threadParentById: {},
   threadStatusById: {},
+  threadResumeLoadingById: {},
   threadListLoadingByWorkspace: {},
   threadListPagingByWorkspace: {},
   threadListCursorByWorkspace: {},
@@ -1036,6 +1043,14 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         threadListLoadingByWorkspace: {
           ...state.threadListLoadingByWorkspace,
           [action.workspaceId]: action.isLoading,
+        },
+      };
+    case "setThreadResumeLoading":
+      return {
+        ...state,
+        threadResumeLoadingById: {
+          ...state.threadResumeLoadingById,
+          [action.threadId]: action.isLoading,
         },
       };
     case "setThreadListPaging":

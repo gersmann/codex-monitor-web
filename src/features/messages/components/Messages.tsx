@@ -32,6 +32,7 @@ type MessagesProps = {
   threadId: string | null;
   workspaceId?: string | null;
   isThinking: boolean;
+  isLoadingMessages?: boolean;
   processingStartedAt?: number | null;
   lastDurationMs?: number | null;
   workspacePath?: string | null;
@@ -1097,6 +1098,7 @@ export const Messages = memo(function Messages({
   threadId,
   workspaceId = null,
   isThinking,
+  isLoadingMessages = false,
   processingStartedAt = null,
   lastDurationMs = null,
   workspacePath = null,
@@ -1414,9 +1416,17 @@ export const Messages = memo(function Messages({
         hasItems={items.length > 0}
         reasoningLabel={latestReasoningLabel}
       />
-      {!items.length && !userInputNode && !isThinking && (
+      {!items.length && !userInputNode && !isThinking && !isLoadingMessages && (
         <div className="empty messages-empty">
           {threadId ? "Send a prompt to the agent." : "Send a prompt to start a new agent."}
+        </div>
+      )}
+      {!items.length && !userInputNode && !isThinking && isLoadingMessages && (
+        <div className="empty messages-empty">
+          <div className="messages-loading-indicator" role="status" aria-live="polite">
+            <span className="working-spinner" aria-hidden />
+            <span className="messages-loading-label">Loading…</span>
+          </div>
         </div>
       )}
       <div ref={bottomRef} />

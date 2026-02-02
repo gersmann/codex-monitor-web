@@ -22,6 +22,18 @@
   padding: 24px var(--main-panel-padding);
 }
 
+.messages-loading-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.messages-loading-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
 .thinking {
   padding: 0 24px;
   font-size: 12px;

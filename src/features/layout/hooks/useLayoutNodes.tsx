@@ -108,6 +108,7 @@ type LayoutNodesOptions = {
   threadsByWorkspace: Record<string, ThreadSummary[]>;
   threadParentById: Record<string, string>;
   threadStatusById: Record<string, ThreadActivityStatus>;
+  threadResumeLoadingById: Record<string, boolean>;
   threadListLoadingByWorkspace: Record<string, boolean>;
   threadListPagingByWorkspace: Record<string, boolean>;
   threadListCursorByWorkspace: Record<string, string | null>;
@@ -529,6 +530,11 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       onUserInputSubmit={options.handleUserInputSubmit}
       onOpenThreadLink={options.onOpenThreadLink}
       isThinking={options.isProcessing}
+      isLoadingMessages={
+        options.activeThreadId
+          ? options.threadResumeLoadingById[options.activeThreadId] ?? false
+          : false
+      }
       processingStartedAt={activeThreadStatus?.processingStartedAt ?? null}
       lastDurationMs={activeThreadStatus?.lastDurationMs ?? null}
     />

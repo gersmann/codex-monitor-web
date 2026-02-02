@@ -277,6 +277,62 @@ describe("useThreadActions", () => {
     });
   });
 
+  it("keeps resume loading true until overlapping resumes finish", async () => {
+    let resolveFirst: ((value: unknown) => void) | null = null;
+    let resolveSecond: ((value: unknown) => void) | null = null;
+    const firstPromise = new Promise((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondPromise = new Promise((resolve) => {
+      resolveSecond = resolve;
+    });
+    vi.mocked(resumeThread)
+      .mockReturnValueOnce(firstPromise as Promise<any>)
+      .mockReturnValueOnce(secondPromise as Promise<any>);
+    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    vi.mocked(isReviewingFromThread).mockReturnValue(false);
+    vi.mocked(getThreadTimestamp).mockReturnValue(0);
+
+    const { result, dispatch } = renderActions();
+
+    let callOne: Promise<string | null> | null = null;
+    let callTwo: Promise<string | null> | null = null;
+    await act(async () => {
+      callOne = result.current.resumeThreadForWorkspace("ws-1", "thread-3", true);
+      callTwo = result.current.resumeThreadForWorkspace("ws-1", "thread-3", true);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadResumeLoading",
+      threadId: "thread-3",
+      isLoading: true,
+    });
+
+    await act(async () => {
+      resolveFirst?.({ result: { thread: { id: "thread-3" } } });
+      await firstPromise;
+    });
+
+    expect(dispatch).not.toHaveBeenCalledWith({
+      type: "setThreadResumeLoading",
+      threadId: "thread-3",
+      isLoading: false,
+    });
+
+    await act(async () => {
+      resolveSecond?.({ result: { thread: { id: "thread-3" } } });
+      await Promise.all([callOne, callTwo]);
+    });
+
+    const loadingFalseCalls = dispatch.mock.calls.filter(
+      ([action]) =>
+        action?.type === "setThreadResumeLoading" &&
+        action?.threadId === "thread-3" &&
+        action?.isLoading === false,
+    );
+    expect(loadingFalseCalls).toHaveLength(1);
+  });
+
   it("lists threads for a workspace and persists activity", async () => {
     vi.mocked(listThreads).mockResolvedValue({
       result: {
