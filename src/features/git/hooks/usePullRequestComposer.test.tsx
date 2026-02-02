@@ -166,4 +166,43 @@ describe("usePullRequestComposer", () => {
     expect(options.startThreadForWorkspace).not.toHaveBeenCalled();
     expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
   });
+
+  it("routes slash commands to the normal composer handler in PR mode", async () => {
+    const options = makeOptions({ selectedPullRequest: pullRequest });
+    const { result } = renderHook(() => usePullRequestComposer(options));
+
+    await act(async () => {
+      await result.current.handleComposerSend("/apps", []);
+    });
+
+    expect(options.handleSend).toHaveBeenCalledWith("/apps", []);
+    expect(options.startThreadForWorkspace).not.toHaveBeenCalled();
+    expect(options.sendUserMessageToThread).not.toHaveBeenCalled();
+  });
+
+  it("treats non-command slash-prefixed text as a PR prompt in PR mode", async () => {
+    const options = makeOptions({ selectedPullRequest: pullRequest });
+    const { result } = renderHook(() => usePullRequestComposer(options));
+
+    await act(async () => {
+      await result.current.handleComposerSend("/src-tauri/something", []);
+    });
+
+    expect(options.handleSend).not.toHaveBeenCalled();
+    expect(buildPullRequestPrompt).toHaveBeenCalledWith(
+      pullRequest,
+      diffs,
+      "/src-tauri/something",
+    );
+    expect(options.startThreadForWorkspace).toHaveBeenCalledWith(
+      connectedWorkspace.id,
+      { activate: false },
+    );
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      connectedWorkspace,
+      "thread-1",
+      "Prompt text",
+      [],
+    );
+  });
 });

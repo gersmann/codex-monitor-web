@@ -19,6 +19,7 @@ const makeOptions = (
   isProcessing: false,
   isReviewing: false,
   steerEnabled: false,
+  appsEnabled: true,
   activeWorkspace: workspace,
   connectWorkspace: vi.fn().mockResolvedValue(undefined),
   startThreadForWorkspace: vi.fn().mockResolvedValue("thread-1"),
@@ -27,6 +28,7 @@ const makeOptions = (
   startFork: vi.fn().mockResolvedValue(undefined),
   startReview: vi.fn().mockResolvedValue(undefined),
   startResume: vi.fn().mockResolvedValue(undefined),
+  startApps: vi.fn().mockResolvedValue(undefined),
   startMcp: vi.fn().mockResolvedValue(undefined),
   startStatus: vi.fn().mockResolvedValue(undefined),
   clearActiveImages: vi.fn(),
@@ -306,6 +308,37 @@ describe("useQueuedSend", () => {
     expect(startMcp).toHaveBeenCalledWith("/mcp now");
     expect(options.sendUserMessage).not.toHaveBeenCalled();
     expect(options.startReview).not.toHaveBeenCalled();
+  });
+
+  it("routes /apps to the apps handler", async () => {
+    const startApps = vi.fn().mockResolvedValue(undefined);
+    const options = makeOptions({ startApps });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/apps now", ["img-1"]);
+    });
+
+    expect(startApps).toHaveBeenCalledWith("/apps now");
+    expect(options.sendUserMessage).not.toHaveBeenCalled();
+    expect(options.startReview).not.toHaveBeenCalled();
+  });
+
+  it("treats /apps as plain text when apps feature is disabled", async () => {
+    const startApps = vi.fn().mockResolvedValue(undefined);
+    const options = makeOptions({ startApps, appsEnabled: false });
+    const { result } = renderHook((props) => useQueuedSend(props), {
+      initialProps: options,
+    });
+
+    await act(async () => {
+      await result.current.handleSend("/apps now", ["img-1"]);
+    });
+
+    expect(startApps).not.toHaveBeenCalled();
+    expect(options.sendUserMessage).toHaveBeenCalledWith("/apps now", ["img-1"]);
   });
 
   it("routes /resume to the resume handler", async () => {

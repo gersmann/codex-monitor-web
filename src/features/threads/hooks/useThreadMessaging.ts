@@ -13,6 +13,7 @@ import {
   sendUserMessage as sendUserMessageService,
   startReview as startReviewService,
   interruptTurn as interruptTurnService,
+  getAppsList as getAppsListService,
   listMcpServerStatus as listMcpServerStatusService,
 } from "../../../services/tauri";
 import { expandCustomPromptText } from "../../../utils/customPrompts";
@@ -727,6 +728,91 @@ export function useThreadMessaging({
     ],
   );
 
+  const startApps = useCallback(
+    async (_text: string) => {
+      if (!activeWorkspace) {
+        return;
+      }
+      const threadId = await ensureThreadForActiveWorkspace();
+      if (!threadId) {
+        return;
+      }
+
+      try {
+        const response = (await getAppsListService(
+          activeWorkspace.id,
+          null,
+          100,
+        )) as Record<string, unknown> | null;
+        const result = (response?.result ?? response) as
+          | Record<string, unknown>
+          | null;
+        const data = Array.isArray(result?.data)
+          ? (result?.data as Array<Record<string, unknown>>)
+          : [];
+
+        const lines: string[] = ["Apps:"];
+        if (data.length === 0) {
+          lines.push("- No apps available.");
+        } else {
+          const apps = [...data].sort((a, b) =>
+            String(a.name ?? "").localeCompare(String(b.name ?? "")),
+          );
+          for (const app of apps) {
+            const name = String(app.name ?? app.id ?? "unknown");
+            const appId = String(app.id ?? "");
+            const isAccessible = Boolean(
+              app.isAccessible ?? app.is_accessible ?? false,
+            );
+            const status = isAccessible ? "connected" : "can be installed";
+            const description =
+              typeof app.description === "string" && app.description.trim().length > 0
+                ? app.description.trim()
+                : "";
+            lines.push(
+              `- ${name}${appId ? ` (${appId})` : ""} — ${status}${description ? `: ${description}` : ""}`,
+            );
+
+            const installUrl =
+              typeof app.installUrl === "string"
+                ? app.installUrl
+                : typeof app.install_url === "string"
+                  ? app.install_url
+                  : "";
+            if (!isAccessible && installUrl) {
+              lines.push(`  install: ${installUrl}`);
+            }
+          }
+        }
+
+        const timestamp = Date.now();
+        recordThreadActivity(activeWorkspace.id, threadId, timestamp);
+        dispatch({
+          type: "addAssistantMessage",
+          threadId,
+          text: lines.join("\n"),
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to load apps.";
+        dispatch({
+          type: "addAssistantMessage",
+          threadId,
+          text: `Apps:\n- ${message}`,
+        });
+      } finally {
+        safeMessageActivity();
+      }
+    },
+    [
+      activeWorkspace,
+      dispatch,
+      ensureThreadForActiveWorkspace,
+      recordThreadActivity,
+      safeMessageActivity,
+    ],
+  );
+
   const startFork = useCallback(
     async (text: string) => {
       if (!activeWorkspace || !activeThreadId) {
@@ -784,6 +870,7 @@ export function useThreadMessaging({
     startFork,
     startReview,
     startResume,
+    startApps,
     startMcp,
     startStatus,
     reviewPrompt,

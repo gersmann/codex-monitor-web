@@ -29,6 +29,7 @@ import type {
   ComposerEditorSettings,
   CustomPromptOption,
   AccountSnapshot,
+  AppOption,
   DebugEntry,
   DictationSessionState,
   DictationTranscript,
@@ -390,6 +391,8 @@ type LayoutNodesOptions = {
   accessMode: AccessMode;
   onSelectAccessMode: (mode: AccessMode) => void;
   skills: SkillOption[];
+  appsEnabled: boolean;
+  apps: AppOption[];
   prompts: CustomPromptOption[];
   files: string[];
   onInsertComposerText: (text: string) => void;
@@ -571,6 +574,8 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       accessMode={options.accessMode}
       onSelectAccessMode={options.onSelectAccessMode}
       skills={options.skills}
+      appsEnabled={options.appsEnabled}
+      apps={options.apps}
       prompts={options.prompts}
       files={options.files}
       textareaRef={options.textareaRef}

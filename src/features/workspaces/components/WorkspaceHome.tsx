@@ -10,6 +10,7 @@ import {
 } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import type {
+  AppOption,
   CustomPromptOption,
   DictationTranscript,
   ModelOption,
@@ -72,6 +73,8 @@ type WorkspaceHomeProps = {
   threadStatusById: Record<string, ThreadStatus>;
   onSelectInstance: (workspaceId: string, threadId: string) => void;
   skills: SkillOption[];
+  appsEnabled: boolean;
+  apps: AppOption[];
   prompts: CustomPromptOption[];
   files: string[];
   dictationEnabled: boolean;
@@ -148,6 +151,8 @@ export function WorkspaceHome({
   threadStatusById,
   onSelectInstance,
   skills,
+  appsEnabled,
+  apps,
   prompts,
   files,
   dictationEnabled,
@@ -209,7 +214,9 @@ export function WorkspaceHome({
     text: prompt,
     selectionStart,
     disabled: isSubmitting,
+    appsEnabled,
     skills,
+    apps,
     prompts,
     files,
     textareaRef,
@@ -270,7 +277,7 @@ export function WorkspaceHome({
       bottom: "auto",
       right: "auto",
     });
-  }, [isAutocompleteOpen, prompt, selectionStart]);
+  }, [isAutocompleteOpen, prompt, selectionStart, textareaRef]);
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
@@ -326,6 +333,7 @@ export function WorkspaceHome({
     prompt,
     resetHistoryNavigation,
     selectionStart,
+    textareaRef,
   ]);
 
   const handleRunSubmit = async () => {

@@ -509,6 +509,27 @@ pub(crate) async fn skills_list(
 }
 
 #[tauri::command]
+pub(crate) async fn apps_list(
+    workspace_id: String,
+    cursor: Option<String>,
+    limit: Option<u32>,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        return remote_backend::call_remote(
+            &*state,
+            app,
+            "apps_list",
+            json!({ "workspaceId": workspace_id, "cursor": cursor, "limit": limit }),
+        )
+        .await;
+    }
+
+    codex_core::apps_list_core(&state.sessions, workspace_id, cursor, limit).await
+}
+
+#[tauri::command]
 pub(crate) async fn respond_to_server_request(
     workspace_id: String,
     request_id: Value,

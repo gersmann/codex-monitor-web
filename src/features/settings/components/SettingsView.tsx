@@ -3221,6 +3221,27 @@ export function SettingsView({
                 </div>
                 <div className="settings-toggle-row">
                   <div>
+                    <div className="settings-toggle-title">Apps</div>
+                    <div className="settings-toggle-subtitle">
+                      Enable ChatGPT apps/connectors and the <code>/apps</code> command.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`settings-toggle ${appSettings.experimentalAppsEnabled ? "on" : ""}`}
+                    onClick={() =>
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        experimentalAppsEnabled: !appSettings.experimentalAppsEnabled,
+                      })
+                    }
+                    aria-pressed={appSettings.experimentalAppsEnabled}
+                  >
+                    <span className="settings-toggle-knob" />
+                  </button>
+                </div>
+                <div className="settings-toggle-row">
+                  <div>
                     <div className="settings-toggle-title">Background terminal</div>
                     <div className="settings-toggle-subtitle">
                       Run long-running terminal commands in the background.

@@ -6,6 +6,7 @@ type UseQueuedSendOptions = {
   isProcessing: boolean;
   isReviewing: boolean;
   steerEnabled: boolean;
+  appsEnabled: boolean;
   activeWorkspace: WorkspaceInfo | null;
   connectWorkspace: (workspace: WorkspaceInfo) => Promise<void>;
   startThreadForWorkspace: (
@@ -22,6 +23,7 @@ type UseQueuedSendOptions = {
   startFork: (text: string) => Promise<void>;
   startReview: (text: string) => Promise<void>;
   startResume: (text: string) => Promise<void>;
+  startApps: (text: string) => Promise<void>;
   startMcp: (text: string) => Promise<void>;
   startStatus: (text: string) => Promise<void>;
   clearActiveImages: () => void;
@@ -35,9 +37,12 @@ type UseQueuedSendResult = {
   removeQueuedMessage: (threadId: string, messageId: string) => void;
 };
 
-type SlashCommandKind = "fork" | "mcp" | "new" | "resume" | "review" | "status";
+type SlashCommandKind = "apps" | "fork" | "mcp" | "new" | "resume" | "review" | "status";
 
-function parseSlashCommand(text: string): SlashCommandKind | null {
+function parseSlashCommand(text: string, appsEnabled: boolean): SlashCommandKind | null {
+  if (appsEnabled && /^\/apps\b/i.test(text)) {
+    return "apps";
+  }
   if (/^\/fork\b/i.test(text)) {
     return "fork";
   }
@@ -64,6 +69,7 @@ export function useQueuedSend({
   isProcessing,
   isReviewing,
   steerEnabled,
+  appsEnabled,
   activeWorkspace,
   connectWorkspace,
   startThreadForWorkspace,
@@ -72,6 +78,7 @@ export function useQueuedSend({
   startFork,
   startReview,
   startResume,
+  startApps,
   startMcp,
   startStatus,
   clearActiveImages,
@@ -131,6 +138,10 @@ export function useQueuedSend({
         await startResume(trimmed);
         return;
       }
+      if (command === "apps") {
+        await startApps(trimmed);
+        return;
+      }
       if (command === "mcp") {
         await startMcp(trimmed);
         return;
@@ -153,6 +164,7 @@ export function useQueuedSend({
       startFork,
       startReview,
       startResume,
+      startApps,
       startMcp,
       startStatus,
       startThreadForWorkspace,
@@ -162,7 +174,7 @@ export function useQueuedSend({
   const handleSend = useCallback(
     async (text: string, images: string[] = []) => {
       const trimmed = text.trim();
-      const command = parseSlashCommand(trimmed);
+      const command = parseSlashCommand(trimmed, appsEnabled);
       const nextImages = command ? [] : images;
       if (!trimmed && nextImages.length === 0) {
         return;
@@ -194,6 +206,7 @@ export function useQueuedSend({
     },
     [
       activeThreadId,
+      appsEnabled,
       activeWorkspace,
       clearActiveImages,
       connectWorkspace,
@@ -209,7 +222,7 @@ export function useQueuedSend({
   const queueMessage = useCallback(
     async (text: string, images: string[] = []) => {
       const trimmed = text.trim();
-      const command = parseSlashCommand(trimmed);
+      const command = parseSlashCommand(trimmed, appsEnabled);
       const nextImages = command ? [] : images;
       if (!trimmed && nextImages.length === 0) {
         return;
@@ -229,7 +242,7 @@ export function useQueuedSend({
       enqueueMessage(activeThreadId, item);
       clearActiveImages();
     },
-    [activeThreadId, clearActiveImages, enqueueMessage, isReviewing],
+    [activeThreadId, appsEnabled, clearActiveImages, enqueueMessage, isReviewing],
   );
 
   useEffect(() => {
@@ -283,7 +296,7 @@ export function useQueuedSend({
     (async () => {
       try {
         const trimmed = nextItem.text.trim();
-        const command = parseSlashCommand(trimmed);
+        const command = parseSlashCommand(trimmed, appsEnabled);
         if (command) {
           await runSlashCommand(command, trimmed);
         } else {
@@ -297,6 +310,7 @@ export function useQueuedSend({
     })();
   }, [
     activeThreadId,
+    appsEnabled,
     inFlightByThread,
     isProcessing,
     isReviewing,

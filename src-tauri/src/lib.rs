@@ -141,6 +141,7 @@ pub fn run() {
             codex::codex_login,
             codex::codex_login_cancel,
             codex::skills_list,
+            codex::apps_list,
             prompts::prompts_list,
             prompts::prompts_create,
             prompts::prompts_update,

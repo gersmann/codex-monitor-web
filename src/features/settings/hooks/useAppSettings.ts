@@ -60,6 +60,7 @@ const defaultSettings: AppSettings = {
   experimentalCollaborationModesEnabled: false,
   experimentalSteerEnabled: false,
   experimentalUnifiedExecEnabled: false,
+  experimentalAppsEnabled: false,
   experimentalPersonality: "default",
   dictationEnabled: false,
   dictationModelId: "base",

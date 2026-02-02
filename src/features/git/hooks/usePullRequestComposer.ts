@@ -5,6 +5,8 @@ import {
   buildPullRequestPrompt,
 } from "../../../utils/pullRequestPrompt";
 
+const KNOWN_SLASH_COMMAND_REGEX = /^\/(?:apps|fork|mcp|new|resume|review|status)\b/i;
+
 type UsePullRequestComposerOptions = {
   activeWorkspace: WorkspaceInfo | null;
   selectedPullRequest: GitHubPullRequest | null;
@@ -101,6 +103,10 @@ export function usePullRequestComposer({
   const handleSendPullRequestQuestion = useCallback(
     async (text: string, images: string[] = []) => {
       const trimmed = text.trim();
+      if (KNOWN_SLASH_COMMAND_REGEX.test(trimmed)) {
+        await handleSend(trimmed, images);
+        return;
+      }
       if (!activeWorkspace || !selectedPullRequest) {
         return;
       }
@@ -129,6 +135,7 @@ export function usePullRequestComposer({
       clearActiveImages,
       connectWorkspace,
       gitPullRequestDiffs,
+      handleSend,
       selectedPullRequest,
       sendUserMessageToThread,
       startThreadForWorkspace,

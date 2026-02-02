@@ -179,6 +179,7 @@ export type AppSettings = {
   experimentalCollaborationModesEnabled: boolean;
   experimentalSteerEnabled: boolean;
   experimentalUnifiedExecEnabled: boolean;
+  experimentalAppsEnabled: boolean;
   experimentalPersonality: PersonalityPreference;
   dictationEnabled: boolean;
   dictationModelId: string;
@@ -462,6 +463,15 @@ export type SkillOption = {
   name: string;
   path: string;
   description?: string;
+};
+
+export type AppOption = {
+  id: string;
+  name: string;
+  description?: string;
+  isAccessible: boolean;
+  installUrl?: string | null;
+  distributionChannel?: string | null;
 };
 
 export type CustomPromptOption = {

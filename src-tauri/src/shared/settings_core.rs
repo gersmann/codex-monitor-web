@@ -30,6 +30,9 @@ pub(crate) async fn get_app_settings_core(app_settings: &Mutex<AppSettings>) -> 
     if let Ok(Some(unified_exec_enabled)) = codex_config::read_unified_exec_enabled() {
         settings.experimental_unified_exec_enabled = unified_exec_enabled;
     }
+    if let Ok(Some(apps_enabled)) = codex_config::read_apps_enabled() {
+        settings.experimental_apps_enabled = apps_enabled;
+    }
     if let Ok(personality) = codex_config::read_personality() {
         settings.experimental_personality = personality
             .as_deref()
@@ -51,6 +54,7 @@ pub(crate) async fn update_app_settings_core(
     );
     let _ = codex_config::write_steer_enabled(settings.experimental_steer_enabled);
     let _ = codex_config::write_unified_exec_enabled(settings.experimental_unified_exec_enabled);
+    let _ = codex_config::write_apps_enabled(settings.experimental_apps_enabled);
     let _ = codex_config::write_personality(settings.experimental_personality.as_str());
     write_settings(settings_path, &settings)?;
     let mut current = app_settings.lock().await;

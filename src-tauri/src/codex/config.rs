@@ -24,6 +24,10 @@ pub(crate) fn read_unified_exec_enabled() -> Result<Option<bool>, String> {
     read_feature_flag("unified_exec")
 }
 
+pub(crate) fn read_apps_enabled() -> Result<Option<bool>, String> {
+    read_feature_flag("apps")
+}
+
 pub(crate) fn read_personality() -> Result<Option<String>, String> {
     let Some(root) = resolve_default_codex_home() else {
         return Ok(None);
@@ -49,6 +53,10 @@ pub(crate) fn write_collaboration_modes_enabled(enabled: bool) -> Result<(), Str
 
 pub(crate) fn write_unified_exec_enabled(enabled: bool) -> Result<(), String> {
     write_feature_flag("unified_exec", enabled)
+}
+
+pub(crate) fn write_apps_enabled(enabled: bool) -> Result<(), String> {
+    write_feature_flag("apps", enabled)
 }
 
 pub(crate) fn write_personality(personality: &str) -> Result<(), String> {

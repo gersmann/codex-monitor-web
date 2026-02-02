@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent } from "react";
 import type {
+  AppOption,
   ComposerEditorSettings,
   CustomPromptOption,
   DictationTranscript,
@@ -32,6 +33,7 @@ type ComposerProps = {
   onStop: () => void;
   canStop: boolean;
   disabled?: boolean;
+  appsEnabled: boolean;
   isProcessing: boolean;
   steerEnabled: boolean;
   collaborationModes: { id: string; label: string }[];
@@ -47,6 +49,7 @@ type ComposerProps = {
   accessMode: "read-only" | "current" | "full-access";
   onSelectAccessMode: (mode: "read-only" | "current" | "full-access") => void;
   skills: { name: string; description?: string }[];
+  apps: AppOption[];
   prompts: CustomPromptOption[];
   files: string[];
   contextUsage?: ThreadTokenUsage | null;
@@ -124,6 +127,7 @@ export function Composer({
   onStop,
   canStop,
   disabled = false,
+  appsEnabled,
   isProcessing,
   steerEnabled,
   collaborationModes,
@@ -139,6 +143,7 @@ export function Composer({
   accessMode,
   onSelectAccessMode,
   skills,
+  apps,
   prompts,
   files,
   contextUsage = null,
@@ -234,7 +239,9 @@ export function Composer({
     text,
     selectionStart,
     disabled,
+    appsEnabled,
     skills,
+    apps,
     prompts,
     files,
     textareaRef,

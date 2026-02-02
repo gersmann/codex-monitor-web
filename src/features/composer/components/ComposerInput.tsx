@@ -91,6 +91,12 @@ const suggestionIcon = (item: AutocompleteItem) => {
   if (isFileSuggestion(item)) {
     return FileText;
   }
+  if (item.id.startsWith("skill:")) {
+    return Wrench;
+  }
+  if (item.id.startsWith("app:")) {
+    return Plug;
+  }
   if (item.id === "review") {
     return Brain;
   }
@@ -98,6 +104,9 @@ const suggestionIcon = (item: AutocompleteItem) => {
     return GitFork;
   }
   if (item.id === "mcp") {
+    return Plug;
+  }
+  if (item.id === "apps") {
     return Plug;
   }
   if (item.id === "new") {
@@ -425,50 +434,58 @@ export function ComposerInput({
                 onConfirmCustom={onReviewPromptConfirmCustom}
               />
             ) : (
-              suggestions.map((item, index) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`composer-suggestion${
-                    index === highlightIndex ? " is-active" : ""
-                  }`}
-                  role="option"
-                  aria-selected={index === highlightIndex}
-                  ref={(node) => {
-                    suggestionRefs.current[index] = node;
-                  }}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => onSelectSuggestion(item)}
-                  onMouseEnter={() => onHighlightIndex(index)}
-                >
-                  {(() => {
-                    const Icon = suggestionIcon(item);
-                    const fileSuggestion = isFileSuggestion(item);
-                    const title = fileSuggestion ? fileTitle(item.label) : item.label;
-                    const description = fileSuggestion ? item.label : item.description;
-                    return (
-                      <span className="composer-suggestion-row">
-                        <span className="composer-suggestion-icon" aria-hidden>
-                          <Icon size={14} />
-                        </span>
-                        <span className="composer-suggestion-content">
-                          <span className="composer-suggestion-title">{title}</span>
-                          {description && (
-                            <span className="composer-suggestion-description">
-                              {description}
+              suggestions.map((item, index) => {
+                const prevGroup = suggestions[index - 1]?.group;
+                const showGroup = Boolean(item.group && item.group !== prevGroup);
+                return (
+                  <div key={item.id}>
+                    {showGroup && (
+                      <div className="composer-suggestion-section">{item.group}</div>
+                    )}
+                    <button
+                      type="button"
+                      className={`composer-suggestion${
+                        index === highlightIndex ? " is-active" : ""
+                      }`}
+                      role="option"
+                      aria-selected={index === highlightIndex}
+                      ref={(node) => {
+                        suggestionRefs.current[index] = node;
+                      }}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => onSelectSuggestion(item)}
+                      onMouseEnter={() => onHighlightIndex(index)}
+                    >
+                      {(() => {
+                        const Icon = suggestionIcon(item);
+                        const fileSuggestion = isFileSuggestion(item);
+                        const title = fileSuggestion ? fileTitle(item.label) : item.label;
+                        const description = fileSuggestion ? item.label : item.description;
+                        return (
+                          <span className="composer-suggestion-row">
+                            <span className="composer-suggestion-icon" aria-hidden>
+                              <Icon size={14} />
                             </span>
-                          )}
-                          {!fileSuggestion && item.hint && (
-                            <span className="composer-suggestion-description">
-                              {item.hint}
+                            <span className="composer-suggestion-content">
+                              <span className="composer-suggestion-title">{title}</span>
+                              {description && (
+                                <span className="composer-suggestion-description">
+                                  {description}
+                                </span>
+                              )}
+                              {!fileSuggestion && item.hint && (
+                                <span className="composer-suggestion-description">
+                                  {item.hint}
+                                </span>
+                              )}
                             </span>
-                          )}
-                        </span>
-                      </span>
-                    );
-                  })()}
-                </button>
-              ))
+                          </span>
+                        );
+                      })()}
+                    </button>
+                  </div>
+                );
+              })
             )}
           </div>
         )}

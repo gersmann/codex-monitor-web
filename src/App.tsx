@@ -47,6 +47,7 @@ import { useModels } from "./features/models/hooks/useModels";
 import { useCollaborationModes } from "./features/collaboration/hooks/useCollaborationModes";
 import { useCollaborationModeSelection } from "./features/collaboration/hooks/useCollaborationModeSelection";
 import { useSkills } from "./features/skills/hooks/useSkills";
+import { useApps } from "./features/apps/hooks/useApps";
 import { useCustomPrompts } from "./features/prompts/hooks/useCustomPrompts";
 import { useWorkspaceFiles } from "./features/workspaces/hooks/useWorkspaceFiles";
 import { useGitBranches } from "./features/git/hooks/useGitBranches";
@@ -446,6 +447,11 @@ function MainApp() {
     onFocusComposer: () => composerInputRef.current?.focus(),
   });
   const { skills } = useSkills({ activeWorkspace, onDebug: addDebugEntry });
+  const { apps } = useApps({
+    activeWorkspace,
+    enabled: appSettings.experimentalAppsEnabled,
+    onDebug: addDebugEntry,
+  });
   const {
     prompts,
     createPrompt,
@@ -629,6 +635,7 @@ function MainApp() {
     startFork,
     startReview,
     startResume,
+    startApps,
     startMcp,
     startStatus,
     reviewPrompt,
@@ -1053,6 +1060,7 @@ function MainApp() {
     isProcessing,
     isReviewing,
     steerEnabled: appSettings.experimentalSteerEnabled,
+    appsEnabled: appSettings.experimentalAppsEnabled,
     connectWorkspace,
     startThreadForWorkspace,
     sendUserMessage,
@@ -1060,6 +1068,7 @@ function MainApp() {
     startFork,
     startReview,
     startResume,
+    startApps,
     startMcp,
     startStatus,
   });
@@ -1938,6 +1947,8 @@ function MainApp() {
     accessMode,
     onSelectAccessMode: setAccessMode,
     skills,
+    appsEnabled: appSettings.experimentalAppsEnabled,
+    apps,
     prompts,
     files,
     onInsertComposerText: handleInsertComposerText,
@@ -2019,6 +2030,8 @@ function MainApp() {
       threadStatusById={threadStatusById}
       onSelectInstance={handleSelectWorkspaceInstance}
       skills={skills}
+      appsEnabled={appSettings.experimentalAppsEnabled}
+      apps={apps}
       prompts={prompts}
       files={files}
       dictationEnabled={appSettings.dictationEnabled && dictationReady}

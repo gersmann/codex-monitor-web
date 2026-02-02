@@ -607,6 +607,15 @@ impl DaemonState {
         codex_core::skills_list_core(&self.sessions, workspace_id).await
     }
 
+    async fn apps_list(
+        &self,
+        workspace_id: String,
+        cursor: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Value, String> {
+        codex_core::apps_list_core(&self.sessions, workspace_id, cursor, limit).await
+    }
+
     async fn respond_to_server_request(
         &self,
         workspace_id: String,
@@ -1167,6 +1176,12 @@ async fn handle_rpc_request(
         "skills_list" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             state.skills_list(workspace_id).await
+        }
+        "apps_list" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let cursor = parse_optional_string(&params, "cursor");
+            let limit = parse_optional_u32(&params, "limit");
+            state.apps_list(workspace_id, cursor, limit).await
         }
         "respond_to_server_request" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
