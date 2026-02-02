@@ -13,6 +13,7 @@ type ItemPayload = Record<string, unknown>;
 type SetupOverrides = {
   activeThreadId?: string | null;
   getCustomName?: (workspaceId: string, threadId: string) => string | undefined;
+  onReviewExited?: (workspaceId: string, threadId: string) => void;
 };
 
 const makeOptions = (overrides: SetupOverrides = {}) => {
@@ -35,6 +36,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
       safeMessageActivity,
       recordThreadActivity,
       applyCollabThreadLinks,
+      onReviewExited: overrides.onReviewExited,
     }),
   );
 
@@ -114,6 +116,23 @@ describe("useThreadItemEvents", () => {
       hasCustomName: false,
     });
     expect(safeMessageActivity).toHaveBeenCalled();
+  });
+
+  it("only triggers onReviewExited on completed exit events", () => {
+    const onReviewExited = vi.fn();
+    const { result } = makeOptions({ onReviewExited });
+    const item: ItemPayload = { type: "exitedReviewMode", id: "review-1" };
+
+    act(() => {
+      result.current.onItemStarted("ws-1", "thread-1", item);
+    });
+    expect(onReviewExited).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.onItemCompleted("ws-1", "thread-1", item);
+    });
+    expect(onReviewExited).toHaveBeenCalledTimes(1);
+    expect(onReviewExited).toHaveBeenCalledWith("ws-1", "thread-1");
   });
 
   it("marks processing and appends agent deltas", () => {

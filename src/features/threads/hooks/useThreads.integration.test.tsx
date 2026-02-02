@@ -495,6 +495,47 @@ describe("useThreads UX integration", () => {
     ).toBe(true);
   });
 
+  it("does not stack detached completion messages when exit is emitted multiple times", async () => {
+    vi.mocked(startReview).mockResolvedValue({
+      result: { reviewThreadId: "thread-review-1" },
+    });
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+        reviewDeliveryMode: "detached",
+      }),
+    );
+
+    act(() => {
+      result.current.setActiveThreadId("thread-parent");
+    });
+
+    await act(async () => {
+      await result.current.startReview("/review check this");
+    });
+
+    act(() => {
+      handlers?.onItemCompleted?.("ws-1", "thread-review-1", {
+        type: "exitedReviewMode",
+        id: "review-exit-1",
+      });
+      handlers?.onItemCompleted?.("ws-1", "thread-review-1", {
+        type: "exitedReviewMode",
+        id: "review-exit-1",
+      });
+    });
+
+    const notices = result.current.activeItems.filter(
+      (item) =>
+        item.kind === "message" &&
+        item.role === "assistant" &&
+        item.text.includes("[Open review thread](/thread/thread-review-1)"),
+    );
+    expect(notices).toHaveLength(1);
+  });
+
   it("does not create a parent link for inline reviews", async () => {
     vi.mocked(startReview).mockResolvedValue({
       result: { reviewThreadId: "thread-parent" },

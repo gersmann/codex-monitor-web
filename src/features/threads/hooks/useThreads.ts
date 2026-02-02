@@ -47,6 +47,7 @@ export function useThreads({
   const loadedThreadsRef = useRef<Record<string, boolean>>({});
   const replaceOnResumeRef = useRef<Record<string, boolean>>({});
   const pendingInterruptsRef = useRef<Set<string>>(new Set());
+  const detachedReviewNoticeRef = useRef<Set<string>>(new Set());
   const { approvalAllowlistRef, handleApprovalDecision, handleApprovalRemember } =
     useThreadApprovals({ dispatch, onDebug });
   const { handleUserInputSubmit } = useThreadUserInput({ dispatch });
@@ -160,11 +161,16 @@ export function useThreads({
         threadId: parentId,
         timestamp,
       });
-      dispatch({
-        type: "addAssistantMessage",
-        threadId: parentId,
-        text: `Detached review completed. [Open review thread](/thread/${threadId})`,
-      });
+      const noticeKey = `${parentId}->${threadId}`;
+      const alreadyNotified = detachedReviewNoticeRef.current.has(noticeKey);
+      if (!alreadyNotified) {
+        detachedReviewNoticeRef.current.add(noticeKey);
+        dispatch({
+          type: "addAssistantMessage",
+          threadId: parentId,
+          text: `Detached review completed. [Open review thread](/thread/${threadId})`,
+        });
+      }
       if (parentId !== activeThreadId) {
         dispatch({ type: "markUnread", threadId: parentId, hasUnread: true });
       }

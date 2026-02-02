@@ -52,7 +52,9 @@ export function useThreadItemEvents({
       } else if (itemType === "exitedReviewMode") {
         markReviewing(threadId, false);
         markProcessing(threadId, false);
-        onReviewExited?.(workspaceId, threadId);
+        if (!shouldMarkProcessing) {
+          onReviewExited?.(workspaceId, threadId);
+        }
       }
       const converted = buildConversationItem(item);
       if (converted) {
