@@ -266,6 +266,27 @@ pub(crate) async fn archive_thread(
 }
 
 #[tauri::command]
+pub(crate) async fn set_thread_name(
+    workspace_id: String,
+    thread_id: String,
+    name: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        return remote_backend::call_remote(
+            &*state,
+            app,
+            "set_thread_name",
+            json!({ "workspaceId": workspace_id, "threadId": thread_id, "name": name }),
+        )
+        .await;
+    }
+
+    codex_core::set_thread_name_core(&state.sessions, workspace_id, thread_id, name).await
+}
+
+#[tauri::command]
 pub(crate) async fn send_user_message(
     workspace_id: String,
     thread_id: String,

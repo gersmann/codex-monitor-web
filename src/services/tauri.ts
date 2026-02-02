@@ -740,6 +740,14 @@ export async function archiveThread(workspaceId: string, threadId: string) {
   return invoke<any>("archive_thread", { workspaceId, threadId });
 }
 
+export async function setThreadName(
+  workspaceId: string,
+  threadId: string,
+  name: string,
+) {
+  return invoke<any>("set_thread_name", { workspaceId, threadId, name });
+}
+
 export async function getCommitMessagePrompt(
   workspaceId: string,
 ): Promise<string> {

@@ -20,6 +20,7 @@ import {
   sendUserMessage,
   sendNotification,
   startReview,
+  setThreadName,
   writeGlobalAgentsMd,
   writeGlobalCodexConfigToml,
   writeAgentMd,
@@ -127,6 +128,19 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("fork_thread", {
       workspaceId: "ws-9",
       threadId: "thread-9",
+    });
+  });
+
+  it("maps workspaceId/threadId/name for set_thread_name", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await setThreadName("ws-9", "thread-9", "New Name");
+
+    expect(invokeMock).toHaveBeenCalledWith("set_thread_name", {
+      workspaceId: "ws-9",
+      threadId: "thread-9",
+      name: "New Name",
     });
   });
 

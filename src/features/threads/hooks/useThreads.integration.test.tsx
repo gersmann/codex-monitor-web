@@ -8,6 +8,7 @@ import {
   interruptTurn,
   listThreads,
   resumeThread,
+  setThreadName,
   startReview,
 } from "../../../services/tauri";
 import { useThreads } from "./useThreads";
@@ -32,6 +33,7 @@ vi.mock("../../../services/tauri", () => ({
   listThreads: vi.fn(),
   resumeThread: vi.fn(),
   archiveThread: vi.fn(),
+  setThreadName: vi.fn(),
   getAccountRateLimits: vi.fn(),
   getAccountInfo: vi.fn(),
   interruptTurn: vi.fn(),
@@ -619,6 +621,11 @@ describe("useThreads UX integration", () => {
     act(() => {
       result.current.renameThread("ws-1", "thread-b", "Custom Beta");
     });
+    expect(vi.mocked(setThreadName)).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-b",
+      "Custom Beta",
+    );
 
     await act(async () => {
       await result.current.listThreadsForWorkspace(workspace);

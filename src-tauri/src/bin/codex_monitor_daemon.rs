@@ -533,6 +533,15 @@ impl DaemonState {
         codex_core::archive_thread_core(&self.sessions, workspace_id, thread_id).await
     }
 
+    async fn set_thread_name(
+        &self,
+        workspace_id: String,
+        thread_id: String,
+        name: String,
+    ) -> Result<Value, String> {
+        codex_core::set_thread_name_core(&self.sessions, workspace_id, thread_id, name).await
+    }
+
     async fn send_user_message(
         &self,
         workspace_id: String,
@@ -1109,6 +1118,12 @@ async fn handle_rpc_request(
             let workspace_id = parse_string(&params, "workspaceId")?;
             let thread_id = parse_string(&params, "threadId")?;
             state.archive_thread(workspace_id, thread_id).await
+        }
+        "set_thread_name" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let thread_id = parse_string(&params, "threadId")?;
+            let name = parse_string(&params, "name")?;
+            state.set_thread_name(workspace_id, thread_id, name).await
         }
         "send_user_message" => {
             let workspace_id = parse_string(&params, "workspaceId")?;

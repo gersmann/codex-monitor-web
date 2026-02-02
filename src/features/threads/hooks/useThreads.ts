@@ -14,6 +14,7 @@ import { useThreadRateLimits } from "./useThreadRateLimits";
 import { useThreadSelectors } from "./useThreadSelectors";
 import { useThreadStatus } from "./useThreadStatus";
 import { useThreadUserInput } from "./useThreadUserInput";
+import { setThreadName as setThreadNameService } from "../../../services/tauri";
 import { makeCustomNameKey, saveCustomName } from "../utils/threadStorage";
 
 type UseThreadsOptions = {
@@ -402,8 +403,19 @@ export function useThreads({
       const key = makeCustomNameKey(workspaceId, threadId);
       customNamesRef.current[key] = newName;
       dispatch({ type: "setThreadName", workspaceId, threadId, name: newName });
+      void Promise.resolve(
+        setThreadNameService(workspaceId, threadId, newName),
+      ).catch((error) => {
+        onDebug?.({
+          id: `${Date.now()}-client-thread-rename-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread/name/set error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      });
     },
-    [customNamesRef, dispatch],
+    [customNamesRef, dispatch, onDebug],
   );
 
   return {

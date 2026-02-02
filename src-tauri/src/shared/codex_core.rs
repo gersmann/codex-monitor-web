@@ -126,6 +126,17 @@ pub(crate) async fn archive_thread_core(
     session.send_request("thread/archive", params).await
 }
 
+pub(crate) async fn set_thread_name_core(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    workspace_id: String,
+    thread_id: String,
+    name: String,
+) -> Result<Value, String> {
+    let session = get_session_clone(sessions, &workspace_id).await?;
+    let params = json!({ "threadId": thread_id, "name": name });
+    session.send_request("thread/name/set", params).await
+}
+
 pub(crate) async fn send_user_message_core(
     sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
     workspace_id: String,
