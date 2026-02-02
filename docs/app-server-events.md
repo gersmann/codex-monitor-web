@@ -1,4 +1,4 @@
-# App-Server Events Reference (Codex `d550fbf41afc09d7d7b5ac813aea38de07b2a73f`)
+# App-Server Events Reference (Codex `1644cbfc6dc23e08c18f0d851dca4f3f0f5e7434`)
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
@@ -43,16 +43,19 @@ These are the events explicitly routed in `useAppServerEvents.ts` (plus
 - `item/tool/requestUserInput`
 - `item/agentMessage/delta`
 - `turn/started`
+- `thread/started`
+- `codex/backgroundThread`
 - `error`
 - `turn/completed`
 - `thread/compacted`
 - `turn/plan/updated`
 - `turn/diff/updated`
 - `thread/tokenUsage/updated`
-- `thread/started`
 - `account/rateLimits/updated`
-- `item/completed`
+- `account/updated`
+- `account/login/completed`
 - `item/started`
+- `item/completed`
 - `item/reasoning/summaryTextDelta`
 - `item/reasoning/summaryPartAdded`
 - `item/reasoning/textDelta`
@@ -65,12 +68,13 @@ These are the events explicitly routed in `useAppServerEvents.ts` (plus
 Compared against Codex app-server protocol v2 notifications, the following
 events are currently not routed:
 
-- `account/updated`
-- `configWarning`
-- `deprecationNotice`
+- `thread/name/updated`
+- `rawResponseItem/completed`
+- `item/plan/delta`
 - `item/mcpToolCall/progress`
 - `mcpServer/oauthLogin/completed`
-- `rawResponseItem/completed`
+- `deprecationNotice`
+- `configWarning`
 - `windows/worldWritableWarning`
 
 ## Where To Look In ../codex
@@ -95,7 +99,7 @@ Use this workflow to update the lists above:
 2. List Codex v2 notification methods:
    - `rg -n \"=> \\\".*\\\" \\(v2::.*Notification\\)\" ../codex/codex-rs/app-server-protocol/src/protocol/common.rs`
 3. List CodexMonitor routed methods:
-   - `rg -n \"method === \\\"\" src/features/app/hooks/useAppServerEvents.ts`
+   - `rg -n \"method === \\\"|method\\.includes\\(\" src/features/app/hooks/useAppServerEvents.ts`
 4. Update the Supported and Missing sections.
 
 ## Schema Drift Workflow (Best)
