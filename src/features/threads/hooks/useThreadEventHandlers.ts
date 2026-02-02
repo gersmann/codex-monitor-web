@@ -82,6 +82,7 @@ export function useThreadEventHandlers({
 
   const {
     onThreadStarted,
+    onThreadNameUpdated,
     onTurnStarted,
     onTurnCompleted,
     onTurnPlanUpdated,
@@ -145,6 +146,7 @@ export function useThreadEventHandlers({
       onTerminalInteraction,
       onFileChangeOutputDelta,
       onThreadStarted,
+      onThreadNameUpdated,
       onTurnStarted,
       onTurnCompleted,
       onTurnPlanUpdated,
@@ -170,6 +172,7 @@ export function useThreadEventHandlers({
       onTerminalInteraction,
       onFileChangeOutputDelta,
       onThreadStarted,
+      onThreadNameUpdated,
       onTurnStarted,
       onTurnCompleted,
       onTurnPlanUpdated,

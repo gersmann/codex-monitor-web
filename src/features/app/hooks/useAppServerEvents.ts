@@ -23,6 +23,10 @@ type AgentCompleted = {
 type AppServerEventHandlers = {
   onWorkspaceConnected?: (workspaceId: string) => void;
   onThreadStarted?: (workspaceId: string, thread: Record<string, unknown>) => void;
+  onThreadNameUpdated?: (
+    workspaceId: string,
+    payload: { threadId: string; threadName: string | null },
+  ) => void;
   onBackgroundThreadAction?: (
     workspaceId: string,
     threadId: string,
@@ -180,6 +184,20 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         const threadId = String(thread?.id ?? "");
         if (thread && threadId) {
           handlers.onThreadStarted?.(workspace_id, thread);
+        }
+        return;
+      }
+
+      if (method === "thread/name/updated") {
+        const params = message.params as Record<string, unknown>;
+        const threadId = String(params.threadId ?? params.thread_id ?? "").trim();
+        const threadNameRaw = params.threadName ?? params.thread_name ?? null;
+        const threadName =
+          typeof threadNameRaw === "string" && threadNameRaw.trim().length > 0
+            ? threadNameRaw.trim()
+            : null;
+        if (threadId) {
+          handlers.onThreadNameUpdated?.(workspace_id, { threadId, threadName });
         }
         return;
       }

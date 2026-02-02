@@ -44,6 +44,7 @@ These are the events explicitly routed in `useAppServerEvents.ts` (plus
 - `item/agentMessage/delta`
 - `turn/started`
 - `thread/started`
+- `thread/name/updated`
 - `codex/backgroundThread`
 - `error`
 - `turn/completed`
@@ -68,7 +69,6 @@ These are the events explicitly routed in `useAppServerEvents.ts` (plus
 Compared against Codex app-server protocol v2 notifications, the following
 events are currently not routed:
 
-- `thread/name/updated`
 - `rawResponseItem/completed`
 - `item/plan/delta`
 - `item/mcpToolCall/progress`

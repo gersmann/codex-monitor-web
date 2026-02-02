@@ -155,6 +155,45 @@ describe("useThreadTurnEvents", () => {
     expect(safeMessageActivity).not.toHaveBeenCalled();
   });
 
+  it("applies thread name updates when no custom name exists", () => {
+    const { result, dispatch, getCustomName } = makeOptions();
+    getCustomName.mockReturnValue(undefined);
+
+    act(() => {
+      result.current.onThreadNameUpdated("ws-1", {
+        threadId: "thread-3",
+        threadName: "Server Rename",
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadName",
+      workspaceId: "ws-1",
+      threadId: "thread-3",
+      name: "Server Rename",
+    });
+  });
+
+  it("does not override custom thread names on thread name updated", () => {
+    const { result, dispatch, getCustomName } = makeOptions();
+    getCustomName.mockReturnValue("Custom Name");
+
+    act(() => {
+      result.current.onThreadNameUpdated("ws-1", {
+        threadId: "thread-3",
+        threadName: "Server Rename",
+      });
+    });
+
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setThreadName",
+        workspaceId: "ws-1",
+        threadId: "thread-3",
+      }),
+    );
+  });
+
   it("marks processing and active turn on turn started", () => {
     const { result, dispatch, markProcessing, setActiveTurnId } = makeOptions();
 

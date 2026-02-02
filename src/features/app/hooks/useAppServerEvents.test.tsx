@@ -48,6 +48,7 @@ describe("useAppServerEvents", () => {
       onAppServerEvent: vi.fn(),
       onWorkspaceConnected: vi.fn(),
       onThreadStarted: vi.fn(),
+      onThreadNameUpdated: vi.fn(),
       onBackgroundThreadAction: vi.fn(),
       onAgentMessageDelta: vi.fn(),
       onReasoningSummaryBoundary: vi.fn(),
@@ -126,6 +127,20 @@ describe("useAppServerEvents", () => {
     expect(handlers.onThreadStarted).toHaveBeenCalledWith("ws-1", {
       id: "thread-2",
       preview: "New thread",
+    });
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "thread/name/updated",
+          params: { threadId: "thread-2", threadName: "Renamed from server" },
+        },
+      });
+    });
+    expect(handlers.onThreadNameUpdated).toHaveBeenCalledWith("ws-1", {
+      threadId: "thread-2",
+      threadName: "Renamed from server",
     });
 
     act(() => {

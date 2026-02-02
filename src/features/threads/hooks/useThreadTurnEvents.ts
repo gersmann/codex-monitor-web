@@ -68,6 +68,28 @@ export function useThreadTurnEvents({
     [dispatch, getCustomName, isThreadHidden, recordThreadActivity, safeMessageActivity],
   );
 
+  const onThreadNameUpdated = useCallback(
+    (
+      workspaceId: string,
+      payload: { threadId: string; threadName: string | null },
+    ) => {
+      const { threadId, threadName } = payload;
+      if (!threadId || !threadName) {
+        return;
+      }
+      if (getCustomName(workspaceId, threadId)) {
+        return;
+      }
+      dispatch({
+        type: "setThreadName",
+        workspaceId,
+        threadId,
+        name: threadName,
+      });
+    },
+    [dispatch, getCustomName],
+  );
+
   const onTurnStarted = useCallback(
     (workspaceId: string, threadId: string, turnId: string) => {
       dispatch({
@@ -186,6 +208,7 @@ export function useThreadTurnEvents({
 
   return {
     onThreadStarted,
+    onThreadNameUpdated,
     onTurnStarted,
     onTurnCompleted,
     onTurnPlanUpdated,
