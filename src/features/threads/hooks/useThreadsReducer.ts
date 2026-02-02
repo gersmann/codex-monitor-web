@@ -199,6 +199,7 @@ export type ThreadAction =
       turnId: string;
     }
   | { type: "appendReasoningContent"; threadId: string; itemId: string; delta: string }
+  | { type: "appendPlanDelta"; threadId: string; itemId: string; delta: string }
   | { type: "appendToolOutput"; threadId: string; itemId: string; delta: string }
   | { type: "setThreads"; workspaceId: string; threads: ThreadSummary[] }
   | {
@@ -903,6 +904,44 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           "content" in base ? base.content : "",
           action.delta,
         ),
+      } as ConversationItem;
+      const next = index >= 0 ? [...list] : [...list, updated];
+      if (index >= 0) {
+        next[index] = updated;
+      }
+      return {
+        ...state,
+        itemsByThread: {
+          ...state.itemsByThread,
+          [action.threadId]: prepareThreadItems(next),
+        },
+      };
+    }
+    case "appendPlanDelta": {
+      const list = state.itemsByThread[action.threadId] ?? [];
+      const index = list.findIndex((entry) => entry.id === action.itemId);
+      const base =
+        index >= 0 && list[index].kind === "tool"
+          ? list[index]
+          : {
+              id: action.itemId,
+              kind: "tool",
+              toolType: "plan",
+              title: "Plan",
+              detail: "",
+              status: "in_progress",
+              output: "",
+            };
+      const existingOutput =
+        base.kind === "tool" ? (base.output ?? "") : "";
+      const updated: ConversationItem = {
+        ...(base as ConversationItem),
+        kind: "tool",
+        toolType: "plan",
+        title: "Plan",
+        detail: "Generating plan...",
+        status: "in_progress",
+        output: mergeStreamingText(existingOutput, action.delta),
       } as ConversationItem;
       const next = index >= 0 ? [...list] : [...list, updated];
       if (index >= 0) {

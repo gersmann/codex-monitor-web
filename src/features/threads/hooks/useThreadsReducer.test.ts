@@ -263,6 +263,24 @@ describe("threadReducer", () => {
     expect(items[0]?.id).toBe("review-mode");
   });
 
+  it("creates and appends plan deltas when no plan tool item exists", () => {
+    const next = threadReducer(initialState, {
+      type: "appendPlanDelta",
+      threadId: "thread-1",
+      itemId: "plan-1",
+      delta: "- Step 1",
+    });
+    const items = next.itemsByThread["thread-1"] ?? [];
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      id: "plan-1",
+      kind: "tool",
+      toolType: "plan",
+      title: "Plan",
+      output: "- Step 1",
+    });
+  });
+
   it("appends reasoning summary and content when missing", () => {
     const withSummary = threadReducer(initialState, {
       type: "appendReasoningSummary",
