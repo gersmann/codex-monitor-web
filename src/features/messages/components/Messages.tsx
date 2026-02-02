@@ -1277,7 +1277,7 @@ export const Messages = memo(function Messages({
     };
   }, [scrollKey, isThinking, isNearBottom]);
 
-  const groupedItems = buildToolGroups(visibleItems);
+  const groupedItems = useMemo(() => buildToolGroups(visibleItems), [visibleItems]);
 
   const hasActiveUserInputRequest = activeUserInputRequestId !== null;
   const userInputNode =

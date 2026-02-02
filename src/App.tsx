@@ -1471,6 +1471,18 @@ function MainApp() {
     ],
   );
 
+  const handleOpenThreadLink = useCallback(
+    (threadId: string) => {
+      if (!activeWorkspaceId) {
+        return;
+      }
+      exitDiffView();
+      resetPullRequestSelection();
+      setActiveThreadId(threadId, activeWorkspaceId);
+    },
+    [activeWorkspaceId, exitDiffView, resetPullRequestSelection, setActiveThreadId],
+  );
+
   const orderValue = (entry: WorkspaceInfo) =>
     typeof entry.settings.sortOrder === "number"
       ? entry.settings.sortOrder
@@ -1674,14 +1686,7 @@ function MainApp() {
       selectWorkspace(workspaceId);
       setActiveThreadId(threadId, workspaceId);
     },
-    onOpenThreadLink: (threadId) => {
-      if (!activeWorkspaceId) {
-        return;
-      }
-      exitDiffView();
-      resetPullRequestSelection();
-      setActiveThreadId(threadId, activeWorkspaceId);
-    },
+    onOpenThreadLink: handleOpenThreadLink,
     onDeleteThread: (workspaceId, threadId) => {
       removeThread(workspaceId, threadId);
       clearDraftForThread(threadId);
