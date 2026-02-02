@@ -2,13 +2,15 @@
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
+- Which app-server requests CodexMonitor sends right now.
 - Where to look in CodexMonitor to add support.
 - Where to look in `../codex` to compare event lists and find emitters.
 
 When updating this document:
 1. Update the Codex hash in the title using `git -C ../codex rev-parse HEAD`.
 2. Compare Codex events vs CodexMonitor routing.
-3. Update both the supported and missing lists below.
+3. Compare Codex request methods vs CodexMonitor outgoing request methods.
+4. Update supported and missing lists below.
 
 ## Where To Look In CodexMonitor
 
@@ -32,6 +34,12 @@ Item normalization / display shaping:
 
 UI rendering of items:
 - `src/features/messages/components/Messages.tsx`
+
+Primary outgoing request layer:
+- `src/services/tauri.ts`
+- `src-tauri/src/shared/codex_core.rs`
+- `src-tauri/src/codex/mod.rs`
+- `src-tauri/src/bin/codex_monitor_daemon.rs`
 
 ## Supported Events (Current)
 
@@ -77,6 +85,51 @@ events are currently not routed:
 - `configWarning`
 - `windows/worldWritableWarning`
 
+## Supported Requests (CodexMonitor -> App-Server, v2)
+
+These are v2 request methods CodexMonitor currently sends to Codex app-server:
+
+- `thread/start`
+- `thread/resume`
+- `thread/fork`
+- `thread/list`
+- `thread/archive`
+- `thread/name/set`
+- `turn/start`
+- `turn/interrupt`
+- `review/start`
+- `model/list`
+- `collaborationMode/list`
+- `mcpServerStatus/list`
+- `account/login/start`
+- `account/read`
+- `skills/list`
+- `app/list`
+
+Also used (legacy/non-v2 request method):
+- `account/rateLimits/read`
+
+## Missing Requests (Codex v2 Request Methods)
+
+Compared against Codex v2 request methods, CodexMonitor currently does not send:
+
+- `thread/unarchive`
+- `thread/rollback`
+- `thread/loaded/list`
+- `thread/read`
+- `skills/config/write`
+- `mcpServer/oauth/login`
+- `config/mcpServer/reload`
+- `account/login/cancel` (CodexMonitor currently sends a notification path for cancel)
+- `account/logout`
+- `feedback/upload`
+- `command/exec`
+- `config/read`
+- `config/value/write`
+- `config/batchWrite`
+- `configRequirements/read`
+- `account/chatgptAuthTokens/refresh`
+
 ## Where To Look In ../codex
 
 Start here for the authoritative v2 notification list:
@@ -101,6 +154,18 @@ Use this workflow to update the lists above:
 3. List CodexMonitor routed methods:
    - `rg -n \"method === \\\"|method\\.includes\\(\" src/features/app/hooks/useAppServerEvents.ts`
 4. Update the Supported and Missing sections.
+
+## Quick Request Comparison Workflow
+
+Use this workflow to update request support lists:
+
+1. Get the current Codex hash:
+   - `git -C ../codex rev-parse HEAD`
+2. List Codex request methods:
+   - `rg -n \"=> \\\".*\\\" \\{\" ../codex/codex-rs/app-server-protocol/src/protocol/common.rs`
+3. List CodexMonitor outgoing requests:
+   - `rg -n \"send_request\\(\\\"\" src-tauri/src -g\"*.rs\"`
+4. Update the Supported Requests and Missing Requests sections.
 
 ## Schema Drift Workflow (Best)
 
