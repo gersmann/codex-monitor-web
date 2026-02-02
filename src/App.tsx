@@ -254,6 +254,7 @@ function MainApp() {
     closeSettings,
   } = useSettingsModalState();
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const workspaceHomeTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const getWorkspaceName = useCallback(
     (workspaceId: string) => workspacesById.get(workspaceId)?.name,
@@ -1062,13 +1063,6 @@ function MainApp() {
     startStatus,
   });
 
-  const handleInsertComposerText = useComposerInsert({
-    activeThreadId,
-    draftText: activeDraft,
-    onDraftChange: handleDraftChange,
-    textareaRef: composerInputRef,
-  });
-
   const {
     runs: workspaceRuns,
     draft: workspacePrompt,
@@ -1092,6 +1086,16 @@ function MainApp() {
     startThreadForWorkspace,
     sendUserMessageToThread,
     onWorktreeCreated: handleWorktreeCreated,
+  });
+
+  const canInsertComposerText = showWorkspaceHome
+    ? Boolean(activeWorkspace)
+    : Boolean(activeThreadId);
+  const handleInsertComposerText = useComposerInsert({
+    isEnabled: canInsertComposerText,
+    draftText: showWorkspaceHome ? workspacePrompt : activeDraft,
+    onDraftChange: showWorkspaceHome ? setWorkspacePrompt : handleDraftChange,
+    textareaRef: showWorkspaceHome ? workspaceHomeTextareaRef : composerInputRef,
   });
   const RECENT_THREAD_LIMIT = 8;
   const { recentThreadInstances, recentThreadsUpdatedAt } = useMemo(() => {
@@ -1928,6 +1932,7 @@ function MainApp() {
     prompts,
     files,
     onInsertComposerText: handleInsertComposerText,
+    canInsertComposerText,
     textareaRef: composerInputRef,
     composerEditorSettings,
     composerEditorExpanded,
@@ -2018,6 +2023,7 @@ function MainApp() {
       onDismissDictationHint={clearDictationHint}
       dictationTranscript={dictationTranscript}
       onDictationTranscriptHandled={clearDictationTranscript}
+      textareaRef={workspaceHomeTextareaRef}
       agentMdContent={agentMdContent}
       agentMdExists={agentMdExists}
       agentMdTruncated={agentMdTruncated}
