@@ -18,6 +18,7 @@ import {
 import { expandCustomPromptText } from "../../../utils/customPrompts";
 import {
   asString,
+  extractReviewThreadId,
   extractRpcErrorMessage,
   parseReviewTarget,
 } from "../utils/threadNormalize";
@@ -441,6 +442,10 @@ export function useThreadMessaging({
           safeMessageActivity();
           return false;
         }
+        const reviewThreadId = extractReviewThreadId(response);
+        if (reviewThreadId && reviewThreadId !== threadId) {
+          updateThreadParent(threadId, [reviewThreadId]);
+        }
         return true;
       } catch (error) {
         markProcessing(threadId, false);
@@ -471,6 +476,7 @@ export function useThreadMessaging({
       safeMessageActivity,
       setActiveTurnId,
       reviewDeliveryMode,
+      updateThreadParent,
     ],
   );
 

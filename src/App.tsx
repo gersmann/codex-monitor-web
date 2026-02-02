@@ -1665,6 +1665,14 @@ function MainApp() {
       selectWorkspace(workspaceId);
       setActiveThreadId(threadId, workspaceId);
     },
+    onOpenThreadLink: (threadId) => {
+      if (!activeWorkspaceId) {
+        return;
+      }
+      exitDiffView();
+      resetPullRequestSelection();
+      setActiveThreadId(threadId, activeWorkspaceId);
+    },
     onDeleteThread: (workspaceId, threadId) => {
       removeThread(workspaceId, threadId);
       clearDraftForThread(threadId);

@@ -137,6 +137,52 @@ export function useThreads({
     [state.hiddenThreadIdsByWorkspace],
   );
 
+  const handleReviewExited = useCallback(
+    (workspaceId: string, threadId: string) => {
+      const parentId = state.threadParentById[threadId];
+      if (!parentId || parentId === threadId) {
+        return;
+      }
+      const parentStatus = state.threadStatusById[parentId];
+      if (!parentStatus?.isReviewing) {
+        return;
+      }
+
+      markReviewing(parentId, false);
+      markProcessing(parentId, false);
+      setActiveTurnId(parentId, null);
+
+      const timestamp = Date.now();
+      recordThreadActivity(workspaceId, parentId, timestamp);
+      dispatch({
+        type: "setThreadTimestamp",
+        workspaceId,
+        threadId: parentId,
+        timestamp,
+      });
+      dispatch({
+        type: "addAssistantMessage",
+        threadId: parentId,
+        text: `Detached review completed. [Open review thread](/thread/${threadId})`,
+      });
+      if (parentId !== activeThreadId) {
+        dispatch({ type: "markUnread", threadId: parentId, hasUnread: true });
+      }
+      safeMessageActivity();
+    },
+    [
+      activeThreadId,
+      dispatch,
+      markProcessing,
+      markReviewing,
+      recordThreadActivity,
+      safeMessageActivity,
+      setActiveTurnId,
+      state.threadParentById,
+      state.threadStatusById,
+    ],
+  );
+
   const threadHandlers = useThreadEventHandlers({
     activeThreadId,
     dispatch,
@@ -151,6 +197,7 @@ export function useThreads({
     onDebug,
     onWorkspaceConnected: handleWorkspaceConnected,
     applyCollabThreadLinks,
+    onReviewExited: handleReviewExited,
     approvalAllowlistRef,
     pendingInterruptsRef,
   });
