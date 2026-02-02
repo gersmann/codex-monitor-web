@@ -1414,9 +1414,9 @@ export const Messages = memo(function Messages({
         hasItems={items.length > 0}
         reasoningLabel={latestReasoningLabel}
       />
-      {!items.length && !userInputNode && (
+      {!items.length && !userInputNode && !isThinking && (
         <div className="empty messages-empty">
-          Start a thread and send a prompt to the agent.
+          {threadId ? "Send a prompt to the agent." : "Send a prompt to start a new agent."}
         </div>
       )}
       <div ref={bottomRef} />
