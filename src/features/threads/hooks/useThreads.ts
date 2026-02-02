@@ -1,4 +1,4 @@
-import { useCallback, useReducer, useRef } from "react";
+import { useCallback, useMemo, useReducer, useRef } from "react";
 import * as Sentry from "@sentry/react";
 import type { CustomPromptOption, DebugEntry, WorkspaceInfo } from "../../../types";
 import { useAppServerEvents } from "../../app/hooks/useAppServerEvents";
@@ -121,13 +121,21 @@ export function useThreads({
     [onWorkspaceConnected, refreshAccountRateLimits, refreshAccountInfo],
   );
 
+  const handleAccountUpdated = useCallback(
+    (workspaceId: string) => {
+      void refreshAccountRateLimits(workspaceId);
+      void refreshAccountInfo(workspaceId);
+    },
+    [refreshAccountRateLimits, refreshAccountInfo],
+  );
+
   const isThreadHidden = useCallback(
     (workspaceId: string, threadId: string) =>
       Boolean(state.hiddenThreadIdsByWorkspace[workspaceId]?.[threadId]),
     [state.hiddenThreadIdsByWorkspace],
   );
 
-  const handlers = useThreadEventHandlers({
+  const threadHandlers = useThreadEventHandlers({
     activeThreadId,
     dispatch,
     getCustomName,
@@ -144,6 +152,22 @@ export function useThreads({
     approvalAllowlistRef,
     pendingInterruptsRef,
   });
+
+  const handleAccountLoginCompleted = useCallback(
+    (workspaceId: string) => {
+      handleAccountUpdated(workspaceId);
+    },
+    [handleAccountUpdated],
+  );
+
+  const handlers = useMemo(
+    () => ({
+      ...threadHandlers,
+      onAccountUpdated: handleAccountUpdated,
+      onAccountLoginCompleted: handleAccountLoginCompleted,
+    }),
+    [threadHandlers, handleAccountUpdated, handleAccountLoginCompleted],
+  );
 
   useAppServerEvents(handlers);
 
