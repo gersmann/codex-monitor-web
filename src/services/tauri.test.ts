@@ -38,6 +38,13 @@ vi.mock("@tauri-apps/plugin-notification", () => ({
 describe("tauri invoke wrappers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === "is_macos_debug_build") {
+        return false;
+      }
+      return undefined;
+    });
   });
 
   it("uses codex_bin for addWorkspace", async () => {
@@ -378,6 +385,7 @@ describe("tauri invoke wrappers", () => {
     const isPermissionGrantedMock = vi.mocked(notification.isPermissionGranted);
     const requestPermissionMock = vi.mocked(notification.requestPermission);
     const sendNotificationMock = vi.mocked(notification.sendNotification);
+    const invokeMock = vi.mocked(invoke);
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     isPermissionGrantedMock.mockResolvedValueOnce(false);
     requestPermissionMock.mockResolvedValueOnce("denied");
@@ -391,6 +399,49 @@ describe("tauri invoke wrappers", () => {
       "Notification permission not granted.",
       { permission: "denied" },
     );
+    expect(invokeMock).toHaveBeenCalledWith("send_notification_fallback", {
+      title: "Denied",
+      body: "Nope",
+    });
     warnSpy.mockRestore();
+  });
+
+  it("falls back when the notification plugin throws", async () => {
+    const isPermissionGrantedMock = vi.mocked(notification.isPermissionGranted);
+    const invokeMock = vi.mocked(invoke);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    isPermissionGrantedMock.mockRejectedValueOnce(new Error("boom"));
+
+    await sendNotification("Plugin", "Failed");
+
+    expect(invokeMock).toHaveBeenCalledWith("send_notification_fallback", {
+      title: "Plugin",
+      body: "Failed",
+    });
+    warnSpy.mockRestore();
+  });
+
+  it("prefers the fallback on macOS debug builds", async () => {
+    const isPermissionGrantedMock = vi.mocked(notification.isPermissionGranted);
+    const invokeMock = vi.mocked(invoke);
+
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === "is_macos_debug_build") {
+        return true;
+      }
+      if (command === "send_notification_fallback") {
+        return undefined;
+      }
+      return undefined;
+    });
+
+    await sendNotification("Dev", "Fallback");
+
+    expect(invokeMock).toHaveBeenCalledWith("is_macos_debug_build");
+    expect(invokeMock).toHaveBeenCalledWith("send_notification_fallback", {
+      title: "Dev",
+      body: "Fallback",
+    });
+    expect(isPermissionGrantedMock).not.toHaveBeenCalled();
   });
 });
