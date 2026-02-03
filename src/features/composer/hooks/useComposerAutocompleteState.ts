@@ -224,6 +224,9 @@ export function useComposerAutocompleteState({
     selectionStart,
     triggers,
   });
+  const autocompleteAnchorIndex = autocompleteRange
+    ? Math.max(0, autocompleteRange.start - 1)
+    : null;
 
   const applyAutocomplete = useCallback(
     (item: AutocompleteItem) => {
@@ -374,6 +377,7 @@ export function useComposerAutocompleteState({
   return {
     isAutocompleteOpen,
     autocompleteMatches,
+    autocompleteAnchorIndex,
     highlightIndex,
     setHighlightIndex,
     applyAutocomplete,

@@ -206,6 +206,7 @@ export function WorkspaceHome({
   const {
     isAutocompleteOpen,
     autocompleteMatches,
+    autocompleteAnchorIndex,
     highlightIndex,
     setHighlightIndex,
     applyAutocomplete,
@@ -264,7 +265,11 @@ export function WorkspaceHome({
       return;
     }
     const cursor =
-      textarea.selectionStart ?? selectionStart ?? prompt.length ?? 0;
+      autocompleteAnchorIndex ??
+      textarea.selectionStart ??
+      selectionStart ??
+      prompt.length ??
+      0;
     const caret = getCaretPosition(textarea, cursor);
     if (!caret) {
       return;
@@ -283,7 +288,7 @@ export function WorkspaceHome({
       bottom: "auto",
       right: "auto",
     });
-  }, [isAutocompleteOpen, prompt, selectionStart, textareaRef]);
+  }, [autocompleteAnchorIndex, isAutocompleteOpen, prompt, selectionStart, textareaRef]);
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
