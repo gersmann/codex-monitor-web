@@ -172,6 +172,10 @@ fn upstream_remote_and_branch(repo_root: &Path) -> Result<Option<(String, String
 async fn push_with_upstream(repo_root: &Path) -> Result<(), String> {
     let upstream = upstream_remote_and_branch(repo_root)?;
     if let Some((remote, branch)) = upstream {
+        // Refresh remote-tracking refs before push so ahead/behind state is current
+        // and we can surface pull/sync requirements before attempting the push.
+        // This is best-effort because some setups intentionally allow push but not fetch.
+        let _ = run_git_command(repo_root, &["fetch", "--prune", remote.as_str()]).await;
         let refspec = format!("HEAD:{branch}");
         return run_git_command(
             repo_root,
