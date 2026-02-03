@@ -506,11 +506,11 @@ export function Sidebar({
                   const nextCursor =
                     threadListCursorByWorkspace[entry.id] ?? null;
                   const showThreadList =
-                    !isCollapsed && (threads.length > 0 || Boolean(nextCursor));
+                    threads.length > 0 || Boolean(nextCursor);
                   const isLoadingThreads =
                     threadListLoadingByWorkspace[entry.id] ?? false;
                   const showThreadLoader =
-                    !isCollapsed && isLoadingThreads && threads.length === 0;
+                    isLoadingThreads && threads.length === 0;
                   const isPaging = threadListPagingByWorkspace[entry.id] ?? false;
                   const worktrees = worktreesByParent.get(entry.id) ?? [];
                   const addMenuOpen = addMenuAnchor?.workspaceId === entry.id;
@@ -583,7 +583,7 @@ export function Sidebar({
                           </div>,
                           document.body,
                         )}
-                      {!isCollapsed && isDraftNewAgent && (
+                      {isDraftNewAgent && (
                         <div
                           className={`thread-row thread-row-draft${
                             isDraftRowActive ? " active" : ""
@@ -602,7 +602,7 @@ export function Sidebar({
                           <span className="thread-name">New Agent</span>
                         </div>
                       )}
-                      {!isCollapsed && worktrees.length > 0 && (
+                      {worktrees.length > 0 && (
                         <WorktreeSection
                           worktrees={worktrees}
                           deletingWorktreeIds={deletingWorktreeIds}

@@ -25,6 +25,7 @@ export function WorktreeCard({
 }: WorktreeCardProps) {
   const worktreeCollapsed = worktree.settings.sidebarCollapsed;
   const worktreeBranch = worktree.worktree?.branch ?? "";
+  const contentCollapsedClass = worktreeCollapsed ? " collapsed" : "";
 
   return (
     <div className={`worktree-card${isDeleting ? " deleting" : ""}`}>
@@ -89,7 +90,13 @@ export function WorktreeCard({
           )}
         </div>
       </div>
-      {children}
+      <div
+        className={`worktree-card-content${contentCollapsedClass}`}
+        aria-hidden={worktreeCollapsed}
+        inert={worktreeCollapsed ? true : undefined}
+      >
+        <div className="worktree-card-content-inner">{children}</div>
+      </div>
     </div>
   );
 }

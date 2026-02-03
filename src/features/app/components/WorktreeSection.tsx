@@ -90,18 +90,14 @@ export function WorktreeSection({
       <div className="worktree-list">
         {worktrees.map((worktree) => {
           const worktreeThreads = threadsByWorkspace[worktree.id] ?? [];
-          const worktreeCollapsed = worktree.settings.sidebarCollapsed;
           const isLoadingWorktreeThreads =
             threadListLoadingByWorkspace[worktree.id] ?? false;
           const showWorktreeLoader =
-            !worktreeCollapsed &&
-            isLoadingWorktreeThreads &&
-            worktreeThreads.length === 0;
+            isLoadingWorktreeThreads && worktreeThreads.length === 0;
           const worktreeNextCursor =
             threadListCursorByWorkspace[worktree.id] ?? null;
           const showWorktreeThreadList =
-            !worktreeCollapsed &&
-            (worktreeThreads.length > 0 || Boolean(worktreeNextCursor));
+            worktreeThreads.length > 0 || Boolean(worktreeNextCursor);
           const isWorktreePaging =
             threadListPagingByWorkspace[worktree.id] ?? false;
           const isWorktreeExpanded = expandedWorkspaces.has(worktree.id);
