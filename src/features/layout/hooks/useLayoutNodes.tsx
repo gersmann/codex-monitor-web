@@ -339,6 +339,7 @@ type LayoutNodesOptions = {
   onQueue: (text: string, images: string[]) => void | Promise<void>;
   onStop: () => void;
   canStop: boolean;
+  onFileAutocompleteActiveChange?: (active: boolean) => void;
   isReviewing: boolean;
   isProcessing: boolean;
   steerEnabled: boolean;
@@ -547,6 +548,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       onStop={options.onStop}
       canStop={options.canStop}
       disabled={options.isReviewing}
+      onFileAutocompleteActiveChange={options.onFileAutocompleteActiveChange}
       contextUsage={options.activeTokenUsage}
       queuedMessages={options.activeQueue}
       sendLabel={
