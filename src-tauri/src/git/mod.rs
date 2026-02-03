@@ -182,6 +182,21 @@ async fn push_with_upstream(repo_root: &Path) -> Result<(), String> {
     run_git_command(repo_root, &["push"]).await
 }
 
+async fn pull_with_default_strategy(repo_root: &Path) -> Result<(), String> {
+    // Explicit strategy avoids "Need to specify how to reconcile divergent branches"
+    // on repos where pull.rebase / pull.ff is not configured.
+    match run_git_command(repo_root, &["pull", "--rebase", "--autostash"]).await {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            let lower = err.to_lowercase();
+            if lower.contains("unknown option") && lower.contains("autostash") {
+                return run_git_command(repo_root, &["pull", "--rebase"]).await;
+            }
+            Err(err)
+        }
+    }
+}
+
 fn status_for_index(status: Status) -> Option<&'static str> {
     if status.contains(Status::INDEX_NEW) {
         Some("A")
@@ -689,7 +704,7 @@ pub(crate) async fn pull_git(
         .clone();
 
     let repo_root = resolve_git_root(&entry)?;
-    run_git_command(&repo_root, &["pull"]).await
+    pull_with_default_strategy(&repo_root).await
 }
 
 #[tauri::command]
@@ -705,7 +720,7 @@ pub(crate) async fn sync_git(
 
     let repo_root = resolve_git_root(&entry)?;
     // Pull first, then push (like VSCode sync)
-    run_git_command(&repo_root, &["pull"]).await?;
+    pull_with_default_strategy(&repo_root).await?;
     push_with_upstream(&repo_root).await
 }
 
