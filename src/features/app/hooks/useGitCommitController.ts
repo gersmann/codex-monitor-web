@@ -3,6 +3,7 @@ import type { WorkspaceInfo } from "../../../types";
 import {
   commitGit,
   generateCommitMessage,
+  fetchGit,
   pullGit,
   pushGit,
   stageGitAll,
@@ -28,10 +29,12 @@ type GitCommitController = {
   commitMessageError: string | null;
   commitLoading: boolean;
   pullLoading: boolean;
+  fetchLoading: boolean;
   pushLoading: boolean;
   syncLoading: boolean;
   commitError: string | null;
   pullError: string | null;
+  fetchError: string | null;
   pushError: string | null;
   syncError: string | null;
   hasWorktreeChanges: boolean;
@@ -41,6 +44,7 @@ type GitCommitController = {
   onCommitAndPush: () => Promise<void>;
   onCommitAndSync: () => Promise<void>;
   onPull: () => Promise<void>;
+  onFetch: () => Promise<void>;
   onPush: () => Promise<void>;
   onSync: () => Promise<void>;
 };
@@ -60,10 +64,12 @@ export function useGitCommitController({
   );
   const [commitLoading, setCommitLoading] = useState(false);
   const [pullLoading, setPullLoading] = useState(false);
+  const [fetchLoading, setFetchLoading] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [pullError, setPullError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [pushError, setPushError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
@@ -279,6 +285,23 @@ export function useGitCommitController({
     }
   }, [activeWorkspace, pushLoading, refreshGitLog, refreshGitStatus]);
 
+  const handleFetch = useCallback(async () => {
+    if (!activeWorkspace || fetchLoading) {
+      return;
+    }
+    setFetchLoading(true);
+    setFetchError(null);
+    try {
+      await fetchGit(activeWorkspace.id);
+      refreshGitStatus();
+      refreshGitLog?.();
+    } catch (error) {
+      setFetchError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setFetchLoading(false);
+    }
+  }, [activeWorkspace, fetchLoading, refreshGitLog, refreshGitStatus]);
+
   const handleSync = useCallback(async () => {
     if (!activeWorkspace || syncLoading) {
       return;
@@ -305,10 +328,12 @@ export function useGitCommitController({
     commitMessageError,
     commitLoading,
     pullLoading,
+    fetchLoading,
     pushLoading,
     syncLoading,
     commitError,
     pullError,
+    fetchError,
     pushError,
     syncError,
     hasWorktreeChanges,
@@ -318,6 +343,7 @@ export function useGitCommitController({
     onCommitAndPush: handleCommitAndPush,
     onCommitAndSync: handleCommitAndSync,
     onPull: handlePull,
+    onFetch: handleFetch,
     onPush: handlePush,
     onSync: handleSync,
   };

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import * as notification from "@tauri-apps/plugin-notification";
 import {
   addWorkspace,
+  fetchGit,
   forkThread,
   getGitHubIssues,
   getGitLog,
@@ -165,6 +166,17 @@ describe("tauri invoke wrappers", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("stage_git_all", {
       workspaceId: "ws-6",
+    });
+  });
+
+  it("invokes fetch_git", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await fetchGit("ws-7");
+
+    expect(invokeMock).toHaveBeenCalledWith("fetch_git", {
+      workspaceId: "ws-7",
     });
   });
 

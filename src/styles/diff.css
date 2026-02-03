@@ -136,6 +136,43 @@
   margin-bottom: 4px;
 }
 
+.diff-branch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.diff-branch-row .diff-branch {
+  margin-bottom: 0;
+}
+
+.diff-branch-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.diff-branch-refresh:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+.diff-branch-refresh:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .git-root-current {
   display: flex;
   align-items: center;
@@ -1116,6 +1153,11 @@
 .push-sync-buttons {
   display: flex;
   gap: 8px;
+}
+
+.push-sync-buttons > button:only-child {
+  flex: 1;
+  width: 100%;
 }
 
 .push-button {

@@ -306,14 +306,17 @@ type LayoutNodesOptions = {
   onCommitAndPush?: () => void | Promise<void>;
   onCommitAndSync?: () => void | Promise<void>;
   onPull?: () => void | Promise<void>;
+  onFetch?: () => void | Promise<void>;
   onPush?: () => void | Promise<void>;
   onSync?: () => void | Promise<void>;
   commitLoading?: boolean;
   pullLoading?: boolean;
+  fetchLoading?: boolean;
   pushLoading?: boolean;
   syncLoading?: boolean;
   commitError?: string | null;
   pullError?: string | null;
+  fetchError?: string | null;
   pushError?: string | null;
   syncError?: string | null;
   commitsAhead?: number;
@@ -842,14 +845,17 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         onCommitAndPush={options.onCommitAndPush}
         onCommitAndSync={options.onCommitAndSync}
         onPull={options.onPull}
+        onFetch={options.onFetch}
         onPush={options.onPush}
         onSync={options.onSync}
         commitLoading={options.commitLoading}
         pullLoading={options.pullLoading}
+        fetchLoading={options.fetchLoading}
         pushLoading={options.pushLoading}
         syncLoading={options.syncLoading}
         commitError={options.commitError}
         pullError={options.pullError}
+        fetchError={options.fetchError}
         pushError={options.pushError}
         syncError={options.syncError}
         commitsAhead={options.commitsAhead}

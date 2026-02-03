@@ -186,6 +186,14 @@ async fn push_with_upstream(repo_root: &Path) -> Result<(), String> {
     run_git_command(repo_root, &["push"]).await
 }
 
+async fn fetch_with_default_remote(repo_root: &Path) -> Result<(), String> {
+    let upstream = upstream_remote_and_branch(repo_root)?;
+    if let Some((remote, _)) = upstream {
+        return run_git_command(repo_root, &["fetch", "--prune", remote.as_str()]).await;
+    }
+    run_git_command(repo_root, &["fetch", "--prune"]).await
+}
+
 async fn pull_with_default_strategy(repo_root: &Path) -> Result<(), String> {
     fn autostash_unsupported(lower: &str) -> bool {
         lower.contains("unknown option") && lower.contains("autostash")
@@ -738,6 +746,21 @@ pub(crate) async fn pull_git(
 
     let repo_root = resolve_git_root(&entry)?;
     pull_with_default_strategy(&repo_root).await
+}
+
+#[tauri::command]
+pub(crate) async fn fetch_git(
+    workspace_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let workspaces = state.workspaces.lock().await;
+    let entry = workspaces
+        .get(&workspace_id)
+        .ok_or("workspace not found")?
+        .clone();
+
+    let repo_root = resolve_git_root(&entry)?;
+    fetch_with_default_remote(&repo_root).await
 }
 
 #[tauri::command]

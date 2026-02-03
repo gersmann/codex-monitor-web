@@ -403,6 +403,10 @@ export async function pullGit(workspaceId: string): Promise<void> {
   return invoke("pull_git", { workspaceId });
 }
 
+export async function fetchGit(workspaceId: string): Promise<void> {
+  return invoke("fetch_git", { workspaceId });
+}
+
 export async function syncGit(workspaceId: string): Promise<void> {
   return invoke("sync_git", { workspaceId });
 }

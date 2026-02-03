@@ -13,6 +13,7 @@ import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import Minus from "lucide-react/dist/esm/icons/minus";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
+import RotateCw from "lucide-react/dist/esm/icons/rotate-cw";
 import ScrollText from "lucide-react/dist/esm/icons/scroll-text";
 import Search from "lucide-react/dist/esm/icons/search";
 import Upload from "lucide-react/dist/esm/icons/upload";
@@ -100,14 +101,17 @@ type GitDiffPanelProps = {
   onCommitAndPush?: () => void | Promise<void>;
   onCommitAndSync?: () => void | Promise<void>;
   onPull?: () => void | Promise<void>;
+  onFetch?: () => void | Promise<void>;
   onPush?: () => void | Promise<void>;
   onSync?: () => void | Promise<void>;
   commitLoading?: boolean;
   pullLoading?: boolean;
+  fetchLoading?: boolean;
   pushLoading?: boolean;
   syncLoading?: boolean;
   commitError?: string | null;
   pullError?: string | null;
+  fetchError?: string | null;
   pushError?: string | null;
   syncError?: string | null;
   // For showing push button when there are commits to push
@@ -678,14 +682,17 @@ export function GitDiffPanel({
   onCommitAndPush: _onCommitAndPush,
   onCommitAndSync: _onCommitAndSync,
   onPull,
+  onFetch,
   onPush,
   onSync: _onSync,
   commitLoading = false,
   pullLoading = false,
+  fetchLoading = false,
   pushLoading = false,
   syncLoading: _syncLoading = false,
   commitError = null,
   pullError = null,
+  fetchError = null,
   pushError = null,
   syncError = null,
   commitsAhead = 0,
@@ -1076,6 +1083,7 @@ export function GitDiffPanel({
         ? [
             { key: "push", message: pushErrorMessage, action: pushErrorAction },
             { key: "pull", message: pullError },
+            { key: "fetch", message: fetchError },
             { key: "commit", message: commitError },
             { key: "sync", message: syncError },
             { key: "commitMessage", message: commitMessageError },
@@ -1099,6 +1107,7 @@ export function GitDiffPanel({
     commitError,
     commitMessageError,
     error,
+    fetchError,
     gitRootScanError,
     issuesError,
     logError,
@@ -1221,7 +1230,23 @@ export function GitDiffPanel({
         </>
       )}
       {mode === "diff" || mode === "log" ? (
-        <div className="diff-branch">{branchName || "unknown"}</div>
+        <div className="diff-branch-row">
+          <div className="diff-branch">{branchName || "unknown"}</div>
+          <button
+            type="button"
+            className="diff-branch-refresh"
+            onClick={() => void onFetch?.()}
+            disabled={!onFetch || fetchLoading}
+            title={fetchLoading ? "Fetching remote..." : "Fetch remote"}
+            aria-label={fetchLoading ? "Fetching remote" : "Fetch remote"}
+          >
+            {fetchLoading ? (
+              <span className="git-panel-spinner" aria-hidden />
+            ) : (
+              <RotateCw size={12} aria-hidden />
+            )}
+          </button>
+        </div>
       ) : null}
       {mode !== "issues" && hasGitRoot && (
         <div className="git-root-current">

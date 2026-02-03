@@ -124,6 +124,7 @@ pub fn run() {
             git::commit_git,
             git::push_git,
             git::pull_git,
+            git::fetch_git,
             git::sync_git,
             git::get_github_issues,
             git::get_github_pull_requests,
