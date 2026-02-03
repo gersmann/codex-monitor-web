@@ -22,6 +22,7 @@ import { useCollapsedGroups } from "../hooks/useCollapsedGroups";
 import { useSidebarMenus } from "../hooks/useSidebarMenus";
 import { useSidebarScrollFade } from "../hooks/useSidebarScrollFade";
 import { useThreadRows } from "../hooks/useThreadRows";
+import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { getUsageLabels } from "../utils/usageLabels";
 import { formatRelativeTimeShort } from "../../../utils/time";
 
@@ -147,7 +148,6 @@ export function Sidebar({
     new Set<string>(),
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [addMenuAnchor, setAddMenuAnchor] = useState<{
     workspaceId: string;
@@ -180,6 +180,7 @@ export function Sidebar({
     creditsLabel,
     showWeekly,
   } = getUsageLabels(accountRateLimits, usageShowRemaining);
+  const debouncedQuery = useDebouncedValue(searchQuery, 150);
   const normalizedQuery = debouncedQuery.trim().toLowerCase();
 
   const isWorkspaceMatch = useCallback(
@@ -384,13 +385,6 @@ export function Sidebar({
       setSearchQuery("");
     }
   }, [isSearchOpen, searchQuery]);
-
-  useEffect(() => {
-    const handle = window.setTimeout(() => {
-      setDebouncedQuery(searchQuery);
-    }, 150);
-    return () => window.clearTimeout(handle);
-  }, [searchQuery]);
 
   return (
     <aside

@@ -7,6 +7,21 @@ type UseWorkspaceFilesOptions = {
   onDebug?: (entry: DebugEntry) => void;
 };
 
+function areStringArraysEqual(a: string[], b: string[]) {
+  if (a === b) {
+    return true;
+  }
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function useWorkspaceFiles({
   activeWorkspace,
   onDebug,
@@ -47,7 +62,8 @@ export function useWorkspaceFiles({
         payload: response,
       });
       if (requestWorkspaceId === workspaceId) {
-        setFiles(Array.isArray(response) ? response : []);
+        const nextFiles = Array.isArray(response) ? response : [];
+        setFiles((prev) => (areStringArraysEqual(prev, nextFiles) ? prev : nextFiles));
         lastFetchedWorkspaceId.current = requestWorkspaceId;
       }
     } catch (error) {

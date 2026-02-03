@@ -1,13 +1,7 @@
-import {
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { createPortal } from "react-dom";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
@@ -30,6 +24,7 @@ import Search from "lucide-react/dist/esm/icons/search";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
 import { readWorkspaceFile } from "../../../services/tauri";
 import type { OpenAppTarget } from "../../../types";
+import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { languageFromPath } from "../../../utils/syntax";
 import { FilePreviewPopover } from "./FilePreviewPopover";
 
@@ -63,7 +58,22 @@ type FileTreeBuildNode = {
   children: Map<string, FileTreeBuildNode>;
 };
 
-function buildTree(paths: string[]): { nodes: FileTreeNode[]; folderPaths: Set<string> } {
+type FileEntry = {
+  path: string;
+  lower: string;
+  segments: string[];
+};
+
+type FileTreeRowEntry = {
+  node: FileTreeNode;
+  depth: number;
+  isFolder: boolean;
+  isExpanded: boolean;
+};
+
+const FILE_TREE_ROW_HEIGHT = 28;
+
+function buildTree(entries: FileEntry[]): { nodes: FileTreeNode[]; folderPaths: Set<string> } {
   const root = new Map<string, FileTreeBuildNode>();
   const addNode = (
     map: Map<string, FileTreeBuildNode>,
@@ -88,12 +98,14 @@ function buildTree(paths: string[]): { nodes: FileTreeNode[]; folderPaths: Set<s
     return node;
   };
 
-  paths.forEach((path) => {
-    const parts = path.split("/").filter(Boolean);
+  entries.forEach(({ segments }) => {
+    if (!segments.length) {
+      return;
+    }
     let currentMap = root;
     let currentPath = "";
-    parts.forEach((segment, index) => {
-      const isFile = index === parts.length - 1;
+    segments.forEach((segment, index) => {
+      const isFile = index === segments.length - 1;
       const nextPath = currentPath ? `${currentPath}/${segment}` : segment;
       const node = addNode(currentMap, segment, nextPath, isFile ? "file" : "folder");
       if (!isFile) {
@@ -258,31 +270,41 @@ export function FileTreePanel({
   const dragMovedRef = useRef(false);
   const hasManualToggle = useRef(false);
   const showLoading = isLoading && files.length === 0;
-  const deferredQuery = useDeferredValue(query);
-  const normalizedQuery = deferredQuery.trim().toLowerCase();
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const debouncedQuery = useDebouncedValue(query, 150);
+  const normalizedQuery = debouncedQuery.trim().toLowerCase();
   const modifiedPathSet = useMemo(() => new Set(modifiedFiles), [modifiedFiles]);
-  const sourceFiles = useMemo(
+  const fileEntries = useMemo(
+    () =>
+      files.map((path) => ({
+        path,
+        lower: path.toLowerCase(),
+        segments: path.split("/").filter(Boolean),
+      })),
+    [files],
+  );
+  const sourceEntries = useMemo(
     () =>
       filterMode === "modified"
-        ? files.filter((path) => modifiedPathSet.has(path))
-        : files,
-    [files, filterMode, modifiedPathSet],
+        ? fileEntries.filter((entry) => modifiedPathSet.has(entry.path))
+        : fileEntries,
+    [fileEntries, filterMode, modifiedPathSet],
   );
   const previewKind = useMemo(
     () => (previewPath && isImagePath(previewPath) ? "image" : "text"),
     [previewPath],
   );
 
-  const visibleFiles = useMemo(() => {
+  const visibleEntries = useMemo(() => {
     if (!normalizedQuery) {
-      return sourceFiles;
+      return sourceEntries;
     }
-    return sourceFiles.filter((path) => path.toLowerCase().includes(normalizedQuery));
-  }, [sourceFiles, normalizedQuery]);
+    return sourceEntries.filter((entry) => entry.lower.includes(normalizedQuery));
+  }, [sourceEntries, normalizedQuery]);
 
   const { nodes, folderPaths } = useMemo(
-    () => buildTree(visibleFiles),
-    [visibleFiles],
+    () => buildTree(visibleEntries),
+    [visibleEntries],
   );
 
   const visibleFolderPaths = folderPaths;
@@ -467,6 +489,28 @@ export function FileTreePanel({
     };
   }, [previewKind, previewPath, workspaceId]);
 
+  const flatNodes = useMemo(() => {
+    const rows: FileTreeRowEntry[] = [];
+    const walk = (node: FileTreeNode, depth: number) => {
+      const isFolder = node.type === "folder";
+      const isExpanded = isFolder && expandedFolders.has(node.path);
+      rows.push({ node, depth, isFolder, isExpanded });
+      if (isFolder && isExpanded) {
+        node.children.forEach((child) => walk(child, depth + 1));
+      }
+    };
+    nodes.forEach((node) => walk(node, 0));
+    return rows;
+  }, [nodes, expandedFolders]);
+
+  const rowVirtualizer = useVirtualizer({
+    count: flatNodes.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => FILE_TREE_ROW_HEIGHT,
+    overscan: 8,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+
   useEffect(() => {
     if (!isDragSelecting) {
       return;
@@ -611,63 +655,55 @@ export function FileTreePanel({
     [canInsertText, onInsertText, resolvePath],
   );
 
-  const renderNode = (node: FileTreeNode, depth: number) => {
-    const isFolder = node.type === "folder";
-    const isExpanded = isFolder && expandedFolders.has(node.path);
+  const renderRow = (entry: FileTreeRowEntry) => {
+    const { node, depth, isFolder, isExpanded } = entry;
     const FileIcon = isFolder ? Folder : getFileIcon(node.name);
     return (
-      <div key={node.path}>
-        <div className="file-tree-row-wrap">
+      <div className="file-tree-row-wrap">
+        <button
+          type="button"
+          className={`file-tree-row${isFolder ? " is-folder" : " is-file"}`}
+          style={{ paddingLeft: `${depth * 10}px` }}
+          onClick={(event) => {
+            if (isFolder) {
+              toggleFolder(node.path);
+              return;
+            }
+            openPreview(node.path, event.currentTarget);
+          }}
+          onContextMenu={(event) => {
+            void showMenu(event, node.path);
+          }}
+        >
+          {isFolder ? (
+            <span className={`file-tree-chevron${isExpanded ? " is-open" : ""}`}>
+              ›
+            </span>
+          ) : (
+            <span className="file-tree-spacer" aria-hidden />
+          )}
+          <span className="file-tree-icon" aria-hidden>
+            <FileIcon size={12} />
+          </span>
+          <span className="file-tree-name">{node.name}</span>
+        </button>
+        {!isFolder && (
           <button
             type="button"
-            className={`file-tree-row${isFolder ? " is-folder" : " is-file"}`}
-            style={{ paddingLeft: `${depth * 10}px` }}
+            className="ghost icon-button file-tree-action"
             onClick={(event) => {
-              if (isFolder) {
-                toggleFolder(node.path);
+              event.stopPropagation();
+              if (!canInsertText) {
                 return;
               }
-              openPreview(node.path, event.currentTarget);
+              onInsertText?.(node.path);
             }}
-            onContextMenu={(event) => {
-              void showMenu(event, node.path);
-            }}
+            disabled={!canInsertText}
+            aria-label={`Mention ${node.name}`}
+            title="Mention in chat"
           >
-            {isFolder ? (
-              <span className={`file-tree-chevron${isExpanded ? " is-open" : ""}`}>
-                ›
-              </span>
-            ) : (
-              <span className="file-tree-spacer" aria-hidden />
-            )}
-            <span className="file-tree-icon" aria-hidden>
-              <FileIcon size={12} />
-            </span>
-            <span className="file-tree-name">{node.name}</span>
+            <Plus size={10} aria-hidden />
           </button>
-          {!isFolder && (
-            <button
-              type="button"
-              className="ghost icon-button file-tree-action"
-              onClick={(event) => {
-                event.stopPropagation();
-                if (!canInsertText) {
-                  return;
-                }
-                onInsertText?.(node.path);
-              }}
-              disabled={!canInsertText}
-              aria-label={`Mention ${node.name}`}
-              title="Mention in chat"
-            >
-              <Plus size={10} aria-hidden />
-            </button>
-          )}
-        </div>
-        {isFolder && isExpanded && node.children.length > 0 && (
-          <div className="file-tree-children">
-            {node.children.map((child) => renderNode(child, depth + 1))}
-          </div>
         )}
       </div>
     );
@@ -679,12 +715,12 @@ export function FileTreePanel({
         <PanelTabs active={filePanelMode} onSelect={onFilePanelModeChange} />
         <div className="file-tree-meta">
           <div className="file-tree-count">
-          {visibleFiles.length
+          {visibleEntries.length
             ? normalizedQuery
-              ? `${visibleFiles.length} match${visibleFiles.length === 1 ? "" : "es"}`
+              ? `${visibleEntries.length} match${visibleEntries.length === 1 ? "" : "es"}`
               : filterMode === "modified"
-                ? `${visibleFiles.length} modified`
-                : `${visibleFiles.length} file${visibleFiles.length === 1 ? "" : "s"}`
+                ? `${visibleEntries.length} modified`
+                : `${visibleEntries.length} file${visibleEntries.length === 1 ? "" : "s"}`
             : showLoading
               ? "Loading files"
               : filterMode === "modified"
@@ -729,7 +765,11 @@ export function FileTreePanel({
           <GitBranch size={14} aria-hidden />
         </button>
       </div>
-      <div className="file-tree-list">
+      <div
+        className="file-tree-list"
+        ref={listRef}
+        style={{ ["--file-tree-row-height" as string]: `${FILE_TREE_ROW_HEIGHT}px` }}
+      >
         {showLoading ? (
           <div className="file-tree-skeleton">
             {Array.from({ length: 8 }).map((_, index) => (
@@ -751,7 +791,33 @@ export function FileTreePanel({
                 : "No files available."}
           </div>
         ) : (
-          nodes.map((node) => renderNode(node, 0))
+          <div
+            className="file-tree-virtual"
+            style={{ height: rowVirtualizer.getTotalSize() }}
+          >
+            {virtualRows.map((virtualRow) => {
+              const entry = flatNodes[virtualRow.index];
+              if (!entry) {
+                return null;
+              }
+              return (
+                <div
+                  key={virtualRow.key}
+                  data-index={virtualRow.index}
+                  ref={rowVirtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  {renderRow(entry)}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
       {previewPath && previewAnchor
