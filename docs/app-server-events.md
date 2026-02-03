@@ -1,13 +1,13 @@
-# App-Server Events Reference (Codex `1644cbfc6dc23e08c18f0d851dca4f3f0f5e7434`)
+# App-Server Events Reference (Codex `59707da8572bbbffa8060396eb09e6961776981e`)
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
 - Which app-server requests CodexMonitor sends right now.
 - Where to look in CodexMonitor to add support.
-- Where to look in `../codex` to compare event lists and find emitters.
+- Where to look in `../Codex` to compare event lists and find emitters.
 
 When updating this document:
-1. Update the Codex hash in the title using `git -C ../codex rev-parse HEAD`.
+1. Update the Codex hash in the title using `git -C ../Codex rev-parse HEAD`.
 2. Compare Codex events vs CodexMonitor routing.
 3. Compare Codex request methods vs CodexMonitor outgoing request methods.
 4. Update supported and missing lists below.
@@ -73,6 +73,19 @@ These are the events explicitly routed in `useAppServerEvents.ts` (plus
 - `item/commandExecution/terminalInteraction`
 - `item/fileChange/outputDelta`
 
+## Conversation Compaction Signals (Codex v2)
+
+Codex currently exposes two compaction signals:
+
+- Preferred: `item/started` + `item/completed` with `item.type = "contextCompaction"` (`ThreadItem::ContextCompaction`).
+- Deprecated: `thread/compacted` (`ContextCompactedNotification`).
+
+CodexMonitor status:
+
+- It routes `item/started` and `item/completed`, so the preferred signal reaches the frontend event layer.
+- It also routes `thread/compacted` directly.
+- It does not currently render/store `contextCompaction` as a conversation item because `buildConversationItem(...)` does not map that item type (`src/utils/threadItems.ts`).
+
 ## Missing Events (Codex v2 Notifications)
 
 Compared against Codex app-server protocol v2 notifications, the following
@@ -130,27 +143,27 @@ Compared against Codex v2 request methods, CodexMonitor currently does not send:
 - `configRequirements/read`
 - `account/chatgptAuthTokens/refresh`
 
-## Where To Look In ../codex
+## Where To Look In ../Codex
 
 Start here for the authoritative v2 notification list:
-- `../codex/codex-rs/app-server-protocol/src/protocol/common.rs`
+- `../Codex/codex-rs/app-server-protocol/src/protocol/common.rs`
 
 Useful follow-ups:
 - Notification payload types:
-  - `../codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
+  - `../Codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
 - Emitters / wiring from core events to server notifications:
-  - `../codex/codex-rs/app-server/src/bespoke_event_handling.rs`
+  - `../Codex/codex-rs/app-server/src/bespoke_event_handling.rs`
 - Human-readable protocol notes:
-  - `../codex/codex-rs/app-server/README.md`
+  - `../Codex/codex-rs/app-server/README.md`
 
 ## Quick Comparison Workflow
 
 Use this workflow to update the lists above:
 
 1. Get the current Codex hash:
-   - `git -C ../codex rev-parse HEAD`
+   - `git -C ../Codex rev-parse HEAD`
 2. List Codex v2 notification methods:
-   - `rg -n \"=> \\\".*\\\" \\(v2::.*Notification\\)\" ../codex/codex-rs/app-server-protocol/src/protocol/common.rs`
+   - `rg -n \"=> \\\".*\\\" \\(v2::.*Notification\\)\" ../Codex/codex-rs/app-server-protocol/src/protocol/common.rs`
 3. List CodexMonitor routed methods:
    - `rg -n \"method === \\\"|method\\.includes\\(\" src/features/app/hooks/useAppServerEvents.ts`
 4. Update the Supported and Missing sections.
@@ -160,9 +173,9 @@ Use this workflow to update the lists above:
 Use this workflow to update request support lists:
 
 1. Get the current Codex hash:
-   - `git -C ../codex rev-parse HEAD`
+   - `git -C ../Codex rev-parse HEAD`
 2. List Codex request methods:
-   - `rg -n \"=> \\\".*\\\" \\{\" ../codex/codex-rs/app-server-protocol/src/protocol/common.rs`
+   - `rg -n \"=> \\\".*\\\" \\{\" ../Codex/codex-rs/app-server-protocol/src/protocol/common.rs`
 3. List CodexMonitor outgoing requests:
    - `rg -n \"send_request\\(\\\"\" src-tauri/src -g\"*.rs\"`
 4. Update the Supported Requests and Missing Requests sections.
@@ -172,17 +185,17 @@ Use this workflow to update request support lists:
 Use this when the method list is unchanged but behavior looks off.
 
 1. Confirm the current Codex hash:
-   - `git -C ../codex rev-parse HEAD`
+   - `git -C ../Codex rev-parse HEAD`
 2. Inspect the authoritative notification structs:
-   - `rg -n \"struct .*Notification\" ../codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
+   - `rg -n \"struct .*Notification\" ../Codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
 3. For a specific method, jump to its struct definition:
-   - Example: `rg -n \"struct TurnPlanUpdatedNotification|struct ThreadTokenUsageUpdatedNotification|struct AccountRateLimitsUpdatedNotification|struct ItemStartedNotification|struct ItemCompletedNotification\" ../codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
+   - Example: `rg -n \"struct TurnPlanUpdatedNotification|struct ThreadTokenUsageUpdatedNotification|struct AccountRateLimitsUpdatedNotification|struct ItemStartedNotification|struct ItemCompletedNotification\" ../Codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
 4. Compare payload shapes to the router expectations:
    - Router: `src/features/app/hooks/useAppServerEvents.ts`
    - Turn/plan/token/rate-limit normalization: `src/features/threads/utils/threadNormalize.ts`
    - Item shaping for display: `src/utils/threadItems.ts`
 5. Verify the ThreadItem schema (many UI issues start here):
-   - `rg -n \"enum ThreadItem|CommandExecution|FileChange|McpToolCall|EnteredReviewMode|ExitedReviewMode|ContextCompaction\" ../codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
+   - `rg -n \"enum ThreadItem|CommandExecution|FileChange|McpToolCall|EnteredReviewMode|ExitedReviewMode|ContextCompaction\" ../Codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
 6. Check for camelCase vs snake_case mismatches:
    - The protocol uses `#[serde(rename_all = \"camelCase\")]`, but fields are often declared in snake_case.
    - CodexMonitor generally defends against this by checking both forms (for example in `threadNormalize.ts` and `useAppServerEvents.ts`).
