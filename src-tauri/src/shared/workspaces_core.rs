@@ -460,6 +460,8 @@ where
     let mut failures: Vec<(String, String)> = Vec::new();
 
     for child in &child_worktrees {
+        kill_session_by_id(sessions, &child.id).await;
+
         let child_path = PathBuf::from(&child.path);
         if child_path.exists() {
             if let Err(error) = run_git_command(
@@ -487,8 +489,6 @@ where
                 }
             }
         }
-
-        kill_session_by_id(sessions, &child.id).await;
         removed_child_ids.push(child.id.clone());
     }
 
@@ -562,6 +562,8 @@ where
 
     let parent_path = PathBuf::from(&parent.path);
     let entry_path = PathBuf::from(&entry.path);
+    kill_session_by_id(sessions, &entry.id).await;
+
     if entry_path.exists() {
         if let Err(error) = run_git_command(
             &parent_path,
@@ -579,8 +581,6 @@ where
         }
     }
     let _ = run_git_command(&parent_path, &["worktree", "prune", "--expire", "now"]).await;
-
-    kill_session_by_id(sessions, &entry.id).await;
 
     {
         let mut workspaces = workspaces.lock().await;

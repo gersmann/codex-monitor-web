@@ -694,14 +694,18 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
         prev && (prev === workspaceId || childIds.has(prev)) ? null : prev,
       );
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       onDebug?.({
         id: `${Date.now()}-client-remove-workspace-error`,
         timestamp: Date.now(),
         source: "error",
         label: "workspace/remove error",
-        payload: error instanceof Error ? error.message : String(error),
+        payload: errorMessage,
       });
-      throw error;
+      void message(errorMessage, {
+        title: "Delete workspace failed",
+        kind: "error",
+      });
     }
   }
 
