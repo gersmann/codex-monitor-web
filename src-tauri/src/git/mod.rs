@@ -183,16 +183,45 @@ async fn push_with_upstream(repo_root: &Path) -> Result<(), String> {
 }
 
 async fn pull_with_default_strategy(repo_root: &Path) -> Result<(), String> {
-    // Explicit strategy avoids "Need to specify how to reconcile divergent branches"
-    // on repos where pull.rebase / pull.ff is not configured.
-    match run_git_command(repo_root, &["pull", "--rebase", "--autostash"]).await {
+    fn autostash_unsupported(lower: &str) -> bool {
+        lower.contains("unknown option") && lower.contains("autostash")
+    }
+
+    fn needs_reconcile_strategy(lower: &str) -> bool {
+        lower.contains("need to specify how to reconcile divergent branches")
+            || lower.contains("you have divergent branches")
+    }
+
+    // Respect user/repo git config first, while still allowing dirty worktrees.
+    match run_git_command(repo_root, &["pull", "--autostash"]).await {
         Ok(()) => Ok(()),
         Err(err) => {
             let lower = err.to_lowercase();
-            if lower.contains("unknown option") && lower.contains("autostash") {
-                return run_git_command(repo_root, &["pull", "--rebase"]).await;
+            if autostash_unsupported(&lower) {
+                match run_git_command(repo_root, &["pull"]).await {
+                    Ok(()) => Ok(()),
+                    Err(no_autostash_err) => {
+                        let no_autostash_lower = no_autostash_err.to_lowercase();
+                        if needs_reconcile_strategy(&no_autostash_lower) {
+                            return run_git_command(repo_root, &["pull", "--no-rebase"]).await;
+                        }
+                        Err(no_autostash_err)
+                    }
+                }
+            } else if needs_reconcile_strategy(&lower) {
+                match run_git_command(repo_root, &["pull", "--no-rebase", "--autostash"]).await {
+                    Ok(()) => Ok(()),
+                    Err(merge_err) => {
+                        let merge_lower = merge_err.to_lowercase();
+                        if autostash_unsupported(&merge_lower) {
+                            return run_git_command(repo_root, &["pull", "--no-rebase"]).await;
+                        }
+                        Err(merge_err)
+                    }
+                }
+            } else {
+                Err(err)
             }
-            Err(err)
         }
     }
 }
