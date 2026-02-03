@@ -178,6 +178,12 @@
   justify-content: center;
 }
 
+.file-tree-icon-image {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
 .file-tree-name {
   min-width: 0;
   overflow: hidden;

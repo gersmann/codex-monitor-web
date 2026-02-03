@@ -10,14 +10,6 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import ChevronsUpDown from "lucide-react/dist/esm/icons/chevrons-up-down";
 import File from "lucide-react/dist/esm/icons/file";
-import FileArchive from "lucide-react/dist/esm/icons/file-archive";
-import FileAudio from "lucide-react/dist/esm/icons/file-audio";
-import FileCode from "lucide-react/dist/esm/icons/file-code";
-import FileImage from "lucide-react/dist/esm/icons/file-image";
-import FileJson from "lucide-react/dist/esm/icons/file-json";
-import FileSpreadsheet from "lucide-react/dist/esm/icons/file-spreadsheet";
-import FileText from "lucide-react/dist/esm/icons/file-text";
-import FileVideo from "lucide-react/dist/esm/icons/file-video";
 import Folder from "lucide-react/dist/esm/icons/folder";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import Search from "lucide-react/dist/esm/icons/search";
@@ -26,6 +18,7 @@ import { readWorkspaceFile } from "../../../services/tauri";
 import type { OpenAppTarget } from "../../../types";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { languageFromPath } from "../../../utils/syntax";
+import { getFileTypeIconUrl } from "../../../utils/fileTypeIcons";
 import { FilePreviewPopover } from "./FilePreviewPopover";
 
 type FileTreeNode = {
@@ -139,77 +132,6 @@ function buildTree(entries: FileEntry[]): { nodes: FileTreeNode[]; folderPaths: 
   };
 
   return { nodes: toArray(root), folderPaths };
-}
-
-function getFileIcon(name: string) {
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  switch (ext) {
-    case "ts":
-    case "tsx":
-    case "js":
-    case "jsx":
-    case "mjs":
-    case "cjs":
-    case "py":
-    case "rs":
-    case "swift":
-    case "go":
-    case "java":
-    case "kt":
-    case "cs":
-    case "cpp":
-    case "c":
-    case "h":
-    case "hpp":
-    case "sh":
-    case "zsh":
-    case "bash":
-      return FileCode;
-    case "json":
-      return FileJson;
-    case "md":
-    case "mdx":
-    case "txt":
-    case "rtf":
-      return FileText;
-    case "png":
-    case "jpg":
-    case "jpeg":
-    case "gif":
-    case "svg":
-    case "webp":
-    case "avif":
-    case "bmp":
-    case "heic":
-    case "heif":
-    case "tif":
-    case "tiff":
-      return FileImage;
-    case "mp4":
-    case "mov":
-    case "m4v":
-    case "webm":
-      return FileVideo;
-    case "mp3":
-    case "wav":
-    case "flac":
-    case "m4a":
-      return FileAudio;
-    case "zip":
-    case "gz":
-    case "tgz":
-    case "tar":
-    case "7z":
-    case "rar":
-      return FileArchive;
-    case "csv":
-    case "tsv":
-    case "xls":
-    case "xlsx":
-      return FileSpreadsheet;
-    default:
-      return File;
-  }
 }
 
 const imageExtensions = new Set([
@@ -657,7 +579,7 @@ export function FileTreePanel({
 
   const renderRow = (entry: FileTreeRowEntry) => {
     const { node, depth, isFolder, isExpanded } = entry;
-    const FileIcon = isFolder ? Folder : getFileIcon(node.name);
+    const fileTypeIconUrl = isFolder ? null : getFileTypeIconUrl(node.path);
     return (
       <div className="file-tree-row-wrap">
         <button
@@ -683,7 +605,19 @@ export function FileTreePanel({
             <span className="file-tree-spacer" aria-hidden />
           )}
           <span className="file-tree-icon" aria-hidden>
-            <FileIcon size={12} />
+            {isFolder ? (
+              <Folder size={12} />
+            ) : fileTypeIconUrl ? (
+              <img
+                className="file-tree-icon-image"
+                src={fileTypeIconUrl}
+                alt=""
+                loading="lazy"
+                decoding="async"
+              />
+            ) : (
+              <File size={12} />
+            )}
           </span>
           <span className="file-tree-name">{node.name}</span>
         </button>
