@@ -18,7 +18,7 @@ import { normalizeOpenAppTargets } from "../../app/utils/openApp";
 import { getDefaultInterruptShortcut } from "../../../utils/shortcuts";
 
 const allowedThemes = new Set(["system", "light", "dark", "dim"]);
-const allowedPersonality = new Set(["default", "friendly", "pragmatic"]);
+const allowedPersonality = new Set(["friendly", "pragmatic"]);
 
 const defaultSettings: AppSettings = {
   codexBin: null,
@@ -57,11 +57,11 @@ const defaultSettings: AppSettings = {
   systemNotificationsEnabled: true,
   preloadGitDiffs: true,
   experimentalCollabEnabled: false,
-  experimentalCollaborationModesEnabled: false,
+  collaborationModesEnabled: true,
   experimentalSteerEnabled: false,
   experimentalUnifiedExecEnabled: false,
   experimentalAppsEnabled: false,
-  experimentalPersonality: "default",
+  personality: "friendly",
   dictationEnabled: false,
   dictationModelId: "base",
   dictationPreferredLanguage: null,
@@ -116,9 +116,9 @@ function normalizeAppSettings(settings: AppSettings): AppSettings {
       DEFAULT_CODE_FONT_FAMILY,
     ),
     codeFontSize: clampCodeFontSize(settings.codeFontSize),
-    experimentalPersonality: allowedPersonality.has(settings.experimentalPersonality)
-      ? settings.experimentalPersonality
-      : "default",
+    personality: allowedPersonality.has(settings.personality)
+      ? settings.personality
+      : "friendly",
     reviewDeliveryMode:
       settings.reviewDeliveryMode === "detached" ? "detached" : "inline",
     openAppTargets: normalizedTargets,

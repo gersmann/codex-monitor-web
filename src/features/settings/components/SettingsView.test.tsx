@@ -56,11 +56,11 @@ const baseSettings: AppSettings = {
   systemNotificationsEnabled: true,
   preloadGitDiffs: true,
   experimentalCollabEnabled: false,
-  experimentalCollaborationModesEnabled: false,
+  collaborationModesEnabled: true,
   experimentalSteerEnabled: false,
   experimentalUnifiedExecEnabled: false,
   experimentalAppsEnabled: false,
-  experimentalPersonality: "default",
+  personality: "friendly",
   dictationEnabled: false,
   dictationModelId: "base",
   dictationPreferredLanguage: null,
@@ -148,7 +148,7 @@ const renderDisplaySection = (
   return { onUpdateAppSettings, onToggleTransparency };
 };
 
-const renderExperimentalSection = (
+const renderFeaturesSection = (
   options: {
     appSettings?: Partial<AppSettings>;
     onUpdateAppSettings?: ComponentProps<typeof SettingsView>["onUpdateAppSettings"];
@@ -185,7 +185,7 @@ const renderExperimentalSection = (
     onDownloadDictationModel: vi.fn(),
     onCancelDictationDownload: vi.fn(),
     onRemoveDictationModel: vi.fn(),
-    initialSection: "experimental",
+    initialSection: "features",
   };
 
   render(<SettingsView {...props} />);
@@ -473,10 +473,10 @@ describe("SettingsView Codex overrides", () => {
   });
 });
 
-describe("SettingsView Experimental", () => {
+describe("SettingsView Features", () => {
   it("updates personality selection", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
-    renderExperimentalSection({ onUpdateAppSettings });
+    renderFeaturesSection({ onUpdateAppSettings });
 
     fireEvent.change(screen.getByLabelText("Personality"), {
       target: { value: "pragmatic" },
@@ -484,7 +484,7 @@ describe("SettingsView Experimental", () => {
 
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ experimentalPersonality: "pragmatic" }),
+        expect.objectContaining({ personality: "pragmatic" }),
       );
     });
   });

@@ -432,10 +432,10 @@ pub(crate) struct AppSettings {
     )]
     pub(crate) experimental_collab_enabled: bool,
     #[serde(
-        default = "default_experimental_collaboration_modes_enabled",
-        rename = "experimentalCollaborationModesEnabled"
+        default = "default_collaboration_modes_enabled",
+        rename = "collaborationModesEnabled"
     )]
-    pub(crate) experimental_collaboration_modes_enabled: bool,
+    pub(crate) collaboration_modes_enabled: bool,
     #[serde(
         default = "default_experimental_steer_enabled",
         rename = "experimentalSteerEnabled"
@@ -452,10 +452,10 @@ pub(crate) struct AppSettings {
     )]
     pub(crate) experimental_apps_enabled: bool,
     #[serde(
-        default = "default_experimental_personality",
-        rename = "experimentalPersonality"
+        default = "default_personality",
+        rename = "personality"
     )]
-    pub(crate) experimental_personality: String,
+    pub(crate) personality: String,
     #[serde(default = "default_dictation_enabled", rename = "dictationEnabled")]
     pub(crate) dictation_enabled: bool,
     #[serde(
@@ -638,8 +638,8 @@ fn default_experimental_collab_enabled() -> bool {
     false
 }
 
-fn default_experimental_collaboration_modes_enabled() -> bool {
-    false
+fn default_collaboration_modes_enabled() -> bool {
+    true
 }
 
 fn default_experimental_steer_enabled() -> bool {
@@ -654,8 +654,8 @@ fn default_experimental_apps_enabled() -> bool {
     false
 }
 
-fn default_experimental_personality() -> String {
-    "default".to_string()
+fn default_personality() -> String {
+    "friendly".to_string()
 }
 
 fn default_dictation_enabled() -> bool {
@@ -806,11 +806,11 @@ impl Default for AppSettings {
             system_notifications_enabled: true,
             preload_git_diffs: default_preload_git_diffs(),
             experimental_collab_enabled: false,
-            experimental_collaboration_modes_enabled: false,
+            collaboration_modes_enabled: true,
             experimental_steer_enabled: false,
             experimental_unified_exec_enabled: false,
             experimental_apps_enabled: false,
-            experimental_personality: default_experimental_personality(),
+            personality: default_personality(),
             dictation_enabled: false,
             dictation_model_id: default_dictation_model_id(),
             dictation_preferred_language: None,
@@ -907,9 +907,10 @@ mod tests {
         assert!(settings.notification_sounds_enabled);
         assert!(settings.system_notifications_enabled);
         assert!(settings.preload_git_diffs);
+        assert!(settings.collaboration_modes_enabled);
         assert!(!settings.experimental_steer_enabled);
         assert!(!settings.experimental_apps_enabled);
-        assert_eq!(settings.experimental_personality, "default");
+        assert_eq!(settings.personality, "friendly");
         assert!(!settings.dictation_enabled);
         assert_eq!(settings.dictation_model_id, "base");
         assert!(settings.dictation_preferred_language.is_none());

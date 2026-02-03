@@ -114,7 +114,7 @@ export type ReviewTarget =
 export type AccessMode = "read-only" | "current" | "full-access";
 export type BackendMode = "local" | "remote";
 export type ThemePreference = "system" | "light" | "dark" | "dim";
-export type PersonalityPreference = "default" | "friendly" | "pragmatic";
+export type PersonalityPreference = "friendly" | "pragmatic";
 
 
 export type ComposerEditorPreset = "default" | "helpful" | "smart";
@@ -176,11 +176,11 @@ export type AppSettings = {
   systemNotificationsEnabled: boolean;
   preloadGitDiffs: boolean;
   experimentalCollabEnabled: boolean;
-  experimentalCollaborationModesEnabled: boolean;
+  collaborationModesEnabled: boolean;
   experimentalSteerEnabled: boolean;
   experimentalUnifiedExecEnabled: boolean;
   experimentalAppsEnabled: boolean;
-  experimentalPersonality: PersonalityPreference;
+  personality: PersonalityPreference;
   dictationEnabled: boolean;
   dictationModelId: string;
   dictationPreferredLanguage: string | null;

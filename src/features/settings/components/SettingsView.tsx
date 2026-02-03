@@ -178,7 +178,7 @@ type SettingsSection =
   | "shortcuts"
   | "open-apps"
   | "git";
-type CodexSection = SettingsSection | "codex" | "experimental";
+type CodexSection = SettingsSection | "codex" | "features";
 type ShortcutSettingKey =
   | "composerModelShortcut"
   | "composerAccessShortcut"
@@ -1095,11 +1095,11 @@ export function SettingsView({
             </button>
             <button
               type="button"
-              className={`settings-nav ${activeSection === "experimental" ? "active" : ""}`}
-              onClick={() => setActiveSection("experimental")}
+              className={`settings-nav ${activeSection === "features" ? "active" : ""}`}
+              onClick={() => setActiveSection("features")}
             >
               <FlaskConical aria-hidden />
-              Experimental
+              Features
             </button>
           </aside>
           <div className="settings-content">
@@ -3122,15 +3122,15 @@ export function SettingsView({
 
               </section>
             )}
-            {activeSection === "experimental" && (
+            {activeSection === "features" && (
               <section className="settings-section">
-                <div className="settings-section-title">Experimental</div>
+                <div className="settings-section-title">Features</div>
                 <div className="settings-section-subtitle">
-                  Preview features that may change or be removed.
+                  Manage stable and experimental Codex features.
                 </div>
                 {hasCodexHomeOverrides && (
                   <div className="settings-help">
-                    Experimental settings are stored in the default CODEX_HOME config.toml.
+                    Feature settings are stored in the default CODEX_HOME config.toml.
                     <br />
                     Workspace overrides are not updated.
                   </div>
@@ -3149,6 +3149,34 @@ export function SettingsView({
                 {openConfigError && (
                   <div className="settings-help">{openConfigError}</div>
                 )}
+                <div className="settings-subsection-title">Stable Features</div>
+                <div className="settings-subsection-subtitle">
+                  Production-ready features enabled by default.
+                </div>
+                <div className="settings-toggle-row">
+                  <div>
+                    <div className="settings-toggle-title">Collaboration modes</div>
+                    <div className="settings-toggle-subtitle">
+                      Enable collaboration mode presets (Code, Plan).
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`settings-toggle ${
+                      appSettings.collaborationModesEnabled ? "on" : ""
+                    }`}
+                    onClick={() =>
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        collaborationModesEnabled:
+                          !appSettings.collaborationModesEnabled,
+                      })
+                    }
+                    aria-pressed={appSettings.collaborationModesEnabled}
+                  >
+                    <span className="settings-toggle-knob" />
+                  </button>
+                </div>
                 <div className="settings-toggle-row">
                   <div>
                     <div className="settings-toggle-title">Personality</div>
@@ -3158,21 +3186,24 @@ export function SettingsView({
                     </div>
                   </div>
                   <select
-                    id="experimental-personality-select"
+                    id="features-personality-select"
                     className="settings-select"
-                    value={appSettings.experimentalPersonality}
+                    value={appSettings.personality}
                     onChange={(event) =>
                       void onUpdateAppSettings({
                         ...appSettings,
-                        experimentalPersonality: event.target.value as AppSettings["experimentalPersonality"],
+                        personality: event.target.value as AppSettings["personality"],
                       })
                     }
                     aria-label="Personality"
                   >
-                    <option value="default">Default (unset)</option>
                     <option value="friendly">Friendly</option>
                     <option value="pragmatic">Pragmatic</option>
                   </select>
+                </div>
+                <div className="settings-subsection-title">Experimental Features</div>
+                <div className="settings-subsection-subtitle">
+                  Preview features that may change or be removed.
                 </div>
                 <div className="settings-toggle-row">
                   <div>
@@ -3191,30 +3222,6 @@ export function SettingsView({
                       })
                     }
                     aria-pressed={appSettings.experimentalCollabEnabled}
-                  >
-                    <span className="settings-toggle-knob" />
-                  </button>
-                </div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">Collaboration modes</div>
-                    <div className="settings-toggle-subtitle">
-                      Enable collaboration mode presets (Code, Plan).
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`settings-toggle ${
-                      appSettings.experimentalCollaborationModesEnabled ? "on" : ""
-                    }`}
-                    onClick={() =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        experimentalCollaborationModesEnabled:
-                          !appSettings.experimentalCollaborationModesEnabled,
-                      })
-                    }
-                    aria-pressed={appSettings.experimentalCollaborationModesEnabled}
                   >
                     <span className="settings-toggle-knob" />
                   </button>

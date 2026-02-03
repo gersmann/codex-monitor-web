@@ -406,7 +406,7 @@ function MainApp() {
     setSelectedCollaborationModeId,
   } = useCollaborationModes({
     activeWorkspace,
-    enabled: appSettings.experimentalCollaborationModesEnabled,
+    enabled: appSettings.collaborationModesEnabled,
     onDebug: addDebugEntry,
   });
 
@@ -415,7 +415,7 @@ function MainApp() {
     modelShortcut: appSettings.composerModelShortcut,
     accessShortcut: appSettings.composerAccessShortcut,
     reasoningShortcut: appSettings.composerReasoningShortcut,
-    collaborationShortcut: appSettings.experimentalCollaborationModesEnabled
+    collaborationShortcut: appSettings.collaborationModesEnabled
       ? appSettings.composerCollaborationShortcut
       : null,
     models,

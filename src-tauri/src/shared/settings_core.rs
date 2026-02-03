@@ -10,7 +10,6 @@ fn normalize_personality(value: &str) -> Option<&'static str> {
     match value.trim() {
         "friendly" => Some("friendly"),
         "pragmatic" => Some("pragmatic"),
-        "default" => Some("default"),
         _ => None,
     }
 }
@@ -22,7 +21,7 @@ pub(crate) async fn get_app_settings_core(app_settings: &Mutex<AppSettings>) -> 
     }
     if let Ok(Some(collaboration_modes_enabled)) = codex_config::read_collaboration_modes_enabled()
     {
-        settings.experimental_collaboration_modes_enabled = collaboration_modes_enabled;
+        settings.collaboration_modes_enabled = collaboration_modes_enabled;
     }
     if let Ok(Some(steer_enabled)) = codex_config::read_steer_enabled() {
         settings.experimental_steer_enabled = steer_enabled;
@@ -34,10 +33,10 @@ pub(crate) async fn get_app_settings_core(app_settings: &Mutex<AppSettings>) -> 
         settings.experimental_apps_enabled = apps_enabled;
     }
     if let Ok(personality) = codex_config::read_personality() {
-        settings.experimental_personality = personality
+        settings.personality = personality
             .as_deref()
             .and_then(normalize_personality)
-            .unwrap_or("default")
+            .unwrap_or("friendly")
             .to_string();
     }
     settings
@@ -50,12 +49,12 @@ pub(crate) async fn update_app_settings_core(
 ) -> Result<AppSettings, String> {
     let _ = codex_config::write_collab_enabled(settings.experimental_collab_enabled);
     let _ = codex_config::write_collaboration_modes_enabled(
-        settings.experimental_collaboration_modes_enabled,
+        settings.collaboration_modes_enabled,
     );
     let _ = codex_config::write_steer_enabled(settings.experimental_steer_enabled);
     let _ = codex_config::write_unified_exec_enabled(settings.experimental_unified_exec_enabled);
     let _ = codex_config::write_apps_enabled(settings.experimental_apps_enabled);
-    let _ = codex_config::write_personality(settings.experimental_personality.as_str());
+    let _ = codex_config::write_personality(settings.personality.as_str());
     write_settings(settings_path, &settings)?;
     let mut current = app_settings.lock().await;
     *current = settings.clone();
