@@ -15,11 +15,13 @@ import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import ScrollText from "lucide-react/dist/esm/icons/scroll-text";
 import Search from "lucide-react/dist/esm/icons/search";
 import Upload from "lucide-react/dist/esm/icons/upload";
+import X from "lucide-react/dist/esm/icons/x";
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { formatRelativeTime } from "../../../utils/time";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
 
 type GitDiffPanelProps = {
+  workspaceId?: string | null;
   mode: "diff" | "log" | "issues" | "prs";
   onModeChange: (mode: "diff" | "log" | "issues" | "prs") => void;
   filePanelMode: PanelTabId;
@@ -255,6 +257,31 @@ type DiffFile = {
   additions: number;
   deletions: number;
 };
+
+type SidebarErrorProps = {
+  variant?: "diff" | "commit";
+  message: string;
+  onDismiss: () => void;
+};
+
+function SidebarError({ variant = "diff", message, onDismiss }: SidebarErrorProps) {
+  return (
+    <div className={`sidebar-error sidebar-error-${variant}`}>
+      <div className={variant === "commit" ? "commit-message-error" : "diff-error"}>
+        {message}
+      </div>
+      <button
+        type="button"
+        className="ghost icon-button sidebar-error-dismiss"
+        onClick={onDismiss}
+        aria-label="Dismiss error"
+        title="Dismiss error"
+      >
+        <X size={12} aria-hidden />
+      </button>
+    </div>
+  );
+}
 
 type DiffFileRowProps = {
   file: DiffFile;
@@ -555,6 +582,7 @@ function GitLogEntryRow({
 }
 
 export function GitDiffPanel({
+  workspaceId = null,
   mode,
   onModeChange,
   filePanelMode,
@@ -629,6 +657,10 @@ export function GitDiffPanel({
   syncError = null,
   commitsAhead = 0,
 }: GitDiffPanelProps) {
+  const [dismissedErrorSignatures, setDismissedErrorSignatures] = useState<Set<string>>(
+    new Set(),
+  );
+
   // Multi-select state for file list
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [lastClickedFile, setLastClickedFile] = useState<string | null>(null);
@@ -957,12 +989,76 @@ export function GitDiffPanel({
     Boolean(gitRootScanError) ||
     gitRootCandidates.length > 0;
   const normalizedGitRoot = normalizeRootPath(gitRoot);
+  const errorScope = `${workspaceId ?? "no-workspace"}:${normalizedGitRoot || "no-git-root"}:${mode}`;
   const hasAnyChanges = stagedFiles.length > 0 || unstagedFiles.length > 0;
   const showApplyWorktree =
     mode === "diff" && Boolean(onApplyWorktreeChanges) && hasAnyChanges;
   const canGenerateCommitMessage = hasAnyChanges;
   const showGenerateCommitMessage =
     mode === "diff" && Boolean(onGenerateCommitMessage) && hasAnyChanges;
+  const sidebarErrorCandidates = useMemo(() => {
+    const options: Array<{ key: string; message: string | null | undefined }> =
+      mode === "diff"
+        ? [
+            { key: "push", message: pushError },
+            { key: "commit", message: commitError },
+            { key: "sync", message: syncError },
+            { key: "commitMessage", message: commitMessageError },
+            { key: "git", message: error },
+            { key: "worktreeApply", message: worktreeApplyError },
+            { key: "gitRootScan", message: gitRootScanError },
+          ]
+        : mode === "log"
+          ? [{ key: "log", message: logError }]
+          : mode === "issues"
+            ? [{ key: "issues", message: issuesError }]
+            : [{ key: "pullRequests", message: pullRequestsError }];
+    return options
+      .filter((entry) => Boolean(entry.message))
+      .map((entry) => ({
+        ...entry,
+        signature: `${errorScope}:${entry.key}:${entry.message}`,
+        message: entry.message as string,
+      }));
+  }, [
+    commitError,
+    commitMessageError,
+    error,
+    gitRootScanError,
+    issuesError,
+    logError,
+    pullRequestsError,
+    pushError,
+    syncError,
+    worktreeApplyError,
+    errorScope,
+    mode,
+  ]);
+  const sidebarError = useMemo(
+    () =>
+      sidebarErrorCandidates.find(
+        (entry) => !dismissedErrorSignatures.has(entry.signature),
+      ) ?? null,
+    [dismissedErrorSignatures, sidebarErrorCandidates],
+  );
+  useEffect(() => {
+    const activeSignatures = new Set(
+      sidebarErrorCandidates.map((entry) => entry.signature),
+    );
+    setDismissedErrorSignatures((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((signature) => {
+        if (activeSignatures.has(signature)) {
+          next.add(signature);
+        } else {
+          changed = true;
+        }
+      });
+      return changed || next.size !== prev.size ? next : prev;
+    });
+  }, [sidebarErrorCandidates]);
+  const showSidebarError = Boolean(sidebarError);
   const worktreeApplyIcon = worktreeApplySuccess ? (
     <Check size={12} aria-hidden />
   ) : (
@@ -1010,7 +1106,6 @@ export function GitDiffPanel({
       {mode === "diff" ? (
         <>
           <div className="diff-status">{diffStatusLabel}</div>
-          {worktreeApplyError && <div className="diff-error">{worktreeApplyError}</div>}
         </>
       ) : mode === "log" ? (
         <>
@@ -1072,7 +1167,6 @@ export function GitDiffPanel({
       )}
       {mode === "diff" ? (
         <div className="diff-list" onClick={handleDiffListClick}>
-          {error && <div className="diff-error">{error}</div>}
           {showGitRootPanel && (
             <div className="git-root-panel">
               <div className="git-root-title">Choose a repo for this workspace.</div>
@@ -1131,7 +1225,6 @@ export function GitDiffPanel({
               {gitRootScanLoading && (
                 <div className="diff-empty">Scanning for repositories...</div>
               )}
-              {gitRootScanError && <div className="diff-error">{gitRootScanError}</div>}
               {!gitRootScanLoading &&
                 !gitRootScanError &&
                 gitRootScanHasScanned &&
@@ -1233,18 +1326,6 @@ export function GitDiffPanel({
                   )}
                 </button>
               </div>
-              {commitMessageError && (
-                <div className="commit-message-error">{commitMessageError}</div>
-              )}
-              {commitError && (
-                <div className="commit-message-error">{commitError}</div>
-              )}
-              {pushError && (
-                <div className="commit-message-error">{pushError}</div>
-              )}
-              {syncError && (
-                <div className="commit-message-error">{syncError}</div>
-              )}
               <CommitButton
                 commitMessage={commitMessage}
                 hasStagedFiles={stagedFiles.length > 0}
@@ -1257,9 +1338,6 @@ export function GitDiffPanel({
           {/* Show Push button when there are commits to push */}
           {commitsAhead > 0 && !stagedFiles.length && (
             <div className="push-section">
-              {pushError && (
-                <div className="commit-message-error">{pushError}</div>
-              )}
               <button
                 type="button"
                 className="push-button"
@@ -1318,7 +1396,6 @@ export function GitDiffPanel({
         </div>
       ) : mode === "log" ? (
         <div className="git-log-list">
-          {logError && <div className="diff-error">{logError}</div>}
           {!logError && logLoading && (
             <div className="diff-viewer-loading">Loading commits...</div>
           )}
@@ -1391,7 +1468,6 @@ export function GitDiffPanel({
         </div>
       ) : mode === "issues" ? (
         <div className="git-issues-list">
-          {issuesError && <div className="diff-error">{issuesError}</div>}
           {!issuesError && !issuesLoading && !issues.length && (
             <div className="diff-empty">No open issues.</div>
           )}
@@ -1420,9 +1496,6 @@ export function GitDiffPanel({
         </div>
       ) : (
         <div className="git-pr-list">
-          {pullRequestsError && (
-            <div className="diff-error">{pullRequestsError}</div>
-          )}
           {!pullRequestsError &&
             !pullRequestsLoading &&
             !pullRequests.length && (
@@ -1468,6 +1541,21 @@ export function GitDiffPanel({
             );
           })}
         </div>
+      )}
+      {showSidebarError && sidebarError && (
+        <SidebarError
+          message={sidebarError.message}
+          onDismiss={() =>
+            setDismissedErrorSignatures((prev) => {
+              if (prev.has(sidebarError.signature)) {
+                return prev;
+              }
+              const next = new Set(prev);
+              next.add(sidebarError.signature);
+              return next;
+            })
+          }
+        />
       )}
     </aside>
   );

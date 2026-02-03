@@ -324,6 +324,31 @@
   white-space: pre-wrap;
 }
 
+.sidebar-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.sidebar-error .diff-error,
+.sidebar-error .commit-message-error {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-error-dismiss {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 4px;
+  color: var(--text-faint);
+}
+
+.sidebar-error-dismiss:hover {
+  color: var(--text-emphasis);
+}
+
 .diff-row {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) auto;
