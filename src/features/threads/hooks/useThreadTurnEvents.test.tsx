@@ -448,27 +448,4 @@ describe("useThreadTurnEvents", () => {
     expect(markProcessing).not.toHaveBeenCalled();
   });
 
-  it("appends a context compacted message and records activity", () => {
-    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(2222);
-    const { result, dispatch, recordThreadActivity, safeMessageActivity } = makeOptions();
-
-    act(() => {
-      result.current.onContextCompacted("ws-1", "thread-1", "turn-9");
-    });
-
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "ensureThread",
-      workspaceId: "ws-1",
-      threadId: "thread-1",
-    });
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "appendContextCompacted",
-      threadId: "thread-1",
-      turnId: "turn-9",
-    });
-    expect(recordThreadActivity).toHaveBeenCalledWith("ws-1", "thread-1", 2222);
-    expect(safeMessageActivity).toHaveBeenCalled();
-
-    nowSpy.mockRestore();
-  });
 });

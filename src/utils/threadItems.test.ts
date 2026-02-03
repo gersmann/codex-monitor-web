@@ -510,6 +510,33 @@ describe("threadItems", () => {
     }
   });
 
+  it("builds context compaction items", () => {
+    const item = buildConversationItem({
+      type: "contextCompaction",
+      id: "compact-1",
+      status: "inProgress",
+    });
+    expect(item).not.toBeNull();
+    if (item && item.kind === "tool") {
+      expect(item.toolType).toBe("contextCompaction");
+      expect(item.title).toBe("Context compaction");
+      expect(item.status).toBe("inProgress");
+    }
+  });
+
+  it("builds context compaction items from thread history", () => {
+    const item = buildConversationItemFromThreadItem({
+      type: "contextCompaction",
+      id: "compact-2",
+    });
+    expect(item).not.toBeNull();
+    if (item && item.kind === "tool") {
+      expect(item.toolType).toBe("contextCompaction");
+      expect(item.title).toBe("Context compaction");
+      expect(item.status).toBe("completed");
+    }
+  });
+
   it("parses ISO timestamps for thread updates", () => {
     const timestamp = getThreadTimestamp({ updated_at: "2025-01-01T00:00:00Z" });
     expect(timestamp).toBe(Date.parse("2025-01-01T00:00:00Z"));

@@ -39,7 +39,6 @@ type AppServerEventHandlers = {
   onAppServerEvent?: (event: AppServerEvent) => void;
   onTurnStarted?: (workspaceId: string, threadId: string, turnId: string) => void;
   onTurnCompleted?: (workspaceId: string, threadId: string, turnId: string) => void;
-  onContextCompacted?: (workspaceId: string, threadId: string, turnId: string) => void;
   onTurnError?: (
     workspaceId: string,
     threadId: string,
@@ -238,16 +237,6 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         const turnId = String(turn?.id ?? params.turnId ?? params.turn_id ?? "");
         if (threadId) {
           handlers.onTurnCompleted?.(workspace_id, threadId, turnId);
-        }
-        return;
-      }
-
-      if (method === "thread/compacted") {
-        const params = message.params as Record<string, unknown>;
-        const threadId = String(params.threadId ?? params.thread_id ?? "");
-        const turnId = String(params.turnId ?? params.turn_id ?? "");
-        if (threadId && turnId) {
-          handlers.onContextCompacted?.(workspace_id, threadId, turnId);
         }
         return;
       }

@@ -212,20 +212,6 @@ export function useThreadTurnEvents({
     ],
   );
 
-  const onContextCompacted = useCallback(
-    (workspaceId: string, threadId: string, turnId: string) => {
-      dispatch({ type: "ensureThread", workspaceId, threadId });
-      if (!turnId) {
-        return;
-      }
-      dispatch({ type: "appendContextCompacted", threadId, turnId });
-      const timestamp = Date.now();
-      recordThreadActivity(workspaceId, threadId, timestamp);
-      safeMessageActivity();
-    },
-    [dispatch, recordThreadActivity, safeMessageActivity],
-  );
-
   return {
     onThreadStarted,
     onThreadNameUpdated,
@@ -235,6 +221,5 @@ export function useThreadTurnEvents({
     onThreadTokenUsageUpdated,
     onAccountRateLimitsUpdated,
     onTurnError,
-    onContextCompacted,
   };
 }

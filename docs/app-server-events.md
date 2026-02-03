@@ -56,7 +56,6 @@ These are the events explicitly routed in `useAppServerEvents.ts` (plus
 - `codex/backgroundThread`
 - `error`
 - `turn/completed`
-- `thread/compacted`
 - `turn/plan/updated`
 - `turn/diff/updated`
 - `thread/tokenUsage/updated`
@@ -83,8 +82,8 @@ Codex currently exposes two compaction signals:
 CodexMonitor status:
 
 - It routes `item/started` and `item/completed`, so the preferred signal reaches the frontend event layer.
-- It also routes `thread/compacted` directly.
-- It does not currently render/store `contextCompaction` as a conversation item because `buildConversationItem(...)` does not map that item type (`src/utils/threadItems.ts`).
+- It renders/stores `contextCompaction` items via the normal item lifecycle.
+- It no longer routes deprecated `thread/compacted`.
 
 ## Missing Events (Codex v2 Notifications)
 

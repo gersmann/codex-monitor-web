@@ -92,7 +92,6 @@ export function useThreadEventHandlers({
     onThreadTokenUsageUpdated,
     onAccountRateLimitsUpdated,
     onTurnError,
-    onContextCompacted,
   } = useThreadTurnEvents({
     dispatch,
     planByThreadRef,
@@ -158,7 +157,6 @@ export function useThreadEventHandlers({
       onThreadTokenUsageUpdated,
       onAccountRateLimitsUpdated,
       onTurnError,
-      onContextCompacted,
     }),
     [
       onWorkspaceConnected,
@@ -185,7 +183,6 @@ export function useThreadEventHandlers({
       onThreadTokenUsageUpdated,
       onAccountRateLimitsUpdated,
       onTurnError,
-      onContextCompacted,
     ],
   );
 

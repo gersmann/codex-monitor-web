@@ -665,6 +665,18 @@ export function buildConversationItem(
       output: "",
     };
   }
+  if (type === "contextCompaction") {
+    const status = asString(item.status ?? "").trim();
+    return {
+      id,
+      kind: "tool",
+      toolType: type,
+      title: "Context compaction",
+      detail: "Compacting conversation context to fit token limits.",
+      status: status || "completed",
+      output: "",
+    };
+  }
   if (type === "enteredReviewMode" || type === "exitedReviewMode") {
     return {
       id,
