@@ -56,6 +56,25 @@
   color: var(--text-faint);
 }
 
+.file-tree-search-filter {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  padding: 0;
+  color: var(--text-faint);
+}
+
+.file-tree-search-filter:hover {
+  color: var(--text-emphasis);
+}
+
+.file-tree-search-filter.is-active {
+  background: var(--surface-active);
+  color: var(--text-emphasis);
+  border-color: var(--border-accent-soft);
+}
+
 .file-tree-list {
   display: flex;
   flex-direction: column;

@@ -25,6 +25,7 @@ import FileSpreadsheet from "lucide-react/dist/esm/icons/file-spreadsheet";
 import FileText from "lucide-react/dist/esm/icons/file-text";
 import FileVideo from "lucide-react/dist/esm/icons/file-video";
 import Folder from "lucide-react/dist/esm/icons/folder";
+import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import Search from "lucide-react/dist/esm/icons/search";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
 import { readWorkspaceFile } from "../../../services/tauri";
@@ -43,6 +44,7 @@ type FileTreePanelProps = {
   workspaceId: string;
   workspacePath: string;
   files: string[];
+  modifiedFiles: string[];
   isLoading: boolean;
   filePanelMode: PanelTabId;
   onFilePanelModeChange: (mode: PanelTabId) => void;
@@ -222,6 +224,7 @@ export function FileTreePanel({
   workspaceId,
   workspacePath,
   files,
+  modifiedFiles,
   isLoading,
   filePanelMode,
   onFilePanelModeChange,
@@ -232,6 +235,7 @@ export function FileTreePanel({
   selectedOpenAppId,
   onSelectOpenAppId,
 }: FileTreePanelProps) {
+  const [filterMode, setFilterMode] = useState<"all" | "modified">("all");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [previewPath, setPreviewPath] = useState<string | null>(null);
@@ -256,21 +260,29 @@ export function FileTreePanel({
   const showLoading = isLoading && files.length === 0;
   const deferredQuery = useDeferredValue(query);
   const normalizedQuery = deferredQuery.trim().toLowerCase();
+  const modifiedPathSet = useMemo(() => new Set(modifiedFiles), [modifiedFiles]);
+  const sourceFiles = useMemo(
+    () =>
+      filterMode === "modified"
+        ? files.filter((path) => modifiedPathSet.has(path))
+        : files,
+    [files, filterMode, modifiedPathSet],
+  );
   const previewKind = useMemo(
     () => (previewPath && isImagePath(previewPath) ? "image" : "text"),
     [previewPath],
   );
 
-  const filteredFiles = useMemo(() => {
+  const visibleFiles = useMemo(() => {
     if (!normalizedQuery) {
-      return files;
+      return sourceFiles;
     }
-    return files.filter((path) => path.toLowerCase().includes(normalizedQuery));
-  }, [files, normalizedQuery]);
+    return sourceFiles.filter((path) => path.toLowerCase().includes(normalizedQuery));
+  }, [sourceFiles, normalizedQuery]);
 
   const { nodes, folderPaths } = useMemo(
-    () => buildTree(normalizedQuery ? filteredFiles : files),
-    [files, filteredFiles, normalizedQuery],
+    () => buildTree(visibleFiles),
+    [visibleFiles],
   );
 
   const visibleFolderPaths = folderPaths;
@@ -280,7 +292,7 @@ export function FileTreePanel({
 
   useEffect(() => {
     setExpandedFolders((prev) => {
-      if (normalizedQuery) {
+      if (normalizedQuery || filterMode === "modified") {
         return new Set(folderPaths);
       }
       const next = new Set<string>();
@@ -298,7 +310,7 @@ export function FileTreePanel({
       }
       return next;
     });
-  }, [folderPaths, nodes, normalizedQuery]);
+  }, [filterMode, folderPaths, nodes, normalizedQuery]);
 
   useEffect(() => {
     setPreviewPath(null);
@@ -667,14 +679,18 @@ export function FileTreePanel({
         <PanelTabs active={filePanelMode} onSelect={onFilePanelModeChange} />
         <div className="file-tree-meta">
           <div className="file-tree-count">
-          {filteredFiles.length
+          {visibleFiles.length
             ? normalizedQuery
-              ? `${filteredFiles.length} match${filteredFiles.length === 1 ? "" : "es"}`
-              : `${filteredFiles.length} file${filteredFiles.length === 1 ? "" : "s"}`
+              ? `${visibleFiles.length} match${visibleFiles.length === 1 ? "" : "es"}`
+              : filterMode === "modified"
+                ? `${visibleFiles.length} modified`
+                : `${visibleFiles.length} file${visibleFiles.length === 1 ? "" : "s"}`
             : showLoading
               ? "Loading files"
-              : "No files"}
-        </div>
+              : filterMode === "modified"
+                ? "No modified"
+                : "No files"}
+          </div>
           {hasFolders ? (
             <button
               type="button"
@@ -698,6 +714,20 @@ export function FileTreePanel({
           onChange={(event) => setQuery(event.target.value)}
           aria-label="Filter files and folders"
         />
+        <button
+          type="button"
+          className={`ghost icon-button file-tree-search-filter${filterMode === "modified" ? " is-active" : ""}`}
+          onClick={() => {
+            setFilterMode((prev) => (prev === "all" ? "modified" : "all"));
+          }}
+          aria-pressed={filterMode === "modified"}
+          aria-label={
+            filterMode === "modified" ? "Show all files" : "Show modified files only"
+          }
+          title={filterMode === "modified" ? "Show all files" : "Show modified files only"}
+        >
+          <GitBranch size={14} aria-hidden />
+        </button>
       </div>
       <div className="file-tree-list">
         {showLoading ? (
@@ -712,7 +742,13 @@ export function FileTreePanel({
           </div>
         ) : nodes.length === 0 ? (
           <div className="file-tree-empty">
-            {normalizedQuery ? "No matches found." : "No files available."}
+            {normalizedQuery
+              ? filterMode === "modified"
+                ? "No modified files match your filter."
+                : "No matches found."
+              : filterMode === "modified"
+                ? "No modified files."
+                : "No files available."}
           </div>
         ) : (
           nodes.map((node) => renderNode(node, 0))

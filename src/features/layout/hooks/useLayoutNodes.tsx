@@ -732,6 +732,12 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         workspaceId={options.activeWorkspace.id}
         workspacePath={options.activeWorkspace.path}
         files={options.files}
+        modifiedFiles={[
+          ...new Set([
+            ...options.gitStatus.stagedFiles.map((file) => file.path),
+            ...options.gitStatus.unstagedFiles.map((file) => file.path),
+          ]),
+        ]}
         isLoading={options.fileTreeLoading}
         filePanelMode={options.filePanelMode}
         onFilePanelModeChange={options.onFilePanelModeChange}
