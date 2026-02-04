@@ -248,6 +248,10 @@ export async function forkThread(workspaceId: string, threadId: string) {
   return invoke<any>("fork_thread", { workspaceId, threadId });
 }
 
+export async function compactThread(workspaceId: string, threadId: string) {
+  return invoke<any>("compact_thread", { workspaceId, threadId });
+}
+
 export async function sendUserMessage(
   workspaceId: string,
   threadId: string,

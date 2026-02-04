@@ -539,6 +539,10 @@ impl DaemonState {
         codex_core::archive_thread_core(&self.sessions, workspace_id, thread_id).await
     }
 
+    async fn compact_thread(&self, workspace_id: String, thread_id: String) -> Result<Value, String> {
+        codex_core::compact_thread_core(&self.sessions, workspace_id, thread_id).await
+    }
+
     async fn set_thread_name(
         &self,
         workspace_id: String,
@@ -1128,6 +1132,11 @@ async fn handle_rpc_request(
             let workspace_id = parse_string(&params, "workspaceId")?;
             let thread_id = parse_string(&params, "threadId")?;
             state.archive_thread(workspace_id, thread_id).await
+        }
+        "compact_thread" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let thread_id = parse_string(&params, "threadId")?;
+            state.compact_thread(workspace_id, thread_id).await
         }
         "set_thread_name" => {
             let workspace_id = parse_string(&params, "workspaceId")?;

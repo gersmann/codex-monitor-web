@@ -106,6 +106,7 @@ These are v2 request methods CodexMonitor currently sends to Codex app-server:
 - `thread/fork`
 - `thread/list`
 - `thread/archive`
+- `thread/compact/start`
 - `thread/name/set`
 - `turn/start`
 - `turn/interrupt`
@@ -126,7 +127,6 @@ Also used (legacy/non-v2 request method):
 Compared against Codex v2 request methods, CodexMonitor currently does not send:
 
 - `thread/unarchive`
-- `thread/compact/start`
 - `thread/rollback`
 - `thread/loaded/list`
 - `thread/read`

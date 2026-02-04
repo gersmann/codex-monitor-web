@@ -143,6 +143,13 @@ export function useComposerAutocompleteState({
   const slashCommandItems = useMemo<AutocompleteItem[]>(() => {
     const commands: AutocompleteItem[] = [
       {
+        id: "compact",
+        label: "compact",
+        description: "compact the active thread context",
+        insertText: "compact",
+        group: "Slash",
+      },
+      {
         id: "fork",
         label: "fork",
         description: "branch into a new thread",
