@@ -2247,6 +2247,7 @@ function MainApp() {
         activeTab={activeTab}
         tabletTab={tabletTab}
         centerMode={centerMode}
+        preloadGitDiffs={appSettings.preloadGitDiffs}
         hasActivePlan={hasActivePlan}
         activeWorkspace={Boolean(activeWorkspace)}
         sidebarNode={sidebarNode}
