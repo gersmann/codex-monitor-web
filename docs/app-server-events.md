@@ -1,4 +1,4 @@
-# App-Server Events Reference (Codex `59707da8572bbbffa8060396eb09e6961776981e`)
+# App-Server Events Reference (Codex `56ebfff1a800095fb501c80e9035455a23b4e43d`)
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
@@ -126,10 +126,14 @@ Also used (legacy/non-v2 request method):
 Compared against Codex v2 request methods, CodexMonitor currently does not send:
 
 - `thread/unarchive`
+- `thread/compact/start`
 - `thread/rollback`
 - `thread/loaded/list`
 - `thread/read`
+- `skills/remote/read`
+- `skills/remote/write`
 - `skills/config/write`
+- `mock/experimentalMethod`
 - `mcpServer/oauth/login`
 - `config/mcpServer/reload`
 - `account/login/cancel` (CodexMonitor currently sends a notification path for cancel)
@@ -140,6 +144,10 @@ Compared against Codex v2 request methods, CodexMonitor currently does not send:
 - `config/value/write`
 - `config/batchWrite`
 - `configRequirements/read`
+- `item/commandExecution/requestApproval`
+- `item/fileChange/requestApproval`
+- `item/tool/requestUserInput`
+- `item/tool/call`
 - `account/chatgptAuthTokens/refresh`
 
 ## Where To Look In ../Codex
