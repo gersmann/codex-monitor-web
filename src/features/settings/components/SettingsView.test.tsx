@@ -60,7 +60,7 @@ const baseSettings: AppSettings = {
   experimentalCollabEnabled: false,
   collaborationModesEnabled: true,
   steerEnabled: true,
-  experimentalUnifiedExecEnabled: false,
+  unifiedExecEnabled: true,
   experimentalAppsEnabled: false,
   personality: "friendly",
   dictationEnabled: false,
@@ -661,6 +661,27 @@ describe("SettingsView Features", () => {
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({ steerEnabled: false }),
+      );
+    });
+  });
+
+  it("toggles background terminal in stable features", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderFeaturesSection({
+      onUpdateAppSettings,
+      appSettings: { unifiedExecEnabled: true },
+    });
+
+    const terminalTitle = screen.getByText("Background terminal");
+    const terminalRow = terminalTitle.closest(".settings-toggle-row");
+    expect(terminalRow).not.toBeNull();
+
+    const toggle = within(terminalRow as HTMLElement).getByRole("button");
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ unifiedExecEnabled: false }),
       );
     });
   });

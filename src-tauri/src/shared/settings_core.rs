@@ -27,7 +27,7 @@ pub(crate) async fn get_app_settings_core(app_settings: &Mutex<AppSettings>) -> 
         settings.steer_enabled = steer_enabled;
     }
     if let Ok(Some(unified_exec_enabled)) = codex_config::read_unified_exec_enabled() {
-        settings.experimental_unified_exec_enabled = unified_exec_enabled;
+        settings.unified_exec_enabled = unified_exec_enabled;
     }
     if let Ok(Some(apps_enabled)) = codex_config::read_apps_enabled() {
         settings.experimental_apps_enabled = apps_enabled;
@@ -52,7 +52,7 @@ pub(crate) async fn update_app_settings_core(
         settings.collaboration_modes_enabled,
     );
     let _ = codex_config::write_steer_enabled(settings.steer_enabled);
-    let _ = codex_config::write_unified_exec_enabled(settings.experimental_unified_exec_enabled);
+    let _ = codex_config::write_unified_exec_enabled(settings.unified_exec_enabled);
     let _ = codex_config::write_apps_enabled(settings.experimental_apps_enabled);
     let _ = codex_config::write_personality(settings.personality.as_str());
     write_settings(settings_path, &settings)?;

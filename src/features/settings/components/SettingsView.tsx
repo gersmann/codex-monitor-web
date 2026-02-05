@@ -3491,6 +3491,27 @@ export function SettingsView({
                     <span className="settings-toggle-knob" />
                   </button>
                 </div>
+                <div className="settings-toggle-row">
+                  <div>
+                    <div className="settings-toggle-title">Background terminal</div>
+                    <div className="settings-toggle-subtitle">
+                      Run long-running terminal commands in the background.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`settings-toggle ${appSettings.unifiedExecEnabled ? "on" : ""}`}
+                    onClick={() =>
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        unifiedExecEnabled: !appSettings.unifiedExecEnabled,
+                      })
+                    }
+                    aria-pressed={appSettings.unifiedExecEnabled}
+                  >
+                    <span className="settings-toggle-knob" />
+                  </button>
+                </div>
                 <div className="settings-subsection-title">Experimental Features</div>
                 <div className="settings-subsection-subtitle">
                   Preview features that may change or be removed.
@@ -3533,27 +3554,6 @@ export function SettingsView({
                       })
                     }
                     aria-pressed={appSettings.experimentalAppsEnabled}
-                  >
-                    <span className="settings-toggle-knob" />
-                  </button>
-                </div>
-                <div className="settings-toggle-row">
-                  <div>
-                    <div className="settings-toggle-title">Background terminal</div>
-                    <div className="settings-toggle-subtitle">
-                      Run long-running terminal commands in the background.
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`settings-toggle ${appSettings.experimentalUnifiedExecEnabled ? "on" : ""}`}
-                    onClick={() =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        experimentalUnifiedExecEnabled: !appSettings.experimentalUnifiedExecEnabled,
-                      })
-                    }
-                    aria-pressed={appSettings.experimentalUnifiedExecEnabled}
                   >
                     <span className="settings-toggle-knob" />
                   </button>
