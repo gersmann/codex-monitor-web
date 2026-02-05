@@ -1,4 +1,4 @@
-# App-Server Events Reference (Codex `56ebfff1a800095fb501c80e9035455a23b4e43d`)
+# App-Server Events Reference (Codex `41b4962b0a7f5d73bb23d329ad9bb742545f6a2c`)
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
@@ -115,12 +115,11 @@ These are v2 request methods CodexMonitor currently sends to Codex app-server:
 - `collaborationMode/list`
 - `mcpServerStatus/list`
 - `account/login/start`
+- `account/login/cancel`
+- `account/rateLimits/read`
 - `account/read`
 - `skills/list`
 - `app/list`
-
-Also used (legacy/non-v2 request method):
-- `account/rateLimits/read`
 
 ## Missing Requests (Codex v2 Request Methods)
 
@@ -136,7 +135,6 @@ Compared against Codex v2 request methods, CodexMonitor currently does not send:
 - `mock/experimentalMethod`
 - `mcpServer/oauth/login`
 - `config/mcpServer/reload`
-- `account/login/cancel` (CodexMonitor currently sends a notification path for cancel)
 - `account/logout`
 - `feedback/upload`
 - `command/exec`
