@@ -459,6 +459,7 @@ export function ComposerInput({
                       {(() => {
                         const Icon = suggestionIcon(item);
                         const fileSuggestion = isFileSuggestion(item);
+                        const skillSuggestion = item.id.startsWith("skill:");
                         const title = fileSuggestion ? fileTitle(item.label) : item.label;
                         const description = fileSuggestion ? item.label : item.description;
                         const fileTypeIconUrl = fileSuggestion
@@ -482,7 +483,11 @@ export function ComposerInput({
                             <span className="composer-suggestion-content">
                               <span className="composer-suggestion-title">{title}</span>
                               {description && (
-                                <span className="composer-suggestion-description">
+                                <span
+                                  className={`composer-suggestion-description${
+                                    skillSuggestion ? " composer-suggestion-description--skill" : ""
+                                  }`}
+                                >
                                   {description}
                                 </span>
                               )}
