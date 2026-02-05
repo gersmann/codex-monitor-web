@@ -209,6 +209,7 @@ impl DaemonState {
         parent_id: String,
         branch: String,
         name: Option<String>,
+        copy_agents_md: bool,
         client_version: String,
     ) -> Result<WorkspaceInfo, String> {
         let client_version = client_version.clone();
@@ -216,6 +217,7 @@ impl DaemonState {
             parent_id,
             branch,
             name,
+            copy_agents_md,
             &self.data_dir,
             &self.workspaces,
             &self.sessions,
@@ -914,6 +916,13 @@ fn parse_optional_u32(value: &Value, key: &str) -> Option<u32> {
     }
 }
 
+fn parse_optional_bool(value: &Value, key: &str) -> Option<bool> {
+    match value {
+        Value::Object(map) => map.get(key).and_then(|value| value.as_bool()),
+        _ => None,
+    }
+}
+
 fn parse_optional_string_array(value: &Value, key: &str) -> Option<Vec<String>> {
     match value {
         Value::Object(map) => map.get(key).and_then(|value| value.as_array()).map(|items| {
@@ -989,8 +998,9 @@ async fn handle_rpc_request(
             let parent_id = parse_string(&params, "parentId")?;
             let branch = parse_string(&params, "branch")?;
             let name = parse_optional_string(&params, "name");
+            let copy_agents_md = parse_optional_bool(&params, "copyAgentsMd").unwrap_or(true);
             let workspace = state
-                .add_worktree(parent_id, branch, name, client_version)
+                .add_worktree(parent_id, branch, name, copy_agents_md, client_version)
                 .await?;
             serde_json::to_value(workspace).map_err(|err| err.to_string())
         }

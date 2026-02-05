@@ -38,9 +38,12 @@ export function useThreadTurnEvents({
   safeMessageActivity,
   recordThreadActivity,
 }: UseThreadTurnEventsOptions) {
-  const shouldClearCompletedPlan = useCallback((threadId: string) => {
+  const shouldClearCompletedPlan = useCallback((threadId: string, turnId: string) => {
     const plan = planByThreadRef.current[threadId];
     if (!plan || plan.steps.length === 0) {
+      return false;
+    }
+    if (turnId && plan.turnId !== turnId) {
       return false;
     }
     return plan.steps.every((step) => step.status === "completed");
@@ -124,11 +127,11 @@ export function useThreadTurnEvents({
   );
 
   const onTurnCompleted = useCallback(
-    (_workspaceId: string, threadId: string, _turnId: string) => {
+    (_workspaceId: string, threadId: string, turnId: string) => {
       markProcessing(threadId, false);
       setActiveTurnId(threadId, null);
       pendingInterruptsRef.current.delete(threadId);
-      if (shouldClearCompletedPlan(threadId)) {
+      if (shouldClearCompletedPlan(threadId, turnId)) {
         dispatch({ type: "clearThreadPlan", threadId });
       }
     },

@@ -6,6 +6,7 @@ import { useRenameThreadPrompt } from "../../threads/hooks/useRenameThreadPrompt
 import { useClonePrompt } from "../../workspaces/hooks/useClonePrompt";
 import { useWorktreePrompt } from "../../workspaces/hooks/useWorktreePrompt";
 import type { BranchSwitcherState } from "../../git/hooks/useBranchSwitcher";
+import { useGitBranches } from "../../git/hooks/useGitBranches";
 
 const RenameThreadPrompt = lazy(() =>
   import("../../threads/components/RenameThreadPrompt").then((module) => ({
@@ -42,6 +43,7 @@ type AppModalsProps = {
   worktreePrompt: WorktreePromptState;
   onWorktreePromptNameChange: (value: string) => void;
   onWorktreePromptChange: (value: string) => void;
+  onWorktreePromptCopyAgentsMdChange: (value: boolean) => void;
   onWorktreeSetupScriptChange: (value: string) => void;
   onWorktreePromptCancel: () => void;
   onWorktreePromptConfirm: () => void;
@@ -74,6 +76,7 @@ export const AppModals = memo(function AppModals({
   worktreePrompt,
   onWorktreePromptNameChange,
   onWorktreePromptChange,
+  onWorktreePromptCopyAgentsMdChange,
   onWorktreeSetupScriptChange,
   onWorktreePromptCancel,
   onWorktreePromptConfirm,
@@ -97,6 +100,10 @@ export const AppModals = memo(function AppModals({
   SettingsViewComponent,
   settingsProps,
 }: AppModalsProps) {
+  const { branches: worktreeBranches } = useGitBranches({
+    activeWorkspace: worktreePrompt?.workspace ?? null,
+  });
+
   return (
     <>
       {renamePrompt && (
@@ -116,6 +123,9 @@ export const AppModals = memo(function AppModals({
             workspaceName={worktreePrompt.workspace.name}
             name={worktreePrompt.name}
             branch={worktreePrompt.branch}
+            branchWasEdited={worktreePrompt.branchWasEdited}
+            branchSuggestions={worktreeBranches}
+            copyAgentsMd={worktreePrompt.copyAgentsMd}
             setupScript={worktreePrompt.setupScript}
             scriptError={worktreePrompt.scriptError}
             error={worktreePrompt.error}
@@ -123,6 +133,7 @@ export const AppModals = memo(function AppModals({
             isSavingScript={worktreePrompt.isSavingScript}
             onNameChange={onWorktreePromptNameChange}
             onChange={onWorktreePromptChange}
+            onCopyAgentsMdChange={onWorktreePromptCopyAgentsMdChange}
             onSetupScriptChange={onWorktreeSetupScriptChange}
             onCancel={onWorktreePromptCancel}
             onConfirm={onWorktreePromptConfirm}

@@ -17,6 +17,44 @@ use uuid::Uuid;
 
 pub(crate) const WORKTREE_SETUP_MARKERS_DIR: &str = "worktree-setup";
 pub(crate) const WORKTREE_SETUP_MARKER_EXT: &str = "ran";
+const AGENTS_MD_FILE_NAME: &str = "AGENTS.md";
+
+fn copy_agents_md_from_parent_to_worktree(
+    parent_repo_root: &PathBuf,
+    worktree_root: &PathBuf,
+) -> Result<(), String> {
+    let source_path = parent_repo_root.join(AGENTS_MD_FILE_NAME);
+    if !source_path.is_file() {
+        return Ok(());
+    }
+
+    let destination_path = worktree_root.join(AGENTS_MD_FILE_NAME);
+    if destination_path.is_file() {
+        return Ok(());
+    }
+
+    let temp_path = worktree_root.join(format!("{AGENTS_MD_FILE_NAME}.tmp"));
+
+    std::fs::copy(&source_path, &temp_path).map_err(|err| {
+        format!(
+            "Failed to copy {} from {} to {}: {err}",
+            AGENTS_MD_FILE_NAME,
+            source_path.display(),
+            temp_path.display()
+        )
+    })?;
+
+    std::fs::rename(&temp_path, &destination_path).map_err(|err| {
+        let _ = std::fs::remove_file(&temp_path);
+        format!(
+            "Failed to finalize {} copy to {}: {err}",
+            AGENTS_MD_FILE_NAME,
+            destination_path.display()
+        )
+    })?;
+
+    Ok(())
+}
 
 pub(crate) fn normalize_setup_script(script: Option<String>) -> Option<String> {
     match script {
@@ -248,6 +286,7 @@ pub(crate) async fn add_worktree_core<
     parent_id: String,
     branch: String,
     name: Option<String>,
+    copy_agents_md: bool,
     data_dir: &PathBuf,
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
@@ -335,6 +374,17 @@ where
             &["worktree", "add", "-b", &branch, &worktree_path_string],
         )
         .await?;
+    }
+
+    if copy_agents_md {
+        if let Err(error) = copy_agents_md_from_parent_to_worktree(&repo_path, &worktree_path) {
+            eprintln!(
+                "add_worktree: optional {} copy failed for {}: {}",
+                AGENTS_MD_FILE_NAME,
+                worktree_path.display(),
+                error
+            );
+        }
     }
 
     let entry = WorkspaceEntry {
@@ -1117,4 +1167,57 @@ fn sort_workspaces(workspaces: &mut [WorkspaceInfo]) {
             .cmp(&b.name)
             .then_with(|| a.id.cmp(&b.id))
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::copy_agents_md_from_parent_to_worktree;
+    use super::AGENTS_MD_FILE_NAME;
+    use uuid::Uuid;
+
+    fn make_temp_dir() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("codex-monitor-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("failed to create temp dir");
+        dir
+    }
+
+    #[test]
+    fn copies_agents_md_when_missing_in_worktree() {
+        let parent = make_temp_dir();
+        let worktree = make_temp_dir();
+        let parent_agents = parent.join(AGENTS_MD_FILE_NAME);
+        let worktree_agents = worktree.join(AGENTS_MD_FILE_NAME);
+
+        std::fs::write(&parent_agents, "parent").expect("failed to write parent AGENTS.md");
+
+        copy_agents_md_from_parent_to_worktree(&parent, &worktree).expect("copy should succeed");
+
+        let copied = std::fs::read_to_string(&worktree_agents)
+            .expect("worktree AGENTS.md should exist after copy");
+        assert_eq!(copied, "parent");
+
+        let _ = std::fs::remove_dir_all(parent);
+        let _ = std::fs::remove_dir_all(worktree);
+    }
+
+    #[test]
+    fn does_not_overwrite_existing_worktree_agents_md() {
+        let parent = make_temp_dir();
+        let worktree = make_temp_dir();
+        let parent_agents = parent.join(AGENTS_MD_FILE_NAME);
+        let worktree_agents = worktree.join(AGENTS_MD_FILE_NAME);
+
+        std::fs::write(&parent_agents, "parent").expect("failed to write parent AGENTS.md");
+        std::fs::write(&worktree_agents, "branch-specific")
+            .expect("failed to write worktree AGENTS.md");
+
+        copy_agents_md_from_parent_to_worktree(&parent, &worktree).expect("copy should succeed");
+
+        let retained = std::fs::read_to_string(&worktree_agents)
+            .expect("worktree AGENTS.md should still exist");
+        assert_eq!(retained, "branch-specific");
+
+        let _ = std::fs::remove_dir_all(parent);
+        let _ = std::fs::remove_dir_all(worktree);
+    }
 }

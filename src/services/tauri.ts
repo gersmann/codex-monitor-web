@@ -157,8 +157,9 @@ export async function addWorktree(
   parentId: string,
   branch: string,
   name: string | null,
+  copyAgentsMd = true,
 ): Promise<WorkspaceInfo> {
-  return invoke<WorkspaceInfo>("add_worktree", { parentId, branch, name });
+  return invoke<WorkspaceInfo>("add_worktree", { parentId, branch, name, copyAgentsMd });
 }
 
 export type WorktreeSetupStatus = {

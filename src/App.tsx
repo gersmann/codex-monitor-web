@@ -67,6 +67,7 @@ import {
 } from "./features/layout/components/SidebarToggleControls";
 import { useAppSettingsController } from "./features/app/hooks/useAppSettingsController";
 import { useUpdaterController } from "./features/app/hooks/useUpdaterController";
+import { useResponseRequiredNotificationsController } from "./features/app/hooks/useResponseRequiredNotificationsController";
 import { useErrorToasts } from "./features/notifications/hooks/useErrorToasts";
 import { useComposerShortcuts } from "./features/composer/hooks/useComposerShortcuts";
 import { useComposerMenuActions } from "./features/composer/hooks/useComposerMenuActions";
@@ -421,8 +422,7 @@ function MainApp() {
     onDebug: addDebugEntry,
   });
 
-  useComposerShortcuts({
-    textareaRef: composerInputRef,
+  const composerShortcuts = {
     modelShortcut: appSettings.composerModelShortcut,
     accessShortcut: appSettings.composerAccessShortcut,
     reasoningShortcut: appSettings.composerReasoningShortcut,
@@ -441,6 +441,16 @@ function MainApp() {
     selectedEffort,
     onSelectEffort: setSelectedEffort,
     reasoningSupported,
+  };
+
+  useComposerShortcuts({
+    textareaRef: composerInputRef,
+    ...composerShortcuts,
+  });
+
+  useComposerShortcuts({
+    textareaRef: workspaceHomeTextareaRef,
+    ...composerShortcuts,
   });
 
   useComposerMenuActions({
@@ -703,6 +713,15 @@ function MainApp() {
     customPrompts: prompts,
     onMessageActivity: queueGitStatusRefresh
   });
+
+  useResponseRequiredNotificationsController({
+    systemNotificationsEnabled: appSettings.systemNotificationsEnabled,
+    approvals,
+    userInputRequests,
+    getWorkspaceName,
+    onDebug: addDebugEntry,
+  });
+
   const {
     activeAccount,
     accountSwitching,
@@ -898,6 +917,7 @@ function MainApp() {
     cancelPrompt: cancelWorktreePrompt,
     updateName: updateWorktreeName,
     updateBranch: updateWorktreeBranch,
+    updateCopyAgentsMd: updateWorktreeCopyAgentsMd,
     updateSetupScript: updateWorktreeSetupScript,
   } = useWorktreePrompt({
     addWorktreeAgent,
@@ -1046,9 +1066,12 @@ function MainApp() {
   const activePlan = activeThreadId
     ? planByThread[activeThreadId] ?? null
     : null;
-  const hasActivePlan = Boolean(
-    activePlan && (activePlan.steps.length > 0 || activePlan.explanation)
-  );
+  const activeThreadProcessing = activeThreadId
+    ? threadStatusById[activeThreadId]?.isProcessing ?? false
+    : false;
+  const hasActivePlan =
+    Boolean(activePlan && (activePlan.steps.length > 0 || activePlan.explanation)) ||
+    activeThreadProcessing;
   const showHome = !activeWorkspace;
   const showWorkspaceHome = Boolean(activeWorkspace && !activeThreadId && !isNewAgentDraftMode);
   const showComposer = (!isCompact
@@ -1925,6 +1948,7 @@ function MainApp() {
     selectedDiffPath,
     diffScrollRequestId,
     onSelectDiff: handleSelectDiff,
+    diffSource,
     gitLogEntries,
     gitLogTotal,
     gitLogAhead,
@@ -2282,6 +2306,7 @@ function MainApp() {
         worktreePrompt={worktreePrompt}
         onWorktreePromptNameChange={updateWorktreeName}
         onWorktreePromptChange={updateWorktreeBranch}
+        onWorktreePromptCopyAgentsMdChange={updateWorktreeCopyAgentsMd}
         onWorktreeSetupScriptChange={updateWorktreeSetupScript}
         onWorktreePromptCancel={cancelWorktreePrompt}
         onWorktreePromptConfirm={confirmWorktreePrompt}

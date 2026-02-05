@@ -267,6 +267,27 @@ describe("useThreadTurnEvents", () => {
     });
   });
 
+  it("does not clear a completed plan for a different turn", () => {
+    const { result, dispatch } = makeOptions({
+      planByThread: {
+        "thread-1": {
+          turnId: "turn-2",
+          explanation: "Done",
+          steps: [{ step: "Finish task", status: "completed" }],
+        },
+      },
+    });
+
+    act(() => {
+      result.current.onTurnCompleted("ws-1", "thread-1", "turn-1");
+    });
+
+    expect(dispatch).not.toHaveBeenCalledWith({
+      type: "clearThreadPlan",
+      threadId: "thread-1",
+    });
+  });
+
   it("keeps the active plan when at least one step is not completed", () => {
     const { result, dispatch } = makeOptions({
       planByThread: {

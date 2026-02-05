@@ -6,6 +6,7 @@ type WorktreePromptState = {
   name: string;
   branch: string;
   branchWasEdited: boolean;
+  copyAgentsMd: boolean;
   setupScript: string;
   savedSetupScript: string | null;
   isSubmitting: boolean;
@@ -18,7 +19,7 @@ type UseWorktreePromptOptions = {
   addWorktreeAgent: (
     workspace: WorkspaceInfo,
     branch: string,
-    options?: { displayName?: string | null },
+    options?: { displayName?: string | null; copyAgentsMd?: boolean },
   ) => Promise<WorkspaceInfo | null>;
   updateWorkspaceSettings: (
     id: string,
@@ -38,6 +39,7 @@ type UseWorktreePromptResult = {
   cancelPrompt: () => void;
   updateName: (value: string) => void;
   updateBranch: (value: string) => void;
+  updateCopyAgentsMd: (value: boolean) => void;
   updateSetupScript: (value: string) => void;
 };
 
@@ -82,6 +84,7 @@ export function useWorktreePrompt({
       name: "",
       branch: defaultBranch,
       branchWasEdited: false,
+      copyAgentsMd: true,
       setupScript: savedSetupScript ?? "",
       savedSetupScript,
       isSubmitting: false,
@@ -116,6 +119,10 @@ export function useWorktreePrompt({
     setWorktreePrompt((prev) =>
       prev ? { ...prev, branch: value, branchWasEdited: true, error: null } : prev,
     );
+  }, []);
+
+  const updateCopyAgentsMd = useCallback((value: boolean) => {
+    setWorktreePrompt((prev) => (prev ? { ...prev, copyAgentsMd: value } : prev));
   }, []);
 
   const updateSetupScript = useCallback((value: string) => {
@@ -191,6 +198,7 @@ export function useWorktreePrompt({
       const displayName = snapshot.name.trim();
       const worktreeWorkspace = await addWorktreeAgent(parentWorkspace, snapshot.branch, {
         displayName: displayName.length > 0 ? displayName : null,
+        copyAgentsMd: snapshot.copyAgentsMd,
       });
       if (!worktreeWorkspace) {
         setWorktreePrompt(null);
@@ -233,6 +241,7 @@ export function useWorktreePrompt({
     cancelPrompt,
     updateName,
     updateBranch,
+    updateCopyAgentsMd,
     updateSetupScript,
   };
 }
