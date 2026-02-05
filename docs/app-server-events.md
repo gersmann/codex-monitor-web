@@ -14,6 +14,9 @@ When updating this document:
 
 ## Where To Look In CodexMonitor
 
+Primary app-server event source of truth (methods + typed parsing helpers):
+- `src/utils/appServerEvents.ts`
+
 Primary event router:
 - `src/features/app/hooks/useAppServerEvents.ts`
 
@@ -43,11 +46,13 @@ Primary outgoing request layer:
 
 ## Supported Events (Current)
 
-These are the events explicitly routed in `useAppServerEvents.ts` (plus
-`requestApproval` methods matched by substring):
+These are the app-server methods currently supported in
+`src/utils/appServerEvents.ts` (`SUPPORTED_APP_SERVER_METHODS`) and routed in
+`useAppServerEvents.ts`.
 
 - `codex/connected`
-- `*requestApproval*` (matched via `method.includes("requestApproval")`)
+- `*requestApproval` methods (matched via
+  `isApprovalRequestMethod(method)`; suffix check)
 - `item/tool/requestUserInput`
 - `item/agentMessage/delta`
 - `turn/started`
@@ -71,6 +76,8 @@ These are the events explicitly routed in `useAppServerEvents.ts` (plus
 - `item/commandExecution/outputDelta`
 - `item/commandExecution/terminalInteraction`
 - `item/fileChange/outputDelta`
+- `codex/event/skills_update_available` (handled via
+  `isSkillsUpdateAvailableEvent(...)` in `useSkills.ts`)
 
 ## Conversation Compaction Signals (Codex v2)
 
@@ -170,7 +177,7 @@ Use this workflow to update the lists above:
 2. List Codex v2 notification methods:
    - `rg -n \"=> \\\".*\\\" \\(v2::.*Notification\\)\" ../Codex/codex-rs/app-server-protocol/src/protocol/common.rs`
 3. List CodexMonitor routed methods:
-   - `rg -n \"method === \\\"|method\\.includes\\(\" src/features/app/hooks/useAppServerEvents.ts`
+   - `rg -n \"SUPPORTED_APP_SERVER_METHODS\" src/utils/appServerEvents.ts`
 4. Update the Supported and Missing sections.
 
 ## Quick Request Comparison Workflow
@@ -196,6 +203,7 @@ Use this when the method list is unchanged but behavior looks off.
 3. For a specific method, jump to its struct definition:
    - Example: `rg -n \"struct TurnPlanUpdatedNotification|struct ThreadTokenUsageUpdatedNotification|struct AccountRateLimitsUpdatedNotification|struct ItemStartedNotification|struct ItemCompletedNotification\" ../Codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
 4. Compare payload shapes to the router expectations:
+   - Parser/source of truth: `src/utils/appServerEvents.ts`
    - Router: `src/features/app/hooks/useAppServerEvents.ts`
    - Turn/plan/token/rate-limit normalization: `src/features/threads/utils/threadNormalize.ts`
    - Item shaping for display: `src/utils/threadItems.ts`
@@ -203,15 +211,16 @@ Use this when the method list is unchanged but behavior looks off.
    - `rg -n \"enum ThreadItem|CommandExecution|FileChange|McpToolCall|EnteredReviewMode|ExitedReviewMode|ContextCompaction\" ../Codex/codex-rs/app-server-protocol/src/protocol/v2.rs`
 6. Check for camelCase vs snake_case mismatches:
    - The protocol uses `#[serde(rename_all = \"camelCase\")]`, but fields are often declared in snake_case.
-   - CodexMonitor generally defends against this by checking both forms (for example in `threadNormalize.ts` and `useAppServerEvents.ts`).
+   - CodexMonitor generally defends against this by checking both forms (for example in `threadNormalize.ts` and `useAppServerEvents.ts`), while centralizing method/type parsing in `appServerEvents.ts`.
 7. If a schema change is found, fix it at the edges first:
-   - Prefer updating `useAppServerEvents.ts` and `threadNormalize.ts` rather than spreading conditionals into components.
+   - Prefer updating `src/utils/appServerEvents.ts`, `useAppServerEvents.ts`, and `threadNormalize.ts` rather than spreading conditionals into components.
 
 ## Notes
 
 - Not all missing events must be surfaced in the conversation view; some may
   be better as toasts, settings warnings, or debug-only entries.
 - For conversation view changes, prefer:
+  - Add method/type support in `src/utils/appServerEvents.ts`
   - Route in `useAppServerEvents.ts`
   - Handle in `useThreadTurnEvents.ts` or `useThreadItemEvents.ts`
   - Update state in `useThreadsReducer.ts`

@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 describe("useSkills", () => {
-  it("refreshes skills on canonical skills_update_available notifications", async () => {
+  it("refreshes skills on canonical codex/event/skills_update_available notifications", async () => {
     vi.mocked(getSkillsList)
       .mockResolvedValueOnce({ result: { skills: [{ name: "first", path: "/skills/first" }] } })
       .mockResolvedValueOnce({
@@ -62,8 +62,7 @@ describe("useSkills", () => {
       listener?.({
         workspace_id: "workspace-1",
         message: {
-          method: "event/msg",
-          params: { msg: { type: "skills_update_available" } },
+          method: "codex/event/skills_update_available",
         },
       });
     });
@@ -112,8 +111,7 @@ describe("useSkills", () => {
       listener?.({
         workspace_id: "workspace-2",
         message: {
-          method: "event/msg",
-          params: { msg: { type: "skills_update_available" } },
+          method: "codex/event/skills_update_available",
         },
       });
     });
