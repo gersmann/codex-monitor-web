@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DebugEntry, SkillOption, WorkspaceInfo } from "../../../types";
 import { getSkillsList } from "../../../services/tauri";
+import { subscribeAppServerEvents } from "../../../services/events";
 
 type UseSkillsOptions = {
   activeWorkspace: WorkspaceInfo | null;
@@ -14,6 +15,24 @@ export function useSkills({ activeWorkspace, onDebug }: UseSkillsOptions) {
 
   const workspaceId = activeWorkspace?.id ?? null;
   const isConnected = Boolean(activeWorkspace?.connected);
+
+  const isSkillsUpdateAvailableEvent = useCallback((message: Record<string, unknown>) => {
+    const method = String(message.method ?? "").trim();
+    if (method !== "event/msg") {
+      return false;
+    }
+
+    const params =
+      message.params && typeof message.params === "object"
+        ? (message.params as Record<string, unknown>)
+        : {};
+    const msg =
+      params.msg && typeof params.msg === "object"
+        ? (params.msg as Record<string, unknown>)
+        : {};
+    const eventType = String(msg.type ?? "").trim();
+    return eventType === "skills_update_available";
+  }, []);
 
   const refreshSkills = useCallback(async () => {
     if (!workspaceId || !isConnected) {
@@ -75,6 +94,34 @@ export function useSkills({ activeWorkspace, onDebug }: UseSkillsOptions) {
     }
     refreshSkills();
   }, [isConnected, refreshSkills, skills.length, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || !isConnected) {
+      return;
+    }
+
+    return subscribeAppServerEvents((event) => {
+      if (event.workspace_id !== workspaceId) {
+        return;
+      }
+      const message =
+        event.message && typeof event.message === "object"
+          ? (event.message as Record<string, unknown>)
+          : {};
+      if (!isSkillsUpdateAvailableEvent(message)) {
+        return;
+      }
+
+      onDebug?.({
+        id: `${Date.now()}-server-skills-update-available`,
+        timestamp: Date.now(),
+        source: "server",
+        label: "skills/update available",
+        payload: event,
+      });
+      void refreshSkills();
+    });
+  }, [isConnected, isSkillsUpdateAvailableEvent, onDebug, refreshSkills, workspaceId]);
 
   const skillOptions = useMemo(
     () => skills.filter((skill) => skill.name),
