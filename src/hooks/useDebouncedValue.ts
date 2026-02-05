@@ -13,6 +13,13 @@ export function useDebouncedValue<T>(value: T, delayMs = 150): T {
       if (cancelled) {
         return;
       }
+
+      // During test teardown, jsdom may be removed before pending timers flush.
+      // Avoid scheduling a React state update when no browser window exists.
+      if (typeof window === "undefined") {
+        return;
+      }
+
       setDebounced(value);
     }, delayMs);
     return () => {
