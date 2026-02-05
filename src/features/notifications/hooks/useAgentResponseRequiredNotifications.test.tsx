@@ -245,4 +245,112 @@ describe("useAgentResponseRequiredNotifications", () => {
       extra: { type: "plan", itemId: "plan-2" },
     });
   });
+
+  it("notifies again when an approval request ID is reused after resolution", async () => {
+    const firstApproval: ApprovalRequest = {
+      workspace_id: "ws-1",
+      request_id: 1,
+      method: "workspace/requestApproval",
+      params: { command: "npm run lint" },
+    };
+
+    const { rerender } = renderHook(
+      ({ approvals }) =>
+        useAgentResponseRequiredNotifications({
+          enabled: true,
+          isWindowFocused: false,
+          approvals,
+          userInputRequests: [],
+        }),
+      { initialProps: { approvals: [firstApproval] as ApprovalRequest[] } },
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+
+    rerender({ approvals: [] as ApprovalRequest[] });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const reusedApproval: ApprovalRequest = {
+      ...firstApproval,
+      params: { command: "npm run test" },
+    };
+    rerender({ approvals: [reusedApproval] as ApprovalRequest[] });
+
+    act(() => {
+      vi.advanceTimersByTime(1_500);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(sendNotification).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(sendNotification).mock.calls[1]?.[2]).toMatchObject({
+      extra: { type: "approval", requestId: 1 },
+    });
+  });
+
+  it("notifies again when a question request ID is reused after resolution", async () => {
+    const firstQuestion: RequestUserInputRequest = {
+      workspace_id: "ws-1",
+      request_id: 1,
+      params: {
+        thread_id: "thread-1",
+        turn_id: "turn-1",
+        item_id: "item-1",
+        questions: [{ id: "q-1", header: "Question one", question: "Choose one" }],
+      },
+    };
+
+    const { rerender } = renderHook(
+      ({ userInputRequests }) =>
+        useAgentResponseRequiredNotifications({
+          enabled: true,
+          isWindowFocused: false,
+          approvals: [],
+          userInputRequests,
+        }),
+      {
+        initialProps: {
+          userInputRequests: [firstQuestion] as RequestUserInputRequest[],
+        },
+      },
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+
+    rerender({ userInputRequests: [] as RequestUserInputRequest[] });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const reusedQuestion: RequestUserInputRequest = {
+      ...firstQuestion,
+      params: {
+        ...firstQuestion.params,
+        item_id: "item-2",
+        questions: [{ id: "q-2", header: "Question two", question: "Choose two" }],
+      },
+    };
+    rerender({ userInputRequests: [reusedQuestion] as RequestUserInputRequest[] });
+
+    act(() => {
+      vi.advanceTimersByTime(1_500);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(sendNotification).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(sendNotification).mock.calls[1]?.[2]).toMatchObject({
+      extra: { type: "question", requestId: 1 },
+    });
+  });
 });

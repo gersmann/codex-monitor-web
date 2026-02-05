@@ -145,6 +145,32 @@ export function useAgentResponseRequiredNotifications({
     [],
   );
 
+  useEffect(() => {
+    const activeKeys = new Set(
+      approvals.map((approval) =>
+        buildApprovalKey(approval.workspace_id, approval.request_id),
+      ),
+    );
+    for (const key of notifiedApprovalsRef.current) {
+      if (!activeKeys.has(key)) {
+        notifiedApprovalsRef.current.delete(key);
+      }
+    }
+  }, [approvals]);
+
+  useEffect(() => {
+    const activeKeys = new Set(
+      userInputRequests.map((request) =>
+        buildUserInputKey(request.workspace_id, request.request_id),
+      ),
+    );
+    for (const key of notifiedUserInputsRef.current) {
+      if (!activeKeys.has(key)) {
+        notifiedUserInputsRef.current.delete(key);
+      }
+    }
+  }, [userInputRequests]);
+
   const latestUnnotifiedApproval = (() => {
     for (let index = approvals.length - 1; index >= 0; index -= 1) {
       const approval = approvals[index];
