@@ -60,7 +60,7 @@ const defaultSettings: AppSettings = {
   gitDiffIgnoreWhitespaceChanges: false,
   experimentalCollabEnabled: false,
   collaborationModesEnabled: true,
-  experimentalSteerEnabled: false,
+  steerEnabled: true,
   experimentalUnifiedExecEnabled: false,
   experimentalAppsEnabled: false,
   personality: "friendly",

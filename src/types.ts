@@ -179,7 +179,7 @@ export type AppSettings = {
   gitDiffIgnoreWhitespaceChanges: boolean;
   experimentalCollabEnabled: boolean;
   collaborationModesEnabled: boolean;
-  experimentalSteerEnabled: boolean;
+  steerEnabled: boolean;
   experimentalUnifiedExecEnabled: boolean;
   experimentalAppsEnabled: boolean;
   personality: PersonalityPreference;

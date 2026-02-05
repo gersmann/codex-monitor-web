@@ -59,7 +59,7 @@ const baseSettings: AppSettings = {
   gitDiffIgnoreWhitespaceChanges: false,
   experimentalCollabEnabled: false,
   collaborationModesEnabled: true,
-  experimentalSteerEnabled: false,
+  steerEnabled: true,
   experimentalUnifiedExecEnabled: false,
   experimentalAppsEnabled: false,
   personality: "friendly",
@@ -640,6 +640,27 @@ describe("SettingsView Features", () => {
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({ personality: "pragmatic" }),
+      );
+    });
+  });
+
+  it("toggles steer mode in stable features", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderFeaturesSection({
+      onUpdateAppSettings,
+      appSettings: { steerEnabled: true },
+    });
+
+    const steerTitle = screen.getByText("Steer mode");
+    const steerRow = steerTitle.closest(".settings-toggle-row");
+    expect(steerRow).not.toBeNull();
+
+    const toggle = within(steerRow as HTMLElement).getByRole("button");
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ steerEnabled: false }),
       );
     });
   });
