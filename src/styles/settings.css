@@ -259,7 +259,7 @@
 }
 
 .settings-input--shortcut {
-  font-family: "SF Mono", "Fira Mono", "Menlo", monospace;
+  font-family: var(--code-font-family);
   letter-spacing: 0.02em;
 }
 
@@ -284,6 +284,11 @@
   background: var(--surface-control);
   color: var(--text-strong);
   font-size: 12px;
+}
+
+.settings-select option {
+  background-color: var(--surface-popover);
+  color: var(--text-strong);
 }
 
 .settings-select--compact {

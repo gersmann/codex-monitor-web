@@ -552,12 +552,11 @@ fn default_usage_show_remaining() -> bool {
 }
 
 fn default_ui_font_family() -> String {
-    "\"SF Pro Text\", \"SF Pro Display\", -apple-system, \"Helvetica Neue\", sans-serif"
-        .to_string()
+    "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif".to_string()
 }
 
 fn default_code_font_family() -> String {
-    "\"SF Mono\", \"SFMono-Regular\", Menlo, Monaco, monospace".to_string()
+    "ui-monospace, \"Cascadia Mono\", \"Segoe UI Mono\", Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace".to_string()
 }
 
 fn default_code_font_size() -> u8 {
@@ -565,15 +564,30 @@ fn default_code_font_size() -> u8 {
 }
 
 fn default_composer_model_shortcut() -> Option<String> {
-    Some("cmd+shift+m".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+m"
+    } else {
+        "ctrl+shift+m"
+    };
+    Some(value.to_string())
 }
 
 fn default_composer_access_shortcut() -> Option<String> {
-    Some("cmd+shift+a".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+a"
+    } else {
+        "ctrl+shift+a"
+    };
+    Some(value.to_string())
 }
 
 fn default_composer_reasoning_shortcut() -> Option<String> {
-    Some("cmd+shift+r".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+r"
+    } else {
+        "ctrl+shift+r"
+    };
+    Some(value.to_string())
 }
 
 fn default_interrupt_shortcut() -> Option<String> {
@@ -590,51 +604,107 @@ fn default_composer_collaboration_shortcut() -> Option<String> {
 }
 
 fn default_new_agent_shortcut() -> Option<String> {
-    Some("cmd+n".to_string())
+    let value = if cfg!(target_os = "macos") { "cmd+n" } else { "ctrl+n" };
+    Some(value.to_string())
 }
 
 fn default_new_worktree_agent_shortcut() -> Option<String> {
-    Some("cmd+shift+n".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+n"
+    } else {
+        "ctrl+shift+n"
+    };
+    Some(value.to_string())
 }
 
 fn default_new_clone_agent_shortcut() -> Option<String> {
-    Some("cmd+alt+n".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+alt+n"
+    } else {
+        "ctrl+alt+n"
+    };
+    Some(value.to_string())
 }
 
 fn default_archive_thread_shortcut() -> Option<String> {
-    Some("cmd+ctrl+a".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+ctrl+a"
+    } else {
+        "ctrl+alt+a"
+    };
+    Some(value.to_string())
 }
 
 fn default_toggle_projects_sidebar_shortcut() -> Option<String> {
-    Some("cmd+shift+p".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+p"
+    } else {
+        "ctrl+shift+p"
+    };
+    Some(value.to_string())
 }
 
 fn default_toggle_git_sidebar_shortcut() -> Option<String> {
-    Some("cmd+shift+g".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+g"
+    } else {
+        "ctrl+shift+g"
+    };
+    Some(value.to_string())
 }
 
 fn default_toggle_debug_panel_shortcut() -> Option<String> {
-    Some("cmd+shift+d".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+d"
+    } else {
+        "ctrl+shift+d"
+    };
+    Some(value.to_string())
 }
 
 fn default_toggle_terminal_shortcut() -> Option<String> {
-    Some("cmd+shift+t".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+t"
+    } else {
+        "ctrl+shift+t"
+    };
+    Some(value.to_string())
 }
 
 fn default_cycle_agent_next_shortcut() -> Option<String> {
-    Some("cmd+ctrl+down".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+ctrl+down"
+    } else {
+        "ctrl+alt+down"
+    };
+    Some(value.to_string())
 }
 
 fn default_cycle_agent_prev_shortcut() -> Option<String> {
-    Some("cmd+ctrl+up".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+ctrl+up"
+    } else {
+        "ctrl+alt+up"
+    };
+    Some(value.to_string())
 }
 
 fn default_cycle_workspace_next_shortcut() -> Option<String> {
-    Some("cmd+shift+down".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+down"
+    } else {
+        "ctrl+alt+shift+down"
+    };
+    Some(value.to_string())
 }
 
 fn default_cycle_workspace_prev_shortcut() -> Option<String> {
-    Some("cmd+shift+up".to_string())
+    let value = if cfg!(target_os = "macos") {
+        "cmd+shift+up"
+    } else {
+        "ctrl+alt+shift+up"
+    };
+    Some(value.to_string())
 }
 
 fn default_notification_sounds_enabled() -> bool {
@@ -730,50 +800,109 @@ fn default_workspace_groups() -> Vec<WorkspaceGroup> {
 }
 
 fn default_open_app_targets() -> Vec<OpenAppTarget> {
+    if cfg!(target_os = "macos") {
+        return vec![
+            OpenAppTarget {
+                id: "vscode".to_string(),
+                label: "VS Code".to_string(),
+                kind: "app".to_string(),
+                app_name: Some("Visual Studio Code".to_string()),
+                command: None,
+                args: Vec::new(),
+            },
+            OpenAppTarget {
+                id: "cursor".to_string(),
+                label: "Cursor".to_string(),
+                kind: "app".to_string(),
+                app_name: Some("Cursor".to_string()),
+                command: None,
+                args: Vec::new(),
+            },
+            OpenAppTarget {
+                id: "zed".to_string(),
+                label: "Zed".to_string(),
+                kind: "app".to_string(),
+                app_name: Some("Zed".to_string()),
+                command: None,
+                args: Vec::new(),
+            },
+            OpenAppTarget {
+                id: "ghostty".to_string(),
+                label: "Ghostty".to_string(),
+                kind: "app".to_string(),
+                app_name: Some("Ghostty".to_string()),
+                command: None,
+                args: Vec::new(),
+            },
+            OpenAppTarget {
+                id: "antigravity".to_string(),
+                label: "Antigravity".to_string(),
+                kind: "app".to_string(),
+                app_name: Some("Antigravity".to_string()),
+                command: None,
+                args: Vec::new(),
+            },
+            OpenAppTarget {
+                id: "finder".to_string(),
+                label: "Finder".to_string(),
+                kind: "finder".to_string(),
+                app_name: None,
+                command: None,
+                args: Vec::new(),
+            },
+        ];
+    }
+
+    let file_manager_label = if cfg!(target_os = "windows") {
+        "Explorer"
+    } else {
+        "File Manager"
+    };
+
     vec![
         OpenAppTarget {
             id: "vscode".to_string(),
             label: "VS Code".to_string(),
-            kind: "app".to_string(),
-            app_name: Some("Visual Studio Code".to_string()),
-            command: None,
+            kind: "command".to_string(),
+            app_name: None,
+            command: Some("code".to_string()),
             args: Vec::new(),
         },
         OpenAppTarget {
             id: "cursor".to_string(),
             label: "Cursor".to_string(),
-            kind: "app".to_string(),
-            app_name: Some("Cursor".to_string()),
-            command: None,
+            kind: "command".to_string(),
+            app_name: None,
+            command: Some("cursor".to_string()),
             args: Vec::new(),
         },
         OpenAppTarget {
             id: "zed".to_string(),
             label: "Zed".to_string(),
-            kind: "app".to_string(),
-            app_name: Some("Zed".to_string()),
-            command: None,
+            kind: "command".to_string(),
+            app_name: None,
+            command: Some("zed".to_string()),
             args: Vec::new(),
         },
         OpenAppTarget {
             id: "ghostty".to_string(),
             label: "Ghostty".to_string(),
-            kind: "app".to_string(),
-            app_name: Some("Ghostty".to_string()),
-            command: None,
+            kind: "command".to_string(),
+            app_name: None,
+            command: Some("ghostty".to_string()),
             args: Vec::new(),
         },
         OpenAppTarget {
             id: "antigravity".to_string(),
             label: "Antigravity".to_string(),
-            kind: "app".to_string(),
-            app_name: Some("Antigravity".to_string()),
-            command: None,
+            kind: "command".to_string(),
+            app_name: None,
+            command: Some("antigravity".to_string()),
             args: Vec::new(),
         },
         OpenAppTarget {
             id: "finder".to_string(),
-            label: "Finder".to_string(),
+            label: file_manager_label.to_string(),
             kind: "finder".to_string(),
             app_name: None,
             command: None,
@@ -783,7 +912,11 @@ fn default_open_app_targets() -> Vec<OpenAppTarget> {
 }
 
 fn default_selected_open_app_id() -> String {
-    "vscode".to_string()
+    if cfg!(target_os = "windows") {
+        "finder".to_string()
+    } else {
+        "vscode".to_string()
+    }
 }
 
 impl Default for AppSettings {
@@ -866,17 +999,23 @@ mod tests {
         assert!(settings.remote_backend_token.is_none());
         assert_eq!(settings.default_access_mode, "current");
         assert_eq!(settings.review_delivery_mode, "inline");
+        let expected_primary = if cfg!(target_os = "macos") { "cmd" } else { "ctrl" };
+        let expected_model = format!("{expected_primary}+shift+m");
+        let expected_access = format!("{expected_primary}+shift+a");
+        let expected_reasoning = format!("{expected_primary}+shift+r");
+        let expected_toggle_debug = format!("{expected_primary}+shift+d");
+        let expected_toggle_terminal = format!("{expected_primary}+shift+t");
         assert_eq!(
             settings.composer_model_shortcut.as_deref(),
-            Some("cmd+shift+m")
+            Some(expected_model.as_str())
         );
         assert_eq!(
             settings.composer_access_shortcut.as_deref(),
-            Some("cmd+shift+a")
+            Some(expected_access.as_str())
         );
         assert_eq!(
             settings.composer_reasoning_shortcut.as_deref(),
-            Some("cmd+shift+r")
+            Some(expected_reasoning.as_str())
         );
         assert_eq!(
             settings.composer_collaboration_shortcut.as_deref(),
@@ -890,39 +1029,59 @@ mod tests {
         assert_eq!(settings.interrupt_shortcut.as_deref(), Some(expected_interrupt));
         assert_eq!(
             settings.archive_thread_shortcut.as_deref(),
-            Some("cmd+ctrl+a")
+            Some(if cfg!(target_os = "macos") {
+                "cmd+ctrl+a"
+            } else {
+                "ctrl+alt+a"
+            })
         );
         assert_eq!(
             settings.toggle_debug_panel_shortcut.as_deref(),
-            Some("cmd+shift+d")
+            Some(expected_toggle_debug.as_str())
         );
         assert_eq!(
             settings.toggle_terminal_shortcut.as_deref(),
-            Some("cmd+shift+t")
+            Some(expected_toggle_terminal.as_str())
         );
         assert_eq!(
             settings.cycle_agent_next_shortcut.as_deref(),
-            Some("cmd+ctrl+down")
+            Some(if cfg!(target_os = "macos") {
+                "cmd+ctrl+down"
+            } else {
+                "ctrl+alt+down"
+            })
         );
         assert_eq!(
             settings.cycle_agent_prev_shortcut.as_deref(),
-            Some("cmd+ctrl+up")
+            Some(if cfg!(target_os = "macos") {
+                "cmd+ctrl+up"
+            } else {
+                "ctrl+alt+up"
+            })
         );
         assert_eq!(
             settings.cycle_workspace_next_shortcut.as_deref(),
-            Some("cmd+shift+down")
+            Some(if cfg!(target_os = "macos") {
+                "cmd+shift+down"
+            } else {
+                "ctrl+alt+shift+down"
+            })
         );
         assert_eq!(
             settings.cycle_workspace_prev_shortcut.as_deref(),
-            Some("cmd+shift+up")
+            Some(if cfg!(target_os = "macos") {
+                "cmd+shift+up"
+            } else {
+                "ctrl+alt+shift+up"
+            })
         );
         assert!(settings.last_composer_model_id.is_none());
         assert!(settings.last_composer_reasoning_effort.is_none());
         assert!((settings.ui_scale - 1.0).abs() < f64::EPSILON);
         assert_eq!(settings.theme, "system");
         assert!(!settings.usage_show_remaining);
-        assert!(settings.ui_font_family.contains("SF Pro Text"));
-        assert!(settings.code_font_family.contains("SF Mono"));
+        assert!(settings.ui_font_family.contains("system-ui"));
+        assert!(settings.code_font_family.contains("ui-monospace"));
         assert_eq!(settings.code_font_size, 11);
         assert!(settings.notification_sounds_enabled);
         assert!(settings.system_notifications_enabled);
@@ -947,7 +1106,12 @@ mod tests {
         assert!(!settings.composer_list_continuation);
         assert!(!settings.composer_code_block_copy_use_modifier);
         assert!(settings.workspace_groups.is_empty());
-        assert_eq!(settings.selected_open_app_id, "vscode");
+        let expected_open_id = if cfg!(target_os = "windows") {
+            "finder"
+        } else {
+            "vscode"
+        };
+        assert_eq!(settings.selected_open_app_id, expected_open_id);
         assert_eq!(settings.open_app_targets.len(), 6);
         assert_eq!(settings.open_app_targets[0].id, "vscode");
     }

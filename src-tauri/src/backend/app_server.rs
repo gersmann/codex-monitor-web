@@ -13,9 +13,12 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio::time::timeout;
 
 use crate::backend::events::{AppServerEvent, EventSink};
-use crate::shared::process_core::tokio_command;
-use crate::codex::args::apply_codex_args;
+use crate::shared::process_core::{kill_child_process_tree, tokio_command};
+use crate::codex::args::parse_codex_args;
 use crate::types::WorkspaceEntry;
+
+#[cfg(target_os = "windows")]
+use crate::shared::process_core::{build_cmd_c_command, resolve_windows_executable};
 
 fn extract_thread_id(value: &Value) -> Option<String> {
     let params = value.get("params")?;
@@ -97,73 +100,143 @@ impl WorkspaceSession {
 }
 
 pub(crate) fn build_codex_path_env(codex_bin: Option<&str>) -> Option<String> {
-    let mut paths: Vec<String> = env::var("PATH")
-        .unwrap_or_default()
-        .split(':')
-        .filter(|value| !value.is_empty())
-        .map(|value| value.to_string())
-        .collect();
-    let mut extras = vec![
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/usr/bin",
-        "/bin",
-        "/usr/sbin",
-        "/sbin",
-    ]
-    .into_iter()
-    .map(|value| value.to_string())
-    .collect::<Vec<String>>();
-    if let Ok(home) = env::var("HOME") {
-        extras.push(format!("{home}/.local/bin"));
-        extras.push(format!("{home}/.local/share/mise/shims"));
-        extras.push(format!("{home}/.cargo/bin"));
-        extras.push(format!("{home}/.bun/bin"));
-        let nvm_root = Path::new(&home).join(".nvm/versions/node");
-        if let Ok(entries) = std::fs::read_dir(nvm_root) {
-            for entry in entries.flatten() {
-                let bin_path = entry.path().join("bin");
-                if bin_path.is_dir() {
-                    extras.push(bin_path.to_string_lossy().to_string());
+    let mut paths: Vec<PathBuf> = env::var_os("PATH")
+        .map(|value| env::split_paths(&value).collect())
+        .unwrap_or_default();
+
+    let mut extras: Vec<PathBuf> = Vec::new();
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        extras.extend([
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin",
+        ].into_iter().map(PathBuf::from));
+
+        if let Ok(home) = env::var("HOME") {
+            let home_path = Path::new(&home);
+            extras.push(home_path.join(".local/bin"));
+            extras.push(home_path.join(".local/share/mise/shims"));
+            extras.push(home_path.join(".cargo/bin"));
+            extras.push(home_path.join(".bun/bin"));
+            let nvm_root = home_path.join(".nvm/versions/node");
+            if let Ok(entries) = std::fs::read_dir(nvm_root) {
+                for entry in entries.flatten() {
+                    let bin_path = entry.path().join("bin");
+                    if bin_path.is_dir() {
+                        extras.push(bin_path);
+                    }
                 }
             }
         }
     }
-    if let Some(bin_path) = codex_bin.filter(|value| !value.trim().is_empty()) {
-        let parent = Path::new(bin_path).parent();
-        if let Some(parent) = parent {
-            extras.push(parent.to_string_lossy().to_string());
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(appdata) = env::var("APPDATA") {
+            extras.push(Path::new(&appdata).join("npm"));
+        }
+        if let Ok(local_app_data) = env::var("LOCALAPPDATA") {
+            extras.push(
+                Path::new(&local_app_data)
+                    .join("Microsoft")
+                    .join("WindowsApps"),
+            );
+        }
+        if let Ok(home) = env::var("USERPROFILE").or_else(|_| env::var("HOME")) {
+            let home_path = Path::new(&home);
+            extras.push(home_path.join(".cargo").join("bin"));
+            extras.push(home_path.join("scoop").join("shims"));
+        }
+        if let Ok(program_data) = env::var("PROGRAMDATA") {
+            extras.push(Path::new(&program_data).join("chocolatey").join("bin"));
         }
     }
+
+    if let Some(bin_path) = codex_bin.filter(|value| !value.trim().is_empty()) {
+        if let Some(parent) = Path::new(bin_path).parent() {
+            extras.push(parent.to_path_buf());
+        }
+    }
+
     for extra in extras {
-        if !paths.contains(&extra) {
+        if !paths.iter().any(|path| path == &extra) {
             paths.push(extra);
         }
     }
+
     if paths.is_empty() {
-        None
-    } else {
-        Some(paths.join(":"))
+        return None;
     }
+
+    env::join_paths(paths)
+        .ok()
+        .map(|joined| joined.to_string_lossy().to_string())
 }
 
-pub(crate) fn build_codex_command_with_bin(codex_bin: Option<String>) -> Command {
+pub(crate) fn build_codex_command_with_bin(
+    codex_bin: Option<String>,
+    codex_args: Option<&str>,
+    args: Vec<String>,
+) -> Result<Command, String> {
     let bin = codex_bin
         .clone()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "codex".into());
-    let mut command = tokio_command(bin);
-    if let Some(path_env) = build_codex_path_env(codex_bin.as_deref()) {
+
+    let path_env = build_codex_path_env(codex_bin.as_deref());
+    let mut command_args = parse_codex_args(codex_args)?;
+    command_args.extend(args);
+
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let bin_trimmed = bin.trim();
+        let resolved = resolve_windows_executable(bin_trimmed, path_env.as_deref());
+        let resolved_path = resolved
+            .as_deref()
+            .unwrap_or_else(|| Path::new(bin_trimmed));
+        let ext = resolved_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.to_ascii_lowercase());
+
+        if matches!(ext.as_deref(), Some("cmd") | Some("bat")) {
+            let mut command = tokio_command("cmd");
+            let command_line = build_cmd_c_command(resolved_path, &command_args)?;
+            command.arg("/D");
+            command.arg("/S");
+            command.arg("/C");
+            command.arg(command_line);
+            command
+        } else {
+            let mut command = tokio_command(resolved_path);
+            command.args(command_args);
+            command
+        }
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let mut command = {
+        let mut command = tokio_command(bin.trim());
+        command.args(command_args);
+        command
+    };
+
+    if let Some(path_env) = path_env {
         command.env("PATH", path_env);
     }
-    command
+    Ok(command)
 }
 
 pub(crate) async fn check_codex_installation(
     codex_bin: Option<String>,
 ) -> Result<Option<String>, String> {
-    let mut command = build_codex_command_with_bin(codex_bin);
-    command.arg("--version");
+    let mut command =
+        build_codex_command_with_bin(codex_bin, None, vec!["--version".to_string()])?;
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
 
@@ -222,10 +295,12 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
         .or(default_codex_bin);
     let _ = check_codex_installation(codex_bin.clone()).await?;
 
-    let mut command = build_codex_command_with_bin(codex_bin);
-    apply_codex_args(&mut command, codex_args.as_deref())?;
+    let mut command = build_codex_command_with_bin(
+        codex_bin,
+        codex_args.as_deref(),
+        vec!["app-server".to_string()],
+    )?;
     command.current_dir(&entry.path);
-    command.arg("app-server");
     if let Some(codex_home) = codex_home {
         command.env("CODEX_HOME", codex_home);
     }
@@ -355,7 +430,7 @@ pub(crate) async fn spawn_workspace_session<E: EventSink>(
         Ok(response) => response,
         Err(_) => {
             let mut child = session.child.lock().await;
-            let _ = child.kill().await;
+            kill_child_process_tree(&mut child).await;
             return Err(
                 "Codex app-server did not respond to initialize. Check that `codex app-server` works in Terminal."
                     .to_string(),

@@ -22,6 +22,10 @@ import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { formatRelativeTime } from "../../../utils/time";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
 import { pushErrorToast } from "../../../services/toasts";
+import {
+  fileManagerName,
+  isAbsolutePath as isAbsolutePathForPlatform,
+} from "../../../utils/platformPaths";
 
 type GitDiffPanelProps = {
   workspaceId?: string | null;
@@ -168,17 +172,12 @@ function getRelativePathWithin(base: string, target: string) {
   }
   return targetSegments.slice(baseSegments.length).join("/");
 }
-
-function isAbsolutePath(value: string) {
-  return value.startsWith("/") || /^[A-Za-z]:\//.test(value);
-}
-
 function resolveRootPath(root: string | null | undefined, workspacePath: string | null | undefined) {
   const normalized = normalizeRootPath(root);
   if (!normalized) {
     return "";
   }
-  if (workspacePath && !isAbsolutePath(normalized)) {
+  if (workspacePath && !isAbsolutePathForPlatform(normalized)) {
     return joinRootAndPath(workspacePath, normalized);
   }
   return normalized;
@@ -1071,6 +1070,7 @@ export function GitDiffPanel({
       }
 
       if (targetPaths.length === 1) {
+        const fileManagerLabel = fileManagerName();
         const rawPath = targetPaths[0];
         const absolutePath = resolvedRoot
           ? joinRootAndPath(resolvedRoot, rawPath)
@@ -1084,12 +1084,12 @@ export function GitDiffPanel({
         const fileName = getFileName(rawPath);
         items.push(
           await MenuItem.new({
-            text: "Show in Finder",
+            text: `Show in ${fileManagerLabel}`,
             action: async () => {
               try {
-                if (!resolvedRoot && !absolutePath.startsWith("/")) {
+                if (!resolvedRoot && !isAbsolutePathForPlatform(absolutePath)) {
                   pushErrorToast({
-                    title: "Couldn't show file in Finder",
+                    title: `Couldn't show file in ${fileManagerLabel}`,
                     message: "Select a git root first.",
                   });
                   return;
@@ -1102,7 +1102,7 @@ export function GitDiffPanel({
                 const message =
                   error instanceof Error ? error.message : String(error);
                 pushErrorToast({
-                  title: "Couldn't show file in Finder",
+                  title: `Couldn't show file in ${fileManagerLabel}`,
                   message,
                 });
                 console.warn("Failed to reveal file", {
