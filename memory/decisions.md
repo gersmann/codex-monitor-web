@@ -281,3 +281,10 @@ Type: preference
 Event: User requested both TCP and Orbit provider options be visibly marked as in progress.
 Action: Updated provider selector labels to `TCP (wip)` and `Orbit (wip)` in settings.
 Rule: Keep both remote provider labels marked `(wip)` until user requests removal after production-readiness.
+
+## 2026-02-07 21:06
+Context: Conversation auto-scroll regression (jump before re-pin)
+Type: decision
+Event: Smooth, delayed auto-scroll on streaming/appended messages caused visible upward jump then repin in the conversation view.
+Action: Updated `Messages` auto-scroll paths to immediate container-bottom pinning (`scrollTop = scrollHeight`) and removed delayed smooth auto-scroll behavior for automatic updates.
+Rule: Automatic message pinning should be immediate and non-animated; reserve smooth scrolling for explicit user-initiated navigation only.

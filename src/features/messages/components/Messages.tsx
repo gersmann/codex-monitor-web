@@ -1,4 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import Brain from "lucide-react/dist/esm/icons/brain";
@@ -1161,19 +1169,20 @@ export const Messages = memo(function Messages({
   };
 
   const requestAutoScroll = useCallback(() => {
-    if (!bottomRef.current) {
-      return;
-    }
     const container = containerRef.current;
     const shouldScroll =
       autoScrollRef.current || (container ? isNearBottom(container) : true);
     if (!shouldScroll) {
       return;
     }
-    bottomRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+      return;
+    }
+    bottomRef.current?.scrollIntoView({ block: "end" });
   }, [isNearBottom]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     autoScrollRef.current = true;
   }, [threadId]);
   const toggleExpanded = useCallback((id: string) => {
@@ -1289,34 +1298,20 @@ export const Messages = memo(function Messages({
     [],
   );
 
-  useEffect(() => {
-    if (!bottomRef.current) {
-      return undefined;
-    }
+  useLayoutEffect(() => {
     const container = containerRef.current;
     const shouldScroll =
       autoScrollRef.current ||
       (container ? isNearBottom(container) : true);
     if (!shouldScroll) {
-      return undefined;
+      return;
     }
-    let raf1 = 0;
-    let raf2 = 0;
-    const target = bottomRef.current;
-    raf1 = window.requestAnimationFrame(() => {
-      raf2 = window.requestAnimationFrame(() => {
-        target.scrollIntoView({ behavior: "smooth", block: "end" });
-      });
-    });
-    return () => {
-      if (raf1) {
-        window.cancelAnimationFrame(raf1);
-      }
-      if (raf2) {
-        window.cancelAnimationFrame(raf2);
-      }
-    };
-  }, [scrollKey, isThinking, isNearBottom]);
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+      return;
+    }
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [scrollKey, isThinking, isNearBottom, threadId]);
 
   const groupedItems = useMemo(() => buildToolGroups(visibleItems), [visibleItems]);
 

@@ -716,4 +716,59 @@ describe("Messages", () => {
       expect(screen.getByText("5 tool calls")).toBeTruthy();
     });
   });
+
+  it("re-pins to bottom on thread switch even when previous thread was scrolled up", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-shared",
+        kind: "message",
+        role: "assistant",
+        text: "Shared tail",
+      },
+    ];
+
+    const { container, rerender } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const messagesNode = container.querySelector(".messages.messages-full");
+    expect(messagesNode).toBeTruthy();
+    const scrollNode = messagesNode as HTMLDivElement;
+
+    Object.defineProperty(scrollNode, "clientHeight", {
+      configurable: true,
+      value: 200,
+    });
+    Object.defineProperty(scrollNode, "scrollHeight", {
+      configurable: true,
+      value: 600,
+    });
+    scrollNode.scrollTop = 100;
+    fireEvent.scroll(scrollNode);
+
+    Object.defineProperty(scrollNode, "scrollHeight", {
+      configurable: true,
+      value: 900,
+    });
+
+    rerender(
+      <Messages
+        items={items}
+        threadId="thread-2"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(scrollNode.scrollTop).toBe(900);
+  });
 });

@@ -111,3 +111,13 @@ Rule: Do not auto-run desktop-only diagnostics on mobile surfaces; gate by platf
 Root cause: Auto-refresh effect was scoped by provider/mode only and assumed desktop capabilities.
 Fix applied: Updated `src/features/settings/components/SettingsView.tsx` effect logic and added `src/utils/platformPaths.test.ts` coverage for mobile detection.
 Prevention rule: For any auto-run settings helper, explicitly classify desktop-only vs cross-platform behavior before wiring useEffect refreshes.
+
+## 2026-02-07 21:09
+Context: Messages auto-scroll regression follow-up (thread switch)
+Type: mistake
+Event: Converting the auto-scroll effect to `useLayoutEffect` introduced an ordering bug where thread switches could skip initial re-pin if the previous thread was scrolled up.
+Action: Switched thread-change `autoScrollRef` reset to `useLayoutEffect`, added `threadId` to auto-scroll layout effect dependencies, and added a regression test for thread-switch re-pin behavior.
+Rule: When converting effects between `useEffect` and `useLayoutEffect`, preserve ordering guarantees for dependent refs across thread/navigation boundaries.
+Root cause: `autoScrollRef.current = true` still ran in `useEffect` after the new layout scroll pass, so first render on thread switch could evaluate stale `false`.
+Fix applied: Updated `src/features/messages/components/Messages.tsx` hook ordering/dependencies and added `re-pins to bottom on thread switch even when previous thread was scrolled up` in `src/features/messages/components/Messages.test.tsx`.
+Prevention rule: For scroll/anchor refs, pair layout-timing ref resets with layout-timing consumers and add regression coverage for cross-thread transitions.
