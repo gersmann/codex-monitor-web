@@ -2,6 +2,7 @@
 
 ## Open
 - [ ] 2026-02-07: Implement Orbit-only mobile remote foundation: Orbit transport in `remote_backend`, runner Orbit mode, hosted/self-host settings + pairing UX, and iOS keychain-backed auth storage.
+- [ ] 2026-02-07: Implement Cloudflare WebSocket transport internals behind `remoteBackendProvider=cloudflare` (handshake/auth/send/subscribe/reconnect/replay) and wire settings UX for worker/session inputs.
 
 ## Done
 - [x] 2026-02-07: Restored Sentry frontend reporting removed in `83a37da` (`@sentry/react`, `Sentry.init`, captureException callsites, and metrics instrumentation).

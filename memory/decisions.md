@@ -204,3 +204,10 @@ Type: decision
 Event: Added daemon-side RPC parity coverage for recently extracted workspace/prompts/local-usage adapters and improved open-app failure diagnostics.
 Action: Added RPC tests in `src-tauri/src/bin/codex_monitor_daemon.rs` for `add_clone`, `prompts_list`, and `local_usage_snapshot` routing; updated `open_workspace_in_core` in `src-tauri/src/shared/workspaces_core.rs` to include bounded stdout/stderr snippets in non-zero exit errors.
 Rule: Keep daemon adapter parity guarded by RPC-level tests for representative workspace/prompts/local-usage methods, and preserve process-output context in open-app failure errors.
+
+## 2026-02-07 17:52
+Context: Remote backend transport abstraction for mobile bridge prep
+Type: decision
+Event: Remote backend was a single TCP-specific module with no transport-level provider split.
+Action: Refactored `src-tauri/src/remote_backend.rs` into `remote_backend/{mod,protocol,transport,tcp_transport,cloudflare_ws_transport}.rs`, added `remoteBackendProvider` + Cloudflare settings fields, kept TCP behavior as default, and added a Cloudflare transport stub that returns a clear not-implemented error.
+Rule: Keep remote transport wiring behind `RemoteTransport` and use provider selection in settings so new bridge transports can be added without touching command callsites.

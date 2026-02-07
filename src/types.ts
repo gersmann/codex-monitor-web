@@ -115,6 +115,7 @@ export type ReviewTarget =
 
 export type AccessMode = "read-only" | "current" | "full-access";
 export type BackendMode = "local" | "remote";
+export type RemoteBackendProvider = "tcp" | "cloudflare";
 export type ThemePreference = "system" | "light" | "dark" | "dim";
 export type PersonalityPreference = "friendly" | "pragmatic";
 
@@ -145,8 +146,11 @@ export type AppSettings = {
   codexBin: string | null;
   codexArgs: string | null;
   backendMode: BackendMode;
+  remoteBackendProvider: RemoteBackendProvider;
   remoteBackendHost: string;
   remoteBackendToken: string | null;
+  cloudflareWorkerUrl: string | null;
+  cloudflareSessionId: string | null;
   defaultAccessMode: AccessMode;
   reviewDeliveryMode: "inline" | "detached";
   composerModelShortcut: string | null;
