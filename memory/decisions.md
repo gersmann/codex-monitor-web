@@ -141,3 +141,52 @@ Type: preference
 Event: User explicitly requested to ignore PR #31 and CloudKit for mobile architecture planning.
 Action: Canonical mobile plan now targets Cloudflare bridge only, with no dependency on CloudKit or PR #31 implementation details.
 Rule: Do not propose CloudKit/PR31-based mobile backend patterns unless user re-requests them.
+
+## 2026-02-07 15:11
+Context: Mobile UI scope confirmation
+Type: preference
+Event: User confirmed iOS should reuse the current app layout's mobile variant instead of introducing a separate mobile-only UI surface.
+Action: Treat mobile work as backend/connectivity enablement for existing mobile-responsive UI flows.
+Rule: For iOS rollout, prioritize backend/transport parity for existing UI flows before designing net-new mobile-specific screens.
+
+## 2026-02-07 15:26
+Context: App/daemon parity refactor quality bar
+Type: preference
+Event: User requested parity work avoid repeated logical code between app and daemon, with shared implementations as the default.
+Action: Current in-progress daemon parity changes must be completed by extracting/using shared core helpers instead of duplicating logic in daemon-specific functions.
+Rule: For app/daemon parity, keep domain logic in shared modules and restrict app/daemon code to thin adapters.
+
+## 2026-02-07 15:42
+Context: Daemon parity implementation scope for mobile wiring
+Type: preference
+Event: User explicitly excluded terminal and dictation from current mobile/remote parity work.
+Action: Implemented daemon RPC parity for non-terminal/non-dictation methods and validated parity gap now contains only `terminal_*` and `dictation_*` commands.
+Rule: For current mobile remote-mode rollout, treat terminal and dictation RPC parity as out of scope unless the user re-enables them.
+
+## 2026-02-07 16:58
+Context: App/daemon parity dedup for mobile remote-mode backend
+Type: decision
+Event: Refactored duplicated prompt/local-usage/codex-utility/git logic into shared core modules and switched app/daemon code to adapter-only wrappers.
+Action: Added `shared/prompts_core.rs`, `shared/local_usage_core.rs`, `shared/codex_aux_core.rs`, and `shared/git_ui_core.rs`; rewired `prompts.rs`, `local_usage.rs`, `git/mod.rs`, `codex/mod.rs`, and daemon method handlers to call shared functions.
+Rule: Keep user-facing git/prompt/local-usage/codex utility behavior in shared cores and keep app/daemon files limited to transport/wiring responsibilities.
+
+## 2026-02-07 17:22
+Context: Remaining workspace-action parity dedup
+Type: decision
+Event: `add_clone`, `apply_worktree_changes`, `open_workspace_in`, and `get_open_app_icon` still duplicated between app and daemon after first parity refactor pass.
+Action: Moved those behaviors into `shared/workspaces_core.rs` (`add_clone_core`, `apply_worktree_changes_core`, `open_workspace_in_core`, `get_open_app_icon_core`) and rewired both app (`workspaces/commands.rs`) and daemon (`codex_monitor_daemon.rs`) to thin adapters.
+Rule: Keep workspace action behavior shared-first; app and daemon should only pass environment dependencies and transport payloads.
+
+## 2026-02-07 17:26
+Context: Backend test-target dead code warnings
+Type: decision
+Event: `cargo test` warnings came from a truly unused test hook and a test helper compiled in targets that do not reference it.
+Action: Removed unused `set_window_appearance_override` from `window.rs`; added `#[allow(dead_code)]` to `workspaces/settings.rs::sort_workspaces` (test-only helper used in lib tests but not daemon test target).
+Rule: Remove genuinely unused test hooks; for cross-target test helpers, use narrow `#[allow(dead_code)]` instead of broad warning suppression.
+
+## 2026-02-07 17:32
+Context: Mobile parity verification policy
+Type: preference
+Event: User explicitly requested no CI parity guard for this phase and to rely on local validation.
+Action: Updated mobile Cloudflare blueprint to remove CI parity guard requirements and require local parity validation only.
+Rule: For current mobile/remote scope, do not add CI parity guardrails unless user requests them again.

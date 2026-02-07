@@ -18,7 +18,10 @@ This document is the canonical implementation plan for shipping CodexMonitor on 
   - `app-server-event`
   - `terminal-output`
   - `terminal-exit`
-- Daemon RPC surface does not match full local Tauri command surface yet (major parity gap).
+- Mobile UI scope is the existing app layout in mobile form-factor (no separate mobile-only feature surface).
+- Shared-core parity refactor is in place for prompts, local usage, codex utility helpers, git/github UI helpers, and workspace actions.
+- Daemon RPC parity for the current mobile scope is complete.
+- `terminal_*` and `dictation_*` command parity are intentionally out of scope for this mobile phase.
 
 ## Target Architecture
 
@@ -214,32 +217,37 @@ Behavior:
 - Outbound WS to Worker.
 - Translate bridge envelopes <-> existing RPC handler + event bus.
 
-## 6) Command parity completion (blocking)
+## 6) Command parity scope (mobile phase)
 
-Remote mode must support the full local command surface used by UI.
+Remote mode must support all commands exercised by the current mobile UI surface.
 
-Implement missing daemon methods and/or remote routing for at least:
+Implemented in shared core + daemon/app adapters:
 
-- Git commands:
+- Git + GitHub UI commands:
   - `list_git_roots`, `get_git_status`, `get_git_diffs`, `get_git_log`, `get_git_commit_diff`, `get_git_remote`
   - `list_git_branches`, `checkout_git_branch`, `create_git_branch`
   - `stage_git_file`, `stage_git_all`, `unstage_git_file`
   - `revert_git_file`, `revert_git_all`
   - `commit_git`, `push_git`, `pull_git`, `fetch_git`, `sync_git`
-  - GitHub API commands for issues/PRs/comments/diff
-- Terminal commands:
-  - `terminal_open`, `terminal_write`, `terminal_resize`, `terminal_close`
+  - GitHub issues/PRs/comments/diff commands
 - Prompts commands:
   - `prompts_list`, `prompts_create`, `prompts_update`, `prompts_delete`, `prompts_move`, `prompts_workspace_dir`, `prompts_global_dir`
-- Dictation commands:
-  - `dictation_model_status`, `dictation_download_model`, `dictation_cancel_download`, `dictation_remove_model`, `dictation_start`, `dictation_request_permission`, `dictation_stop`, `dictation_cancel`
 - Workspace/app extras:
   - `add_clone`, `apply_worktree_changes`, `open_workspace_in`, `get_open_app_icon`
 - Utility commands:
   - `codex_doctor`, `get_commit_message_prompt`, `generate_commit_message`, `generate_run_metadata`, `local_usage_snapshot`, `send_notification_fallback`, `is_macos_debug_build`, `menu_set_accelerators`
 
-Add CI guard:
-- Script that parses `generate_handler![]` and daemon RPC dispatch and fails on mismatch.
+Out of scope for this mobile phase:
+
+- Terminal commands:
+  - `terminal_open`, `terminal_write`, `terminal_resize`, `terminal_close`
+- Dictation commands:
+  - `dictation_model_status`, `dictation_download_model`, `dictation_cancel_download`, `dictation_remove_model`, `dictation_start`, `dictation_request_permission`, `dictation_stop`, `dictation_cancel`
+
+Validation policy:
+
+- No CI parity guard is required for this phase.
+- Validate parity locally before merge (build/tests + remote-mode smoke checks).
 
 ## Frontend Plan
 
@@ -423,17 +431,18 @@ cargo test
 3. Connect workspace.
 4. Start thread, send messages, interrupt turn.
 5. Git diff panel operations.
-6. Terminal open/write/resize/close.
-7. Prompts CRUD.
-8. Background iOS app, resume, ensure state resync.
-9. macOS runner restart, iOS auto-reconnect.
+6. Prompts CRUD.
+7. Verify terminal UI is not exposed in mobile mode.
+8. Verify dictation UI is not exposed in mobile mode.
+9. Background iOS app, resume, ensure state resync.
+10. macOS runner restart, iOS auto-reconnect.
 
 ## Implementation Milestones
 
 1. Milestone A: iOS compile baseline + mobile-safe stubs.
 2. Milestone B: Cloudflare Worker + DO bridge deployed + tested with mock clients.
 3. Milestone C: remote_backend transport refactor + runner bridge mode.
-4. Milestone D: daemon parity closure + CI parity guard.
+4. Milestone D: daemon parity closure for mobile scope (excluding terminal/dictation).
 5. Milestone E: settings UX/service manager + pairing UX.
 6. Milestone F: full E2E validation and TestFlight beta.
 
@@ -452,7 +461,7 @@ cargo test
 2. Implement Milestone A first and ensure local iOS dev build works.
 3. Implement Cloudflare bridge in isolation (mock runner/client).
 4. Refactor `remote_backend` to transport abstraction.
-5. Complete daemon parity and add parity CI guard.
+5. Complete daemon parity for mobile scope and validate locally.
 6. Build settings UX and runner service controls.
 7. Validate full manual checklist on simulator and physical device.
 8. Ship behind feature flag, then remove flag after beta validation.

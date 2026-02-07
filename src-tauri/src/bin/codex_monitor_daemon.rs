@@ -3,29 +3,33 @@
 mod backend;
 #[path = "../codex/args.rs"]
 mod codex_args;
-#[path = "../codex/home.rs"]
-mod codex_home;
 #[path = "../codex/config.rs"]
 mod codex_config;
+#[path = "../codex/home.rs"]
+mod codex_home;
 #[path = "../files/io.rs"]
 mod file_io;
 #[path = "../files/ops.rs"]
 mod file_ops;
 #[path = "../files/policy.rs"]
 mod file_policy;
+#[path = "../git_utils.rs"]
+mod git_utils;
 #[path = "../rules.rs"]
 mod rules;
-#[path = "../storage.rs"]
-mod storage;
 #[path = "../shared/mod.rs"]
 mod shared;
-#[path = "../utils.rs"]
-mod utils;
-#[path = "../workspaces/settings.rs"]
-mod workspace_settings;
+#[path = "../storage.rs"]
+mod storage;
 #[allow(dead_code)]
 #[path = "../types.rs"]
 mod types;
+#[path = "../utils.rs"]
+mod utils;
+#[path = "../workspaces/macos.rs"]
+mod workspace_macos;
+#[path = "../workspaces/settings.rs"]
+mod workspace_settings;
 
 // Provide feature-style module paths for shared cores when compiled in the daemon.
 mod codex {
@@ -67,17 +71,21 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc, Mutex};
 
-use backend::app_server::{
-    spawn_workspace_session, WorkspaceSession,
-};
+use backend::app_server::{spawn_workspace_session, WorkspaceSession};
 use backend::events::{AppServerEvent, EventSink, TerminalExit, TerminalOutput};
-use storage::{read_settings, read_workspaces};
-use shared::{codex_core, files_core, git_core, settings_core, workspaces_core, worktree_core};
 use shared::codex_core::CodexLoginCancelState;
-use workspace_settings::apply_workspace_settings_update;
-use types::{
-    AppSettings, WorkspaceEntry, WorkspaceInfo, WorkspaceSettings, WorktreeSetupStatus,
+use shared::prompts_core::{self, CustomPromptEntry};
+use shared::{
+    codex_aux_core, codex_core, files_core, git_core, git_ui_core, local_usage_core,
+    settings_core, workspaces_core, worktree_core,
 };
+use storage::{read_settings, read_workspaces};
+use types::{
+    AppSettings, GitCommitDiff, GitFileDiff, GitHubIssuesResponse, GitHubPullRequestComment,
+    GitHubPullRequestDiff, GitHubPullRequestsResponse, GitLogResponse, LocalUsageSnapshot,
+    WorkspaceEntry, WorkspaceInfo, WorkspaceSettings, WorktreeSetupStatus,
+};
+use workspace_settings::apply_workspace_settings_update;
 
 const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:4732";
 
@@ -252,14 +260,21 @@ impl DaemonState {
         .await
     }
 
-    async fn worktree_setup_status(&self, workspace_id: String) -> Result<WorktreeSetupStatus, String> {
+    async fn worktree_setup_status(
+        &self,
+        workspace_id: String,
+    ) -> Result<WorktreeSetupStatus, String> {
         workspaces_core::worktree_setup_status_core(&self.workspaces, &workspace_id, &self.data_dir)
             .await
     }
 
     async fn worktree_setup_mark_ran(&self, workspace_id: String) -> Result<(), String> {
-        workspaces_core::worktree_setup_mark_ran_core(&self.workspaces, &workspace_id, &self.data_dir)
-            .await
+        workspaces_core::worktree_setup_mark_ran_core(
+            &self.workspaces,
+            &workspace_id,
+            &self.data_dir,
+        )
+        .await
     }
 
     async fn remove_workspace(&self, id: String) -> Result<(), String> {
@@ -326,7 +341,9 @@ impl DaemonState {
                 }
             },
             |value| worktree_core::sanitize_worktree_name(value),
-            |root, name, current| worktree_core::unique_worktree_path_for_rename(root, name, current),
+            |root, name, current| {
+                worktree_core::unique_worktree_path_for_rename(root, name, current)
+            },
             |root, args| {
                 workspaces_core::run_git_command_unit(root, args, git_core::run_git_command_owned)
             },
@@ -513,7 +530,11 @@ impl DaemonState {
         codex_core::start_thread_core(&self.sessions, workspace_id).await
     }
 
-    async fn resume_thread(&self, workspace_id: String, thread_id: String) -> Result<Value, String> {
+    async fn resume_thread(
+        &self,
+        workspace_id: String,
+        thread_id: String,
+    ) -> Result<Value, String> {
         codex_core::resume_thread_core(&self.sessions, workspace_id, thread_id).await
     }
 
@@ -540,11 +561,19 @@ impl DaemonState {
         codex_core::list_mcp_server_status_core(&self.sessions, workspace_id, cursor, limit).await
     }
 
-    async fn archive_thread(&self, workspace_id: String, thread_id: String) -> Result<Value, String> {
+    async fn archive_thread(
+        &self,
+        workspace_id: String,
+        thread_id: String,
+    ) -> Result<Value, String> {
         codex_core::archive_thread_core(&self.sessions, workspace_id, thread_id).await
     }
 
-    async fn compact_thread(&self, workspace_id: String, thread_id: String) -> Result<Value, String> {
+    async fn compact_thread(
+        &self,
+        workspace_id: String,
+        thread_id: String,
+    ) -> Result<Value, String> {
         codex_core::compact_thread_core(&self.sessions, workspace_id, thread_id).await
     }
 
@@ -646,8 +675,13 @@ impl DaemonState {
         request_id: Value,
         result: Value,
     ) -> Result<Value, String> {
-        codex_core::respond_to_server_request_core(&self.sessions, workspace_id, request_id, result)
-            .await?;
+        codex_core::respond_to_server_request_core(
+            &self.sessions,
+            workspace_id,
+            request_id,
+            result,
+        )
+        .await?;
         Ok(json!({ "ok": true }))
     }
 
@@ -662,6 +696,381 @@ impl DaemonState {
     async fn get_config_model(&self, workspace_id: String) -> Result<Value, String> {
         codex_core::get_config_model_core(&self.workspaces, workspace_id).await
     }
+
+    async fn add_clone(
+        &self,
+        source_workspace_id: String,
+        copies_folder: String,
+        copy_name: String,
+        client_version: String,
+    ) -> Result<WorkspaceInfo, String> {
+        workspaces_core::add_clone_core(
+            source_workspace_id,
+            copy_name,
+            copies_folder,
+            &self.workspaces,
+            &self.sessions,
+            &self.app_settings,
+            &self.storage_path,
+            |entry, default_bin, codex_args, codex_home| {
+                spawn_with_client(
+                    self.event_sink.clone(),
+                    client_version.clone(),
+                    entry,
+                    default_bin,
+                    codex_args,
+                    codex_home,
+                )
+            },
+        )
+        .await
+    }
+
+    async fn apply_worktree_changes(&self, workspace_id: String) -> Result<(), String> {
+        workspaces_core::apply_worktree_changes_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn open_workspace_in(
+        &self,
+        path: String,
+        app: Option<String>,
+        args: Vec<String>,
+        command: Option<String>,
+    ) -> Result<(), String> {
+        workspaces_core::open_workspace_in_core(path, app, args, command).await
+    }
+
+    async fn get_open_app_icon(&self, app_name: String) -> Result<Option<String>, String> {
+        #[cfg(target_os = "macos")]
+        {
+            return workspaces_core::get_open_app_icon_core(app_name, |name| {
+                workspace_macos::get_open_app_icon_inner(name)
+            })
+            .await;
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            workspaces_core::get_open_app_icon_core(app_name, |_name| None).await
+        }
+    }
+
+    async fn get_git_status(&self, workspace_id: String) -> Result<Value, String> {
+        git_ui_core::get_git_status_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn list_git_roots(
+        &self,
+        workspace_id: String,
+        depth: Option<usize>,
+    ) -> Result<Vec<String>, String> {
+        git_ui_core::list_git_roots_core(&self.workspaces, workspace_id, depth).await
+    }
+
+    async fn get_git_diffs(&self, workspace_id: String) -> Result<Vec<GitFileDiff>, String> {
+        git_ui_core::get_git_diffs_core(&self.workspaces, &self.app_settings, workspace_id).await
+    }
+
+    async fn get_git_log(
+        &self,
+        workspace_id: String,
+        limit: Option<usize>,
+    ) -> Result<GitLogResponse, String> {
+        git_ui_core::get_git_log_core(&self.workspaces, workspace_id, limit).await
+    }
+
+    async fn get_git_commit_diff(
+        &self,
+        workspace_id: String,
+        sha: String,
+    ) -> Result<Vec<GitCommitDiff>, String> {
+        git_ui_core::get_git_commit_diff_core(&self.workspaces, &self.app_settings, workspace_id, sha)
+            .await
+    }
+
+    async fn get_git_remote(&self, workspace_id: String) -> Result<Option<String>, String> {
+        git_ui_core::get_git_remote_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn stage_git_file(&self, workspace_id: String, path: String) -> Result<(), String> {
+        git_ui_core::stage_git_file_core(&self.workspaces, workspace_id, path).await
+    }
+
+    async fn stage_git_all(&self, workspace_id: String) -> Result<(), String> {
+        git_ui_core::stage_git_all_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn unstage_git_file(&self, workspace_id: String, path: String) -> Result<(), String> {
+        git_ui_core::unstage_git_file_core(&self.workspaces, workspace_id, path).await
+    }
+
+    async fn revert_git_file(&self, workspace_id: String, path: String) -> Result<(), String> {
+        git_ui_core::revert_git_file_core(&self.workspaces, workspace_id, path).await
+    }
+
+    async fn revert_git_all(&self, workspace_id: String) -> Result<(), String> {
+        git_ui_core::revert_git_all_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn commit_git(&self, workspace_id: String, message: String) -> Result<(), String> {
+        git_ui_core::commit_git_core(&self.workspaces, workspace_id, message).await
+    }
+
+    async fn push_git(&self, workspace_id: String) -> Result<(), String> {
+        git_ui_core::push_git_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn pull_git(&self, workspace_id: String) -> Result<(), String> {
+        git_ui_core::pull_git_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn fetch_git(&self, workspace_id: String) -> Result<(), String> {
+        git_ui_core::fetch_git_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn sync_git(&self, workspace_id: String) -> Result<(), String> {
+        git_ui_core::sync_git_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn get_github_issues(
+        &self,
+        workspace_id: String,
+    ) -> Result<GitHubIssuesResponse, String> {
+        git_ui_core::get_github_issues_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn get_github_pull_requests(
+        &self,
+        workspace_id: String,
+    ) -> Result<GitHubPullRequestsResponse, String> {
+        git_ui_core::get_github_pull_requests_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn get_github_pull_request_diff(
+        &self,
+        workspace_id: String,
+        pr_number: u64,
+    ) -> Result<Vec<GitHubPullRequestDiff>, String> {
+        git_ui_core::get_github_pull_request_diff_core(&self.workspaces, workspace_id, pr_number)
+            .await
+    }
+
+    async fn get_github_pull_request_comments(
+        &self,
+        workspace_id: String,
+        pr_number: u64,
+    ) -> Result<Vec<GitHubPullRequestComment>, String> {
+        git_ui_core::get_github_pull_request_comments_core(&self.workspaces, workspace_id, pr_number)
+            .await
+    }
+
+    async fn list_git_branches(&self, workspace_id: String) -> Result<Value, String> {
+        git_ui_core::list_git_branches_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn checkout_git_branch(&self, workspace_id: String, name: String) -> Result<(), String> {
+        git_ui_core::checkout_git_branch_core(&self.workspaces, workspace_id, name).await
+    }
+
+    async fn create_git_branch(&self, workspace_id: String, name: String) -> Result<(), String> {
+        git_ui_core::create_git_branch_core(&self.workspaces, workspace_id, name).await
+    }
+
+    async fn prompts_list(&self, workspace_id: String) -> Result<Vec<CustomPromptEntry>, String> {
+        prompts_core::prompts_list_core(&self.workspaces, &self.settings_path, workspace_id).await
+    }
+
+    async fn prompts_workspace_dir(&self, workspace_id: String) -> Result<String, String> {
+        prompts_core::prompts_workspace_dir_core(&self.workspaces, &self.settings_path, workspace_id)
+            .await
+    }
+
+    async fn prompts_global_dir(&self, workspace_id: String) -> Result<String, String> {
+        prompts_core::prompts_global_dir_core(&self.workspaces, workspace_id).await
+    }
+
+    async fn prompts_create(
+        &self,
+        workspace_id: String,
+        scope: String,
+        name: String,
+        description: Option<String>,
+        argument_hint: Option<String>,
+        content: String,
+    ) -> Result<CustomPromptEntry, String> {
+        prompts_core::prompts_create_core(
+            &self.workspaces,
+            &self.settings_path,
+            workspace_id,
+            scope,
+            name,
+            description,
+            argument_hint,
+            content,
+        )
+        .await
+    }
+
+    async fn prompts_update(
+        &self,
+        workspace_id: String,
+        path: String,
+        name: String,
+        description: Option<String>,
+        argument_hint: Option<String>,
+        content: String,
+    ) -> Result<CustomPromptEntry, String> {
+        prompts_core::prompts_update_core(
+            &self.workspaces,
+            &self.settings_path,
+            workspace_id,
+            path,
+            name,
+            description,
+            argument_hint,
+            content,
+        )
+        .await
+    }
+
+    async fn prompts_delete(&self, workspace_id: String, path: String) -> Result<(), String> {
+        prompts_core::prompts_delete_core(&self.workspaces, &self.settings_path, workspace_id, path)
+            .await
+    }
+
+    async fn prompts_move(
+        &self,
+        workspace_id: String,
+        path: String,
+        scope: String,
+    ) -> Result<CustomPromptEntry, String> {
+        prompts_core::prompts_move_core(
+            &self.workspaces,
+            &self.settings_path,
+            workspace_id,
+            path,
+            scope,
+        )
+        .await
+    }
+
+    async fn codex_doctor(
+        &self,
+        codex_bin: Option<String>,
+        codex_args: Option<String>,
+    ) -> Result<Value, String> {
+        codex_aux_core::codex_doctor_core(&self.app_settings, codex_bin, codex_args).await
+    }
+
+    async fn get_commit_message_prompt(&self, workspace_id: String) -> Result<String, String> {
+        let repo_root =
+            git_ui_core::resolve_repo_root_for_workspace_core(&self.workspaces, workspace_id)
+                .await?;
+        let diff = git_ui_core::collect_workspace_diff_core(&repo_root)?;
+        if diff.trim().is_empty() {
+            return Err("No changes to generate commit message for".to_string());
+        }
+        Ok(codex_aux_core::build_commit_message_prompt(&diff))
+    }
+
+    async fn generate_commit_message(&self, workspace_id: String) -> Result<String, String> {
+        let repo_root = git_ui_core::resolve_repo_root_for_workspace_core(
+            &self.workspaces,
+            workspace_id.clone(),
+        )
+        .await?;
+        let diff = git_ui_core::collect_workspace_diff_core(&repo_root)?;
+        if diff.trim().is_empty() {
+            return Err("No changes to generate commit message for".to_string());
+        }
+        let prompt = codex_aux_core::build_commit_message_prompt(&diff);
+        let response = codex_aux_core::run_background_prompt_core(
+            &self.sessions,
+            workspace_id,
+            prompt,
+            |workspace_id, thread_id| {
+                emit_background_thread_hide(&self.event_sink, workspace_id, thread_id);
+            },
+            "Timeout waiting for commit message generation",
+            "Unknown error during commit message generation",
+        )
+        .await?;
+
+        let trimmed = response.trim().to_string();
+        if trimmed.is_empty() {
+            return Err("No commit message was generated".to_string());
+        }
+        Ok(trimmed)
+    }
+
+    async fn generate_run_metadata(
+        &self,
+        workspace_id: String,
+        prompt: String,
+    ) -> Result<Value, String> {
+        let cleaned_prompt = prompt.trim();
+        if cleaned_prompt.is_empty() {
+            return Err("Prompt is required.".to_string());
+        }
+
+        let title_prompt = codex_aux_core::build_run_metadata_prompt(cleaned_prompt);
+        let response_text = codex_aux_core::run_background_prompt_core(
+            &self.sessions,
+            workspace_id,
+            title_prompt,
+            |workspace_id, thread_id| {
+                emit_background_thread_hide(&self.event_sink, workspace_id, thread_id);
+            },
+            "Timeout waiting for metadata generation",
+            "Unknown error during metadata generation",
+        )
+        .await?;
+
+        let trimmed = response_text.trim();
+        if trimmed.is_empty() {
+            return Err("No metadata was generated".to_string());
+        }
+        let json_value = codex_aux_core::extract_json_value(trimmed)
+            .ok_or_else(|| "Failed to parse metadata JSON".to_string())?;
+        let title = json_value
+            .get("title")
+            .and_then(|v| v.as_str())
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| "Missing title in metadata".to_string())?;
+        let worktree_name = json_value
+            .get("worktreeName")
+            .or_else(|| json_value.get("worktree_name"))
+            .and_then(|v| v.as_str())
+            .map(codex_aux_core::sanitize_run_worktree_name)
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| "Missing worktree name in metadata".to_string())?;
+        Ok(json!({
+            "title": title,
+            "worktreeName": worktree_name
+        }))
+    }
+
+    async fn local_usage_snapshot(
+        &self,
+        days: Option<u32>,
+        workspace_path: Option<String>,
+    ) -> Result<LocalUsageSnapshot, String> {
+        local_usage_core::local_usage_snapshot_core(&self.workspaces, days, workspace_path).await
+    }
+
+    async fn menu_set_accelerators(&self, _updates: Vec<Value>) -> Result<(), String> {
+        // Daemon has no native menu runtime; treat as no-op for remote parity.
+        Ok(())
+    }
+
+    async fn is_macos_debug_build(&self) -> bool {
+        cfg!(all(target_os = "macos", debug_assertions))
+    }
+
+    async fn send_notification_fallback(&self, title: String, body: String) -> Result<(), String> {
+        send_notification_fallback_inner(title, body)
+    }
 }
 
 fn should_skip_dir(name: &str) -> bool {
@@ -673,6 +1082,56 @@ fn should_skip_dir(name: &str) -> bool {
 
 fn normalize_git_path(path: &str) -> String {
     path.replace('\\', "/")
+}
+
+fn parse_optional_u64(value: &Value, key: &str) -> Option<u64> {
+    match value {
+        Value::Object(map) => map.get(key).and_then(|value| value.as_u64()),
+        _ => None,
+    }
+}
+
+fn emit_background_thread_hide(event_sink: &DaemonEventSink, workspace_id: &str, thread_id: &str) {
+    event_sink.emit_app_server_event(AppServerEvent {
+        workspace_id: workspace_id.to_string(),
+        message: json!({
+            "method": "codex/backgroundThread",
+            "params": {
+                "threadId": thread_id,
+                "action": "hide"
+            }
+        }),
+    });
+}
+
+
+fn send_notification_fallback_inner(title: String, body: String) -> Result<(), String> {
+    #[cfg(all(target_os = "macos", debug_assertions))]
+    {
+        let escape = |value: &str| value.replace('\\', "\\\\").replace('"', "\\\"");
+        let script = format!(
+            "display notification \"{}\" with title \"{}\"",
+            escape(&body),
+            escape(&title)
+        );
+
+        let status = std::process::Command::new("/usr/bin/osascript")
+            .arg("-e")
+            .arg(script)
+            .status()
+            .map_err(|error| format!("Failed to run osascript: {error}"))?;
+
+        if status.success() {
+            return Ok(());
+        }
+        return Err(format!("osascript exited with status: {status}"));
+    }
+
+    #[cfg(not(all(target_os = "macos", debug_assertions)))]
+    {
+        let _ = (title, body);
+        Err("Notification fallback is only available on macOS debug builds.".to_string())
+    }
 }
 
 fn list_workspace_files_inner(root: &PathBuf, max_files: usize) -> Vec<String> {
@@ -749,8 +1208,7 @@ fn read_workspace_file_inner(
         buffer.truncate(MAX_WORKSPACE_FILE_BYTES as usize);
     }
 
-    let content =
-        String::from_utf8(buffer).map_err(|_| "File is not valid UTF-8".to_string())?;
+    let content = String::from_utf8(buffer).map_err(|_| "File is not valid UTF-8".to_string())?;
     Ok(WorkspaceFileResponse { content, truncated })
 }
 
@@ -843,15 +1301,19 @@ fn build_error_response(id: Option<u64>, message: &str) -> Option<String> {
             "id": id,
             "error": { "message": message }
         }))
-        .unwrap_or_else(|_| "{\"id\":0,\"error\":{\"message\":\"serialization failed\"}}".to_string()),
+        .unwrap_or_else(|_| {
+            "{\"id\":0,\"error\":{\"message\":\"serialization failed\"}}".to_string()
+        }),
     )
 }
 
 fn build_result_response(id: Option<u64>, result: Value) -> Option<String> {
     let id = id?;
-    Some(serde_json::to_string(&json!({ "id": id, "result": result })).unwrap_or_else(|_| {
-        "{\"id\":0,\"error\":{\"message\":\"serialization failed\"}}".to_string()
-    }))
+    Some(
+        serde_json::to_string(&json!({ "id": id, "result": result })).unwrap_or_else(|_| {
+            "{\"id\":0,\"error\":{\"message\":\"serialization failed\"}}".to_string()
+        }),
+    )
 }
 
 fn build_event_notification(event: DaemonEvent) -> Option<String> {
@@ -926,12 +1388,15 @@ fn parse_optional_bool(value: &Value, key: &str) -> Option<bool> {
 
 fn parse_optional_string_array(value: &Value, key: &str) -> Option<Vec<String>> {
     match value {
-        Value::Object(map) => map.get(key).and_then(|value| value.as_array()).map(|items| {
-            items
-                .iter()
-                .filter_map(|item| item.as_str().map(|value| value.to_string()))
-                .collect::<Vec<_>>()
-        }),
+        Value::Object(map) => map
+            .get(key)
+            .and_then(|value| value.as_array())
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(|value| value.to_string()))
+                    .collect::<Vec<_>>()
+            }),
         _ => None,
     }
 }
@@ -1135,13 +1600,17 @@ async fn handle_rpc_request(
             let cursor = parse_optional_string(&params, "cursor");
             let limit = parse_optional_u32(&params, "limit");
             let sort_key = parse_optional_string(&params, "sortKey");
-            state.list_threads(workspace_id, cursor, limit, sort_key).await
+            state
+                .list_threads(workspace_id, cursor, limit, sort_key)
+                .await
         }
         "list_mcp_server_status" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
             let cursor = parse_optional_string(&params, "cursor");
             let limit = parse_optional_u32(&params, "limit");
-            state.list_mcp_server_status(workspace_id, cursor, limit).await
+            state
+                .list_mcp_server_status(workspace_id, cursor, limit)
+                .await
         }
         "archive_thread" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
@@ -1196,7 +1665,9 @@ async fn handle_rpc_request(
                 .cloned()
                 .ok_or("missing `target`")?;
             let delivery = parse_optional_string(&params, "delivery");
-            state.start_review(workspace_id, thread_id, target, delivery).await
+            state
+                .start_review(workspace_id, thread_id, target, delivery)
+                .await
         }
         "model_list" => {
             let workspace_id = parse_string(&params, "workspaceId")?;
@@ -1249,6 +1720,284 @@ async fn handle_rpc_request(
             let workspace_id = parse_string(&params, "workspaceId")?;
             let command = parse_string_array(&params, "command")?;
             state.remember_approval_rule(workspace_id, command).await
+        }
+        "add_clone" => {
+            let source_workspace_id = parse_string(&params, "sourceWorkspaceId")?;
+            let copies_folder = parse_string(&params, "copiesFolder")?;
+            let copy_name = parse_string(&params, "copyName")?;
+            let workspace = state
+                .add_clone(
+                    source_workspace_id,
+                    copies_folder,
+                    copy_name,
+                    client_version,
+                )
+                .await?;
+            serde_json::to_value(workspace).map_err(|err| err.to_string())
+        }
+        "apply_worktree_changes" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.apply_worktree_changes(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "open_workspace_in" => {
+            let path = parse_string(&params, "path")?;
+            let app = parse_optional_string(&params, "app");
+            let command = parse_optional_string(&params, "command");
+            let args = parse_optional_string_array(&params, "args").unwrap_or_default();
+            state.open_workspace_in(path, app, args, command).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "get_open_app_icon" => {
+            let app_name = parse_string(&params, "appName")?;
+            let icon = state.get_open_app_icon(app_name).await?;
+            serde_json::to_value(icon).map_err(|err| err.to_string())
+        }
+        "get_git_status" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.get_git_status(workspace_id).await
+        }
+        "list_git_roots" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let depth = parse_optional_u32(&params, "depth").map(|value| value as usize);
+            let roots = state.list_git_roots(workspace_id, depth).await?;
+            serde_json::to_value(roots).map_err(|err| err.to_string())
+        }
+        "get_git_diffs" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let diffs = state.get_git_diffs(workspace_id).await?;
+            serde_json::to_value(diffs).map_err(|err| err.to_string())
+        }
+        "get_git_log" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let limit = parse_optional_u32(&params, "limit").map(|value| value as usize);
+            let log = state.get_git_log(workspace_id, limit).await?;
+            serde_json::to_value(log).map_err(|err| err.to_string())
+        }
+        "get_git_commit_diff" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let sha = parse_string(&params, "sha")?;
+            let diff = state.get_git_commit_diff(workspace_id, sha).await?;
+            serde_json::to_value(diff).map_err(|err| err.to_string())
+        }
+        "get_git_remote" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let remote = state.get_git_remote(workspace_id).await?;
+            serde_json::to_value(remote).map_err(|err| err.to_string())
+        }
+        "stage_git_file" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let path = parse_string(&params, "path")?;
+            state.stage_git_file(workspace_id, path).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "stage_git_all" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.stage_git_all(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "unstage_git_file" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let path = parse_string(&params, "path")?;
+            state.unstage_git_file(workspace_id, path).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "revert_git_file" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let path = parse_string(&params, "path")?;
+            state.revert_git_file(workspace_id, path).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "revert_git_all" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.revert_git_all(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "commit_git" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let message = parse_string(&params, "message")?;
+            state.commit_git(workspace_id, message).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "push_git" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.push_git(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "pull_git" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.pull_git(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "fetch_git" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.fetch_git(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "sync_git" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.sync_git(workspace_id).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "get_github_issues" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let issues = state.get_github_issues(workspace_id).await?;
+            serde_json::to_value(issues).map_err(|err| err.to_string())
+        }
+        "get_github_pull_requests" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let prs = state.get_github_pull_requests(workspace_id).await?;
+            serde_json::to_value(prs).map_err(|err| err.to_string())
+        }
+        "get_github_pull_request_diff" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let pr_number =
+                parse_optional_u64(&params, "prNumber").ok_or("missing or invalid `prNumber`")?;
+            let diff = state
+                .get_github_pull_request_diff(workspace_id, pr_number)
+                .await?;
+            serde_json::to_value(diff).map_err(|err| err.to_string())
+        }
+        "get_github_pull_request_comments" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let pr_number =
+                parse_optional_u64(&params, "prNumber").ok_or("missing or invalid `prNumber`")?;
+            let comments = state
+                .get_github_pull_request_comments(workspace_id, pr_number)
+                .await?;
+            serde_json::to_value(comments).map_err(|err| err.to_string())
+        }
+        "list_git_branches" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            state.list_git_branches(workspace_id).await
+        }
+        "checkout_git_branch" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let name = parse_string(&params, "name")?;
+            state.checkout_git_branch(workspace_id, name).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "create_git_branch" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let name = parse_string(&params, "name")?;
+            state.create_git_branch(workspace_id, name).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "prompts_list" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let prompts = state.prompts_list(workspace_id).await?;
+            serde_json::to_value(prompts).map_err(|err| err.to_string())
+        }
+        "prompts_workspace_dir" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let dir = state.prompts_workspace_dir(workspace_id).await?;
+            Ok(Value::String(dir))
+        }
+        "prompts_global_dir" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let dir = state.prompts_global_dir(workspace_id).await?;
+            Ok(Value::String(dir))
+        }
+        "prompts_create" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let scope = parse_string(&params, "scope")?;
+            let name = parse_string(&params, "name")?;
+            let description = parse_optional_string(&params, "description");
+            let argument_hint = parse_optional_string(&params, "argumentHint");
+            let content = parse_string(&params, "content")?;
+            let prompt = state
+                .prompts_create(
+                    workspace_id,
+                    scope,
+                    name,
+                    description,
+                    argument_hint,
+                    content,
+                )
+                .await?;
+            serde_json::to_value(prompt).map_err(|err| err.to_string())
+        }
+        "prompts_update" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let path = parse_string(&params, "path")?;
+            let name = parse_string(&params, "name")?;
+            let description = parse_optional_string(&params, "description");
+            let argument_hint = parse_optional_string(&params, "argumentHint");
+            let content = parse_string(&params, "content")?;
+            let prompt = state
+                .prompts_update(
+                    workspace_id,
+                    path,
+                    name,
+                    description,
+                    argument_hint,
+                    content,
+                )
+                .await?;
+            serde_json::to_value(prompt).map_err(|err| err.to_string())
+        }
+        "prompts_delete" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let path = parse_string(&params, "path")?;
+            state.prompts_delete(workspace_id, path).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "prompts_move" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let path = parse_string(&params, "path")?;
+            let scope = parse_string(&params, "scope")?;
+            let prompt = state.prompts_move(workspace_id, path, scope).await?;
+            serde_json::to_value(prompt).map_err(|err| err.to_string())
+        }
+        "codex_doctor" => {
+            let codex_bin = parse_optional_string(&params, "codexBin");
+            let codex_args = parse_optional_string(&params, "codexArgs");
+            state.codex_doctor(codex_bin, codex_args).await
+        }
+        "get_commit_message_prompt" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let prompt = state.get_commit_message_prompt(workspace_id).await?;
+            Ok(Value::String(prompt))
+        }
+        "generate_commit_message" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let message = state.generate_commit_message(workspace_id).await?;
+            Ok(Value::String(message))
+        }
+        "generate_run_metadata" => {
+            let workspace_id = parse_string(&params, "workspaceId")?;
+            let prompt = parse_string(&params, "prompt")?;
+            state.generate_run_metadata(workspace_id, prompt).await
+        }
+        "local_usage_snapshot" => {
+            let days = parse_optional_u32(&params, "days");
+            let workspace_path = parse_optional_string(&params, "workspacePath");
+            let snapshot = state.local_usage_snapshot(days, workspace_path).await?;
+            serde_json::to_value(snapshot).map_err(|err| err.to_string())
+        }
+        "menu_set_accelerators" => {
+            let updates: Vec<Value> = match &params {
+                Value::Object(map) => map
+                    .get("updates")
+                    .cloned()
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|err| err.to_string())?
+                    .unwrap_or_default(),
+                _ => Vec::new(),
+            };
+            state.menu_set_accelerators(updates).await?;
+            Ok(json!({ "ok": true }))
+        }
+        "is_macos_debug_build" => {
+            let is_debug = state.is_macos_debug_build().await;
+            Ok(Value::Bool(is_debug))
+        }
+        "send_notification_fallback" => {
+            let title = parse_string(&params, "title")?;
+            let body = parse_string(&params, "body")?;
+            state.send_notification_fallback(title, body).await?;
+            Ok(json!({ "ok": true }))
         }
         _ => Err(format!("unknown method: {method}")),
     }
