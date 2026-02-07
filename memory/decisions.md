@@ -288,3 +288,10 @@ Type: decision
 Event: Smooth, delayed auto-scroll on streaming/appended messages caused visible upward jump then repin in the conversation view.
 Action: Updated `Messages` auto-scroll paths to immediate container-bottom pinning (`scrollTop = scrollHeight`) and removed delayed smooth auto-scroll behavior for automatic updates.
 Rule: Automatic message pinning should be immediate and non-animated; reserve smooth scrolling for explicit user-initiated navigation only.
+
+## 2026-02-07 21:16
+Context: Desktop Tailscale CLI detection in Tauri runtime
+Type: decision
+Event: Settings reported missing Tailscale CLI even when installed because GUI runtime PATH did not include shell-resolved aliases/paths.
+Action: Added Tailscale binary candidate resolution (`PATH` first, then standard install paths including macOS app bundle path) before status checks.
+Rule: Desktop CLI integrations must not rely on shell aliases or login-shell PATH alone; include deterministic install-path fallbacks.

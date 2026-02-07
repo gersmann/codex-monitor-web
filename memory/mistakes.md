@@ -131,3 +131,13 @@ Rule: Node-targeted unit tests must not assume browser globals exist; create and
 Root cause: The tests were authored assuming `navigator` is always available, but Vitest runs with `environment: node` in CI.
 Fix applied: Added a global-scope navigator shim path and descriptor-safe restore logic in `src/utils/platformPaths.test.ts`.
 Prevention rule: For tests that patch `navigator`, `window`, or `document`, guard setup with `typeof ... === \"undefined\"` and perform full teardown in `finally`.
+
+## 2026-02-07 21:16
+Context: Tailscale CLI detection from GUI app runtime
+Type: mistake
+Event: Tailscale detection relied on `PATH` only, which can differ from shell aliases and fail in Tauri GUI runtime.
+Action: Added binary resolution fallback candidates (including macOS app bundle path) before reporting CLI missing.
+Rule: For desktop-integrated CLIs, resolve from PATH plus standard install locations; do not assume shell alias/path propagation.
+Root cause: Implementation assumed the app process inherits the same shell PATH/aliases as user terminal sessions.
+Fix applied: Updated `src-tauri/src/tailscale/mod.rs` to probe candidate binaries and execute status/version via resolved path.
+Prevention rule: Any new CLI integration in Tauri should include explicit path fallback logic and a test for candidate list coverage.
