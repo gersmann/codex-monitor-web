@@ -528,19 +528,33 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       const wasProcessing = previous?.isProcessing ?? false;
       const startedAt = previous?.processingStartedAt ?? null;
       const lastDurationMs = previous?.lastDurationMs ?? null;
+      const hasUnread = previous?.hasUnread ?? false;
+      const isReviewing = previous?.isReviewing ?? false;
       if (action.isProcessing) {
+        const nextStartedAt =
+          wasProcessing && startedAt ? startedAt : action.timestamp;
+        const nextStatus: ThreadActivityStatus = {
+          isProcessing: true,
+          hasUnread,
+          isReviewing,
+          processingStartedAt: nextStartedAt,
+          lastDurationMs,
+        };
+        if (
+          previous &&
+          previous.isProcessing === nextStatus.isProcessing &&
+          previous.hasUnread === nextStatus.hasUnread &&
+          previous.isReviewing === nextStatus.isReviewing &&
+          previous.processingStartedAt === nextStatus.processingStartedAt &&
+          previous.lastDurationMs === nextStatus.lastDurationMs
+        ) {
+          return state;
+        }
         return {
           ...state,
           threadStatusById: {
             ...state.threadStatusById,
-            [action.threadId]: {
-              isProcessing: true,
-              hasUnread: previous?.hasUnread ?? false,
-              isReviewing: previous?.isReviewing ?? false,
-              processingStartedAt:
-                wasProcessing && startedAt ? startedAt : action.timestamp,
-              lastDurationMs,
-            },
+            [action.threadId]: nextStatus,
           },
         };
       }
@@ -548,17 +562,28 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         wasProcessing && startedAt
           ? Math.max(0, action.timestamp - startedAt)
           : lastDurationMs ?? null;
+      const nextStatus: ThreadActivityStatus = {
+        isProcessing: false,
+        hasUnread,
+        isReviewing,
+        processingStartedAt: null,
+        lastDurationMs: nextDuration,
+      };
+      if (
+        previous &&
+        previous.isProcessing === nextStatus.isProcessing &&
+        previous.hasUnread === nextStatus.hasUnread &&
+        previous.isReviewing === nextStatus.isReviewing &&
+        previous.processingStartedAt === nextStatus.processingStartedAt &&
+        previous.lastDurationMs === nextStatus.lastDurationMs
+      ) {
+        return state;
+      }
       return {
         ...state,
         threadStatusById: {
           ...state.threadStatusById,
-          [action.threadId]: {
-            isProcessing: false,
-            hasUnread: previous?.hasUnread ?? false,
-            isReviewing: previous?.isReviewing ?? false,
-            processingStartedAt: null,
-            lastDurationMs: nextDuration,
-          },
+          [action.threadId]: nextStatus,
         },
       };
     }
@@ -570,41 +595,60 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           [action.threadId]: action.turnId,
         },
       };
-    case "markReviewing":
+    case "markReviewing": {
+      const previous = state.threadStatusById[action.threadId];
+      const nextStatus: ThreadActivityStatus = {
+        isProcessing: previous?.isProcessing ?? false,
+        hasUnread: previous?.hasUnread ?? false,
+        isReviewing: action.isReviewing,
+        processingStartedAt: previous?.processingStartedAt ?? null,
+        lastDurationMs: previous?.lastDurationMs ?? null,
+      };
+      if (
+        previous &&
+        previous.isProcessing === nextStatus.isProcessing &&
+        previous.hasUnread === nextStatus.hasUnread &&
+        previous.isReviewing === nextStatus.isReviewing &&
+        previous.processingStartedAt === nextStatus.processingStartedAt &&
+        previous.lastDurationMs === nextStatus.lastDurationMs
+      ) {
+        return state;
+      }
       return {
         ...state,
         threadStatusById: {
           ...state.threadStatusById,
-          [action.threadId]: {
-            isProcessing:
-              state.threadStatusById[action.threadId]?.isProcessing ?? false,
-            hasUnread: state.threadStatusById[action.threadId]?.hasUnread ?? false,
-            isReviewing: action.isReviewing,
-            processingStartedAt:
-              state.threadStatusById[action.threadId]?.processingStartedAt ?? null,
-            lastDurationMs:
-              state.threadStatusById[action.threadId]?.lastDurationMs ?? null,
-          },
+          [action.threadId]: nextStatus,
         },
       };
-    case "markUnread":
+    }
+    case "markUnread": {
+      const previous = state.threadStatusById[action.threadId];
+      const nextStatus: ThreadActivityStatus = {
+        isProcessing: previous?.isProcessing ?? false,
+        hasUnread: action.hasUnread,
+        isReviewing: previous?.isReviewing ?? false,
+        processingStartedAt: previous?.processingStartedAt ?? null,
+        lastDurationMs: previous?.lastDurationMs ?? null,
+      };
+      if (
+        previous &&
+        previous.isProcessing === nextStatus.isProcessing &&
+        previous.hasUnread === nextStatus.hasUnread &&
+        previous.isReviewing === nextStatus.isReviewing &&
+        previous.processingStartedAt === nextStatus.processingStartedAt &&
+        previous.lastDurationMs === nextStatus.lastDurationMs
+      ) {
+        return state;
+      }
       return {
         ...state,
         threadStatusById: {
           ...state.threadStatusById,
-          [action.threadId]: {
-            isProcessing:
-              state.threadStatusById[action.threadId]?.isProcessing ?? false,
-            hasUnread: action.hasUnread,
-            isReviewing:
-              state.threadStatusById[action.threadId]?.isReviewing ?? false,
-            processingStartedAt:
-              state.threadStatusById[action.threadId]?.processingStartedAt ?? null,
-            lastDurationMs:
-              state.threadStatusById[action.threadId]?.lastDurationMs ?? null,
-          },
+          [action.threadId]: nextStatus,
         },
       };
+    }
     case "addAssistantMessage": {
       const list = state.itemsByThread[action.threadId] ?? [];
       const message: ConversationItem = {

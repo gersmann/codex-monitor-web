@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -132,7 +133,7 @@ const DEFAULT_EDITOR_SETTINGS: ComposerEditorSettings = {
 };
 const CARET_ANCHOR_GAP = 8;
 
-export function Composer({
+export const Composer = memo(function Composer({
   onSend,
   onQueue,
   onStop,
@@ -725,4 +726,6 @@ export function Composer({
       />
     </footer>
   );
-}
+});
+
+Composer.displayName = "Composer";

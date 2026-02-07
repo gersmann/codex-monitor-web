@@ -295,3 +295,10 @@ Type: decision
 Event: Settings reported missing Tailscale CLI even when installed because GUI runtime PATH did not include shell-resolved aliases/paths.
 Action: Added Tailscale binary candidate resolution (`PATH` first, then standard install paths including macOS app bundle path) before status checks.
 Rule: Desktop CLI integrations must not rely on shell aliases or login-shell PATH alone; include deterministic install-path fallbacks.
+
+## 2026-02-07 21:24
+Context: Composer typing lag while non-active threads stream updates
+Type: decision
+Event: Thread status actions (`markProcessing`, `markUnread`, `markReviewing`) were creating new reducer state even when values were unchanged, and composer/sidebar surfaces lacked memo boundaries against unrelated parent re-renders.
+Action: Added no-op guards in `useThreadsReducer` for unchanged thread-status transitions and wrapped `Composer`/`Sidebar` in `React.memo` to prevent unnecessary rerenders on unrelated app-state updates.
+Rule: Streaming/event reducers must return previous state for no-op status transitions, and high-churn UI shells should be memoized to isolate typing/input responsiveness.
