@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::types::{WorkspaceEntry, WorkspaceSettings};
 #[cfg(test)]
 use crate::types::WorkspaceInfo;
+use crate::types::{WorkspaceEntry, WorkspaceSettings};
 
 #[cfg(test)]
 #[allow(dead_code)]

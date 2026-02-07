@@ -197,3 +197,10 @@ Type: preference
 Event: User selected Orbit-only path for mobile remote architecture and requested canonical plan updates away from custom Cloudflare bridge implementation.
 Action: Rewrote `docs/mobile-ios-cloudflare-blueprint.md` to Orbit-only architecture, setup flows, settings model, transport refactor, and implementation milestones; removed custom Worker/DO protocol/envelope sections.
 Rule: For current mobile rollout, plan and implementation should target Orbit integration only (hosted and self-host modes), not a custom bridge protocol/service.
+
+## 2026-02-07 17:39
+Context: Daemon parity hardening follow-up
+Type: decision
+Event: Added daemon-side RPC parity coverage for recently extracted workspace/prompts/local-usage adapters and improved open-app failure diagnostics.
+Action: Added RPC tests in `src-tauri/src/bin/codex_monitor_daemon.rs` for `add_clone`, `prompts_list`, and `local_usage_snapshot` routing; updated `open_workspace_in_core` in `src-tauri/src/shared/workspaces_core.rs` to include bounded stdout/stderr snippets in non-zero exit errors.
+Rule: Keep daemon adapter parity guarded by RPC-level tests for representative workspace/prompts/local-usage methods, and preserve process-output context in open-app failure errors.

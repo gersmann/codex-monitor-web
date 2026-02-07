@@ -113,9 +113,11 @@ pub(crate) async fn get_workspace_diff(
     workspace_id: &str,
     state: &State<'_, AppState>,
 ) -> Result<String, String> {
-    let repo_root =
-        git_ui_core::resolve_repo_root_for_workspace_core(&state.workspaces, workspace_id.to_string())
-            .await?;
+    let repo_root = git_ui_core::resolve_repo_root_for_workspace_core(
+        &state.workspaces,
+        workspace_id.to_string(),
+    )
+    .await?;
     git_ui_core::collect_workspace_diff_core(&repo_root)
 }
 

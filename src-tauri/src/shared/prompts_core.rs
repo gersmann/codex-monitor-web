@@ -57,10 +57,7 @@ fn app_data_dir(settings_path: &Path) -> Result<PathBuf, String> {
 
 fn workspace_prompts_dir(settings_path: &Path, entry: &WorkspaceEntry) -> Result<PathBuf, String> {
     let data_dir = app_data_dir(settings_path)?;
-    Ok(data_dir
-        .join("workspaces")
-        .join(&entry.id)
-        .join("prompts"))
+    Ok(data_dir.join("workspaces").join(&entry.id).join("prompts"))
 }
 
 fn prompt_roots_for_workspace(
@@ -178,7 +175,9 @@ fn build_prompt_contents(
     argument_hint: Option<String>,
     content: String,
 ) -> String {
-    let has_meta = description.as_ref().is_some_and(|value| !value.trim().is_empty())
+    let has_meta = description
+        .as_ref()
+        .is_some_and(|value| !value.trim().is_empty())
         || argument_hint
             .as_ref()
             .is_some_and(|value| !value.trim().is_empty());

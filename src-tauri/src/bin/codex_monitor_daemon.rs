@@ -76,8 +76,8 @@ use backend::events::{AppServerEvent, EventSink, TerminalExit, TerminalOutput};
 use shared::codex_core::CodexLoginCancelState;
 use shared::prompts_core::{self, CustomPromptEntry};
 use shared::{
-    codex_aux_core, codex_core, files_core, git_core, git_ui_core, local_usage_core,
-    settings_core, workspaces_core, worktree_core,
+    codex_aux_core, codex_core, files_core, git_core, git_ui_core, local_usage_core, settings_core,
+    workspaces_core, worktree_core,
 };
 use storage::{read_settings, read_workspaces};
 use types::{
@@ -784,8 +784,13 @@ impl DaemonState {
         workspace_id: String,
         sha: String,
     ) -> Result<Vec<GitCommitDiff>, String> {
-        git_ui_core::get_git_commit_diff_core(&self.workspaces, &self.app_settings, workspace_id, sha)
-            .await
+        git_ui_core::get_git_commit_diff_core(
+            &self.workspaces,
+            &self.app_settings,
+            workspace_id,
+            sha,
+        )
+        .await
     }
 
     async fn get_git_remote(&self, workspace_id: String) -> Result<Option<String>, String> {
@@ -860,8 +865,12 @@ impl DaemonState {
         workspace_id: String,
         pr_number: u64,
     ) -> Result<Vec<GitHubPullRequestComment>, String> {
-        git_ui_core::get_github_pull_request_comments_core(&self.workspaces, workspace_id, pr_number)
-            .await
+        git_ui_core::get_github_pull_request_comments_core(
+            &self.workspaces,
+            workspace_id,
+            pr_number,
+        )
+        .await
     }
 
     async fn list_git_branches(&self, workspace_id: String) -> Result<Value, String> {
@@ -881,8 +890,12 @@ impl DaemonState {
     }
 
     async fn prompts_workspace_dir(&self, workspace_id: String) -> Result<String, String> {
-        prompts_core::prompts_workspace_dir_core(&self.workspaces, &self.settings_path, workspace_id)
-            .await
+        prompts_core::prompts_workspace_dir_core(
+            &self.workspaces,
+            &self.settings_path,
+            workspace_id,
+        )
+        .await
     }
 
     async fn prompts_global_dir(&self, workspace_id: String) -> Result<String, String> {
@@ -1103,7 +1116,6 @@ fn emit_background_thread_hide(event_sink: &DaemonEventSink, workspace_id: &str,
         }),
     });
 }
-
 
 fn send_notification_fallback_inner(title: String, body: String) -> Result<(), String> {
     #[cfg(all(target_os = "macos", debug_assertions))]
@@ -2118,6 +2130,158 @@ async fn handle_client(
         task.abort();
     }
     write_task.abort();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::WorkspaceKind;
+    use serde_json::json;
+    use std::future::Future;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn run_async_test<F>(future: F)
+    where
+        F: Future<Output = ()>,
+    {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime")
+            .block_on(future);
+    }
+
+    fn make_temp_dir(prefix: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "codex-monitor-{prefix}-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
+    fn test_state(data_dir: &std::path::Path) -> DaemonState {
+        let (tx, _rx) = broadcast::channel::<DaemonEvent>(32);
+        DaemonState {
+            data_dir: data_dir.to_path_buf(),
+            workspaces: Mutex::new(HashMap::new()),
+            sessions: Mutex::new(HashMap::new()),
+            storage_path: data_dir.join("workspaces.json"),
+            settings_path: data_dir.join("settings.json"),
+            app_settings: Mutex::new(AppSettings::default()),
+            event_sink: DaemonEventSink { tx },
+            codex_login_cancels: Mutex::new(HashMap::new()),
+        }
+    }
+
+    async fn insert_workspace(state: &DaemonState, workspace_id: &str, workspace_path: &str) {
+        let entry = WorkspaceEntry {
+            id: workspace_id.to_string(),
+            name: "Workspace".to_string(),
+            path: workspace_path.to_string(),
+            codex_bin: None,
+            kind: WorkspaceKind::Main,
+            parent_id: None,
+            worktree: None,
+            settings: WorkspaceSettings {
+                codex_home: Some(format!("{workspace_path}/.codex-home")),
+                ..WorkspaceSettings::default()
+            },
+        };
+        state
+            .workspaces
+            .lock()
+            .await
+            .insert(workspace_id.to_string(), entry);
+    }
+
+    #[test]
+    fn rpc_add_clone_uses_workspace_core_validation() {
+        run_async_test(async {
+            let tmp = make_temp_dir("rpc-add-clone");
+            let state = test_state(&tmp);
+
+            let err = handle_rpc_request(
+                &state,
+                "add_clone",
+                json!({
+                    "sourceWorkspaceId": "source",
+                    "copiesFolder": tmp.to_string_lossy().to_string(),
+                    "copyName": "   "
+                }),
+                "daemon-test".to_string(),
+            )
+            .await
+            .expect_err("expected validation error");
+
+            assert_eq!(err, "Copy name is required.");
+            let _ = std::fs::remove_dir_all(&tmp);
+        });
+    }
+
+    #[test]
+    fn rpc_prompts_list_reads_workspace_prompts() {
+        run_async_test(async {
+            let tmp = make_temp_dir("rpc-prompts-list");
+            let workspace_id = "ws-prompts";
+            let workspace_dir = tmp.join("workspace");
+            std::fs::create_dir_all(&workspace_dir).expect("create workspace dir");
+
+            let state = test_state(&tmp);
+            insert_workspace(&state, workspace_id, &workspace_dir.to_string_lossy()).await;
+
+            let prompts_dir = tmp.join("workspaces").join(workspace_id).join("prompts");
+            std::fs::create_dir_all(&prompts_dir).expect("create prompts dir");
+            std::fs::write(prompts_dir.join("review.md"), "Prompt body").expect("write prompt");
+
+            let result = handle_rpc_request(
+                &state,
+                "prompts_list",
+                json!({ "workspaceId": workspace_id }),
+                "daemon-test".to_string(),
+            )
+            .await
+            .expect("prompts_list should succeed");
+
+            let prompts = result.as_array().expect("array result");
+            assert!(
+                prompts.iter().any(|entry| {
+                    entry
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .is_some_and(|name| name == "review")
+                }),
+                "expected prompts_list to include workspace prompt"
+            );
+            let _ = std::fs::remove_dir_all(&tmp);
+        });
+    }
+
+    #[test]
+    fn rpc_local_usage_snapshot_returns_snapshot_shape() {
+        run_async_test(async {
+            let tmp = make_temp_dir("rpc-local-usage");
+            let state = test_state(&tmp);
+
+            let result = handle_rpc_request(
+                &state,
+                "local_usage_snapshot",
+                json!({ "days": 7 }),
+                "daemon-test".to_string(),
+            )
+            .await
+            .expect("local_usage_snapshot should succeed");
+
+            assert!(result.get("days").and_then(Value::as_array).is_some());
+            assert!(result.get("totals").is_some());
+            let _ = std::fs::remove_dir_all(&tmp);
+        });
+    }
 }
 
 fn main() {

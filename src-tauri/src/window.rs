@@ -14,13 +14,11 @@ static WINDOW_APPEARANCE_OVERRIDE: OnceLock<Mutex<Option<WindowAppearanceOverrid
 #[cfg(target_os = "macos")]
 fn apply_macos_window_appearance(window: &Window, theme: &str) -> Result<(), String> {
     use objc2_app_kit::{
-        NSAppearance, NSAppearanceCustomization, NSAppearanceNameAqua,
-        NSAppearanceNameDarkAqua, NSWindow,
+        NSAppearance, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
+        NSWindow,
     };
 
-    let ns_window = window
-        .ns_window()
-        .map_err(|error| error.to_string())?;
+    let ns_window = window.ns_window().map_err(|error| error.to_string())?;
     let ns_window: &NSWindow = unsafe { &*ns_window.cast() };
 
     if theme == "system" {

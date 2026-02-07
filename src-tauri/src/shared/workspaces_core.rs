@@ -13,9 +13,9 @@ use crate::backend::app_server::WorkspaceSession;
 use crate::codex::args::resolve_workspace_codex_args;
 use crate::codex::home::resolve_workspace_codex_home;
 use crate::git_utils::resolve_git_root;
-use crate::shared::process_core::{kill_child_process_tree, tokio_command};
 #[cfg(target_os = "windows")]
 use crate::shared::process_core::{build_cmd_c_command, resolve_windows_executable};
+use crate::shared::process_core::{kill_child_process_tree, tokio_command};
 use crate::shared::{git_core, worktree_core};
 use crate::storage::write_workspaces;
 use crate::types::{
@@ -310,7 +310,8 @@ where
         (source_entry, inherited_group_id)
     };
 
-    let destination_path = worktree_core::build_clone_destination_path(&copies_folder_path, &copy_name);
+    let destination_path =
+        worktree_core::build_clone_destination_path(&copies_folder_path, &copy_name);
     let destination_path_string = destination_path.to_string_lossy().to_string();
 
     if let Err(error) = git_core::run_git_command(
@@ -323,7 +324,8 @@ where
         return Err(error);
     }
 
-    if let Some(origin_url) = git_core::git_get_origin_url(&PathBuf::from(&source_entry.path)).await {
+    if let Some(origin_url) = git_core::git_get_origin_url(&PathBuf::from(&source_entry.path)).await
+    {
         let _ = git_core::run_git_command(
             &destination_path,
             &["remote", "set-url", "origin", &origin_url],
@@ -426,7 +428,8 @@ async fn apply_worktree_changes_inner_core(
     let worktree_root = resolve_git_root(entry)?;
     let parent_root = resolve_git_root(parent)?;
 
-    let parent_status = git_core::run_git_command_bytes(&parent_root, &["status", "--porcelain"]).await?;
+    let parent_status =
+        git_core::run_git_command_bytes(&parent_root, &["status", "--porcelain"]).await?;
     if !String::from_utf8_lossy(&parent_status).trim().is_empty() {
         return Err(
             "Your current branch has uncommitted changes. Please commit, stash, or discard them before applying worktree changes."
@@ -441,7 +444,8 @@ async fn apply_worktree_changes_inner_core(
     )
     .await?;
     patch.extend_from_slice(&staged_patch);
-    let unstaged_patch = git_core::run_git_diff(&worktree_root, &["diff", "--binary", "--no-color"]).await?;
+    let unstaged_patch =
+        git_core::run_git_diff(&worktree_root, &["diff", "--binary", "--no-color"]).await?;
     patch.extend_from_slice(&unstaged_patch);
 
     let untracked_output = git_core::run_git_command_bytes(
@@ -474,7 +478,8 @@ async fn apply_worktree_changes_inner_core(
         return Err("No changes to apply.".to_string());
     }
 
-    let git_bin = crate::utils::resolve_git_binary().map_err(|e| format!("Failed to run git: {e}"))?;
+    let git_bin =
+        crate::utils::resolve_git_binary().map_err(|e| format!("Failed to run git: {e}"))?;
     let mut child = tokio_command(git_bin)
         .args(["apply", "--3way", "--whitespace=nowarn", "-"])
         .current_dir(&parent_root)
@@ -534,13 +539,28 @@ pub(crate) async fn open_workspace_in_core(
     args: Vec<String>,
     command: Option<String>,
 ) -> Result<(), String> {
+    fn output_snippet(bytes: &[u8]) -> Option<String> {
+        const MAX_CHARS: usize = 240;
+        let text = String::from_utf8_lossy(bytes).trim().replace('\n', "\\n");
+        if text.is_empty() {
+            return None;
+        }
+        let mut chars = text.chars();
+        let snippet: String = chars.by_ref().take(MAX_CHARS).collect();
+        if chars.next().is_some() {
+            Some(format!("{snippet}..."))
+        } else {
+            Some(snippet)
+        }
+    }
+
     let target_label = command
         .as_ref()
         .map(|value| format!("command `{value}`"))
         .or_else(|| app.as_ref().map(|value| format!("app `{value}`")))
         .unwrap_or_else(|| "target".to_string());
 
-    let status = if let Some(command) = command {
+    let output = if let Some(command) = command {
         let trimmed = command.trim();
         if trimmed.is_empty() {
             return Err("Missing app or command".to_string());
@@ -579,7 +599,7 @@ pub(crate) async fn open_workspace_in_core(
             cmd
         };
 
-        cmd.status()
+        cmd.output()
             .await
             .map_err(|error| format!("Failed to open app ({target_label}): {error}"))?
     } else if let Some(app) = app {
@@ -605,24 +625,40 @@ pub(crate) async fn open_workspace_in_core(
             cmd
         };
 
-        cmd.status()
+        cmd.output()
             .await
             .map_err(|error| format!("Failed to open app ({target_label}): {error}"))?
     } else {
         return Err("Missing app or command".to_string());
     };
 
-    if status.success() {
+    if output.status.success() {
         return Ok(());
     }
 
-    let exit_detail = status
+    let exit_detail = output
+        .status
         .code()
         .map(|code| format!("exit code {code}"))
         .unwrap_or_else(|| "terminated by signal".to_string());
-    Err(format!(
-        "Failed to open app ({target_label} returned {exit_detail})."
-    ))
+    let mut details = Vec::new();
+    if let Some(stderr) = output_snippet(&output.stderr) {
+        details.push(format!("stderr: {stderr}"));
+    }
+    if let Some(stdout) = output_snippet(&output.stdout) {
+        details.push(format!("stdout: {stdout}"));
+    }
+
+    if details.is_empty() {
+        Err(format!(
+            "Failed to open app ({target_label} returned {exit_detail})."
+        ))
+    } else {
+        Err(format!(
+            "Failed to open app ({target_label} returned {exit_detail}; {}).",
+            details.join("; ")
+        ))
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -671,7 +707,11 @@ where
         .iter()
         .map(|value| value.to_string())
         .collect::<Vec<_>>();
-    async move { run_git_command(repo_path, args_owned).await.map(|_output| ()) }
+    async move {
+        run_git_command(repo_path, args_owned)
+            .await
+            .map(|_output| ())
+    }
 }
 
 pub(crate) async fn add_worktree_core<
@@ -863,22 +903,14 @@ where
     Ok(())
 }
 
-async fn kill_session_by_id(
-    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
-    id: &str,
-) {
+async fn kill_session_by_id(sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>, id: &str) {
     if let Some(session) = sessions.lock().await.remove(id) {
         let mut child = session.child.lock().await;
         kill_child_process_tree(&mut child).await;
     }
 }
 
-pub(crate) async fn remove_workspace_core<
-    FRunGit,
-    FutRunGit,
-    FIsMissing,
-    FRemoveDirAll,
->(
+pub(crate) async fn remove_workspace_core<FRunGit, FutRunGit, FIsMissing, FRemoveDirAll>(
     id: String,
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
     sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
@@ -921,11 +953,8 @@ where
 
         let child_path = PathBuf::from(&child.path);
         if child_path.exists() {
-            if let Err(error) = run_git_command(
-                &repo_path,
-                &["worktree", "remove", "--force", &child.path],
-            )
-            .await
+            if let Err(error) =
+                run_git_command(&repo_path, &["worktree", "remove", "--force", &child.path]).await
             {
                 if is_missing_worktree_error(&error) {
                     if child_path.exists() {
@@ -1142,8 +1171,8 @@ where
         )
         .await
         {
-            let _ = run_git_command(&parent_root, &["branch", "-m", &final_branch, &old_branch])
-                .await;
+            let _ =
+                run_git_command(&parent_root, &["branch", "-m", &final_branch, &old_branch]).await;
             return Err(error);
         }
     }
@@ -1308,7 +1337,11 @@ where
             &["push", &remote_name, &format!("{new_branch}:{new_branch}")],
         )
         .await?;
-        run_git_command(&parent_root, &["push", &remote_name, &format!(":{old_branch}")]).await?;
+        run_git_command(
+            &parent_root,
+            &["push", &remote_name, &format!(":{old_branch}")],
+        )
+        .await?;
     } else {
         run_git_command(&parent_root, &["push", &remote_name, &new_branch]).await?;
     }
@@ -1327,11 +1360,7 @@ where
     Ok(())
 }
 
-pub(crate) async fn update_workspace_settings_core<
-    FApplySettings,
-    FSpawn,
-    FutSpawn,
->(
+pub(crate) async fn update_workspace_settings_core<FApplySettings, FSpawn, FutSpawn>(
     id: String,
     mut settings: WorkspaceSettings,
     workspaces: &Mutex<HashMap<String, WorkspaceEntry>>,
@@ -1342,8 +1371,11 @@ pub(crate) async fn update_workspace_settings_core<
     spawn_session: FSpawn,
 ) -> Result<WorkspaceInfo, String>
 where
-    FApplySettings: Fn(&mut HashMap<String, WorkspaceEntry>, &str, WorkspaceSettings)
-        -> Result<WorkspaceEntry, String>,
+    FApplySettings: Fn(
+        &mut HashMap<String, WorkspaceEntry>,
+        &str,
+        WorkspaceSettings,
+    ) -> Result<WorkspaceEntry, String>,
     FSpawn: Fn(WorkspaceEntry, Option<String>, Option<String>, Option<PathBuf>) -> FutSpawn,
     FutSpawn: Future<Output = Result<Arc<WorkspaceSession>, String>>,
 {
@@ -1399,20 +1431,29 @@ where
             let settings = app_settings.lock().await;
             (
                 settings.codex_bin.clone(),
-                resolve_workspace_codex_args(&entry_snapshot, parent_entry.as_ref(), Some(&settings)),
+                resolve_workspace_codex_args(
+                    &entry_snapshot,
+                    parent_entry.as_ref(),
+                    Some(&settings),
+                ),
             )
         };
         let codex_home = resolve_workspace_codex_home(&entry_snapshot, parent_entry.as_ref());
-        let new_session =
-            match spawn_session(entry_snapshot.clone(), default_bin, codex_args, codex_home).await
-            {
-                Ok(session) => session,
-                Err(error) => {
-                    let mut workspaces = workspaces.lock().await;
-                    workspaces.insert(rollback_entry.id.clone(), rollback_entry);
-                    return Err(error);
-                }
-            };
+        let new_session = match spawn_session(
+            entry_snapshot.clone(),
+            default_bin,
+            codex_args,
+            codex_home,
+        )
+        .await
+        {
+            Ok(session) => session,
+            Err(error) => {
+                let mut workspaces = workspaces.lock().await;
+                workspaces.insert(rollback_entry.id.clone(), rollback_entry);
+                return Err(error);
+            }
+        };
         if let Some(old_session) = sessions
             .lock()
             .await
@@ -1432,10 +1473,16 @@ where
             }
             let previous_child_home = resolve_workspace_codex_home(child, Some(&previous_entry));
             let next_child_home = resolve_workspace_codex_home(child, Some(&entry_snapshot));
-            let previous_child_args =
-                resolve_workspace_codex_args(child, Some(&previous_entry), Some(&app_settings_snapshot));
-            let next_child_args =
-                resolve_workspace_codex_args(child, Some(&entry_snapshot), Some(&app_settings_snapshot));
+            let previous_child_args = resolve_workspace_codex_args(
+                child,
+                Some(&previous_entry),
+                Some(&app_settings_snapshot),
+            );
+            let next_child_args = resolve_workspace_codex_args(
+                child,
+                Some(&entry_snapshot),
+                Some(&app_settings_snapshot),
+            );
             if previous_child_home == next_child_home && previous_child_args == next_child_args {
                 continue;
             }
@@ -1456,11 +1503,7 @@ where
                     continue;
                 }
             };
-            if let Some(old_session) = sessions
-                .lock()
-                .await
-                .insert(child.id.clone(), new_session)
-            {
+            if let Some(old_session) = sessions.lock().await.insert(child.id.clone(), new_session) {
                 let mut child = old_session.child.lock().await;
                 kill_child_process_tree(&mut child).await;
             }
@@ -1566,9 +1609,7 @@ fn sort_workspaces(workspaces: &mut [WorkspaceInfo]) {
         if a_order != b_order {
             return a_order.cmp(&b_order);
         }
-        a.name
-            .cmp(&b.name)
-            .then_with(|| a.id.cmp(&b.id))
+        a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id))
     });
 }
 

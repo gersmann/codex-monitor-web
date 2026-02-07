@@ -8,9 +8,9 @@ pub(crate) mod args;
 pub(crate) mod config;
 pub(crate) mod home;
 
+use crate::backend::app_server::spawn_workspace_session as spawn_workspace_session_inner;
 pub(crate) use crate::backend::app_server::WorkspaceSession;
 use crate::backend::events::AppServerEvent;
-use crate::backend::app_server::spawn_workspace_session as spawn_workspace_session_inner;
 use crate::event_sink::TauriEventSink;
 use crate::remote_backend;
 use crate::shared::codex_core;
@@ -411,12 +411,7 @@ pub(crate) async fn codex_login(
         .await;
     }
 
-    codex_core::codex_login_core(
-        &state.sessions,
-        &state.codex_login_cancels,
-        workspace_id,
-    )
-    .await
+    codex_core::codex_login_core(&state.sessions, &state.codex_login_cancels, workspace_id).await
 }
 
 #[tauri::command]
@@ -515,7 +510,9 @@ pub(crate) async fn get_commit_message_prompt(
         return Err("No changes to generate commit message for".to_string());
     }
 
-    Ok(crate::shared::codex_aux_core::build_commit_message_prompt(&diff))
+    Ok(crate::shared::codex_aux_core::build_commit_message_prompt(
+        &diff,
+    ))
 }
 
 #[tauri::command]

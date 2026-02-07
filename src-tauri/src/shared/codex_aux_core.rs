@@ -129,7 +129,9 @@ pub(crate) async fn codex_doctor_core(
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
     let app_server_ok = match timeout(Duration::from_secs(5), command.output()).await {
-        Ok(result) => result.map(|output| output.status.success()).unwrap_or(false),
+        Ok(result) => result
+            .map(|output| output.status.success())
+            .unwrap_or(false),
         Err(_) => false,
     };
     let (node_ok, node_version, node_details) = {
@@ -181,7 +183,11 @@ pub(crate) async fn codex_doctor_core(
                     }
                 }
             },
-            Err(_) => (false, None, Some("Timed out while checking Node.".to_string())),
+            Err(_) => (
+                false,
+                None,
+                Some("Timed out while checking Node.".to_string()),
+            ),
         }
     };
     let details = if app_server_ok {
