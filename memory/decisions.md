@@ -253,3 +253,10 @@ Type: decision
 Event: App and daemon both needed the same latest-state-safe token persistence behavior after Orbit poll/sign-out.
 Action: Added `update_remote_backend_token_core` in `shared/settings_core.rs` and switched both Orbit adapters to use it instead of cloning stale settings snapshots.
 Rule: Persist Orbit token changes only via shared settings-core mutation helpers to avoid app/daemon divergence and stale overwrite races.
+
+## 2026-02-07 20:11
+Context: SettingsView component decomposition
+Type: decision
+Event: Split `SettingsView` into section-focused components plus a dedicated sidebar nav while keeping orchestration/state in the container.
+Action: Added `SettingsNav`, extracted section components under `src/features/settings/components/sections/*`, introduced shared settings types in `settingsTypes.ts`, and rewired `SettingsView.tsx` to modal shell + section routing.
+Rule: For large settings surfaces, keep `SettingsView` as layout/orchestration and move section UI into dedicated components with typed props.
