@@ -74,3 +74,9 @@ Context: Memory compaction model update
 Type: decision
 Rule: Keep `memory/decisions.md` as a compact canonical rule register and archive detailed historical decision timelines under `memory/archive/`.
 Why: This improves retrieval quality for future agents and reduces low-signal duplicate context during implementation.
+
+## 2026-02-07 21:34
+Context: Message file-link display controls
+Type: decision
+Rule: Keep file-link parent path display in messages behind `showMessageFilePath`, defaulting to enabled.
+Why: This preserves existing context-rich defaults while allowing users to reduce visual noise in message file references.

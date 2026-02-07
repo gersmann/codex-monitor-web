@@ -181,6 +181,7 @@ export type AppSettings = {
   uiScale: number;
   theme: ThemePreference;
   usageShowRemaining: boolean;
+  showMessageFilePath: boolean;
   uiFontFamily: string;
   codeFontFamily: string;
   codeFontSize: number;

@@ -189,6 +189,35 @@ describe("Messages", () => {
     );
   });
 
+  it("hides file parent paths when message file path display is disabled", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-file-link-hidden-path",
+        kind: "message",
+        role: "assistant",
+        text: "Refactor candidate: `iosApp/src/views/DocumentsList/DocumentListView.swift:111`",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+        showMessageFilePath={false}
+      />,
+    );
+
+    const fileName = container.querySelector(".message-file-link-name");
+    const lineLabel = container.querySelector(".message-file-link-line");
+    expect(fileName?.textContent).toBe("DocumentListView.swift");
+    expect(lineLabel?.textContent).toBe("L111");
+    expect(container.querySelector(".message-file-link-path")).toBeNull();
+  });
+
   it("renders absolute file references as workspace-relative paths", () => {
     const workspacePath = "/Users/dimillian/Documents/Dev/CodexMonitor";
     const absolutePath =

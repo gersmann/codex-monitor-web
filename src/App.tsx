@@ -1809,6 +1809,7 @@ function MainApp() {
     onCancelSwitchAccount: handleCancelSwitchAccount,
     accountSwitching,
     codeBlockCopyUseModifier: appSettings.composerCodeBlockCopyUseModifier,
+    showMessageFilePath: appSettings.showMessageFilePath,
     openAppTargets: appSettings.openAppTargets,
     openAppIconById,
     selectedOpenAppId: appSettings.selectedOpenAppId,

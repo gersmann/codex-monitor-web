@@ -109,6 +109,27 @@ export function SettingsDisplaySection({
       </div>
       <div className="settings-toggle-row">
         <div>
+          <div className="settings-toggle-title">Show file path in messages</div>
+          <div className="settings-toggle-subtitle">
+            Display the parent path next to file links in messages.
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`settings-toggle ${appSettings.showMessageFilePath ? "on" : ""}`}
+          onClick={() =>
+            void onUpdateAppSettings({
+              ...appSettings,
+              showMessageFilePath: !appSettings.showMessageFilePath,
+            })
+          }
+          aria-pressed={appSettings.showMessageFilePath}
+        >
+          <span className="settings-toggle-knob" />
+        </button>
+      </div>
+      <div className="settings-toggle-row">
+        <div>
           <div className="settings-toggle-title">Reduce transparency</div>
           <div className="settings-toggle-subtitle">Use solid surfaces instead of glass.</div>
         </div>

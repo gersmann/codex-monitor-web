@@ -125,6 +125,7 @@ type LayoutNodesOptions = {
   onCancelSwitchAccount: () => void;
   accountSwitching: boolean;
   codeBlockCopyUseModifier: boolean;
+  showMessageFilePath: boolean;
   openAppTargets: OpenAppTarget[];
   openAppIconById: Record<string, string>;
   selectedOpenAppId: string;
@@ -540,6 +541,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       openTargets={options.openAppTargets}
       selectedOpenAppId={options.selectedOpenAppId}
       codeBlockCopyUseModifier={options.codeBlockCopyUseModifier}
+      showMessageFilePath={options.showMessageFilePath}
       userInputRequests={options.userInputRequests}
       onUserInputSubmit={options.handleUserInputSubmit}
       onOpenThreadLink={options.onOpenThreadLink}

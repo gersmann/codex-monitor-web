@@ -544,6 +544,11 @@ pub(crate) struct AppSettings {
         rename = "usageShowRemaining"
     )]
     pub(crate) usage_show_remaining: bool,
+    #[serde(
+        default = "default_show_message_file_path",
+        rename = "showMessageFilePath"
+    )]
+    pub(crate) show_message_file_path: bool,
     #[serde(default = "default_ui_font_family", rename = "uiFontFamily")]
     pub(crate) ui_font_family: String,
     #[serde(default = "default_code_font_family", rename = "codeFontFamily")]
@@ -705,6 +710,10 @@ fn default_theme() -> String {
 
 fn default_usage_show_remaining() -> bool {
     false
+}
+
+fn default_show_message_file_path() -> bool {
+    true
 }
 
 fn default_ui_font_family() -> String {
@@ -1119,6 +1128,7 @@ impl Default for AppSettings {
             ui_scale: 1.0,
             theme: default_theme(),
             usage_show_remaining: default_usage_show_remaining(),
+            show_message_file_path: default_show_message_file_path(),
             ui_font_family: default_ui_font_family(),
             code_font_family: default_code_font_family(),
             code_font_size: default_code_font_size(),
@@ -1269,6 +1279,7 @@ mod tests {
         assert!((settings.ui_scale - 1.0).abs() < f64::EPSILON);
         assert_eq!(settings.theme, "system");
         assert!(!settings.usage_show_remaining);
+        assert!(settings.show_message_file_path);
         assert!(settings.ui_font_family.contains("system-ui"));
         assert!(settings.code_font_family.contains("ui-monospace"));
         assert_eq!(settings.code_font_size, 11);

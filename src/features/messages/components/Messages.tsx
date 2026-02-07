@@ -47,6 +47,7 @@ type MessagesProps = {
   openTargets: OpenAppTarget[];
   selectedOpenAppId: string;
   codeBlockCopyUseModifier?: boolean;
+  showMessageFilePath?: boolean;
   userInputRequests?: RequestUserInputRequest[];
   onUserInputSubmit?: (
     request: RequestUserInputRequest,
@@ -77,6 +78,7 @@ type MessageRowProps = {
   isCopied: boolean;
   onCopy: (item: Extract<ConversationItem, { kind: "message" }>) => void;
   codeBlockCopyUseModifier?: boolean;
+  showMessageFilePath?: boolean;
   workspacePath?: string | null;
   onOpenFileLink?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
@@ -88,6 +90,7 @@ type ReasoningRowProps = {
   parsed: ReturnType<typeof parseReasoning>;
   isExpanded: boolean;
   onToggle: (id: string) => void;
+  showMessageFilePath?: boolean;
   workspacePath?: string | null;
   onOpenFileLink?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
@@ -96,6 +99,7 @@ type ReasoningRowProps = {
 
 type ReviewRowProps = {
   item: Extract<ConversationItem, { kind: "review" }>;
+  showMessageFilePath?: boolean;
   workspacePath?: string | null;
   onOpenFileLink?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
@@ -110,6 +114,7 @@ type ToolRowProps = {
   item: Extract<ConversationItem, { kind: "tool" }>;
   isExpanded: boolean;
   onToggle: (id: string) => void;
+  showMessageFilePath?: boolean;
   workspacePath?: string | null;
   onOpenFileLink?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
@@ -682,6 +687,7 @@ const MessageRow = memo(function MessageRow({
   isCopied,
   onCopy,
   codeBlockCopyUseModifier,
+  showMessageFilePath,
   workspacePath,
   onOpenFileLink,
   onOpenFileLinkMenu,
@@ -720,6 +726,7 @@ const MessageRow = memo(function MessageRow({
             className="markdown"
             codeBlockStyle="message"
             codeBlockCopyUseModifier={codeBlockCopyUseModifier}
+            showFilePath={showMessageFilePath}
             workspacePath={workspacePath}
             onOpenFileLink={onOpenFileLink}
             onOpenFileLinkMenu={onOpenFileLinkMenu}
@@ -755,6 +762,7 @@ const ReasoningRow = memo(function ReasoningRow({
   parsed,
   isExpanded,
   onToggle,
+  showMessageFilePath,
   workspacePath,
   onOpenFileLink,
   onOpenFileLinkMenu,
@@ -791,6 +799,7 @@ const ReasoningRow = memo(function ReasoningRow({
             className={`reasoning-inline-detail markdown ${
               isExpanded ? "" : "tool-inline-clamp"
             }`}
+            showFilePath={showMessageFilePath}
             workspacePath={workspacePath}
             onOpenFileLink={onOpenFileLink}
             onOpenFileLinkMenu={onOpenFileLinkMenu}
@@ -804,6 +813,7 @@ const ReasoningRow = memo(function ReasoningRow({
 
 const ReviewRow = memo(function ReviewRow({
   item,
+  showMessageFilePath,
   workspacePath,
   onOpenFileLink,
   onOpenFileLinkMenu,
@@ -824,6 +834,7 @@ const ReviewRow = memo(function ReviewRow({
         <Markdown
           value={item.text}
           className="item-text markdown"
+          showFilePath={showMessageFilePath}
           workspacePath={workspacePath}
           onOpenFileLink={onOpenFileLink}
           onOpenFileLinkMenu={onOpenFileLinkMenu}
@@ -852,6 +863,7 @@ const ToolRow = memo(function ToolRow({
   item,
   isExpanded,
   onToggle,
+  showMessageFilePath,
   workspacePath,
   onOpenFileLink,
   onOpenFileLinkMenu,
@@ -996,6 +1008,7 @@ const ToolRow = memo(function ToolRow({
           <Markdown
             value={item.detail}
             className="item-text markdown"
+            showFilePath={showMessageFilePath}
             workspacePath={workspacePath}
             onOpenFileLink={onOpenFileLink}
             onOpenFileLinkMenu={onOpenFileLinkMenu}
@@ -1008,6 +1021,7 @@ const ToolRow = memo(function ToolRow({
             value={summary.output}
             className="tool-inline-output markdown"
             codeBlock
+            showFilePath={showMessageFilePath}
             workspacePath={workspacePath}
             onOpenFileLink={onOpenFileLink}
             onOpenFileLinkMenu={onOpenFileLinkMenu}
@@ -1126,6 +1140,7 @@ export const Messages = memo(function Messages({
   openTargets,
   selectedOpenAppId,
   codeBlockCopyUseModifier = false,
+  showMessageFilePath = true,
   userInputRequests = [],
   onUserInputSubmit,
   onOpenThreadLink,
@@ -1336,6 +1351,7 @@ export const Messages = memo(function Messages({
           isCopied={isCopied}
           onCopy={handleCopyMessage}
           codeBlockCopyUseModifier={codeBlockCopyUseModifier}
+          showMessageFilePath={showMessageFilePath}
           workspacePath={workspacePath}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
@@ -1353,6 +1369,7 @@ export const Messages = memo(function Messages({
           parsed={parsed}
           isExpanded={isExpanded}
           onToggle={toggleExpanded}
+          showMessageFilePath={showMessageFilePath}
           workspacePath={workspacePath}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
@@ -1365,6 +1382,7 @@ export const Messages = memo(function Messages({
         <ReviewRow
           key={item.id}
           item={item}
+          showMessageFilePath={showMessageFilePath}
           workspacePath={workspacePath}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
@@ -1383,6 +1401,7 @@ export const Messages = memo(function Messages({
           item={item}
           isExpanded={isExpanded}
           onToggle={toggleExpanded}
+          showMessageFilePath={showMessageFilePath}
           workspacePath={workspacePath}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
