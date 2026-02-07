@@ -99,3 +99,17 @@ Type: decision
 Event: Added lint enforcement to prevent regressions back to raw popover shell/menu-row markup in migrated files.
 Action: Added `.eslintrc.cjs` popover override covering migrated popover components, requiring `PopoverSurface`/`PopoverMenuItem` patterns and keeping DS token color-literal restrictions in scope.
 Rule: Popover changes in guarded files must keep DS primitive markup and pass lint before merge.
+
+## 2026-02-07 12:03
+Context: Frontend telemetry regression restoration
+Type: preference
+Event: User requested full restoration of Sentry reporting removed in `83a37da`.
+Action: Reintroduced `@sentry/react`, restored `Sentry.init` in `src/main.tsx`, and re-enabled removed capture/metrics callsites in app/workspace/thread/file-link flows.
+Rule: Keep Sentry telemetry enabled unless the user explicitly asks to deprecate or replace it with another telemetry provider.
+
+## 2026-02-07 12:17
+Context: Duplicate telemetry prevention for New Agent creation
+Type: decision
+Event: New Agent creation could be triggered twice for `Cmd+N` because both a web keydown hook and native menu accelerator path were active.
+Action: Removed `useNewAgentShortcut` from `useWorkspaceActions` so New Agent creation flows through a single menu/command path (`useAppMenuEvents` + configured menu accelerators), and added focused Composer tests to assert one send call for Enter and send-button triggers.
+Rule: For accelerator-backed actions, keep a single trigger path to avoid double action execution and duplicate telemetry.

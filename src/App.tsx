@@ -1504,7 +1504,6 @@ function MainApp() {
     handleAddWorktreeAgent,
     handleAddCloneAgent,
   } = useWorkspaceActions({
-    activeWorkspace,
     isCompact,
     addWorkspace,
     addWorkspaceFromPath,

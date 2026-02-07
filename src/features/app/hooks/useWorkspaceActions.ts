@@ -1,10 +1,9 @@
 import type { RefObject } from "react";
 import { useCallback } from "react";
-import { useNewAgentShortcut } from "./useNewAgentShortcut";
+import * as Sentry from "@sentry/react";
 import type { DebugEntry, WorkspaceInfo } from "../../../types";
 
 type Params = {
-  activeWorkspace: WorkspaceInfo | null;
   isCompact: boolean;
   addWorkspace: () => Promise<WorkspaceInfo | null>;
   addWorkspaceFromPath: (path: string) => Promise<WorkspaceInfo | null>;
@@ -20,7 +19,6 @@ type Params = {
 };
 
 export function useWorkspaceActions({
-  activeWorkspace,
   isCompact,
   addWorkspace,
   addWorkspaceFromPath,
@@ -91,6 +89,12 @@ export function useWorkspaceActions({
       selectWorkspace(workspace.id);
       setActiveThreadId(null, workspace.id);
       onStartNewAgentDraft(workspace.id);
+      Sentry.metrics.count("agent_created", 1, {
+        attributes: {
+          workspace_id: workspace.id,
+          thread_id: "draft",
+        },
+      });
       if (isCompact) {
         setActiveTab("codex");
       }
@@ -122,15 +126,6 @@ export function useWorkspaceActions({
     },
     [exitDiffView, openClonePrompt],
   );
-
-  useNewAgentShortcut({
-    isEnabled: Boolean(activeWorkspace),
-    onTrigger: () => {
-      if (activeWorkspace) {
-        void handleAddAgent(activeWorkspace);
-      }
-    },
-  });
 
   return {
     handleAddWorkspace,
