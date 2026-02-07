@@ -1,14 +1,20 @@
-# CodexMonitor iOS + Cloudflare Bridge Blueprint
+# CodexMonitor iOS + Orbit Cloudflare Blueprint
 
-This document is the canonical implementation plan for shipping CodexMonitor on iOS using a Cloudflare bridge to a macOS runner.
+This document is the canonical implementation plan for shipping CodexMonitor on iOS using Orbit on Cloudflare as the relay/control plane to a macOS runner.
 
 ## Scope
 
 - Build and ship a real iOS app (Tauri mobile target).
 - Keep macOS as the execution host (Codex binary, repos, git, terminals, files).
-- Use Cloudflare as secure relay/realtime bridge between iOS and macOS.
-- Make macOS setup manageable from CodexMonitor Settings: configure bridge, store credentials, launch/stop service, inspect status/logs.
+- Use Orbit on Cloudflare as secure relay/realtime bridge between iOS and macOS.
+- Make macOS setup manageable from CodexMonitor Settings: authenticate, pair device, launch/stop runner, inspect status/logs.
 - Keep one backend logic path (shared core + daemon). Do not duplicate backend behavior in iOS UI.
+
+## Non-Goals (This Plan)
+
+- Building a custom Cloudflare Worker/DO protocol for relay.
+- Defining a custom bridge envelope (`seq`/`ack`) as a required transport contract.
+- Reintroducing CloudKit/PR31-based remote architecture.
 
 ## Current State (Important)
 
@@ -30,115 +36,52 @@ This document is the canonical implementation plan for shipping CodexMonitor on 
 1. iOS App (Tauri)
 - UI + local state + IPC wrappers.
 - Uses remote mode only (no local codex execution).
-- Connects to Cloudflare WebSocket bridge.
+- Connects to Orbit WebSocket endpoint and consumes Codex JSON-RPC stream.
 
 2. macOS App + Daemon Runner
 - Runs all backend operations (shared cores, codex process, files/git/terminal).
-- Maintains outbound connection to Cloudflare bridge.
-- Receives command envelopes from bridge and returns results/events.
+- Maintains outbound connection to Orbit.
+- Receives JSON-RPC from Orbit and returns results/events.
 
-3. Cloudflare Bridge
-- Worker entrypoint for auth/session routing.
-- Durable Object per session for fanout and coordination.
-- Durable Object SQLite storage for cursor/queue/snapshot persistence.
-- Optional REST endpoints for pairing bootstrap.
+3. Orbit Cloud Services
+- Auth service (passkey + JWT/session).
+- Orbit relay (Worker + Durable Object routing + event persistence endpoint).
+- Optional hosted deployment path or self-host deployment path.
+
+## Canonical Protocol Choice
+
+- Use Orbit JSON-RPC relay model plus Orbit control messages (`orbit.subscribe`, `orbit.unsubscribe`, `orbit.list-anchors`, keepalive ping/pong).
+- Do not introduce a second custom transport protocol for this phase.
+- Reconnection/resync should use Orbit thread event history endpoint and thread resume flows.
 
 ## Data Flow
 
-1. macOS runner authenticates to Cloudflare and opens persistent WS.
-2. iOS app pairs and opens WS to same session.
-3. iOS sends `invoke` envelopes to bridge.
-4. Bridge forwards to runner.
-5. Runner executes daemon RPC.
-6. Runner streams `result` + `event` envelopes back.
-7. iOS applies ordered events and acks sequence.
-8. On reconnect, iOS requests replay from last acked sequence.
+1. macOS runner authenticates and opens persistent WS to Orbit.
+2. iOS app authenticates and opens WS to Orbit.
+3. iOS subscribes to thread channels via `orbit.subscribe`.
+4. iOS sends JSON-RPC `invoke` messages (for example `thread/start`, `turn/start`) through Orbit.
+5. Orbit relays to runner.
+6. Runner executes daemon RPC / app-server operations.
+7. Orbit relays results and notifications back to subscribed iOS clients.
+8. On reconnect, iOS reloads state from thread resume + stored events endpoint.
 
-## Transport Protocol (Bridge Envelope)
+## Orbit Deployment Modes
 
-All frames JSON:
+## Mode A (Recommended): Hosted Orbit
 
-```json
-{
-  "v": 1,
-  "sessionId": "string",
-  "seq": 123,
-  "kind": "auth|invoke|result|event|ack|ping|pong|error",
-  "requestId": "uuid-optional",
-  "method": "optional",
-  "params": {},
-  "result": {},
-  "error": { "code": "string", "message": "string" },
-  "ts": 1730000000000
-}
-```
+Best setup UX for most users.
 
-Rules:
-- `requestId` required for `invoke/result/error`.
-- `seq` monotonic per session for replay.
-- `ack` carries highest contiguous applied `seq`.
-- Bridge stores unacked frames in DO storage.
+- User does not deploy Cloudflare services manually.
+- User authenticates in app, pairs device, and connects.
+- CodexMonitor stores only required client credentials/tokens in secure storage.
 
-## Cloudflare Implementation Plan
+## Mode B: Self-Hosted Orbit
 
-## Product Choices
+Advanced setup for users who want full control.
 
-- Workers + Durable Objects (WebSocket hibernation API).
-- Durable Object SQLite-backed storage.
-- Cloudflare Access service token authentication.
-
-## Worker/DO Topology
-
-- Worker routes:
-  - `GET /ws/:sessionId` (WS upgrade)
-  - `POST /pair/start` (desktop bootstrap)
-  - `POST /pair/claim` (mobile claim via code)
-  - `GET /session/:id/status`
-- Durable Object key = `sessionId`.
-- One runner connection max per session.
-- Multiple viewer/client connections allowed (future web clients).
-
-## Durable Object Storage Schema
-
-- `session_meta` (owner, createdAt, ttl, runnerOnline).
-- `messages` (seq, kind, requestId, payload, createdAt).
-- `acks` (clientId -> seq).
-- `pair_codes` (shortCode, expiresAt, claimedBy).
-
-## Auth Model
-
-- Runner and client both must present credentials.
-- Recommend Access service token headers at Worker ingress.
-- Inside envelope, include signed session claim (short-lived JWT or HMAC token minted by Worker during pairing).
-- Rotate bridge secrets without app rebuild (settings update + reconnect).
-
-## Wrangler Bootstrap
-
-Example `wrangler.toml` skeleton:
-
-```toml
-name = "codexmonitor-bridge"
-main = "src/index.ts"
-compatibility_date = "2026-02-07"
-
-[durable_objects]
-bindings = [
-  { name = "SESSIONS", class_name = "SessionBridge" }
-]
-
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["SessionBridge"]
-```
-
-Initial ops checklist:
-
-1. `npm create cloudflare@latest codexmonitor-bridge`.
-2. Add Durable Object class and WS handlers.
-3. Add pairing endpoints.
-4. Add auth middleware (Access token verification policy).
-5. `npx wrangler deploy`.
-6. Save Worker URL for app settings.
+- User deploys Orbit/Auth workers and D1 with Wrangler.
+- User provides Orbit/Auth endpoints in Settings.
+- Pair/auth flows remain the same once endpoints are configured.
 
 ## Required Backend Refactor in CodexMonitor
 
@@ -152,7 +95,7 @@ Proposed structure:
 - `src-tauri/src/remote_backend/protocol.rs`
 - `src-tauri/src/remote_backend/transport.rs` (trait)
 - `src-tauri/src/remote_backend/tcp_transport.rs` (legacy/dev)
-- `src-tauri/src/remote_backend/cloudflare_ws_transport.rs` (new)
+- `src-tauri/src/remote_backend/orbit_ws_transport.rs` (new)
 
 `RemoteTransport` trait:
 
@@ -162,20 +105,21 @@ Proposed structure:
 - `close()`
 - `status()`
 
-## 2) Add cloud bridge configuration to settings model
+## 2) Add Orbit configuration to settings model
 
 Extend `AppSettings` in `src-tauri/src/types.rs` and UI types in `src/types.ts`.
 
 Add section:
 
-- `remoteBridgeProvider`: `"tcp" | "cloudflare"`
-- `cloudflareWorkerUrl`
-- `cloudflareSessionId`
-- `cloudflareRunnerName`
-- `cloudflareAutoStartRunner` (bool)
-- `cloudflareUseAccess` (bool)
-- `cloudflareAccessClientId` (non-secret allowed)
-- `cloudflareAccessClientSecretRef` (secret reference only)
+- `remoteBridgeProvider`: `"tcp" | "orbit"`
+- `orbitDeploymentMode`: `"hosted" | "self_hosted"`
+- `orbitWsUrl` (required for self-host; optional/derived for hosted)
+- `orbitAuthUrl` (required for self-host; optional/derived for hosted)
+- `orbitRunnerName`
+- `orbitAutoStartRunner` (bool)
+- `orbitUseAccess` (bool, self-host optional)
+- `orbitAccessClientId` (non-secret allowed)
+- `orbitAccessClientSecretRef` (secret reference only)
 
 Keep secrets out of plain `settings.json` where possible.
 
@@ -186,7 +130,7 @@ Implement secure secret storage adapter:
 - macOS: Keychain via Rust crate (`keyring`) or dedicated secure-storage layer.
 - iOS: Keychain-backed storage for mobile credentials.
 
-Store only secret reference/alias in app settings JSON.
+Store only secret references/aliases in app settings JSON.
 
 ## 4) Runner service manager (macOS)
 
@@ -195,6 +139,7 @@ Add backend service manager module:
 - `src-tauri/src/bridge_runner/mod.rs`
 
 Responsibilities:
+
 - Start runner process/task.
 - Stop runner.
 - Report health (`connecting|online|offline|error`).
@@ -202,20 +147,26 @@ Responsibilities:
 - Auto-start on app launch if enabled.
 
 Potential implementations:
+
 - Embedded task in app process (faster iteration).
 - Optional LaunchAgent installation for background persistence across app restarts.
 
-## 5) Daemon bridge mode
+## 5) Daemon Orbit mode
 
-Extend daemon binary (`src-tauri/src/bin/codex_monitor_daemon.rs`) with optional bridge connector mode:
+Extend daemon binary (`src-tauri/src/bin/codex_monitor_daemon.rs`) with optional Orbit connector mode.
 
-- `--bridge-url`
-- `--bridge-session`
-- `--bridge-auth-*`
+Representative options:
+
+- `--orbit-url`
+- `--orbit-auth-url`
+- `--orbit-device-login`
+- `--orbit-token-ref`
 
 Behavior:
-- Outbound WS to Worker.
-- Translate bridge envelopes <-> existing RPC handler + event bus.
+
+- Outbound WS to Orbit relay.
+- Translate Orbit-relayed JSON-RPC to existing RPC handler + event bus.
+- Support runner reconnect and re-subscription behavior.
 
 ## 6) Command parity scope (mobile phase)
 
@@ -253,33 +204,37 @@ Validation policy:
 
 ## Settings UX (required for easy setup)
 
-Update `src/features/settings/components/SettingsView.tsx` to add a Cloudflare section when `backendMode=remote` and provider is cloudflare.
+Update `src/features/settings/components/SettingsView.tsx` to add an Orbit section when `backendMode=remote` and provider is orbit.
 
 Required controls:
 
-- Provider selector (`TCP daemon` / `Cloudflare bridge`)
-- Worker URL input
-- Session ID input
+- Provider selector (`TCP daemon` / `Orbit`)
+- Deployment mode selector (`Hosted` / `Self-Hosted`)
+- Orbit WS URL input (self-host only)
+- Orbit Auth URL input (self-host only)
 - Runner name input
-- Access auth toggle + client id input + secret set/reset
+- Access auth toggle + client id input + secret set/reset (self-host optional)
 - `Connect test` button
+- `Sign In` / `Sign Out` actions
 - `Start Runner` / `Stop Runner` buttons
 - `Install LaunchAgent` / `Remove LaunchAgent` (optional)
 - Status badge + last heartbeat + error message
-- `Copy Pair Code` / `Show QR` (if pairing flow enabled)
+- `Copy Pair Code` / `Show QR`
 - `View Logs` drawer
 
 UX behavior:
-- Disable invalid combos.
-- Show clear actionable errors (auth failed, session not found, runner offline).
+
+- Hide manual endpoint fields in hosted mode.
+- Disable invalid combinations.
+- Show clear actionable errors (auth failed, runner offline, endpoint invalid, token expired).
 - Persist non-secret fields immediately.
 - Save secrets via secure backend command only.
 
 ## iOS client UX
 
-- Connection screen:
-  - Worker URL
-  - Pair code / QR scanner (if enabled)
+- First launch setup:
+  - `Sign In` (hosted) or endpoint-aware sign-in (self-host)
+  - `Scan QR` / `Enter pair code`
   - Recent sessions
 - Runtime status:
   - `Connected to <runnerName>`
@@ -287,7 +242,56 @@ UX behavior:
   - Reconnecting state
 - Conflict handling:
   - Runner offline banner
-  - Replay-in-progress state after reconnect
+  - Rehydration state after reconnect
+
+## User Setup Flows
+
+## Hosted Orbit (default)
+
+Desktop setup:
+
+1. Open CodexMonitor Settings.
+2. Set `Backend Mode = Remote`, `Provider = Orbit`, `Mode = Hosted`.
+3. Click `Sign In` and complete auth.
+4. Click `Start Runner`.
+5. Click `Show QR` (or `Copy Pair Code`).
+
+Mobile setup:
+
+1. Launch iOS app.
+2. Sign in.
+3. Scan QR (or enter pair code).
+4. App stores credentials in Keychain and auto-connects.
+
+User-provided information:
+
+- No manual URL/session entry required.
+- Only account login + pair action.
+
+## Self-Hosted Orbit
+
+Desktop setup:
+
+1. Deploy Orbit/Auth services to Cloudflare.
+2. Open CodexMonitor Settings.
+3. Set `Backend Mode = Remote`, `Provider = Orbit`, `Mode = Self-Hosted`.
+4. Enter `Orbit WS URL` and `Orbit Auth URL`.
+5. Configure optional Access credentials.
+6. Sign in and start runner.
+7. Pair mobile via QR/code.
+
+Mobile setup:
+
+1. Launch iOS app.
+2. Sign in against configured self-host auth.
+3. Scan QR or enter pair code.
+4. Store credentials in Keychain and auto-connect.
+
+User-provided information:
+
+- Orbit WS URL.
+- Orbit Auth URL.
+- Optional Access client credentials (if enabled).
 
 ## Mobile-safe UI readiness
 
@@ -416,13 +420,14 @@ cargo check
 cargo test
 ```
 
-## Bridge integration tests
+## Orbit integration tests
 
 - Simulate iOS disconnect/reconnect.
-- Verify replay from `ack` cursor.
-- Verify idempotent handling of duplicate `requestId`.
+- Verify thread rehydration via resume/events endpoint.
+- Verify idempotent handling of duplicate RPC responses.
 - Verify unauthorized client rejection.
 - Verify runner failover from offline -> online.
+- Verify thread subscription behavior (`orbit.subscribe`/`orbit.unsubscribe`).
 
 ## Manual scenario checklist
 
@@ -440,26 +445,26 @@ cargo test
 ## Implementation Milestones
 
 1. Milestone A: iOS compile baseline + mobile-safe stubs.
-2. Milestone B: Cloudflare Worker + DO bridge deployed + tested with mock clients.
-3. Milestone C: remote_backend transport refactor + runner bridge mode.
+2. Milestone B: Orbit integration baseline (hosted + self-host config paths).
+3. Milestone C: `remote_backend` transport refactor + Orbit transport + runner Orbit mode.
 4. Milestone D: daemon parity closure for mobile scope (excluding terminal/dictation).
-5. Milestone E: settings UX/service manager + pairing UX.
+5. Milestone E: Settings UX/service manager + pairing UX.
 6. Milestone F: full E2E validation and TestFlight beta.
 
 ## Definition of Done
 
-- iOS app can fully control a macOS runner via Cloudflare bridge.
+- iOS app can fully control a macOS runner via Orbit bridge.
 - Remote feature parity with desktop local mode for supported workflows.
-- macOS users can configure bridge from Settings without terminal steps.
+- macOS users can configure Orbit from Settings without terminal steps in hosted mode.
 - Runner can be started/stopped/auto-started from app.
-- Reconnect/replay is robust and observable.
+- Reconnect/resync is robust and observable.
 - Build/install flow is documented and reproducible.
 
 ## Fresh-Agent Execution Checklist
 
 1. Read this document completely.
 2. Implement Milestone A first and ensure local iOS dev build works.
-3. Implement Cloudflare bridge in isolation (mock runner/client).
+3. Integrate Orbit transport/auth in isolation with mock runner/client tests.
 4. Refactor `remote_backend` to transport abstraction.
 5. Complete daemon parity for mobile scope and validate locally.
 6. Build settings UX and runner service controls.

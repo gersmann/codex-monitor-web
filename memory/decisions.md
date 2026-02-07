@@ -190,3 +190,10 @@ Type: preference
 Event: User explicitly requested no CI parity guard for this phase and to rely on local validation.
 Action: Updated mobile Cloudflare blueprint to remove CI parity guard requirements and require local parity validation only.
 Rule: For current mobile/remote scope, do not add CI parity guardrails unless user requests them again.
+
+## 2026-02-07 17:47
+Context: Mobile remote bridge provider finalization
+Type: preference
+Event: User selected Orbit-only path for mobile remote architecture and requested canonical plan updates away from custom Cloudflare bridge implementation.
+Action: Rewrote `docs/mobile-ios-cloudflare-blueprint.md` to Orbit-only architecture, setup flows, settings model, transport refactor, and implementation milestones; removed custom Worker/DO protocol/envelope sections.
+Rule: For current mobile rollout, plan and implementation should target Orbit integration only (hosted and self-host modes), not a custom bridge protocol/service.
