@@ -1,7 +1,7 @@
 # TODO
 
 ## Open
-- (none)
+- [ ] 2026-02-07: Backfill `v0.7.42` GitHub release `latest.json` with corrected Linux/Windows asset URLs so in-app updates stop returning 404 for existing clients.
 
 ## Done
 - [x] 2026-02-07: Restored Sentry frontend reporting removed in `83a37da` (`@sentry/react`, `Sentry.init`, captureException callsites, and metrics instrumentation).

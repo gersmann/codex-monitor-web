@@ -113,3 +113,10 @@ Type: decision
 Event: New Agent creation could be triggered twice for `Cmd+N` because both a web keydown hook and native menu accelerator path were active.
 Action: Removed `useNewAgentShortcut` from `useWorkspaceActions` so New Agent creation flows through a single menu/command path (`useAppMenuEvents` + configured menu accelerators), and added focused Composer tests to assert one send call for Enter and send-button triggers.
 Rule: For accelerator-backed actions, keep a single trigger path to avoid double action execution and duplicate telemetry.
+
+## 2026-02-07 12:27
+Context: Windows updater 404 from release metadata
+Type: decision
+Event: Published `latest.json` referenced asset names that did not match uploaded release asset filenames, causing updater download 404s.
+Action: Updated `.github/workflows/release.yml` to normalize artifact filenames before publish, URL-encode generated `latest.json` URLs, and validate that every `latest.json` URL maps to an actual artifact before creating the release.
+Rule: Generate `latest.json` URLs from normalized artifact filenames and fail the release job if any referenced asset is missing.

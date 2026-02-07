@@ -332,6 +332,26 @@ jobs:
         with:
           name: windows-artifacts
           path: release-artifacts
+
+      - name: Normalize release artifact filenames
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' artifact; do
+            dir=$(dirname "$artifact")
+            file=$(basename "$artifact")
+            normalized="${file// /.}"
+            if [ "$file" = "$normalized" ]; then
+              continue
+            fi
+            target="${dir}/${normalized}"
+            if [ -e "$target" ]; then
+              echo "Cannot normalize filename because target already exists: $target"
+              exit 1
+            fi
+            echo "Renaming $artifact -> $target"
+            mv "$artifact" "$target"
+          done < <(find release-artifacts -type f -name '* *' -print0)
+
       - name: Validate RPM artifacts
         run: |
           set -euo pipefail
@@ -412,13 +432,17 @@ jobs:
           import json
           from datetime import datetime, timezone
           from pathlib import Path
+          from urllib.parse import quote
 
           notes = Path("release-artifacts/release-notes.md").read_text().strip()
           artifacts_dir = Path("release-artifacts")
 
+          def release_url(filename):
+            return f"https://github.com/Dimillian/CodexMonitor/releases/download/v${VERSION}/{quote(filename)}"
+
           platforms = {
             "darwin-aarch64": {
-              "url": "https://github.com/Dimillian/CodexMonitor/releases/download/v${VERSION}/CodexMonitor.app.tar.gz",
+              "url": release_url("CodexMonitor.app.tar.gz"),
               "signature": "${SIGNATURE}",
             }
           }
@@ -445,7 +469,7 @@ jobs:
             if not sig_path.exists():
               raise SystemExit(f"Missing signature for {appimage.name}")
             platforms[f"linux-{arch}"] = {
-              "url": f"https://github.com/Dimillian/CodexMonitor/releases/download/v${VERSION}/{appimage.name}",
+              "url": release_url(appimage.name),
               "signature": sig_path.read_text().strip(),
             }
 
@@ -476,7 +500,7 @@ jobs:
             raise SystemExit(f"Missing signature for {windows_installer.name}")
 
           platforms["windows-x86_64"] = {
-            "url": f"https://github.com/Dimillian/CodexMonitor/releases/download/v${VERSION}/{windows_installer.name}",
+            "url": release_url(windows_installer.name),
             "signature": win_sig_path.read_text().strip(),
           }
 
@@ -488,6 +512,35 @@ jobs:
           }
 
           Path("release-artifacts/latest.json").write_text(json.dumps(payload, indent=2) + "\n")
+          PY
+
+      - name: Validate latest.json artifact references
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from urllib.parse import unquote, urlparse
+
+          artifacts_dir = Path("release-artifacts")
+          latest_path = artifacts_dir / "latest.json"
+          payload = json.loads(latest_path.read_text())
+          available_files = {path.name for path in artifacts_dir.rglob("*") if path.is_file()}
+
+          missing = []
+          for platform, metadata in payload.get("platforms", {}).items():
+            url = metadata.get("url", "")
+            filename = Path(unquote(urlparse(url).path)).name
+            if filename not in available_files:
+              missing.append((platform, filename))
+
+          if missing:
+            print("latest.json references missing artifacts:")
+            for platform, filename in missing:
+              print(f"- {platform}: {filename}")
+            raise SystemExit(1)
+
+          print(f"Validated {len(payload.get('platforms', {}))} latest.json platform URL(s).")
           PY
 
       - name: Create GitHub release
