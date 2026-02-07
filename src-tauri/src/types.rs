@@ -263,6 +263,37 @@ pub(crate) struct OrbitRunnerStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TailscaleStatus {
+    pub(crate) installed: bool,
+    pub(crate) running: bool,
+    #[serde(default)]
+    pub(crate) version: Option<String>,
+    #[serde(default)]
+    pub(crate) dns_name: Option<String>,
+    #[serde(default)]
+    pub(crate) host_name: Option<String>,
+    #[serde(default)]
+    pub(crate) tailnet_name: Option<String>,
+    #[serde(default)]
+    pub(crate) ipv4: Vec<String>,
+    #[serde(default)]
+    pub(crate) ipv6: Vec<String>,
+    #[serde(default)]
+    pub(crate) suggested_remote_host: Option<String>,
+    pub(crate) message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TailscaleDaemonCommandPreview {
+    pub(crate) command: String,
+    pub(crate) daemon_path: String,
+    pub(crate) args: Vec<String>,
+    pub(crate) token_configured: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct BranchInfo {
     pub(crate) name: String,
     pub(crate) last_commit: i64,

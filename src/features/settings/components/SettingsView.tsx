@@ -10,6 +10,8 @@ import type {
   OrbitRunnerStatus,
   OrbitSignInPollResult,
   OrbitSignOutResult,
+  TailscaleDaemonCommandPreview,
+  TailscaleStatus,
   WorkspaceSettings,
   OpenAppTarget,
   WorkspaceGroup,
@@ -24,8 +26,14 @@ import {
   orbitSignInPoll,
   orbitSignInStart,
   orbitSignOut,
+  tailscaleDaemonCommandPreview as fetchTailscaleDaemonCommandPreview,
+  tailscaleStatus as fetchTailscaleStatus,
 } from "../../../services/tauri";
-import { isMacPlatform, isWindowsPlatform } from "../../../utils/platformPaths";
+import {
+  isMacPlatform,
+  isMobilePlatform,
+  isWindowsPlatform,
+} from "../../../utils/platformPaths";
 import { buildShortcutValue } from "../../../utils/shortcuts";
 import { clampUiScale } from "../../../utils/uiScale";
 import {
@@ -388,6 +396,18 @@ export function SettingsView({
     null,
   );
   const [orbitBusyAction, setOrbitBusyAction] = useState<string | null>(null);
+  const [tailscaleStatus, setTailscaleStatus] = useState<TailscaleStatus | null>(
+    null,
+  );
+  const [tailscaleStatusBusy, setTailscaleStatusBusy] = useState(false);
+  const [tailscaleStatusError, setTailscaleStatusError] = useState<string | null>(null);
+  const [tailscaleCommandPreview, setTailscaleCommandPreview] =
+    useState<TailscaleDaemonCommandPreview | null>(null);
+  const [tailscaleCommandBusy, setTailscaleCommandBusy] = useState(false);
+  const [tailscaleCommandError, setTailscaleCommandError] = useState<string | null>(
+    null,
+  );
+  const mobilePlatform = useMemo(() => isMobilePlatform(), []);
   const [scaleDraft, setScaleDraft] = useState(
     `${Math.round(clampUiScale(appSettings.uiScale) * 100)}%`,
   );
@@ -795,8 +815,8 @@ export function SettingsView({
     }
   };
 
-  const handleCommitRemoteHost = async () => {
-    const nextHost = remoteHostDraft.trim() || "127.0.0.1:4732";
+  const applyRemoteHost = async (rawValue: string) => {
+    const nextHost = rawValue.trim() || "127.0.0.1:4732";
     setRemoteHostDraft(nextHost);
     if (nextHost === appSettings.remoteBackendHost) {
       return;
@@ -805,6 +825,10 @@ export function SettingsView({
       ...appSettings,
       remoteBackendHost: nextHost,
     });
+  };
+
+  const handleCommitRemoteHost = async () => {
+    await applyRemoteHost(remoteHostDraft);
   };
 
   const handleCommitRemoteToken = async () => {
@@ -829,6 +853,50 @@ export function SettingsView({
       ...appSettings,
       remoteBackendProvider: provider,
     });
+  };
+
+  const handleRefreshTailscaleStatus = useCallback(() => {
+    void (async () => {
+      setTailscaleStatusBusy(true);
+      setTailscaleStatusError(null);
+      try {
+        const status = await fetchTailscaleStatus();
+        setTailscaleStatus(status);
+      } catch (error) {
+        setTailscaleStatusError(
+          error instanceof Error ? error.message : "Unable to load Tailscale status.",
+        );
+      } finally {
+        setTailscaleStatusBusy(false);
+      }
+    })();
+  }, []);
+
+  const handleRefreshTailscaleCommandPreview = useCallback(() => {
+    void (async () => {
+      setTailscaleCommandBusy(true);
+      setTailscaleCommandError(null);
+      try {
+        const preview = await fetchTailscaleDaemonCommandPreview();
+        setTailscaleCommandPreview(preview);
+      } catch (error) {
+        setTailscaleCommandError(
+          error instanceof Error
+            ? error.message
+            : "Unable to build Tailscale daemon command.",
+        );
+      } finally {
+        setTailscaleCommandBusy(false);
+      }
+    })();
+  }, []);
+
+  const handleUseSuggestedTailscaleHost = async () => {
+    const suggestedHost = tailscaleStatus?.suggestedRemoteHost ?? null;
+    if (!suggestedHost) {
+      return;
+    }
+    await applyRemoteHost(suggestedHost);
   };
 
   const handleCommitOrbitWsUrl = async () => {
@@ -923,10 +991,10 @@ export function SettingsView({
       ...latestSettings,
       remoteBackendToken: normalizedToken,
     };
-    latestSettingsRef.current = nextSettings;
     await onUpdateAppSettings({
       ...nextSettings,
     });
+    latestSettingsRef.current = nextSettings;
   };
 
   const handleOrbitConnectTest = () => {
@@ -1009,9 +1077,14 @@ export function SettingsView({
         "Signed out from Orbit.",
       );
       if (result !== null) {
-        await syncRemoteBackendToken(null);
-        setOrbitAuthCode(null);
-        setOrbitVerificationUrl(null);
+        try {
+          await syncRemoteBackendToken(null);
+          setOrbitAuthCode(null);
+          setOrbitVerificationUrl(null);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Unknown Orbit error";
+          setOrbitStatusText(`Sign Out failed: ${message}`);
+        }
       }
     })();
   };
@@ -1042,6 +1115,30 @@ export function SettingsView({
       "Orbit runner status refreshed.",
     );
   };
+
+  useEffect(() => {
+    if (appSettings.backendMode !== "remote") {
+      return;
+    }
+    if (appSettings.remoteBackendProvider !== "tcp") {
+      return;
+    }
+    if (!mobilePlatform) {
+      handleRefreshTailscaleCommandPreview();
+    }
+    if (tailscaleStatus === null && !tailscaleStatusBusy) {
+      handleRefreshTailscaleStatus();
+    }
+  }, [
+    appSettings.backendMode,
+    appSettings.remoteBackendProvider,
+    appSettings.remoteBackendToken,
+    handleRefreshTailscaleCommandPreview,
+    handleRefreshTailscaleStatus,
+    mobilePlatform,
+    tailscaleStatus,
+    tailscaleStatusBusy,
+  ]);
 
   const handleCommitScale = async () => {
     if (parsedScale === null) {
@@ -1594,6 +1691,12 @@ export function SettingsView({
               orbitAuthCode={orbitAuthCode}
               orbitVerificationUrl={orbitVerificationUrl}
               orbitBusyAction={orbitBusyAction}
+              tailscaleStatus={tailscaleStatus}
+              tailscaleStatusBusy={tailscaleStatusBusy}
+              tailscaleStatusError={tailscaleStatusError}
+              tailscaleCommandPreview={tailscaleCommandPreview}
+              tailscaleCommandBusy={tailscaleCommandBusy}
+              tailscaleCommandError={tailscaleCommandError}
               globalAgentsMeta={globalAgentsMeta}
               globalAgentsError={globalAgentsError}
               globalAgentsContent={globalAgentsContent}
@@ -1632,6 +1735,9 @@ export function SettingsView({
               onCommitRemoteHost={handleCommitRemoteHost}
               onCommitRemoteToken={handleCommitRemoteToken}
               onChangeRemoteProvider={handleChangeRemoteProvider}
+              onRefreshTailscaleStatus={handleRefreshTailscaleStatus}
+              onRefreshTailscaleCommandPreview={handleRefreshTailscaleCommandPreview}
+              onUseSuggestedTailscaleHost={handleUseSuggestedTailscaleHost}
               onCommitOrbitWsUrl={handleCommitOrbitWsUrl}
               onCommitOrbitAuthUrl={handleCommitOrbitAuthUrl}
               onCommitOrbitRunnerName={handleCommitOrbitRunnerName}

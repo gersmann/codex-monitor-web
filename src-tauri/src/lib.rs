@@ -4,6 +4,7 @@ use tauri::{RunEvent, WindowEvent};
 
 mod backend;
 mod codex;
+mod daemon_binary;
 mod dictation;
 mod event_sink;
 mod files;
@@ -20,6 +21,7 @@ mod settings;
 mod shared;
 mod state;
 mod storage;
+mod tailscale;
 mod terminal;
 mod types;
 mod utils;
@@ -174,7 +176,9 @@ pub fn run() {
             orbit::orbit_sign_out,
             orbit::orbit_runner_start,
             orbit::orbit_runner_stop,
-            orbit::orbit_runner_status
+            orbit::orbit_runner_status,
+            tailscale::tailscale_status,
+            tailscale::tailscale_daemon_command_preview
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");

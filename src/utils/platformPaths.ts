@@ -28,6 +28,25 @@ export function isWindowsPlatform(): boolean {
   return platformKind() === "windows";
 }
 
+export function isMobilePlatform(): boolean {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  const platform =
+    (navigator as Navigator & { userAgentData?: { platform?: string } })
+      .userAgentData?.platform ?? navigator.platform ?? "";
+  const normalizedPlatform = platform.toLowerCase();
+  const userAgent = (navigator.userAgent ?? "").toLowerCase();
+  return (
+    normalizedPlatform.includes("iphone") ||
+    normalizedPlatform.includes("ipad") ||
+    normalizedPlatform.includes("android") ||
+    userAgent.includes("iphone") ||
+    userAgent.includes("ipad") ||
+    userAgent.includes("android")
+  );
+}
+
 export function fileManagerName(): string {
   const platform = platformKind();
   if (platform === "mac") {

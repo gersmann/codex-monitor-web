@@ -81,3 +81,33 @@ Rule: Any settings update that changes remote transport config must invalidate t
 Root cause: Remote client cache lifecycle was only tied to disconnect/errors, not to transport settings mutations.
 Fix applied: Updated `src-tauri/src/settings/mod.rs` to compare previous vs updated transport settings and reset cached remote backend when they differ; added predicate unit tests.
 Prevention rule: Treat transport-config settings as cache keys and invalidate on change at the backend boundary, not only from UI handlers.
+
+## 2026-02-07 20:36
+Context: Orbit token sync persistence retry behavior in Settings
+Type: mistake
+Event: `syncRemoteBackendToken` updated `latestSettingsRef` before settings persistence succeeded, so a failed save could make later retries no-op.
+Action: Moved `latestSettingsRef` mutation to after successful `onUpdateAppSettings` completion and added a regression test for retry-after-failure.
+Rule: In async settings flows, only advance local "latest" refs after persistence succeeds.
+Root cause: Optimistically mutating in-memory settings state before awaiting durable save.
+Fix applied: Updated `src/features/settings/components/SettingsView.tsx` token sync ordering and added `retries Orbit token persistence after a failed save` in `src/features/settings/components/SettingsView.test.tsx`.
+Prevention rule: Keep optimistic UI drafts separate from persisted-settings refs and add explicit retry-path tests for async save failures.
+
+## 2026-02-07 21:01
+Context: Tailscale settings helper token preview freshness
+Type: mistake
+Event: Tailscale daemon command preview did not auto-refresh after remote token changes, leaving `tokenConfigured` warning state stale until manual refresh.
+Action: Added `appSettings.remoteBackendToken` as a dependency of the auto-refresh effect in `SettingsView` so preview data is recomputed after token edits.
+Rule: Any derived helper output that depends on settings values must include those values in effect dependencies (or equivalent invalidation paths).
+Root cause: The effect dependency list tracked provider/mode only and omitted token changes used by preview generation.
+Fix applied: Updated `src/features/settings/components/SettingsView.tsx` effect dependencies and revalidated `SettingsView` tests.
+Prevention rule: When adding helper panels, explicitly audit dependency arrays against all backend inputs shown in that panel (especially token/auth state).
+
+## 2026-02-07 21:03
+Context: Tailscale helper auto-preview on mobile
+Type: mistake
+Event: Settings auto-fetched desktop-only Tailscale daemon command preview on mobile, creating immediate unsupported-error noise.
+Action: Added `isMobilePlatform` helper and gated auto preview fetch in `SettingsView` to desktop platforms only.
+Rule: Do not auto-run desktop-only diagnostics on mobile surfaces; gate by platform first.
+Root cause: Auto-refresh effect was scoped by provider/mode only and assumed desktop capabilities.
+Fix applied: Updated `src/features/settings/components/SettingsView.tsx` effect logic and added `src/utils/platformPaths.test.ts` coverage for mobile detection.
+Prevention rule: For any auto-run settings helper, explicitly classify desktop-only vs cross-platform behavior before wiring useEffect refreshes.

@@ -267,3 +267,10 @@ Type: decision
 Event: Product direction is now self-hosted Orbit only; app should not present hosted Orbit mode or imply CodexMonitor-hosted relay/auth services.
 Action: Removed `orbitDeploymentMode` from frontend/backend settings models and defaults, removed deployment mode selector from Settings UI, and updated mobile Orbit blueprint/setup language to self-host-only.
 Rule: Keep Orbit setup/docs/UI self-host-only unless user explicitly requests reintroducing hosted mode.
+
+## 2026-02-07 20:48
+Context: Tailscale bootstrap path for mobile remote onboarding
+Type: decision
+Event: Added end-to-end Tailscale setup support so users can self-host remote TCP access before iOS Orbit UX is finalized.
+Action: Implemented desktop `tailscale_status` and `tailscale_daemon_command_preview` commands, wired Settings helpers (detect, suggested host, daemon command), and updated blueprint docs to include the Tailscale bootstrap flow.
+Rule: Keep Tailscale as the first-run self-host bootstrap path for TCP remote setup while Orbit remains the production relay path.

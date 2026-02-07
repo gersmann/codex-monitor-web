@@ -1,6 +1,12 @@
 import Stethoscope from "lucide-react/dist/esm/icons/stethoscope";
 import type { Dispatch, SetStateAction } from "react";
-import type { AppSettings, CodexDoctorResult, WorkspaceInfo } from "../../../../types";
+import type {
+  AppSettings,
+  CodexDoctorResult,
+  TailscaleDaemonCommandPreview,
+  TailscaleStatus,
+  WorkspaceInfo,
+} from "../../../../types";
 import { FileEditorCard } from "../../../shared/components/FileEditorCard";
 
 type SettingsCodexSectionProps = {
@@ -25,6 +31,12 @@ type SettingsCodexSectionProps = {
   orbitAuthCode: string | null;
   orbitVerificationUrl: string | null;
   orbitBusyAction: string | null;
+  tailscaleStatus: TailscaleStatus | null;
+  tailscaleStatusBusy: boolean;
+  tailscaleStatusError: string | null;
+  tailscaleCommandPreview: TailscaleDaemonCommandPreview | null;
+  tailscaleCommandBusy: boolean;
+  tailscaleCommandError: string | null;
   globalAgentsMeta: string;
   globalAgentsError: string | null;
   globalAgentsContent: string;
@@ -63,6 +75,9 @@ type SettingsCodexSectionProps = {
   onCommitRemoteHost: () => Promise<void>;
   onCommitRemoteToken: () => Promise<void>;
   onChangeRemoteProvider: (provider: AppSettings["remoteBackendProvider"]) => Promise<void>;
+  onRefreshTailscaleStatus: () => void;
+  onRefreshTailscaleCommandPreview: () => void;
+  onUseSuggestedTailscaleHost: () => Promise<void>;
   onCommitOrbitWsUrl: () => Promise<void>;
   onCommitOrbitAuthUrl: () => Promise<void>;
   onCommitOrbitRunnerName: () => Promise<void>;
@@ -109,6 +124,12 @@ export function SettingsCodexSection({
   orbitAuthCode,
   orbitVerificationUrl,
   orbitBusyAction,
+  tailscaleStatus,
+  tailscaleStatusBusy,
+  tailscaleStatusError,
+  tailscaleCommandPreview,
+  tailscaleCommandBusy,
+  tailscaleCommandError,
   globalAgentsMeta,
   globalAgentsError,
   globalAgentsContent,
@@ -147,6 +168,9 @@ export function SettingsCodexSection({
   onCommitRemoteHost,
   onCommitRemoteToken,
   onChangeRemoteProvider,
+  onRefreshTailscaleStatus,
+  onRefreshTailscaleCommandPreview,
+  onUseSuggestedTailscaleHost,
   onCommitOrbitWsUrl,
   onCommitOrbitAuthUrl,
   onCommitOrbitRunnerName,
@@ -407,6 +431,81 @@ export function SettingsCodexSection({
               </div>
               <div className="settings-help">
                 Start the daemon separately and point CodexMonitor to it (host:port + token).
+              </div>
+              <div className="settings-field">
+                <div className="settings-field-label">Tailscale helper</div>
+                <div className="settings-field-row">
+                  <button
+                    type="button"
+                    className="button settings-button-compact"
+                    onClick={onRefreshTailscaleStatus}
+                    disabled={tailscaleStatusBusy}
+                  >
+                    {tailscaleStatusBusy ? "Checking..." : "Detect Tailscale"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button settings-button-compact"
+                    onClick={onRefreshTailscaleCommandPreview}
+                    disabled={tailscaleCommandBusy}
+                  >
+                    {tailscaleCommandBusy ? "Refreshing..." : "Refresh daemon command"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button settings-button-compact"
+                    disabled={!tailscaleStatus?.suggestedRemoteHost}
+                    onClick={() => {
+                      void onUseSuggestedTailscaleHost();
+                    }}
+                  >
+                    Use suggested host
+                  </button>
+                </div>
+                {tailscaleStatusError && (
+                  <div className="settings-help settings-help-error">{tailscaleStatusError}</div>
+                )}
+                {tailscaleStatus && (
+                  <>
+                    <div className="settings-help">{tailscaleStatus.message}</div>
+                    <div className="settings-help">
+                      {tailscaleStatus.installed
+                        ? `Version: ${tailscaleStatus.version ?? "unknown"}`
+                        : "Install Tailscale on both desktop and iOS to continue."}
+                    </div>
+                    {tailscaleStatus.suggestedRemoteHost && (
+                      <div className="settings-help">
+                        Suggested remote host: <code>{tailscaleStatus.suggestedRemoteHost}</code>
+                      </div>
+                    )}
+                    {tailscaleStatus.tailnetName && (
+                      <div className="settings-help">
+                        Tailnet: <code>{tailscaleStatus.tailnetName}</code>
+                      </div>
+                    )}
+                  </>
+                )}
+                {tailscaleCommandError && (
+                  <div className="settings-help settings-help-error">{tailscaleCommandError}</div>
+                )}
+                {tailscaleCommandPreview && (
+                  <>
+                    <div className="settings-help">
+                      Run this command on the desktop host to start the daemon on your tailnet:
+                    </div>
+                    <pre className="settings-command-preview">
+                      <code>{tailscaleCommandPreview.command}</code>
+                    </pre>
+                    <div className="settings-help">
+                      Use the same value as <code>Remote backend token</code>.
+                    </div>
+                    {!tailscaleCommandPreview.tokenConfigured && (
+                      <div className="settings-help settings-help-error">
+                        Remote backend token is empty. Set one before exposing daemon access.
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           )}

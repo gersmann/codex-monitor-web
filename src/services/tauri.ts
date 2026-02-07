@@ -12,6 +12,8 @@ import type {
   OrbitRunnerStatus,
   OrbitSignInPollResult,
   OrbitSignOutResult,
+  TailscaleDaemonCommandPreview,
+  TailscaleStatus,
   WorkspaceInfo,
   WorkspaceSettings,
 } from "../types";
@@ -615,6 +617,14 @@ export async function orbitRunnerStop(): Promise<OrbitRunnerStatus> {
 
 export async function orbitRunnerStatus(): Promise<OrbitRunnerStatus> {
   return invoke<OrbitRunnerStatus>("orbit_runner_status");
+}
+
+export async function tailscaleStatus(): Promise<TailscaleStatus> {
+  return invoke<TailscaleStatus>("tailscale_status");
+}
+
+export async function tailscaleDaemonCommandPreview(): Promise<TailscaleDaemonCommandPreview> {
+  return invoke<TailscaleDaemonCommandPreview>("tailscale_daemon_command_preview");
 }
 
 type MenuAcceleratorUpdate = {

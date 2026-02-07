@@ -125,8 +125,27 @@
   color: var(--text-subtle);
 }
 
+.settings-help-error {
+  color: var(--text-danger);
+}
+
 .settings-help-inline {
   margin-right: 4px;
+}
+
+.settings-command-preview {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-muted);
+  background: var(--surface-1);
+  color: var(--text-strong);
+  font-family: var(--code-font-family);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .settings-agents-header {

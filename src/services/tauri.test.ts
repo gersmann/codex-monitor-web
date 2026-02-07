@@ -30,6 +30,8 @@ import {
   sendNotification,
   startReview,
   setThreadName,
+  tailscaleDaemonCommandPreview,
+  tailscaleStatus,
   writeGlobalAgentsMd,
   writeGlobalCodexConfigToml,
   writeAgentMd,
@@ -249,6 +251,17 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("orbit_runner_start");
     expect(invokeMock).toHaveBeenCalledWith("orbit_runner_stop");
     expect(invokeMock).toHaveBeenCalledWith("orbit_runner_status");
+  });
+
+  it("invokes tailscale wrappers", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValue(undefined);
+
+    await tailscaleStatus();
+    await tailscaleDaemonCommandPreview();
+
+    expect(invokeMock).toHaveBeenCalledWith("tailscale_status");
+    expect(invokeMock).toHaveBeenCalledWith("tailscale_daemon_command_preview");
   });
 
   it("reads agent.md for a workspace", async () => {

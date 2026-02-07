@@ -1,11 +1,12 @@
-# CodexMonitor iOS + Orbit Cloudflare Blueprint
+# CodexMonitor iOS Remote Blueprint (Orbit + Tailscale Bootstrap)
 
-This document is the canonical implementation plan for shipping CodexMonitor on iOS using Orbit on Cloudflare as the relay/control plane to a macOS runner.
+This document is the canonical implementation plan for shipping CodexMonitor on iOS with a Tailscale-first bootstrap path and Orbit on Cloudflare as the production relay/control plane to a macOS runner.
 
 ## Scope
 
 - Build and ship a real iOS app (Tauri mobile target).
 - Keep macOS as the execution host (Codex binary, repos, git, terminals, files).
+- Provide a low-friction self-host bootstrap path via Tailscale + TCP daemon for early end-to-end mobile testing.
 - Use Orbit on Cloudflare as secure relay/realtime bridge between iOS and macOS.
 - Make macOS setup manageable from CodexMonitor Settings: authenticate, pair device, launch/stop runner, inspect status/logs.
 - Keep one backend logic path (shared core + daemon). Do not duplicate backend behavior in iOS UI.
@@ -53,6 +54,10 @@ This document is the canonical implementation plan for shipping CodexMonitor on 
   - `terminal-exit`
 - Mobile UI scope is the existing app layout in mobile form-factor (no separate mobile-only feature surface).
 - Shared-core parity refactor is in place for prompts, local usage, codex utility helpers, git/github UI helpers, and workspace actions.
+- Tailscale setup helper is implemented for TCP remote mode:
+  - Desktop command: `tailscale_status`
+  - Desktop command: `tailscale_daemon_command_preview`
+  - Settings UI helpers: detect Tailscale, use suggested tailnet host, show daemon launch command template
 - Daemon RPC parity for the current mobile scope is complete.
 - `terminal_*` and `dictation_*` command parity are intentionally out of scope for this mobile phase.
 
@@ -70,7 +75,12 @@ This document is the canonical implementation plan for shipping CodexMonitor on 
 - Maintains outbound connection to Orbit.
 - Receives JSON-RPC from Orbit and returns results/events.
 
-3. Orbit Cloud Services
+3. Tailscale Tailnet (Bootstrap Path)
+- iOS and macOS join the same user-managed tailnet.
+- iOS connects directly to daemon TCP endpoint over tailnet (`remoteBackendProvider=tcp`).
+- No hosted CodexMonitor service required.
+
+4. Orbit Cloud Services
 - Auth service (passkey + JWT/session).
 - Orbit relay (Worker + Durable Object routing + event persistence endpoint).
 - User-owned self-host deployment path only.
@@ -78,6 +88,7 @@ This document is the canonical implementation plan for shipping CodexMonitor on 
 ## Canonical Protocol Choice
 
 - Use Orbit JSON-RPC relay model plus Orbit control messages (`orbit.subscribe`, `orbit.unsubscribe`, `orbit.list-anchors`, keepalive ping/pong).
+- For Tailscale bootstrap mode, continue using existing TCP JSON-RPC over tailnet (`remoteBackendProvider=tcp`) with token auth.
 - Do not introduce a second custom transport protocol for this phase.
 - Reconnection/resync should use Orbit thread event history endpoint and thread resume flows.
 
@@ -249,6 +260,10 @@ Update `src/features/settings/components/SettingsView.tsx` to add an Orbit secti
 Required controls:
 
 - Provider selector (`TCP daemon` / `Orbit`)
+- TCP + Tailscale helpers:
+  - `Detect Tailscale`
+  - `Use suggested host`
+  - daemon launch command template
 - Orbit WS URL input
 - Orbit Auth URL input
 - Runner name input
@@ -265,6 +280,7 @@ Current implementation status:
 
 - Implemented now:
   - Provider selector
+  - TCP Tailscale helper controls (`Detect Tailscale`, suggested host, daemon command template)
   - Orbit WS/Auth URL inputs
   - Runner name input
   - Access toggle + client id/secret ref fields
@@ -298,6 +314,24 @@ UX behavior:
   - Rehydration state after reconnect
 
 ## User Setup Flows
+
+## Tailscale Bootstrap (Implemented)
+
+Desktop setup:
+
+1. Install Tailscale and sign into the same tailnet on desktop and iPhone.
+2. In CodexMonitor Settings, set `Backend Mode = Remote`, `Provider = TCP`.
+3. Click `Detect Tailscale` and then `Use suggested host`.
+4. Set a `Remote backend token`.
+5. Copy the generated daemon command template and run it on desktop.
+6. Use the same host/token in mobile app remote settings.
+
+Mobile setup:
+
+1. Install and sign into Tailscale on iOS.
+2. Open CodexMonitor iOS app.
+3. Set remote provider to TCP and enter tailnet host + token from desktop setup.
+4. Connect and validate thread list + messaging.
 
 ## Self-Hosted Orbit
 

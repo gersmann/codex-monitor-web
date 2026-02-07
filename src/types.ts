@@ -257,6 +257,26 @@ export type OrbitRunnerStatus = {
   orbitUrl: string | null;
 };
 
+export type TailscaleStatus = {
+  installed: boolean;
+  running: boolean;
+  version: string | null;
+  dnsName: string | null;
+  hostName: string | null;
+  tailnetName: string | null;
+  ipv4: string[];
+  ipv6: string[];
+  suggestedRemoteHost: string | null;
+  message: string;
+};
+
+export type TailscaleDaemonCommandPreview = {
+  command: string;
+  daemonPath: string;
+  args: string[];
+  tokenConfigured: boolean;
+};
+
 export type CodexDoctorResult = {
   ok: boolean;
   codexBin: string | null;
