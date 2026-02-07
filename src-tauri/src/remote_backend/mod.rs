@@ -1,4 +1,4 @@
-mod cloudflare_ws_transport;
+mod orbit_ws_transport;
 mod protocol;
 mod tcp_transport;
 mod transport;
@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 use crate::state::AppState;
 use crate::types::{BackendMode, RemoteBackendProvider};
 
-use self::cloudflare_ws_transport::CloudflareWsTransport;
+use self::orbit_ws_transport::OrbitWsTransport;
 use self::protocol::{build_request_line, DEFAULT_REMOTE_HOST, DISCONNECTED_MESSAGE};
 use self::tcp_transport::TcpTransport;
 use self::transport::{PendingMap, RemoteTransport, RemoteTransportConfig, RemoteTransportKind};
@@ -121,7 +121,7 @@ async fn ensure_remote_backend(state: &AppState, app: AppHandle) -> Result<Remot
 
     let transport: Box<dyn RemoteTransport> = match transport_config.kind() {
         RemoteTransportKind::Tcp => Box::new(TcpTransport),
-        RemoteTransportKind::CloudflareWs => Box::new(CloudflareWsTransport),
+        RemoteTransportKind::OrbitWs => Box::new(OrbitWsTransport),
     };
     let connection = transport.connect(app, transport_config).await?;
 
@@ -164,28 +164,37 @@ fn resolve_transport_config(
                 auth_token: settings.remote_backend_token.clone(),
             })
         }
-        RemoteBackendProvider::Cloudflare => {
-            let worker_url = settings
-                .cloudflare_worker_url
+        RemoteBackendProvider::Orbit => {
+            let ws_url = settings
+                .orbit_ws_url
                 .as_ref()
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty())
-                .ok_or_else(|| {
-                    "Cloudflare provider requires cloudflareWorkerUrl in app settings.".to_string()
-                })?;
-            let session_id = settings
-                .cloudflare_session_id
-                .as_ref()
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| {
-                    "Cloudflare provider requires cloudflareSessionId in app settings.".to_string()
-                })?;
-            Ok(RemoteTransportConfig::CloudflareWs {
-                worker_url,
-                session_id,
+                .ok_or_else(|| "Orbit provider requires orbitWsUrl in app settings.".to_string())?;
+            Ok(RemoteTransportConfig::OrbitWs {
+                ws_url,
                 auth_token: settings.remote_backend_token.clone(),
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_transport_config;
+    use crate::remote_backend::transport::RemoteTransportConfig;
+    use crate::types::{AppSettings, RemoteBackendProvider};
+
+    #[test]
+    fn resolve_orbit_transport_uses_orbit_ws_url() {
+        let mut settings = AppSettings::default();
+        settings.remote_backend_provider = RemoteBackendProvider::Orbit;
+        settings.orbit_ws_url = Some("https://orbit.example/ws/live".to_string());
+
+        let config = resolve_transport_config(&settings).expect("transport config");
+        let RemoteTransportConfig::OrbitWs { ws_url, .. } = config else {
+            panic!("expected orbit transport config");
+        };
+        assert_eq!(ws_url, "https://orbit.example/ws/live");
     }
 }

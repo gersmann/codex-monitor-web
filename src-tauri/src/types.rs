@@ -325,10 +325,22 @@ pub(crate) struct AppSettings {
     pub(crate) remote_backend_host: String,
     #[serde(default, rename = "remoteBackendToken")]
     pub(crate) remote_backend_token: Option<String>,
-    #[serde(default, rename = "cloudflareWorkerUrl")]
-    pub(crate) cloudflare_worker_url: Option<String>,
-    #[serde(default, rename = "cloudflareSessionId")]
-    pub(crate) cloudflare_session_id: Option<String>,
+    #[serde(default, rename = "orbitDeploymentMode")]
+    pub(crate) orbit_deployment_mode: OrbitDeploymentMode,
+    #[serde(default, rename = "orbitWsUrl")]
+    pub(crate) orbit_ws_url: Option<String>,
+    #[serde(default, rename = "orbitAuthUrl")]
+    pub(crate) orbit_auth_url: Option<String>,
+    #[serde(default, rename = "orbitRunnerName")]
+    pub(crate) orbit_runner_name: Option<String>,
+    #[serde(default, rename = "orbitAutoStartRunner")]
+    pub(crate) orbit_auto_start_runner: bool,
+    #[serde(default, rename = "orbitUseAccess")]
+    pub(crate) orbit_use_access: bool,
+    #[serde(default, rename = "orbitAccessClientId")]
+    pub(crate) orbit_access_client_id: Option<String>,
+    #[serde(default, rename = "orbitAccessClientSecretRef")]
+    pub(crate) orbit_access_client_secret_ref: Option<String>,
     #[serde(default = "default_access_mode", rename = "defaultAccessMode")]
     pub(crate) default_access_mode: String,
     #[serde(
@@ -558,12 +570,25 @@ impl Default for BackendMode {
 #[serde(rename_all = "lowercase")]
 pub(crate) enum RemoteBackendProvider {
     Tcp,
-    Cloudflare,
+    Orbit,
 }
 
 impl Default for RemoteBackendProvider {
     fn default() -> Self {
         RemoteBackendProvider::Tcp
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum OrbitDeploymentMode {
+    Hosted,
+    SelfHosted,
+}
+
+impl Default for OrbitDeploymentMode {
+    fn default() -> Self {
+        OrbitDeploymentMode::Hosted
     }
 }
 
@@ -972,8 +997,14 @@ impl Default for AppSettings {
             remote_backend_provider: RemoteBackendProvider::Tcp,
             remote_backend_host: default_remote_backend_host(),
             remote_backend_token: None,
-            cloudflare_worker_url: None,
-            cloudflare_session_id: None,
+            orbit_deployment_mode: OrbitDeploymentMode::Hosted,
+            orbit_ws_url: None,
+            orbit_auth_url: None,
+            orbit_runner_name: None,
+            orbit_auto_start_runner: false,
+            orbit_use_access: false,
+            orbit_access_client_id: None,
+            orbit_access_client_secret_ref: None,
             default_access_mode: "current".to_string(),
             review_delivery_mode: default_review_delivery_mode(),
             composer_model_shortcut: default_composer_model_shortcut(),
@@ -1036,8 +1067,8 @@ impl Default for AppSettings {
 #[cfg(test)]
 mod tests {
     use super::{
-        AppSettings, BackendMode, RemoteBackendProvider, WorkspaceEntry, WorkspaceGroup,
-        WorkspaceKind, WorkspaceSettings,
+        AppSettings, BackendMode, OrbitDeploymentMode, RemoteBackendProvider, WorkspaceEntry,
+        WorkspaceGroup, WorkspaceKind, WorkspaceSettings,
     };
 
     #[test]
@@ -1051,8 +1082,17 @@ mod tests {
         ));
         assert_eq!(settings.remote_backend_host, "127.0.0.1:4732");
         assert!(settings.remote_backend_token.is_none());
-        assert!(settings.cloudflare_worker_url.is_none());
-        assert!(settings.cloudflare_session_id.is_none());
+        assert!(matches!(
+            settings.orbit_deployment_mode,
+            OrbitDeploymentMode::Hosted
+        ));
+        assert!(settings.orbit_ws_url.is_none());
+        assert!(settings.orbit_auth_url.is_none());
+        assert!(settings.orbit_runner_name.is_none());
+        assert!(!settings.orbit_auto_start_runner);
+        assert!(!settings.orbit_use_access);
+        assert!(settings.orbit_access_client_id.is_none());
+        assert!(settings.orbit_access_client_secret_ref.is_none());
         assert_eq!(settings.default_access_mode, "current");
         assert_eq!(settings.review_delivery_mode, "inline");
         let expected_primary = if cfg!(target_os = "macos") {

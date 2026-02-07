@@ -115,7 +115,8 @@ export type ReviewTarget =
 
 export type AccessMode = "read-only" | "current" | "full-access";
 export type BackendMode = "local" | "remote";
-export type RemoteBackendProvider = "tcp" | "cloudflare";
+export type RemoteBackendProvider = "tcp" | "orbit";
+export type OrbitDeploymentMode = "hosted" | "self_hosted";
 export type ThemePreference = "system" | "light" | "dark" | "dim";
 export type PersonalityPreference = "friendly" | "pragmatic";
 
@@ -149,8 +150,14 @@ export type AppSettings = {
   remoteBackendProvider: RemoteBackendProvider;
   remoteBackendHost: string;
   remoteBackendToken: string | null;
-  cloudflareWorkerUrl: string | null;
-  cloudflareSessionId: string | null;
+  orbitDeploymentMode: OrbitDeploymentMode;
+  orbitWsUrl: string | null;
+  orbitAuthUrl: string | null;
+  orbitRunnerName: string | null;
+  orbitAutoStartRunner: boolean;
+  orbitUseAccess: boolean;
+  orbitAccessClientId: string | null;
+  orbitAccessClientSecretRef: string | null;
   defaultAccessMode: AccessMode;
   reviewDeliveryMode: "inline" | "detached";
   composerModelShortcut: string | null;

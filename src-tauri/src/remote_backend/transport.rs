@@ -19,9 +19,8 @@ pub(crate) enum RemoteTransportConfig {
         host: String,
         auth_token: Option<String>,
     },
-    CloudflareWs {
-        worker_url: String,
-        session_id: String,
+    OrbitWs {
+        ws_url: String,
         auth_token: Option<String>,
     },
 }
@@ -29,21 +28,21 @@ pub(crate) enum RemoteTransportConfig {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum RemoteTransportKind {
     Tcp,
-    CloudflareWs,
+    OrbitWs,
 }
 
 impl RemoteTransportConfig {
     pub(crate) fn kind(&self) -> RemoteTransportKind {
         match self {
             RemoteTransportConfig::Tcp { .. } => RemoteTransportKind::Tcp,
-            RemoteTransportConfig::CloudflareWs { .. } => RemoteTransportKind::CloudflareWs,
+            RemoteTransportConfig::OrbitWs { .. } => RemoteTransportKind::OrbitWs,
         }
     }
 
     pub(crate) fn auth_token(&self) -> Option<&str> {
         match self {
             RemoteTransportConfig::Tcp { auth_token, .. } => auth_token.as_deref(),
-            RemoteTransportConfig::CloudflareWs { auth_token, .. } => auth_token.as_deref(),
+            RemoteTransportConfig::OrbitWs { auth_token, .. } => auth_token.as_deref(),
         }
     }
 }
@@ -84,7 +83,7 @@ where
             if writer.write_all(message.as_bytes()).await.is_err()
                 || writer.write_all(b"\n").await.is_err()
             {
-                disconnect_and_fail_pending(&pending_for_writer, &connected_for_writer).await;
+                mark_disconnected(&pending_for_writer, &connected_for_writer).await;
                 break;
             }
         }
@@ -116,37 +115,44 @@ async fn read_loop<R>(
         if trimmed.is_empty() {
             continue;
         }
-
-        let Some(message) = parse_incoming_line(trimmed) else {
-            continue;
-        };
-
-        match message {
-            IncomingMessage::Response { id, payload } => {
-                let sender = pending.lock().await.remove(&id);
-                if let Some(sender) = sender {
-                    let _ = sender.send(payload);
-                }
-            }
-            IncomingMessage::Notification { method, params } => match method.as_str() {
-                "app-server-event" => {
-                    let _ = app.emit("app-server-event", params);
-                }
-                "terminal-output" => {
-                    let _ = app.emit("terminal-output", params);
-                }
-                "terminal-exit" => {
-                    let _ = app.emit("terminal-exit", params);
-                }
-                _ => {}
-            },
-        }
+        dispatch_incoming_line(&app, &pending, trimmed).await;
     }
 
-    disconnect_and_fail_pending(&pending, &connected).await;
+    mark_disconnected(&pending, &connected).await;
 }
 
-async fn disconnect_and_fail_pending(
+pub(crate) async fn dispatch_incoming_line(
+    app: &AppHandle,
+    pending: &Arc<Mutex<PendingMap>>,
+    line: &str,
+) {
+    let Some(message) = parse_incoming_line(line) else {
+        return;
+    };
+
+    match message {
+        IncomingMessage::Response { id, payload } => {
+            let sender = pending.lock().await.remove(&id);
+            if let Some(sender) = sender {
+                let _ = sender.send(payload);
+            }
+        }
+        IncomingMessage::Notification { method, params } => match method.as_str() {
+            "app-server-event" => {
+                let _ = app.emit("app-server-event", params);
+            }
+            "terminal-output" => {
+                let _ = app.emit("terminal-output", params);
+            }
+            "terminal-exit" => {
+                let _ = app.emit("terminal-exit", params);
+            }
+            _ => {}
+        },
+    }
+}
+
+pub(crate) async fn mark_disconnected(
     pending: &Arc<Mutex<PendingMap>>,
     connected: &Arc<AtomicBool>,
 ) {

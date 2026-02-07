@@ -2,7 +2,7 @@
 
 ## Open
 - [ ] 2026-02-07: Implement Orbit-only mobile remote foundation: Orbit transport in `remote_backend`, runner Orbit mode, hosted/self-host settings + pairing UX, and iOS keychain-backed auth storage.
-- [ ] 2026-02-07: Implement Cloudflare WebSocket transport internals behind `remoteBackendProvider=cloudflare` (handshake/auth/send/subscribe/reconnect/replay) and wire settings UX for worker/session inputs.
+- [ ] 2026-02-07: Harden Orbit WS transport with explicit reconnect/backoff + replay/resync handling for mobile reconnect flows.
 
 ## Done
 - [x] 2026-02-07: Restored Sentry frontend reporting removed in `83a37da` (`@sentry/react`, `Sentry.init`, captureException callsites, and metrics instrumentation).
@@ -14,3 +14,6 @@
 - [x] 2026-02-07: Replace daemon `local_usage_snapshot` temporary implementation by sharing real local usage scanner logic in `shared/local_usage_core.rs`.
 - [x] 2026-02-07: Eliminate app/daemon duplication for git/github/prompt/codex utility behavior via shared cores (`git_ui_core`, `prompts_core`, `codex_aux_core`).
 - [x] 2026-02-07: Move remaining duplicated workspace-action logic (`add_clone`, `apply_worktree_changes`, `open_workspace_in`, `get_open_app_icon`) into shared core helpers.
+- [x] 2026-02-07: Implement Cloudflare WebSocket transport internals behind `remoteBackendProvider=cloudflare` (connect/read/write/pending-response flow) while preserving TCP behavior and callsites.
+- [x] 2026-02-07: Migrate remote provider naming/settings from Cloudflare-specific keys to Orbit (`orbit` provider + `orbit*` settings).
+- [x] 2026-02-07: Remove unreleased Cloudflare backward-compat aliases and backport tests to keep Orbit implementation canonical-only.

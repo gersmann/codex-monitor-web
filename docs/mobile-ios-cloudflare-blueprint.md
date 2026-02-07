@@ -19,7 +19,22 @@ This document is the canonical implementation plan for shipping CodexMonitor on 
 ## Current State (Important)
 
 - Tauri app is desktop-first with `#[cfg_attr(mobile, tauri::mobile_entry_point)]` already present in `src-tauri/src/lib.rs`.
-- `src-tauri/src/remote_backend.rs` currently uses raw TCP `host:port` and optional token auth.
+- `remote_backend` has been refactored into pluggable transport modules:
+  - `src-tauri/src/remote_backend/mod.rs`
+  - `src-tauri/src/remote_backend/protocol.rs`
+  - `src-tauri/src/remote_backend/transport.rs`
+  - `src-tauri/src/remote_backend/tcp_transport.rs`
+  - `src-tauri/src/remote_backend/orbit_ws_transport.rs`
+- Current transport behavior:
+  - TCP transport remains intact (existing remote path preserved).
+  - Orbit WS transport is implemented for connect/read/write + request/response routing.
+  - Reconnect/backoff and replay/resync hardening are still pending.
+- Remote provider settings baseline is implemented:
+  - `remoteBackendProvider`: `"tcp" | "orbit"`
+  - `remoteBackendHost`, `remoteBackendToken`
+  - `orbitDeploymentMode`, `orbitWsUrl`, `orbitAuthUrl`
+  - `orbitRunnerName`, `orbitAutoStartRunner`
+  - `orbitUseAccess`, `orbitAccessClientId`, `orbitAccessClientSecretRef`
 - Remote notification forwarding currently handles only:
   - `app-server-event`
   - `terminal-output`
@@ -89,7 +104,7 @@ Advanced setup for users who want full control.
 
 Target: keep existing `call_remote(...)` callsites while replacing transport internals.
 
-Proposed structure:
+Implemented structure:
 
 - `src-tauri/src/remote_backend/mod.rs`
 - `src-tauri/src/remote_backend/protocol.rs`
@@ -105,21 +120,33 @@ Proposed structure:
 - `close()`
 - `status()`
 
-## 2) Add Orbit configuration to settings model
+Current status:
+
+- Done: transport split + provider routing + Orbit WS connect/read/write path.
+- Pending: reconnect strategy, backoff policy, replay/resync contract integration.
+
+## 2) Add bridge configuration to settings model
 
 Extend `AppSettings` in `src-tauri/src/types.rs` and UI types in `src/types.ts`.
 
-Add section:
+Implemented baseline fields:
 
-- `remoteBridgeProvider`: `"tcp" | "orbit"`
-- `orbitDeploymentMode`: `"hosted" | "self_hosted"`
-- `orbitWsUrl` (required for self-host; optional/derived for hosted)
-- `orbitAuthUrl` (required for self-host; optional/derived for hosted)
+- `remoteBackendProvider`: `"tcp" | "orbit"`
+- `remoteBackendHost`
+- `remoteBackendToken`
+- `orbitDeploymentMode`
+- `orbitWsUrl`
+- `orbitAuthUrl`
 - `orbitRunnerName`
-- `orbitAutoStartRunner` (bool)
-- `orbitUseAccess` (bool, self-host optional)
-- `orbitAccessClientId` (non-secret allowed)
-- `orbitAccessClientSecretRef` (secret reference only)
+- `orbitAutoStartRunner`
+- `orbitUseAccess`
+- `orbitAccessClientId`
+- `orbitAccessClientSecretRef`
+
+Planned next (not yet implemented in settings model):
+
+- deployment/auth/pairing metadata required for full hosted/self-host Orbit UX
+- secure-storage integration for secret material lifecycle (set/reset/rotation)
 
 Keep secrets out of plain `settings.json` where possible.
 
@@ -446,7 +473,7 @@ cargo test
 
 1. Milestone A: iOS compile baseline + mobile-safe stubs.
 2. Milestone B: Orbit integration baseline (hosted + self-host config paths).
-3. Milestone C: `remote_backend` transport refactor + Orbit transport + runner Orbit mode.
+3. Milestone C: `remote_backend` transport refactor + Orbit WS transport + runner Orbit mode.
 4. Milestone D: daemon parity closure for mobile scope (excluding terminal/dictation).
 5. Milestone E: Settings UX/service manager + pairing UX.
 6. Milestone F: full E2E validation and TestFlight beta.

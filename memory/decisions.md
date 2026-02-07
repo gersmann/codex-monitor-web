@@ -211,3 +211,31 @@ Type: decision
 Event: Remote backend was a single TCP-specific module with no transport-level provider split.
 Action: Refactored `src-tauri/src/remote_backend.rs` into `remote_backend/{mod,protocol,transport,tcp_transport,cloudflare_ws_transport}.rs`, added `remoteBackendProvider` + Cloudflare settings fields, kept TCP behavior as default, and added a Cloudflare transport stub that returns a clear not-implemented error.
 Rule: Keep remote transport wiring behind `RemoteTransport` and use provider selection in settings so new bridge transports can be added without touching command callsites.
+
+## 2026-02-07 17:58
+Context: Cloudflare transport implementation pass
+Type: decision
+Event: Cloudflare transport stub blocked real remote bridge connectivity testing.
+Action: Implemented `cloudflare_ws_transport` with real WebSocket connect/read/write loops via `tokio-tungstenite`, shared incoming dispatch/pending-response handling, URL normalization to `/ws/{sessionId}`, and transport-level disconnect propagation.
+Rule: New remote transports should reuse shared dispatch/disconnect helpers and preserve the same request/response semantics as TCP transport.
+
+## 2026-02-07 18:00
+Context: Mobile Cloudflare blueprint canonicalization
+Type: decision
+Event: Blueprint still referenced pre-refactor remote backend structure and outdated settings keys after transport work landed.
+Action: Updated `docs/mobile-ios-cloudflare-blueprint.md` to reflect implemented remote backend module split, Cloudflare WS transport status, current provider settings fields, and remaining reconnect/replay hardening work.
+Rule: Keep blueprint "Current State" and backend/settings sections synchronized with merged transport architecture before starting new milestone work.
+
+## 2026-02-07 18:09
+Context: Orbit-only provider canonicalization
+Type: decision
+Event: Backend/provider/settings naming still reflected Cloudflare-specific labels after Orbit-only direction was finalized.
+Action: Renamed remote transport/provider/settings model to Orbit (`orbit_ws_transport`, `RemoteBackendProvider::Orbit`, `orbit*` settings), retained serde aliases for legacy Cloudflare config keys, and updated the mobile blueprint/todo notes to Orbit-first language.
+Rule: Keep runtime/provider naming Orbit-first while preserving narrow backward-compatible aliases only for persisted legacy settings.
+
+## 2026-02-07 18:13
+Context: Orbit-only feature branch compatibility policy
+Type: preference
+Event: User requested removing all unreleased Cloudflare fallback/backport compatibility paths and tests.
+Action: Removed provider/url/session legacy compatibility aliases, removed legacy session URL injection logic, and deleted backport-focused tests from remote backend and settings models.
+Rule: For this unreleased Orbit workstream, keep settings and transport strictly canonical without backward-compat adapters.
