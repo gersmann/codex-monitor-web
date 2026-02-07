@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]
 use std::path::Path;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::process::Stdio;
 use std::sync::Arc;
 
@@ -855,7 +857,7 @@ pub(crate) async fn open_workspace_in(
                 cmd.arg("/D");
                 cmd.arg("/S");
                 cmd.arg("/C");
-                cmd.arg(command_line);
+                cmd.raw_arg(command_line);
                 cmd
             } else {
                 let mut cmd = tokio_command(resolved_path);

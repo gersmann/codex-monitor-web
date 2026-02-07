@@ -19,6 +19,8 @@ use crate::types::WorkspaceEntry;
 
 #[cfg(target_os = "windows")]
 use crate::shared::process_core::{build_cmd_c_command, resolve_windows_executable};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 fn extract_thread_id(value: &Value) -> Option<String> {
     let params = value.get("params")?;
@@ -210,7 +212,7 @@ pub(crate) fn build_codex_command_with_bin(
             command.arg("/D");
             command.arg("/S");
             command.arg("/C");
-            command.arg(command_line);
+            command.raw_arg(command_line);
             command
         } else {
             let mut command = tokio_command(resolved_path);
