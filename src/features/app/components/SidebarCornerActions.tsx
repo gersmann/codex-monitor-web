@@ -3,6 +3,8 @@ import Settings from "lucide-react/dist/esm/icons/settings";
 import User from "lucide-react/dist/esm/icons/user";
 import X from "lucide-react/dist/esm/icons/x";
 import { useEffect, useRef, useState } from "react";
+import { PopoverSurface } from "../../design-system/components/popover/PopoverPrimitives";
+import { useDismissibleMenu } from "../hooks/useDismissibleMenu";
 
 type SidebarCornerActionsProps = {
   onOpenSettings: () => void;
@@ -34,22 +36,11 @@ export function SidebarCornerActions({
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!accountMenuOpen) {
-      return;
-    }
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (accountMenuRef.current?.contains(target)) {
-        return;
-      }
-      setAccountMenuOpen(false);
-    };
-    window.addEventListener("mousedown", handleClick);
-    return () => {
-      window.removeEventListener("mousedown", handleClick);
-    };
-  }, [accountMenuOpen]);
+  useDismissibleMenu({
+    isOpen: accountMenuOpen,
+    containerRef: accountMenuRef,
+    onClose: () => setAccountMenuOpen(false),
+  });
 
   useEffect(() => {
     if (!showAccountSwitcher) {
@@ -71,7 +62,7 @@ export function SidebarCornerActions({
             <User size={14} aria-hidden />
           </button>
           {accountMenuOpen && (
-            <div className="sidebar-account-popover popover-surface" role="dialog">
+            <PopoverSurface className="sidebar-account-popover" role="dialog">
               <div className="sidebar-account-title">Account</div>
               <div className="sidebar-account-value">{accountLabel}</div>
               <div className="sidebar-account-actions-row">
@@ -102,7 +93,7 @@ export function SidebarCornerActions({
                   </button>
                 )}
               </div>
-            </div>
+            </PopoverSurface>
           )}
         </div>
       )}

@@ -3,6 +3,7 @@ import type { CSSProperties, MouseEvent } from "react";
 import X from "lucide-react/dist/esm/icons/x";
 import { highlightLine, languageFromPath } from "../../../utils/syntax";
 import { OpenAppMenu } from "../../app/components/OpenAppMenu";
+import { PopoverSurface } from "../../design-system/components/popover/PopoverPrimitives";
 import type { OpenAppTarget } from "../../../types";
 
 type FilePreviewPopoverProps = {
@@ -79,7 +80,7 @@ export function FilePreviewPopover({
   );
 
   return (
-    <div className="file-preview-popover popover-surface" style={style}>
+    <PopoverSurface className="file-preview-popover" style={style}>
       <div className="file-preview-header">
         <div className="file-preview-title">
           <span className="file-preview-path">{path}</span>
@@ -198,6 +199,6 @@ export function FilePreviewPopover({
           </div>
         </div>
       )}
-    </div>
+    </PopoverSurface>
   );
 }

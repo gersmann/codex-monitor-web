@@ -208,8 +208,10 @@ Use the design-system layer for shared UI shells and tokenized styling.
   - `src/features/design-system/components/modal/ModalShell.tsx`
   - `src/features/design-system/components/toast/ToastPrimitives.tsx`
   - `src/features/design-system/components/panel/PanelPrimitives.tsx`
+  - `src/features/design-system/components/popover/PopoverPrimitives.tsx`
   - Toast sub-primitives: `ToastHeader`, `ToastActions`, `ToastError` (in `ToastPrimitives.tsx`)
   - Panel sub-primitives: `PanelMeta`, `PanelSearchField` (in `PanelPrimitives.tsx`)
+  - Popover sub-primitives: `PopoverMenuItem` (in `PopoverPrimitives.tsx`)
 - Diff theming and style bridge:
   - `src/features/design-system/diff/diffViewerTheme.ts`
 - DS token/style locations:
@@ -217,18 +219,19 @@ Use the design-system layer for shared UI shells and tokenized styling.
   - `src/styles/ds-modal.css`
   - `src/styles/ds-toast.css`
   - `src/styles/ds-panel.css`
+  - `src/styles/ds-popover.css`
   - `src/styles/ds-diff.css`
 
 Naming conventions:
 
 - DS CSS classes use `.ds-*` prefixes.
 - DS CSS variables use `--ds-*` prefixes.
-- DS React primitives use `PascalCase` component names (`ModalShell`, `ToastCard`, `ToastHeader`, `ToastActions`, `ToastError`, `PanelFrame`, `PanelHeader`, `PanelMeta`, `PanelSearchField`).
+- DS React primitives use `PascalCase` component names (`ModalShell`, `ToastCard`, `ToastHeader`, `ToastActions`, `ToastError`, `PanelFrame`, `PanelHeader`, `PanelMeta`, `PanelSearchField`, `PopoverSurface`, `PopoverMenuItem`).
 - Feature CSS should keep feature-prefixed classes (`.worktree-*`, `.update-*`) for content/layout specifics.
 
 Do:
 
-- Use DS primitives first for shared shells (modal wrappers, toast cards/viewports, panel shells/headers).
+- Use DS primitives first for shared shells (modal wrappers, toast cards/viewports, panel shells/headers, popover/dropdown surfaces).
 - Pull shared visual tokens from `--ds-*` variables.
 - Keep feature styles focused on feature-specific layout/content, not duplicated shell chrome.
 - Centralize shared animation/chrome in DS stylesheets when used by multiple feature families.
@@ -238,6 +241,7 @@ Don't:
 - Recreate fixed modal backdrops/cards in feature CSS when `ModalShell` is used.
 - Duplicate toast card chrome (background/border/shadow/padding/enter animation) per toast family.
 - Duplicate panel shell layout/header alignment in feature styles when `PanelFrame`/`PanelHeader` already provide it.
+- Recreate popover/dropdown shell chrome in feature CSS when `PopoverSurface`/`PopoverMenuItem` already provide it.
 - Add new non-DS color constants for shared shells; add/extend DS tokens instead.
 
 Migration guidance for new/updated components:
@@ -258,12 +262,13 @@ Anti-duplication guidance:
 Enforcement workflow:
 
 - Lint guardrails for DS-targeted files live in `.eslintrc.cjs`.
+- Popover guardrails are enforced for migrated popover files (`MainHeader`, `Sidebar`, `SidebarHeader`, `SidebarCornerActions`, `OpenAppMenu`, `LaunchScript*`, `ComposerInput`, `FilePreviewPopover`, `WorkspaceHome`) to require `PopoverSurface`/`PopoverMenuItem`.
 - Codemod scripts live in `scripts/codemods/`:
   - `modal-shell-codemod.mjs`
   - `panel-shell-codemod.mjs`
   - `toast-shell-codemod.mjs`
 - Run `npm run codemod:ds:dry` before UI shell migration PRs.
-- Keep `npm run lint:ds`/`npm run lint` green for modal/toast/panel/diff files.
+- Keep `npm run lint:ds`/`npm run lint` green for modal/toast/panel/popover/diff files.
 
 ### Backend Guidelines
 

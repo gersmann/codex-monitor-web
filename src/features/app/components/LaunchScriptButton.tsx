@@ -1,6 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import Play from "lucide-react/dist/esm/icons/play";
 import type { LaunchScriptIconId } from "../../../types";
+import { PopoverSurface } from "../../design-system/components/popover/PopoverPrimitives";
+import { useDismissibleMenu } from "../hooks/useDismissibleMenu";
 import { LaunchScriptIconPicker } from "./LaunchScriptIconPicker";
 import { DEFAULT_LAUNCH_SCRIPT_ICON } from "../utils/launchScriptIcons";
 
@@ -56,23 +58,14 @@ export function LaunchScriptButton({
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const hasLaunchScript = Boolean(launchScript?.trim());
 
-  useEffect(() => {
-    if (!editorOpen) {
-      return;
-    }
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (popoverRef.current?.contains(target)) {
-        return;
-      }
+  useDismissibleMenu({
+    isOpen: editorOpen,
+    containerRef: popoverRef,
+    onClose: () => {
       onCloseEditor();
       onCloseNew?.();
-    };
-    window.addEventListener("mousedown", handleClick);
-    return () => {
-      window.removeEventListener("mousedown", handleClick);
-    };
-  }, [editorOpen, onCloseEditor, onCloseNew]);
+    },
+  });
 
   return (
     <div className="launch-script-menu" ref={popoverRef}>
@@ -93,7 +86,7 @@ export function LaunchScriptButton({
         </button>
       </div>
       {editorOpen && (
-        <div className="launch-script-popover popover-surface" role="dialog">
+        <PopoverSurface className="launch-script-popover" role="dialog">
           <div className="launch-script-title">Launch script</div>
           <textarea
             className="launch-script-textarea"
@@ -181,7 +174,7 @@ export function LaunchScriptButton({
               </div>
             </div>
           )}
-        </div>
+        </PopoverSurface>
       )}
     </div>
   );

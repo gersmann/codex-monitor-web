@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { openWorkspaceIn } from "../../../services/tauri";
@@ -9,7 +9,12 @@ import {
   DEFAULT_OPEN_APP_TARGETS,
   OPEN_APP_STORAGE_KEY,
 } from "../constants";
+import {
+  PopoverMenuItem,
+  PopoverSurface,
+} from "../../design-system/components/popover/PopoverPrimitives";
 import { GENERIC_APP_ICON, getKnownOpenAppIcon } from "../utils/openAppIcons";
+import { useDismissibleMenu } from "../hooks/useDismissibleMenu";
 
 type OpenTarget = {
   id: string;
@@ -96,22 +101,11 @@ export function OpenAppMenu({
     });
   };
 
-  useEffect(() => {
-    if (!openMenuOpen) {
-      return;
-    }
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target as Node;
-      const openContains = openMenuRef.current?.contains(target) ?? false;
-      if (!openContains) {
-        setOpenMenuOpen(false);
-      }
-    };
-    window.addEventListener("mousedown", handleClick);
-    return () => {
-      window.removeEventListener("mousedown", handleClick);
-    };
-  }, [openMenuOpen]);
+  useDismissibleMenu({
+    isOpen: openMenuOpen,
+    containerRef: openMenuRef,
+    onClose: () => setOpenMenuOpen(false),
+  });
 
   const resolveAppName = (target: OpenTarget) =>
     (target.target.appName ?? "").trim();
@@ -217,25 +211,23 @@ export function OpenAppMenu({
         </button>
       </div>
       {openMenuOpen && (
-        <div className="open-app-dropdown" role="menu">
+        <PopoverSurface className="open-app-dropdown" role="menu">
           {resolvedOpenTargets.map((target) => (
             // Keep entries visible but disable ones missing required config.
-            <button
+            <PopoverMenuItem
               key={target.id}
-              type="button"
-              className={`open-app-option${
-                target.id === resolvedOpenAppId ? " is-active" : ""
-              }`}
+              className="open-app-option"
               onClick={() => handleSelectOpenTarget(target)}
               disabled={!canOpenTarget(target)}
               role="menuitem"
               data-tauri-drag-region="false"
+              icon={<img className="open-app-icon" src={target.icon} alt="" aria-hidden />}
+              active={target.id === resolvedOpenAppId}
             >
-              <img className="open-app-icon" src={target.icon} alt="" aria-hidden />
               {target.label}
-            </button>
+            </PopoverMenuItem>
           ))}
-        </div>
+        </PopoverSurface>
       )}
     </div>
   );

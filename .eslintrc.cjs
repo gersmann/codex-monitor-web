@@ -161,5 +161,48 @@ module.exports = {
         ],
       },
     },
+    {
+      files: [
+        'src/features/app/components/MainHeader.tsx',
+        'src/features/app/components/LaunchScriptButton.tsx',
+        'src/features/app/components/LaunchScriptEntryButton.tsx',
+        'src/features/app/components/OpenAppMenu.tsx',
+        'src/features/app/components/Sidebar.tsx',
+        'src/features/app/components/SidebarHeader.tsx',
+        'src/features/app/components/SidebarCornerActions.tsx',
+        'src/features/composer/components/ComposerInput.tsx',
+        'src/features/files/components/FilePreviewPopover.tsx',
+        'src/features/workspaces/components/WorkspaceHome.tsx',
+      ],
+      rules: {
+        'no-restricted-syntax': [
+          'error',
+          {
+            selector:
+              "JSXOpeningElement[name.name='div'] > JSXAttribute[name.name='className'][value.value=/\\b(workspace-add-menu|sidebar-sort-dropdown|sidebar-account-popover|worktree-info-popover|workspace-branch-dropdown|launch-script-popover|open-app-dropdown|file-preview-popover)\\b/]",
+            message:
+              'Use `PopoverSurface` for popover/dropdown shell markup instead of raw `<div>` wrappers.',
+          },
+          {
+            selector:
+              "JSXOpeningElement[name.name='div'] > JSXAttribute[name.name='role'][value.value=/^(menu|listbox)$/]",
+            message:
+              'Use `PopoverSurface` for popover/dropdown shell semantics instead of raw `<div role=\"menu|listbox\">` wrappers.',
+          },
+          {
+            selector:
+              "JSXOpeningElement[name.name='button'] > JSXAttribute[name.name='className'][value.value=/\\b(open-app-option|workspace-add-option|sidebar-sort-option)\\b/]",
+            message:
+              'Use `PopoverMenuItem` for precomputed popover list entries instead of raw `<button>` menu rows.',
+          },
+          {
+            selector:
+              "Literal[value=/#[0-9A-Fa-f]{3,8}|rgba?\\(|hsla?\\(/]",
+            message:
+              'Avoid hardcoded color literals in DS-targeted components; use design-system CSS variables/tokens.',
+          },
+        ],
+      },
+    },
   ],
 };

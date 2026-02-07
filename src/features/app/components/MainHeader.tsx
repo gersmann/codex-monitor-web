@@ -9,10 +9,12 @@ import { revealInFileManagerLabel } from "../../../utils/platformPaths";
 import { BranchList } from "../../git/components/BranchList";
 import { filterBranches, findExactBranch } from "../../git/utils/branchSearch";
 import { validateBranchName } from "../../git/utils/branchValidation";
+import { PopoverSurface } from "../../design-system/components/popover/PopoverPrimitives";
 import { OpenAppMenu } from "./OpenAppMenu";
 import { LaunchScriptButton } from "./LaunchScriptButton";
 import { LaunchScriptEntryButton } from "./LaunchScriptEntryButton";
 import type { WorkspaceLaunchScriptsState } from "../hooks/useWorkspaceLaunchScripts";
+import { useDismissibleMenu } from "../hooks/useDismissibleMenu";
 
 type MainHeaderProps = {
   workspace: WorkspaceInfo;
@@ -140,26 +142,21 @@ export function MainHeader({
     [relativeWorktreePath],
   );
 
-  useEffect(() => {
-    if (!menuOpen && !infoOpen) {
-      return;
-    }
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target as Node;
-      const menuContains = menuRef.current?.contains(target) ?? false;
-      const infoContains = infoRef.current?.contains(target) ?? false;
-      if (!menuContains && !infoContains) {
-        setMenuOpen(false);
-        setInfoOpen(false);
-        setBranchQuery("");
-        setError(null);
-      }
-    };
-    window.addEventListener("mousedown", handleClick);
-    return () => {
-      window.removeEventListener("mousedown", handleClick);
-    };
-  }, [infoOpen, menuOpen]);
+  useDismissibleMenu({
+    isOpen: menuOpen,
+    containerRef: menuRef,
+    onClose: () => {
+      setMenuOpen(false);
+      setBranchQuery("");
+      setError(null);
+    },
+  });
+
+  useDismissibleMenu({
+    isOpen: infoOpen,
+    containerRef: infoRef,
+    onClose: () => setInfoOpen(false),
+  });
 
   useEffect(() => {
     if (!infoOpen && renameOnCancel) {
@@ -217,7 +214,7 @@ export function MainHeader({
                 {worktreeLabel || branchName}
               </button>
               {infoOpen && (
-                <div className="worktree-info-popover popover-surface" role="dialog">
+                <PopoverSurface className="worktree-info-popover" role="dialog">
                   {worktreeRename && (
                     <div className="worktree-info-rename">
                       <span className="worktree-info-label">Name</span>
@@ -343,7 +340,7 @@ export function MainHeader({
                       {revealInFileManagerLabel()}
                     </button>
                   </div>
-                </div>
+                </PopoverSurface>
               )}
             </div>
           ) : (
@@ -362,8 +359,8 @@ export function MainHeader({
                 </span>
               </button>
               {menuOpen && (
-                <div
-                  className="workspace-branch-dropdown popover-surface"
+                <PopoverSurface
+                  className="workspace-branch-dropdown"
                   role="menu"
                   data-tauri-drag-region="false"
                 >
@@ -482,7 +479,7 @@ export function MainHeader({
                     }}
                   />
                   {error && <div className="branch-error">{error}</div>}
-                </div>
+                </PopoverSurface>
               )}
             </div>
           )}

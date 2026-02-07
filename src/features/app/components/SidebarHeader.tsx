@@ -5,6 +5,10 @@ import ListFilter from "lucide-react/dist/esm/icons/list-filter";
 import Search from "lucide-react/dist/esm/icons/search";
 import { useRef, useState } from "react";
 import type { ThreadListSortKey } from "../../../types";
+import {
+  PopoverMenuItem,
+  PopoverSurface,
+} from "../../design-system/components/popover/PopoverPrimitives";
 import { useDismissibleMenu } from "../hooks/useDismissibleMenu";
 
 type SidebarHeaderProps = {
@@ -79,34 +83,30 @@ export function SidebarHeader({
             <ListFilter aria-hidden />
           </button>
           {sortMenuOpen && (
-            <div className="sidebar-sort-dropdown popover-surface" role="menu">
-              <button
-                type="button"
-                className={`sidebar-sort-option${
-                  threadListSortKey === "updated_at" ? " is-active" : ""
-                }`}
+            <PopoverSurface className="sidebar-sort-dropdown" role="menu">
+              <PopoverMenuItem
+                className="sidebar-sort-option"
                 role="menuitemradio"
                 aria-checked={threadListSortKey === "updated_at"}
                 onClick={() => handleSelectSort("updated_at")}
                 data-tauri-drag-region="false"
+                icon={<Clock3 aria-hidden />}
+                active={threadListSortKey === "updated_at"}
               >
-                <Clock3 aria-hidden />
                 Last updated
-              </button>
-              <button
-                type="button"
-                className={`sidebar-sort-option${
-                  threadListSortKey === "created_at" ? " is-active" : ""
-                }`}
+              </PopoverMenuItem>
+              <PopoverMenuItem
+                className="sidebar-sort-option"
                 role="menuitemradio"
                 aria-checked={threadListSortKey === "created_at"}
                 onClick={() => handleSelectSort("created_at")}
                 data-tauri-drag-region="false"
+                icon={<Calendar aria-hidden />}
+                active={threadListSortKey === "created_at"}
               >
-                <Calendar aria-hidden />
                 Most recent
-              </button>
-            </div>
+              </PopoverMenuItem>
+            </PopoverSurface>
           )}
         </div>
         <button

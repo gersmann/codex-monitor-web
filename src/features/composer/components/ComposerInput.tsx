@@ -22,6 +22,7 @@ import Wrench from "lucide-react/dist/esm/icons/wrench";
 import FileText from "lucide-react/dist/esm/icons/file-text";
 import Plug from "lucide-react/dist/esm/icons/plug";
 import { useComposerImageDrop } from "../hooks/useComposerImageDrop";
+import { PopoverSurface } from "../../design-system/components/popover/PopoverPrimitives";
 import { ComposerAttachments } from "./ComposerAttachments";
 import { DictationWaveform } from "../../dictation/components/DictationWaveform";
 import { ReviewInlinePrompt } from "./ReviewInlinePrompt";
@@ -386,8 +387,8 @@ export function ComposerInput({
           </div>
         )}
         {suggestionsOpen && (
-          <div
-            className={`composer-suggestions popover-surface${
+          <PopoverSurface
+            className={`composer-suggestions${
               reviewPromptOpen ? " review-inline-suggestions" : ""
             }`}
             role="listbox"
@@ -505,7 +506,7 @@ export function ComposerInput({
                 );
               })
             )}
-          </div>
+          </PopoverSurface>
         )}
       </div>
       {onToggleExpand && (

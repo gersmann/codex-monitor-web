@@ -78,3 +78,24 @@ Type: preference
 Event: User requested removing phase-progress wording from `AGENTS.md` so it stays canonical and current-state only.
 Action: Removed phase-specific wording from the design-system enforcement section title.
 Rule: Keep `AGENTS.md` free of phase labels/progress framing; document canonical behavior and workflow only.
+
+## 2026-02-07 11:37
+Context: Design-system popover standardization
+Type: preference
+Event: User requested all app popovers use one consistent pattern with iconized precomputed menu entries and Escape/outside-click dismissal behavior.
+Action: Added DS popover primitives/styles and migrated popover/dropdown callsites (branch/worktree menus, sidebar add/sort/account menus, launch script, open-app menus, workspace-home run mode/models, composer suggestions, file preview) to use shared shell semantics and dismiss behavior.
+Rule: New popover/dropdown UI should use DS popover primitives, include leading icons for precomputed action lists, and close on Escape/outside click unless explicitly exempted.
+
+## 2026-02-07 11:40
+Context: AGENTS canonical DS documentation update
+Type: decision
+Event: Canonical design-system guidance needed to include popover primitives and style sources after popover migration.
+Action: Updated `AGENTS.md` design-system section to list `PopoverPrimitives.tsx`, `PopoverSurface`/`PopoverMenuItem`, and `ds-popover.css` plus popover-specific do/don't guidance.
+Rule: Keep AGENTS design-system inventory aligned with currently implemented DS primitives and styles, without claiming guardrails that are not implemented.
+
+## 2026-02-07 11:42
+Context: Popover design-system regression guardrails
+Type: decision
+Event: Added lint enforcement to prevent regressions back to raw popover shell/menu-row markup in migrated files.
+Action: Added `.eslintrc.cjs` popover override covering migrated popover components, requiring `PopoverSurface`/`PopoverMenuItem` patterns and keeping DS token color-literal restrictions in scope.
+Rule: Popover changes in guarded files must keep DS primitive markup and pass lint before merge.
