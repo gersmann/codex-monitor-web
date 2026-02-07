@@ -14,6 +14,12 @@ import Folder from "lucide-react/dist/esm/icons/folder";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import Search from "lucide-react/dist/esm/icons/search";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
+import {
+  PanelFrame,
+  PanelHeader,
+  PanelMeta,
+  PanelSearchField,
+} from "../../design-system/components/panel/PanelPrimitives";
 import { readWorkspaceFile } from "../../../services/tauri";
 import type { OpenAppTarget } from "../../../types";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
@@ -642,22 +648,22 @@ export function FileTreePanel({
   };
 
   return (
-    <aside className="diff-panel file-tree-panel">
-      <div className="git-panel-header">
+    <PanelFrame className="file-tree-panel">
+      <PanelHeader className="git-panel-header">
         <PanelTabs active={filePanelMode} onSelect={onFilePanelModeChange} />
-        <div className="file-tree-meta">
+        <PanelMeta className="file-tree-meta">
           <div className="file-tree-count">
-          {visibleEntries.length
-            ? normalizedQuery
-              ? `${visibleEntries.length} match${visibleEntries.length === 1 ? "" : "es"}`
-              : filterMode === "modified"
-                ? `${visibleEntries.length} modified`
-                : `${visibleEntries.length} file${visibleEntries.length === 1 ? "" : "s"}`
-            : showLoading
-              ? "Loading files"
-              : filterMode === "modified"
-                ? "No modified"
-                : "No files"}
+            {visibleEntries.length
+              ? normalizedQuery
+                ? `${visibleEntries.length} match${visibleEntries.length === 1 ? "" : "es"}`
+                : filterMode === "modified"
+                  ? `${visibleEntries.length} modified`
+                  : `${visibleEntries.length} file${visibleEntries.length === 1 ? "" : "s"}`
+              : showLoading
+                ? "Loading files"
+                : filterMode === "modified"
+                  ? "No modified"
+                  : "No files"}
           </div>
           {hasFolders ? (
             <button
@@ -670,33 +676,33 @@ export function FileTreePanel({
               <ChevronsUpDown aria-hidden />
             </button>
           ) : null}
-        </div>
-      </div>
-      <div className="file-tree-search">
-        <Search className="file-tree-search-icon" aria-hidden />
-        <input
-          className="file-tree-search-input"
-          type="search"
-          placeholder="Filter files and folders"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label="Filter files and folders"
-        />
-        <button
-          type="button"
-          className={`ghost icon-button file-tree-search-filter${filterMode === "modified" ? " is-active" : ""}`}
-          onClick={() => {
-            setFilterMode((prev) => (prev === "all" ? "modified" : "all"));
-          }}
-          aria-pressed={filterMode === "modified"}
-          aria-label={
-            filterMode === "modified" ? "Show all files" : "Show modified files only"
-          }
-          title={filterMode === "modified" ? "Show all files" : "Show modified files only"}
-        >
-          <GitBranch size={14} aria-hidden />
-        </button>
-      </div>
+        </PanelMeta>
+      </PanelHeader>
+      <PanelSearchField
+        className="file-tree-search"
+        inputClassName="file-tree-search-input"
+        placeholder="Filter files and folders"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        aria-label="Filter files and folders"
+        icon={<Search aria-hidden />}
+        trailing={
+          <button
+            type="button"
+            className={`ghost icon-button file-tree-search-filter${filterMode === "modified" ? " is-active" : ""}`}
+            onClick={() => {
+              setFilterMode((prev) => (prev === "all" ? "modified" : "all"));
+            }}
+            aria-pressed={filterMode === "modified"}
+            aria-label={
+              filterMode === "modified" ? "Show all files" : "Show modified files only"
+            }
+            title={filterMode === "modified" ? "Show all files" : "Show modified files only"}
+          >
+            <GitBranch size={14} aria-hidden />
+          </button>
+        }
+      />
       <div
         className="file-tree-list"
         ref={listRef}
@@ -789,6 +795,6 @@ export function FileTreePanel({
             document.body,
           )
         : null}
-    </aside>
+    </PanelFrame>
   );
 }

@@ -8,6 +8,10 @@ import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import { workerFactory } from "../../../utils/diffsWorker";
 import type { GitHubPullRequest, GitHubPullRequestComment } from "../../../types";
 import { formatRelativeTime } from "../../../utils/time";
+import {
+  DIFF_VIEWER_HIGHLIGHTER_OPTIONS,
+  DIFF_VIEWER_SCROLL_CSS,
+} from "../../design-system/diff/diffViewerTheme";
 import { Markdown } from "../../messages/components/Markdown";
 import { ImageDiffCard } from "./ImageDiffCard";
 
@@ -41,63 +45,6 @@ type GitDiffViewerProps = {
   onActivePathChange?: (path: string) => void;
 };
 
-const DIFF_SCROLL_CSS = `
-[data-column-number],
-[data-buffer],
-[data-separator-wrapper],
-[data-annotation-content] {
-  position: static !important;
-}
-
-[data-buffer] {
-  background-image: none !important;
-}
-
-diffs-container,
-[data-diffs],
-[data-diffs-header],
-[data-error-wrapper] {
-  position: relative !important;
-  contain: layout style !important;
-  isolation: isolate !important;
-}
-
-[data-diffs-header],
-[data-diffs],
-[data-error-wrapper] {
-  --diffs-light-bg: rgba(255, 255, 255, 0.35);
-  --diffs-dark-bg: rgba(10, 12, 16, 0.35);
-}
-
-[data-diffs-header][data-theme-type='light'],
-[data-diffs][data-theme-type='light'] {
-  --diffs-bg: rgba(255, 255, 255, 0.35);
-}
-
-[data-diffs-header][data-theme-type='dark'],
-[data-diffs][data-theme-type='dark'] {
-  --diffs-bg: rgba(10, 12, 16, 0.35);
-}
-
-@media (prefers-color-scheme: dark) {
-  [data-diffs-header]:not([data-theme-type]),
-  [data-diffs]:not([data-theme-type]),
-  [data-diffs-header][data-theme-type='system'],
-  [data-diffs][data-theme-type='system'] {
-    --diffs-bg: rgba(10, 12, 16, 0.35);
-  }
-}
-
-@media (prefers-color-scheme: light) {
-  [data-diffs-header]:not([data-theme-type]),
-  [data-diffs]:not([data-theme-type]),
-  [data-diffs-header][data-theme-type='system'],
-  [data-diffs][data-theme-type='system'] {
-    --diffs-bg: rgba(255, 255, 255, 0.35);
-  }
-}
-`;
-
 function normalizePatchName(name: string) {
   if (!name) {
     return name;
@@ -129,7 +76,7 @@ const DiffCard = memo(function DiffCard({
       diffStyle,
       hunkSeparators: "line-info" as const,
       overflow: "scroll" as const,
-      unsafeCSS: DIFF_SCROLL_CSS,
+      unsafeCSS: DIFF_VIEWER_SCROLL_CSS,
       disableFileHeader: true,
     }),
     [diffStyle],
@@ -424,7 +371,7 @@ export function GitDiffViewer({
   const hasActivePathHandler = Boolean(onActivePathChange);
   const poolOptions = useMemo(() => ({ workerFactory }), []);
   const highlighterOptions = useMemo(
-    () => ({ theme: { dark: "pierre-dark", light: "pierre-light" } }),
+    () => DIFF_VIEWER_HIGHLIGHTER_OPTIONS,
     [],
   );
   const indexByPath = useMemo(() => {
@@ -640,7 +587,7 @@ export function GitDiffViewer({
       poolOptions={poolOptions}
       highlighterOptions={highlighterOptions}
     >
-      <div className="diff-viewer" ref={containerRef}>
+      <div className="diff-viewer ds-diff-viewer" ref={containerRef}>
         {pullRequest && (
           <PullRequestSummary
             pullRequest={pullRequest}

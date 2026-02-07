@@ -53,6 +53,7 @@ import { DEFAULT_OPEN_APP_ID, OPEN_APP_STORAGE_KEY } from "../../app/constants";
 import { GENERIC_APP_ICON, getKnownOpenAppIcon } from "../../app/utils/openAppIcons";
 import { useGlobalAgentsMd } from "../hooks/useGlobalAgentsMd";
 import { useGlobalCodexConfigToml } from "../hooks/useGlobalCodexConfigToml";
+import { ModalShell } from "../../design-system/components/modal/ModalShell";
 import { FileEditorCard } from "../../shared/components/FileEditorCard";
 
 const DICTATION_MODELS = [
@@ -1138,22 +1139,27 @@ export function SettingsView({
   };
 
   return (
-    <div className="settings-overlay" role="dialog" aria-modal="true">
-      <div className="settings-backdrop" onClick={onClose} />
-      <div className="settings-window">
-        <div className="settings-titlebar">
-          <div className="settings-title">Settings</div>
-          <button
-            type="button"
-            className="ghost icon-button settings-close"
-            onClick={onClose}
-            aria-label="Close settings"
-          >
-            <X aria-hidden />
-          </button>
+    <ModalShell
+      className="settings-overlay"
+      cardClassName="settings-window"
+      onBackdropClick={onClose}
+      ariaLabelledBy="settings-modal-title"
+    >
+      <div className="settings-titlebar">
+        <div className="settings-title" id="settings-modal-title">
+          Settings
         </div>
-        <div className="settings-body">
-          <aside className="settings-sidebar">
+        <button
+          type="button"
+          className="ghost icon-button settings-close"
+          onClick={onClose}
+          aria-label="Close settings"
+        >
+          <X aria-hidden />
+        </button>
+      </div>
+      <div className="settings-body">
+        <aside className="settings-sidebar">
             <button
               type="button"
               className={`settings-nav ${activeSection === "projects" ? "active" : ""}`}
@@ -3590,8 +3596,7 @@ export function SettingsView({
               </section>
             )}
           </div>
-        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

@@ -21,6 +21,10 @@ import X from "lucide-react/dist/esm/icons/x";
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { formatRelativeTime } from "../../../utils/time";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
+import {
+  PanelFrame,
+  PanelHeader,
+} from "../../design-system/components/panel/PanelPrimitives";
 import { pushErrorToast } from "../../../services/toasts";
 import {
   fileManagerName,
@@ -1276,8 +1280,8 @@ export function GitDiffPanel({
     <Upload size={12} aria-hidden />
   );
   return (
-    <aside className="diff-panel">
-      <div className="git-panel-header">
+    <PanelFrame>
+      <PanelHeader className="git-panel-header">
         <PanelTabs active={filePanelMode} onSelect={onFilePanelModeChange} />
         <div className="git-panel-actions" role="group" aria-label="Git panel">
           <div className="git-panel-select">
@@ -1313,7 +1317,7 @@ export function GitDiffPanel({
             </button>
           )}
         </div>
-      </div>
+      </PanelHeader>
       {mode === "diff" ? (
         <>
           <div className="diff-status">{diffStatusLabel}</div>
@@ -1829,6 +1833,6 @@ export function GitDiffPanel({
           }
         />
       )}
-    </aside>
+    </PanelFrame>
   );
 }

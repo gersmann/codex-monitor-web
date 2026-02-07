@@ -8,6 +8,12 @@ import {
 import type { CustomPromptOption } from "../../../types";
 import { expandCustomPromptText, getPromptArgumentHint } from "../../../utils/customPrompts";
 import { PanelTabs, type PanelTabId } from "../../layout/components/PanelTabs";
+import {
+  PanelFrame,
+  PanelHeader,
+  PanelMeta,
+  PanelSearchField,
+} from "../../design-system/components/panel/PanelPrimitives";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -400,24 +406,22 @@ export function PromptPanel({
   };
 
   return (
-    <aside className="diff-panel prompt-panel">
-      <div className="git-panel-header">
+    <PanelFrame className="prompt-panel">
+      <PanelHeader className="git-panel-header">
         <PanelTabs active={filePanelMode} onSelect={onFilePanelModeChange} />
-        <div className="prompt-panel-meta">
+        <PanelMeta className="prompt-panel-meta">
           {hasPrompts ? `${totalCount} prompt${totalCount === 1 ? "" : "s"}` : "No prompts"}
-        </div>
-      </div>
-      <div className="file-tree-search">
-        <Search className="file-tree-search-icon" aria-hidden />
-        <input
-          className="file-tree-search-input"
-          type="search"
-          placeholder="Filter prompts"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label="Filter prompts"
-        />
-      </div>
+        </PanelMeta>
+      </PanelHeader>
+      <PanelSearchField
+        className="file-tree-search"
+        inputClassName="file-tree-search-input"
+        placeholder="Filter prompts"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        aria-label="Filter prompts"
+        icon={<Search aria-hidden />}
+      />
       <div className="prompt-panel-scroll">
         {editor && (
           <div className="prompt-editor">
@@ -589,6 +593,6 @@ export function PromptPanel({
           )}
         </div>
       </div>
-    </aside>
+    </PanelFrame>
   );
 }

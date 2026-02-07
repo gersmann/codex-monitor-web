@@ -14,6 +14,9 @@ describe("UpdateToast", () => {
       <UpdateToast state={state} onUpdate={onUpdate} onDismiss={onDismiss} />,
     );
 
+    const region = screen.getByRole("region");
+    expect(region.getAttribute("aria-live")).toBe("polite");
+    expect(screen.getByRole("status")).toBeTruthy();
     expect(screen.getAllByText("Update")).toHaveLength(2);
     expect(screen.getByText("v1.2.3")).toBeTruthy();
     expect(screen.getByText("A new version is available.")).toBeTruthy();

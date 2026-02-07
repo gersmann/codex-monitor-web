@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -324,7 +325,7 @@ describe("SettingsView Display", () => {
     });
   });
 
-  it("toggles reduce transparency", () => {
+  it("toggles reduce transparency", async () => {
     const onToggleTransparency = vi.fn();
     renderDisplaySection({ onToggleTransparency, reduceTransparency: false });
 
@@ -342,7 +343,9 @@ describe("SettingsView Display", () => {
     }
     fireEvent.click(toggle);
 
-    expect(onToggleTransparency).toHaveBeenCalledWith(true);
+    await waitFor(() => {
+      expect(onToggleTransparency).toHaveBeenCalledWith(true);
+    });
   });
 
   it("commits interface scale on blur and enter with clamping", async () => {
@@ -688,7 +691,7 @@ describe("SettingsView Features", () => {
 });
 
 describe("SettingsView Shortcuts", () => {
-  it("closes on Cmd+W", () => {
+  it("closes on Cmd+W", async () => {
     const onClose = vi.fn();
     render(
       <SettingsView
@@ -722,14 +725,18 @@ describe("SettingsView Shortcuts", () => {
       />,
     );
 
-    window.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "w", metaKey: true, bubbles: true }),
-    );
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "w", metaKey: true, bubbles: true }),
+      );
+    });
 
-    expect(onClose).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled();
+    });
   });
 
-  it("closes on Escape", () => {
+  it("closes on Escape", async () => {
     const onClose = vi.fn();
     render(
       <SettingsView
@@ -763,8 +770,60 @@ describe("SettingsView Shortcuts", () => {
       />,
     );
 
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
 
-    expect(onClose).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  it("closes when clicking the modal backdrop", async () => {
+    const onClose = vi.fn();
+    const { container } = render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={onClose}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+      />,
+    );
+
+    const backdrop = container.querySelector(".ds-modal-backdrop");
+    expect(backdrop).toBeTruthy();
+    if (!backdrop) {
+      throw new Error("Expected settings modal backdrop");
+    }
+
+    await act(async () => {
+      fireEvent.click(backdrop);
+    });
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
   });
 });

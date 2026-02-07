@@ -200,6 +200,71 @@ Keep `src/App.tsx` lean:
 - Move stateful logic/effects into hooks under `src/features/app/hooks/`.
 - Keep Tauri IPC, menu listeners, and subscriptions out of `src/App.tsx`.
 
+### Design System Usage
+
+Use the design-system layer for shared UI shells and tokenized styling.
+
+- Primitive component locations:
+  - `src/features/design-system/components/modal/ModalShell.tsx`
+  - `src/features/design-system/components/toast/ToastPrimitives.tsx`
+  - `src/features/design-system/components/panel/PanelPrimitives.tsx`
+  - Toast sub-primitives: `ToastHeader`, `ToastActions`, `ToastError` (in `ToastPrimitives.tsx`)
+  - Panel sub-primitives: `PanelMeta`, `PanelSearchField` (in `PanelPrimitives.tsx`)
+- Diff theming and style bridge:
+  - `src/features/design-system/diff/diffViewerTheme.ts`
+- DS token/style locations:
+  - `src/styles/ds-tokens.css`
+  - `src/styles/ds-modal.css`
+  - `src/styles/ds-toast.css`
+  - `src/styles/ds-panel.css`
+  - `src/styles/ds-diff.css`
+
+Naming conventions:
+
+- DS CSS classes use `.ds-*` prefixes.
+- DS CSS variables use `--ds-*` prefixes.
+- DS React primitives use `PascalCase` component names (`ModalShell`, `ToastCard`, `ToastHeader`, `ToastActions`, `ToastError`, `PanelFrame`, `PanelHeader`, `PanelMeta`, `PanelSearchField`).
+- Feature CSS should keep feature-prefixed classes (`.worktree-*`, `.update-*`) for content/layout specifics.
+
+Do:
+
+- Use DS primitives first for shared shells (modal wrappers, toast cards/viewports, panel shells/headers).
+- Pull shared visual tokens from `--ds-*` variables.
+- Keep feature styles focused on feature-specific layout/content, not duplicated shell chrome.
+- Centralize shared animation/chrome in DS stylesheets when used by multiple feature families.
+
+Don't:
+
+- Recreate fixed modal backdrops/cards in feature CSS when `ModalShell` is used.
+- Duplicate toast card chrome (background/border/shadow/padding/enter animation) per toast family.
+- Duplicate panel shell layout/header alignment in feature styles when `PanelFrame`/`PanelHeader` already provide it.
+- Add new non-DS color constants for shared shells; add/extend DS tokens instead.
+
+Migration guidance for new/updated components:
+
+1. Start by wrapping UI in the closest DS primitive.
+2. Migrate shared shell styles into DS CSS (`ds-*.css`) and delete redundant feature-level shell selectors.
+3. Keep only feature-local classes for spacing/content/interaction details.
+4. For legacy selectors that are still referenced, keep minimal compatibility aliases temporarily.
+5. Remove compatibility aliases once callsites reach zero, then rerun lint/typecheck/tests.
+
+Anti-duplication guidance:
+
+- Before adding shell styles, search for existing DS token/primitive coverage.
+- If two or more feature files need the same shell rule, move it to DS CSS immediately.
+- Prefer extending DS primitives/tokens over introducing another feature-specific wrapper class.
+- During refactors, remove unused legacy selectors once callsites are migrated.
+
+Enforcement workflow:
+
+- Lint guardrails for DS-targeted files live in `.eslintrc.cjs`.
+- Codemod scripts live in `scripts/codemods/`:
+  - `modal-shell-codemod.mjs`
+  - `panel-shell-codemod.mjs`
+  - `toast-shell-codemod.mjs`
+- Run `npm run codemod:ds:dry` before UI shell migration PRs.
+- Keep `npm run lint:ds`/`npm run lint` green for modal/toast/panel/diff files.
+
 ### Backend Guidelines
 
 - Shared logic goes in `src-tauri/src/shared/` first.

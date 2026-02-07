@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BranchInfo, WorkspaceInfo } from "../../../types";
+import { ModalShell } from "../../design-system/components/modal/ModalShell";
 import { BranchList } from "./BranchList";
 import { filterBranches } from "../utils/branchSearch";
 
@@ -101,54 +102,51 @@ export function BranchSwitcherPrompt({
   };
 
   return (
-    <div className="branch-switcher-modal" role="dialog" aria-modal="true">
-      <div className="branch-switcher-modal-backdrop" onClick={onCancel} />
-      <div className="branch-switcher-modal-card">
-        <input
-          ref={inputRef}
-          className="branch-switcher-modal-input"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Search branches..."
-        />
-        <BranchList
-          branches={filteredBranches}
-          currentBranch={currentBranch}
-          selectedIndex={selectedIndex}
-          listClassName="branch-switcher-modal-list"
-          listRef={listRef}
-          itemClassName="branch-switcher-modal-item"
-          selectedItemClassName="selected"
-          itemLabelClassName="branch-switcher-modal-item-name"
-          emptyClassName="branch-switcher-modal-empty"
-          emptyText="No branches found"
-          onSelect={handleSelect}
-          onMouseEnter={setSelectedIndex}
-          renderMeta={(branch) => {
-            const isCurrent = branch.name === currentBranch;
-            const worktree = getWorktreeByBranch(
-              workspaces,
-              activeWorkspace,
-              branch.name,
-            );
-            return (
-              <span className="branch-switcher-modal-item-meta">
-                {isCurrent && (
-                  <span className="branch-switcher-modal-item-current">
-                    current
-                  </span>
-                )}
-                {worktree && (
-                  <span className="branch-switcher-modal-item-worktree">
-                    worktree
-                  </span>
-                )}
-              </span>
-            );
-          }}
-        />
-      </div>
-    </div>
+    <ModalShell
+      className="branch-switcher-modal"
+      onBackdropClick={onCancel}
+      ariaLabel="Switch branch"
+    >
+      <input
+        ref={inputRef}
+        className="branch-switcher-modal-input"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Search branches..."
+      />
+      <BranchList
+        branches={filteredBranches}
+        currentBranch={currentBranch}
+        selectedIndex={selectedIndex}
+        listClassName="branch-switcher-modal-list"
+        listRef={listRef}
+        itemClassName="branch-switcher-modal-item"
+        selectedItemClassName="selected"
+        itemLabelClassName="branch-switcher-modal-item-name"
+        emptyClassName="branch-switcher-modal-empty"
+        emptyText="No branches found"
+        onSelect={handleSelect}
+        onMouseEnter={setSelectedIndex}
+        renderMeta={(branch) => {
+          const isCurrent = branch.name === currentBranch;
+          const worktree = getWorktreeByBranch(
+            workspaces,
+            activeWorkspace,
+            branch.name,
+          );
+          return (
+            <span className="branch-switcher-modal-item-meta">
+              {isCurrent && (
+                <span className="branch-switcher-modal-item-current">current</span>
+              )}
+              {worktree && (
+                <span className="branch-switcher-modal-item-worktree">worktree</span>
+              )}
+            </span>
+          );
+        }}
+      />
+    </ModalShell>
   );
 }
