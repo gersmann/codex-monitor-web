@@ -2619,9 +2619,13 @@ fn main() {
             return;
         }
 
-        let listener = TcpListener::bind(config.listen)
-            .await
-            .unwrap_or_else(|err| panic!("failed to bind {}: {err}", config.listen));
+        let listener = match TcpListener::bind(config.listen).await {
+            Ok(listener) => listener,
+            Err(err) => {
+                eprintln!("failed to bind {}: {err}", config.listen);
+                std::process::exit(2);
+            }
+        };
         eprintln!(
             "codex-monitor-daemon listening on {} (data dir: {})",
             config.listen,

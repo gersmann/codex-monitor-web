@@ -126,6 +126,18 @@ fn sync_tcp_daemon_listen_addr(status: &mut TcpDaemonStatus, configured_listen_a
     status.listen_addr = Some(configured_listen_addr.to_string());
 }
 
+async fn ensure_listen_addr_available(listen_addr: &str) -> Result<(), String> {
+    match tokio::net::TcpListener::bind(listen_addr).await {
+        Ok(listener) => {
+            drop(listener);
+            Ok(())
+        }
+        Err(err) => Err(format!(
+            "Cannot start mobile access daemon because {listen_addr} is unavailable: {err}"
+        )),
+    }
+}
+
 async fn refresh_tcp_daemon_runtime(runtime: &mut TcpDaemonRuntime) {
     let Some(child) = runtime.child.as_mut() else {
         runtime.status.state = TcpDaemonState::Stopped;
@@ -146,11 +158,18 @@ async fn refresh_tcp_daemon_runtime(runtime: &mut TcpDaemonRuntime) {
                     listen_addr: runtime.status.listen_addr.clone(),
                 };
             } else {
+                let failure_hint = if status.code() == Some(101) {
+                    " This usually indicates a startup panic (often due to an unavailable listen port)."
+                } else {
+                    ""
+                };
                 runtime.status = TcpDaemonStatus {
                     state: TcpDaemonState::Error,
                     pid,
                     started_at_ms: runtime.status.started_at_ms,
-                    last_error: Some(format!("Daemon exited with status: {status}")),
+                    last_error: Some(format!(
+                        "Daemon exited with status: {status}.{failure_hint}"
+                    )),
                     listen_addr: runtime.status.listen_addr.clone(),
                 };
             }
@@ -224,8 +243,8 @@ pub(crate) async fn tailscale_status() -> Result<TailscaleStatus, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        daemon_listen_addr, parse_port_from_remote_host, sync_tcp_daemon_listen_addr,
-        tailscale_binary_candidates,
+        daemon_listen_addr, ensure_listen_addr_available, parse_port_from_remote_host,
+        sync_tcp_daemon_listen_addr, tailscale_binary_candidates,
     };
     use crate::types::{TcpDaemonState, TcpDaemonStatus};
 
@@ -293,6 +312,26 @@ mod tests {
         sync_tcp_daemon_listen_addr(&mut status, "0.0.0.0:7777");
         assert_eq!(status.listen_addr.as_deref(), Some("0.0.0.0:4732"));
     }
+
+    #[test]
+    fn listen_addr_preflight_fails_when_port_is_in_use() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+
+        runtime.block_on(async {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind ephemeral listener");
+            let occupied = listener.local_addr().expect("local addr").to_string();
+
+            let error = ensure_listen_addr_available(&occupied)
+                .await
+                .expect_err("expected occupied port error");
+            assert!(error.contains("unavailable"));
+        });
+    }
 }
 
 #[tauri::command]
@@ -356,6 +395,7 @@ pub(crate) async fn tailscale_daemon_start(
     if matches!(runtime.status.state, TcpDaemonState::Running) {
         return Ok(runtime.status.clone());
     }
+    ensure_listen_addr_available(&listen_addr).await?;
 
     let child = tokio_command(&daemon_binary)
         .arg("--listen")

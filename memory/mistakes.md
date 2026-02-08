@@ -151,3 +151,13 @@ Rule: Non-running daemon status responses must re-sync listen metadata from curr
 Root cause: Status handler treated listen address as immutable cached state rather than configuration-derived metadata for stopped/error states.
 Fix applied: `src-tauri/src/tailscale/mod.rs` now refreshes listen addr unless daemon is actively running with a known bind, and tests cover both branches.
 Prevention rule: Any status endpoint that reports config-derived fields should recompute those fields on refresh when runtime state is inactive.
+
+## 2026-02-08 06:39
+Context: Tailscale preflight test implementation
+Type: mistake
+Event: Added `#[tokio::test]` in a crate configuration where Tokio test macros are not enabled, causing compile failure.
+Action: Replaced macro usage with a standard `#[test]` and an explicit current-thread Tokio runtime in the test body.
+Rule: In this repo, use explicit runtime-backed tests unless Tokio test-macro support is confirmed enabled.
+Root cause: Assumed Tokio test-macro feature availability from runtime dependency alone.
+Fix applied: Updated the test to build a runtime manually in `src-tauri/src/tailscale/mod.rs`.
+Prevention rule: Prefer `runtime.block_on(...)` for async unit tests in `src-tauri` modules unless existing files already use `#[tokio::test]`.
