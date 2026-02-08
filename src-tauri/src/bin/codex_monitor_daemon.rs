@@ -1587,6 +1587,13 @@ async fn handle_rpc_request(
 ) -> Result<Value, String> {
     match method {
         "ping" => Ok(json!({ "ok": true })),
+        "daemon_shutdown" => {
+            tokio::spawn(async {
+                sleep(Duration::from_millis(100)).await;
+                std::process::exit(0);
+            });
+            Ok(json!({ "ok": true }))
+        }
         "list_workspaces" => {
             let workspaces = state.list_workspaces().await;
             serde_json::to_value(workspaces).map_err(|err| err.to_string())

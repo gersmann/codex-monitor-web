@@ -1,6 +1,6 @@
-use tauri::Window;
 #[cfg(desktop)]
 use tauri::Theme;
+use tauri::Window;
 
 #[cfg(test)]
 use std::sync::{Mutex, OnceLock};
@@ -105,8 +105,7 @@ pub(crate) fn configure_ios_webview_edge_to_edge(
             if !view_controller.is_null() {
                 // UIRectEdgeAll
                 let all_edges: usize = 15;
-                let () =
-                    objc2::msg_send![view_controller, setEdgesForExtendedLayout: all_edges];
+                let () = objc2::msg_send![view_controller, setEdgesForExtendedLayout: all_edges];
                 let () = objc2::msg_send![
                     view_controller,
                     setExtendedLayoutIncludesOpaqueBars: true

@@ -3,9 +3,14 @@ mod core;
 use std::ffi::{OsStr, OsString};
 use std::io::ErrorKind;
 use std::process::Output;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use serde_json::{json, Value};
 use tauri::State;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::net::TcpStream;
+use tokio::time::{sleep, timeout};
 
 use crate::daemon_binary::resolve_daemon_binary_path;
 use crate::shared::process_core::{kill_child_process_tree, tokio_command};
@@ -115,6 +120,11 @@ fn daemon_listen_addr(remote_host: &str) -> String {
     format!("0.0.0.0:{port}")
 }
 
+fn daemon_connect_addr(listen_addr: &str) -> Option<String> {
+    let port = parse_port_from_remote_host(listen_addr)?;
+    Some(format!("127.0.0.1:{port}"))
+}
+
 fn configured_daemon_listen_addr(settings: &crate::types::AppSettings) -> String {
     daemon_listen_addr(&settings.remote_backend_host)
 }
@@ -189,6 +199,309 @@ async fn refresh_tcp_daemon_runtime(runtime: &mut TcpDaemonRuntime) {
             };
         }
     }
+}
+
+const DAEMON_RPC_TIMEOUT: Duration = Duration::from_millis(700);
+
+#[derive(Debug, Clone)]
+enum DaemonProbe {
+    NotReachable,
+    Running {
+        auth_ok: bool,
+        auth_error: Option<String>,
+    },
+    NotDaemon,
+}
+
+type DaemonLines = tokio::io::Lines<BufReader<OwnedReadHalf>>;
+
+fn parse_daemon_error_message(response: &Value) -> Option<String> {
+    response
+        .get("error")
+        .and_then(|error| error.get("message"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+}
+
+fn is_auth_error_message(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    lower.contains("unauthorized") || lower.contains("invalid token")
+}
+
+async fn send_rpc_request(
+    writer: &mut OwnedWriteHalf,
+    id: u64,
+    method: &str,
+    params: Value,
+) -> Result<(), String> {
+    let mut payload = serde_json::to_string(&json!({
+        "id": id,
+        "method": method,
+        "params": params,
+    }))
+    .map_err(|err| err.to_string())?;
+    payload.push('\n');
+    writer
+        .write_all(payload.as_bytes())
+        .await
+        .map_err(|err| err.to_string())
+}
+
+async fn read_rpc_response(lines: &mut DaemonLines, expected_id: u64) -> Result<Value, String> {
+    for _ in 0..12 {
+        let line = match timeout(DAEMON_RPC_TIMEOUT, lines.next_line()).await {
+            Ok(Ok(Some(line))) => line,
+            Ok(Ok(None)) => return Err("connection closed".to_string()),
+            Ok(Err(err)) => return Err(err.to_string()),
+            Err(_) => return Err("timed out waiting for daemon response".to_string()),
+        };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let parsed: Value = serde_json::from_str(&line).map_err(|err| err.to_string())?;
+        let id = parsed.get("id").and_then(Value::as_u64);
+        if id == Some(expected_id) {
+            return Ok(parsed);
+        }
+    }
+    Err("did not receive expected daemon response".to_string())
+}
+
+async fn send_and_expect_result(
+    writer: &mut OwnedWriteHalf,
+    lines: &mut DaemonLines,
+    id: u64,
+    method: &str,
+    params: Value,
+) -> Result<Value, String> {
+    send_rpc_request(writer, id, method, params).await?;
+    let response = read_rpc_response(lines, id).await?;
+    if let Some(message) = parse_daemon_error_message(&response) {
+        return Err(message);
+    }
+    response
+        .get("result")
+        .cloned()
+        .ok_or_else(|| "daemon response missing result".to_string())
+}
+
+async fn probe_daemon(listen_addr: &str, token: Option<&str>) -> DaemonProbe {
+    let Some(connect_addr) = daemon_connect_addr(listen_addr) else {
+        return DaemonProbe::NotReachable;
+    };
+
+    let stream = match timeout(DAEMON_RPC_TIMEOUT, TcpStream::connect(&connect_addr)).await {
+        Ok(Ok(stream)) => stream,
+        Ok(Err(_)) | Err(_) => return DaemonProbe::NotReachable,
+    };
+
+    let (reader, mut writer) = stream.into_split();
+    let mut lines = BufReader::new(reader).lines();
+
+    match send_and_expect_result(&mut writer, &mut lines, 1, "ping", json!({})).await {
+        Ok(_) => DaemonProbe::Running {
+            auth_ok: true,
+            auth_error: None,
+        },
+        Err(message) => {
+            if !is_auth_error_message(&message) {
+                return DaemonProbe::NotDaemon;
+            }
+
+            let trimmed_token = token.map(str::trim).filter(|value| !value.is_empty());
+            let Some(auth_token) = trimmed_token else {
+                return DaemonProbe::Running {
+                    auth_ok: false,
+                    auth_error: Some(
+                        "Daemon is running but requires a remote backend token.".to_string(),
+                    ),
+                };
+            };
+
+            match send_and_expect_result(
+                &mut writer,
+                &mut lines,
+                2,
+                "auth",
+                json!({ "token": auth_token }),
+            )
+            .await
+            {
+                Ok(_) => {
+                    match send_and_expect_result(&mut writer, &mut lines, 3, "ping", json!({}))
+                        .await
+                    {
+                        Ok(_) => DaemonProbe::Running {
+                            auth_ok: true,
+                            auth_error: None,
+                        },
+                        Err(ping_error) => DaemonProbe::Running {
+                            auth_ok: false,
+                            auth_error: Some(format!(
+                                "Daemon is running but ping failed after auth: {ping_error}"
+                            )),
+                        },
+                    }
+                }
+                Err(auth_error) => {
+                    if is_auth_error_message(&auth_error) {
+                        DaemonProbe::Running {
+                            auth_ok: false,
+                            auth_error: Some(format!(
+                                "Daemon is running but token authentication failed: {auth_error}"
+                            )),
+                        }
+                    } else {
+                        DaemonProbe::NotDaemon
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn request_daemon_shutdown(listen_addr: &str, token: Option<&str>) -> Result<(), String> {
+    let Some(connect_addr) = daemon_connect_addr(listen_addr) else {
+        return Err("invalid daemon listen address".to_string());
+    };
+
+    let stream = timeout(DAEMON_RPC_TIMEOUT, TcpStream::connect(&connect_addr))
+        .await
+        .map_err(|_| format!("Timed out connecting to daemon at {connect_addr}"))?
+        .map_err(|err| format!("Failed to connect to daemon at {connect_addr}: {err}"))?;
+
+    let (reader, mut writer) = stream.into_split();
+    let mut lines = BufReader::new(reader).lines();
+
+    match send_and_expect_result(&mut writer, &mut lines, 1, "ping", json!({})).await {
+        Ok(_) => {}
+        Err(message) if is_auth_error_message(&message) => {
+            let auth_token = token
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    "Daemon is running but requires a remote backend token.".to_string()
+                })?;
+            send_and_expect_result(
+                &mut writer,
+                &mut lines,
+                2,
+                "auth",
+                json!({ "token": auth_token }),
+            )
+            .await
+            .map_err(|err| format!("Daemon authentication failed: {err}"))?;
+        }
+        Err(message) => {
+            return Err(format!("Daemon ping failed: {message}"));
+        }
+    }
+
+    send_and_expect_result(&mut writer, &mut lines, 3, "daemon_shutdown", json!({}))
+        .await
+        .map(|_| ())
+        .map_err(|err| format!("Daemon shutdown request failed: {err}"))
+}
+
+async fn wait_for_daemon_shutdown(listen_addr: &str, token: Option<&str>) -> bool {
+    for _ in 0..20 {
+        if matches!(
+            probe_daemon(listen_addr, token).await,
+            DaemonProbe::NotReachable
+        ) {
+            return true;
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
+    false
+}
+
+#[cfg(unix)]
+fn is_pid_running(pid: u32) -> bool {
+    let result = unsafe { libc::kill(pid as i32, 0) };
+    if result == 0 {
+        return true;
+    }
+    match std::io::Error::last_os_error().raw_os_error() {
+        Some(code) => code != libc::ESRCH,
+        None => false,
+    }
+}
+
+#[cfg(unix)]
+async fn find_listener_pid(port: u16) -> Option<u32> {
+    let target = format!(":{port}");
+    let output = match tokio_command("lsof")
+        .args(["-nP", "-iTCP"])
+        .arg(&target)
+        .args(["-sTCP:LISTEN", "-t"])
+        .output()
+        .await
+    {
+        Ok(output) => output,
+        Err(err) if err.kind() == ErrorKind::NotFound => return None,
+        Err(_) => return None,
+    };
+
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if output.status.code() == Some(1) && stdout.trim().is_empty() && stderr.trim().is_empty() {
+            return None;
+        }
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout
+        .lines()
+        .find_map(|line| line.trim().parse::<u32>().ok())
+}
+
+#[cfg(unix)]
+async fn kill_pid_gracefully(pid: u32) -> Result<(), String> {
+    let term_result = unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+    if term_result != 0 {
+        let err = std::io::Error::last_os_error();
+        if err.raw_os_error() != Some(libc::ESRCH) {
+            return Err(format!("Failed to stop daemon process {pid}: {err}"));
+        }
+        return Ok(());
+    }
+
+    for _ in 0..12 {
+        if !is_pid_running(pid) {
+            return Ok(());
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
+
+    let kill_result = unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+    if kill_result != 0 {
+        let err = std::io::Error::last_os_error();
+        if err.raw_os_error() != Some(libc::ESRCH) {
+            return Err(format!("Failed to force-stop daemon process {pid}: {err}"));
+        }
+    }
+
+    for _ in 0..8 {
+        if !is_pid_running(pid) {
+            return Ok(());
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
+
+    Err(format!("Daemon process {pid} is still running."))
+}
+
+#[cfg(not(unix))]
+async fn find_listener_pid(_port: u16) -> Option<u32> {
+    None
+}
+
+#[cfg(not(unix))]
+async fn kill_pid_gracefully(_pid: u32) -> Result<(), String> {
+    Err("Stopping external daemon by pid is not supported on this platform.".to_string())
 }
 
 #[tauri::command]
@@ -382,6 +695,8 @@ pub(crate) async fn tailscale_daemon_start(
             "Set a Remote backend token before starting mobile access daemon.".to_string()
         })?;
     let listen_addr = configured_daemon_listen_addr(&settings);
+    let listen_port = parse_port_from_remote_host(&listen_addr)
+        .ok_or_else(|| format!("Invalid daemon listen address: {listen_addr}"))?;
     let daemon_binary = resolve_daemon_binary_path()?;
 
     let data_dir = state
@@ -395,6 +710,36 @@ pub(crate) async fn tailscale_daemon_start(
     if matches!(runtime.status.state, TcpDaemonState::Running) {
         return Ok(runtime.status.clone());
     }
+
+    match probe_daemon(&listen_addr, Some(token)).await {
+        DaemonProbe::Running {
+            auth_ok,
+            auth_error,
+        } => {
+            let pid = find_listener_pid(listen_port).await;
+            runtime.child = None;
+            runtime.status = TcpDaemonStatus {
+                state: TcpDaemonState::Running,
+                pid,
+                started_at_ms: runtime.status.started_at_ms,
+                last_error: auth_error.clone(),
+                listen_addr: Some(listen_addr.clone()),
+            };
+            if !auth_ok {
+                return Err(auth_error.unwrap_or_else(|| {
+                    "Daemon is already running but authentication failed.".to_string()
+                }));
+            }
+            return Ok(runtime.status.clone());
+        }
+        DaemonProbe::NotDaemon => {
+            return Err(format!(
+                "Cannot start mobile access daemon because {listen_addr} is already in use by another process."
+            ));
+        }
+        DaemonProbe::NotReachable => {}
+    }
+
     ensure_listen_addr_available(&listen_addr).await?;
 
     let child = tokio_command(&daemon_binary)
@@ -428,19 +773,93 @@ pub(crate) async fn tailscale_daemon_stop(
 ) -> Result<TcpDaemonStatus, String> {
     let settings = state.app_settings.lock().await.clone();
     let configured_listen_addr = configured_daemon_listen_addr(&settings);
+    let listen_port = parse_port_from_remote_host(&configured_listen_addr);
 
     let mut runtime = state.tcp_daemon.lock().await;
+    let mut stop_error: Option<String> = None;
     if let Some(mut child) = runtime.child.take() {
         kill_child_process_tree(&mut child).await;
         let _ = child.wait().await;
+    } else if let Some(port) = listen_port {
+        match probe_daemon(
+            &configured_listen_addr,
+            settings.remote_backend_token.as_deref(),
+        )
+        .await
+        {
+            DaemonProbe::Running { .. } => {
+                if let Err(shutdown_error) = request_daemon_shutdown(
+                    &configured_listen_addr,
+                    settings.remote_backend_token.as_deref(),
+                )
+                .await
+                {
+                    let pid = find_listener_pid(port).await;
+                    if let Some(pid) = pid {
+                        if let Err(err) = kill_pid_gracefully(pid).await {
+                            stop_error = Some(format!("{shutdown_error}; {err}"));
+                        } else {
+                            stop_error = None;
+                        }
+                    } else {
+                        stop_error = Some(shutdown_error);
+                    }
+                } else if !wait_for_daemon_shutdown(
+                    &configured_listen_addr,
+                    settings.remote_backend_token.as_deref(),
+                )
+                .await
+                {
+                    stop_error =
+                        Some("Daemon acknowledged shutdown but is still reachable.".to_string());
+                }
+            }
+            DaemonProbe::NotDaemon => {
+                stop_error = Some(format!(
+                    "Port {port} is in use by a non-daemon process; refusing to stop it."
+                ));
+            }
+            DaemonProbe::NotReachable => {}
+        }
     }
 
-    runtime.status = TcpDaemonStatus {
-        state: TcpDaemonState::Stopped,
-        pid: None,
-        started_at_ms: None,
-        last_error: None,
-        listen_addr: runtime.status.listen_addr.clone(),
+    let probe_after_stop = probe_daemon(
+        &configured_listen_addr,
+        settings.remote_backend_token.as_deref(),
+    )
+    .await;
+    let pid_after_stop = match listen_port {
+        Some(port) => find_listener_pid(port).await,
+        None => None,
+    };
+    runtime.status = match probe_after_stop {
+        DaemonProbe::Running { auth_error, .. } => TcpDaemonStatus {
+            state: TcpDaemonState::Error,
+            pid: pid_after_stop,
+            started_at_ms: runtime.status.started_at_ms,
+            last_error: Some(
+                stop_error
+                    .or(auth_error)
+                    .unwrap_or_else(|| "Daemon is still running after stop attempt.".to_string()),
+            ),
+            listen_addr: runtime.status.listen_addr.clone(),
+        },
+        DaemonProbe::NotDaemon => TcpDaemonStatus {
+            state: TcpDaemonState::Error,
+            pid: pid_after_stop,
+            started_at_ms: runtime.status.started_at_ms,
+            last_error: Some(stop_error.unwrap_or_else(|| {
+                "Configured port is now occupied by a non-daemon process.".to_string()
+            })),
+            listen_addr: runtime.status.listen_addr.clone(),
+        },
+        DaemonProbe::NotReachable => TcpDaemonStatus {
+            state: TcpDaemonState::Stopped,
+            pid: None,
+            started_at_ms: None,
+            last_error: stop_error,
+            listen_addr: runtime.status.listen_addr.clone(),
+        },
     };
     sync_tcp_daemon_listen_addr(&mut runtime.status, &configured_listen_addr);
 
@@ -453,9 +872,51 @@ pub(crate) async fn tailscale_daemon_status(
 ) -> Result<TcpDaemonStatus, String> {
     let settings = state.app_settings.lock().await.clone();
     let configured_listen_addr = configured_daemon_listen_addr(&settings);
+    let listen_port = parse_port_from_remote_host(&configured_listen_addr);
 
     let mut runtime = state.tcp_daemon.lock().await;
     refresh_tcp_daemon_runtime(&mut runtime).await;
+
+    if !matches!(runtime.status.state, TcpDaemonState::Running) {
+        let pid = match listen_port {
+            Some(port) => find_listener_pid(port).await,
+            None => None,
+        };
+        runtime.status = match probe_daemon(
+            &configured_listen_addr,
+            settings.remote_backend_token.as_deref(),
+        )
+        .await
+        {
+            DaemonProbe::Running {
+                auth_ok: _,
+                auth_error,
+            } => TcpDaemonStatus {
+                state: TcpDaemonState::Running,
+                pid,
+                started_at_ms: runtime.status.started_at_ms,
+                last_error: auth_error,
+                listen_addr: runtime.status.listen_addr.clone(),
+            },
+            DaemonProbe::NotDaemon => TcpDaemonStatus {
+                state: TcpDaemonState::Error,
+                pid,
+                started_at_ms: runtime.status.started_at_ms,
+                last_error: Some(format!(
+                    "Configured daemon port {configured_listen_addr} is occupied by a non-daemon process."
+                )),
+                listen_addr: runtime.status.listen_addr.clone(),
+            },
+            DaemonProbe::NotReachable => TcpDaemonStatus {
+                state: TcpDaemonState::Stopped,
+                pid: None,
+                started_at_ms: None,
+                last_error: None,
+                listen_addr: runtime.status.listen_addr.clone(),
+            },
+        };
+    }
+
     sync_tcp_daemon_listen_addr(&mut runtime.status, &configured_listen_addr);
 
     Ok(runtime.status.clone())
