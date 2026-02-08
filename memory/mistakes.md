@@ -261,3 +261,23 @@ Rule: On iOS-style narrow layouts, modal card placement must account for safe-ar
 Root cause: Centered modal placement used viewport-only geometry without safe-area compensation for notched displays.
 Fix applied: Updated `src/styles/settings.css` mobile rules to include safe-area-aware height and top offset.
 Prevention rule: Validate modal vertical placement against notch/status-bar safe areas whenever mobile modal dimensions or centering behavior change.
+
+## 2026-02-08 08:49
+Context: iOS compact shell full-height regression
+Type: mistake
+Event: Applied safe-area top inset to the entire `.compact-shell`, which reduced usable layout height and lifted bottom navigation off the device edge.
+Action: Moved top safe-area offset from shell-level container padding to top content regions (`.sidebar` and `.compact-topbar`) and validated with `scripts/build_run_ios.sh` + simulator screenshot.
+Rule: Never apply global safe-area padding to the full-height phone shell container; apply safe-area offsets only to top content/header regions.
+Root cause: Safe-area compensation was added at the wrong layout level, shrinking the entire vertical flex stack.
+Fix applied: Updated `src/styles/compact-phone.css` and validated via full iOS build/run screenshot workflow.
+Prevention rule: For iOS safe-area adjustments, verify tab bar bottom anchoring after changes and prefer localized top-inset handling over shell-level padding.
+
+## 2026-02-08 08:39
+Context: iOS bottom-gap in compact shell
+Type: mistake
+Event: Mobile root height sync used `visualViewport.height` directly, which can exclude top viewport offset in WKWebView and leave the app container shorter than the simulator frame.
+Action: Updated viewport sync to use `visualViewport.height + visualViewport.offsetTop` and keep `window.innerHeight` as a fallback candidate.
+Rule: In iOS WKWebView, treat viewport height as `visualViewport.height + offsetTop` when computing root app height.
+Root cause: Assumed `visualViewport.height` alone represented full visible app height in Tauri iOS runtime.
+Fix applied: Updated `syncMobileViewportHeight()` in `src/main.tsx`.
+Prevention rule: After viewport sync changes, verify bottom anchoring with simulator screenshots and avoid raw `visualViewport.height`-only calculations.

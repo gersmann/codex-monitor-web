@@ -44,9 +44,24 @@ function syncMobileViewportHeight() {
   }
 
   const setViewportHeight = () => {
-    const visualHeight = window.visualViewport?.height;
+    const visualViewport = window.visualViewport;
+    const visualHeight = visualViewport
+      ? visualViewport.height + visualViewport.offsetTop
+      : 0;
+    const rootHeight = document.documentElement?.clientHeight ?? 0;
+    const bodyHeight = document.body?.clientHeight ?? 0;
+    const screenCssHeight =
+      window.screen?.height && window.devicePixelRatio > 0
+        ? window.screen.height / window.devicePixelRatio
+        : 0;
     const nextHeight = Math.round(
-      Math.max(window.innerHeight, visualHeight ?? 0),
+      Math.max(
+        window.innerHeight,
+        visualHeight,
+        rootHeight,
+        bodyHeight,
+        screenCssHeight,
+      ),
     );
     document.documentElement.style.setProperty("--app-height", `${nextHeight}px`);
   };

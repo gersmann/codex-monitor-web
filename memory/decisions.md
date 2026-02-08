@@ -158,3 +158,15 @@ Context: Compact sidebar footer/action stacking
 Type: preference
 Rule: In compact/mobile sidebar layouts, place account/settings corner actions in normal flow under the usage widget instead of absolute bottom positioning.
 Why: Absolute positioning overlaps usage bars on narrow viewports and causes control collisions.
+
+## 2026-02-08 08:49
+Context: iOS layout verification workflow
+Type: preference
+Rule: Validate iOS UI layout changes by running `scripts/build_run_ios.sh` and then taking a fresh simulator screenshot from that launched build.
+Why: CSS/runtime changes can behave differently in the packaged iOS runtime than in incremental simulator state.
+
+## 2026-02-08 08:39
+Context: iOS mobile viewport height sync
+Type: decision
+Rule: When syncing `--app-height` on mobile, account for `visualViewport.offsetTop` (use `visualViewport.height + visualViewport.offsetTop`) instead of `visualViewport.height` alone.
+Why: WKWebView can report a reduced visual viewport origin, and ignoring the offset under-sizes the app container and creates a bottom gap.

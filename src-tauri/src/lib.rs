@@ -79,6 +79,12 @@ pub fn run() {
         .setup(|app| {
             let state = state::AppState::load(&app.handle());
             app.manage(state);
+            #[cfg(target_os = "ios")]
+            {
+                if let Some(main_webview) = app.get_webview_window("main") {
+                    let _ = window::configure_ios_webview_edge_to_edge(&main_webview);
+                }
+            }
             #[cfg(desktop)]
             {
                 app.handle()
