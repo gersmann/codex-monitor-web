@@ -74,6 +74,65 @@ Run in dev mode:
 npm run tauri dev
 ```
 
+## iOS Support (WIP)
+
+iOS support is currently in progress.
+
+- Current status: mobile layout runs, remote backend flow is wired, and iOS defaults to remote backend mode.
+- Current limits: terminal and dictation remain unavailable on mobile builds.
+- Desktop behavior is unchanged: macOS/Linux/Windows remain local-first unless remote mode is explicitly selected.
+
+### iOS Prerequisites
+
+- Xcode + Command Line Tools installed.
+- Rust iOS target installed:
+
+```bash
+rustup target add aarch64-apple-ios
+```
+
+- Apple signing configured (development team).
+  - Set `bundle.iOS.developmentTeam` in `src-tauri/tauri.conf.json`, or
+  - pass `--team <TEAM_ID>` to the device script.
+
+### Run on iOS Simulator
+
+```bash
+./scripts/build_run_ios.sh
+```
+
+Options:
+
+- `--simulator "<name>"` to target a specific simulator.
+- `--target aarch64-sim|x86_64-sim` to override architecture.
+- `--skip-build` to reuse the current app bundle.
+
+### Run on USB Device
+
+List discoverable devices:
+
+```bash
+./scripts/build_run_ios_device.sh --list-devices
+```
+
+Build, install, and launch on a specific device:
+
+```bash
+./scripts/build_run_ios_device.sh --device "<device name or identifier>" --team <TEAM_ID>
+```
+
+First-time device setup usually requires:
+
+1. iPhone unlocked and trusted with this Mac.
+2. Developer Mode enabled on iPhone.
+3. Pairing/signing approved in Xcode at least once.
+
+If signing is not ready yet, open Xcode from the script flow:
+
+```bash
+./scripts/build_run_ios_device.sh --open-xcode
+```
+
 ## Release Build
 
 Build the production Tauri bundle:

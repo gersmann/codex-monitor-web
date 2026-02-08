@@ -11,6 +11,10 @@ mod files;
 mod git;
 mod git_utils;
 mod local_usage;
+#[cfg(desktop)]
+mod menu;
+#[cfg(not(desktop))]
+#[path = "menu_mobile.rs"]
 mod menu;
 mod notifications;
 mod orbit;
@@ -22,6 +26,10 @@ mod shared;
 mod state;
 mod storage;
 mod tailscale;
+#[cfg(desktop)]
+mod terminal;
+#[cfg(not(desktop))]
+#[path = "terminal_mobile.rs"]
 mod terminal;
 mod types;
 mod utils;
@@ -42,11 +50,17 @@ pub fn run() {
         }
     }
 
+    #[cfg(desktop)]
     let builder = tauri::Builder::default()
         .enable_macos_default_menu(false)
         .manage(menu::MenuItemRegistry::<tauri::Wry>::default())
         .menu(menu::build_menu)
-        .on_menu_event(menu::handle_menu_event)
+        .on_menu_event(menu::handle_menu_event);
+
+    #[cfg(not(desktop))]
+    let builder = tauri::Builder::default();
+
+    let builder = builder
         .on_window_event(|window, event| {
             if window.label() != "main" {
                 return;

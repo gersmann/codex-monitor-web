@@ -16,16 +16,18 @@ import {
 } from "../../app/constants";
 import { normalizeOpenAppTargets } from "../../app/utils/openApp";
 import { getDefaultInterruptShortcut, isMacPlatform } from "../../../utils/shortcuts";
+import { isMobilePlatform } from "../../../utils/platformPaths";
 
 const allowedThemes = new Set(["system", "light", "dark", "dim"]);
 const allowedPersonality = new Set(["friendly", "pragmatic"]);
 
 function buildDefaultSettings(): AppSettings {
   const isMac = isMacPlatform();
+  const isMobile = isMobilePlatform();
   return {
     codexBin: null,
     codexArgs: null,
-    backendMode: "local",
+    backendMode: isMobile ? "remote" : "local",
     remoteBackendProvider: "tcp",
     remoteBackendHost: "127.0.0.1:4732",
     remoteBackendToken: null,

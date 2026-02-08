@@ -693,7 +693,7 @@ pub(crate) enum BackendMode {
 
 impl Default for BackendMode {
     fn default() -> Self {
-        BackendMode::Local
+        default_backend_mode()
     }
 }
 
@@ -716,6 +716,14 @@ fn default_access_mode() -> String {
 
 fn default_review_delivery_mode() -> String {
     "inline".to_string()
+}
+
+fn default_backend_mode() -> BackendMode {
+    if cfg!(target_os = "ios") {
+        BackendMode::Remote
+    } else {
+        BackendMode::Local
+    }
 }
 
 fn default_remote_backend_host() -> String {
@@ -1115,7 +1123,7 @@ impl Default for AppSettings {
         Self {
             codex_bin: None,
             codex_args: None,
-            backend_mode: BackendMode::Local,
+            backend_mode: default_backend_mode(),
             remote_backend_provider: RemoteBackendProvider::Tcp,
             remote_backend_host: default_remote_backend_host(),
             remote_backend_token: None,
@@ -1197,7 +1205,16 @@ mod tests {
     fn app_settings_defaults_from_empty_json() {
         let settings: AppSettings = serde_json::from_str("{}").expect("settings deserialize");
         assert!(settings.codex_bin.is_none());
-        assert!(matches!(settings.backend_mode, BackendMode::Local));
+        let expected_backend_mode = if cfg!(target_os = "ios") {
+            BackendMode::Remote
+        } else {
+            BackendMode::Local
+        };
+        assert!(matches!(
+            (&settings.backend_mode, &expected_backend_mode),
+            (BackendMode::Local, BackendMode::Local)
+                | (BackendMode::Remote, BackendMode::Remote)
+        ));
         assert!(matches!(
             settings.remote_backend_provider,
             RemoteBackendProvider::Tcp

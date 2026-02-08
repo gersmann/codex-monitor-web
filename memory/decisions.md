@@ -92,3 +92,39 @@ Context: Server settings desktop/mobile behavior
 Type: preference
 Rule: Keep mobile access controls visible in `Server` regardless of desktop backend mode; `backendMode` only affects whether desktop traffic is local or routed through remote transport.
 Why: The desktop app should stay local by default while still allowing users to configure and operate the mobile daemon path.
+
+## 2026-02-08 06:46
+Context: iOS runtime backend defaults
+Type: preference
+Rule: Default backend mode to `remote` on iOS/mobile runtime while keeping desktop defaults `local`.
+Why: Mobile clients must connect through the remote daemon flow, while desktop continues to run local-first.
+
+## 2026-02-08 07:02
+Context: Tauri iOS target build with vendored libgit2
+Type: decision
+Rule: Keep iOS Xcode target linker flags including `-lz` and `-liconv` in `src-tauri/gen/apple/codex-monitor.xcodeproj/project.pbxproj` (and mirrored in `src-tauri/gen/apple/project.yml`).
+Why: Vendored `libgit2` objects require zlib/iconv symbols at app link time, and iOS build fails without explicit flags.
+
+## 2026-02-08 07:19
+Context: iOS app icon composition
+Type: preference
+Rule: Keep iOS app icons regenerated from trimmed source artwork at high fill (~95% canvas) instead of macOS-style inset composition.
+Why: iOS icons should occupy most of the masked tile area; desktop-style inset icons look undersized on Home Screen.
+
+## 2026-02-08 07:24
+Context: iOS app icon full-bleed requirement
+Type: preference
+Rule: Keep iOS AppIcon assets fully opaque and full-bleed (no transparent padding), with artwork scaled for edge-to-edge appearance under the iOS mask.
+Why: Inset/transparent icon composition reads like desktop icon treatment and looks undersized on iOS Home Screen.
+
+## 2026-02-08 07:39
+Context: iOS documentation canonicalization
+Type: preference
+Rule: Keep `README.md` and `AGENTS.md` explicit that iOS support is WIP and document simulator/device launch via `scripts/build_run_ios.sh` and `scripts/build_run_ios_device.sh`, including signing/team requirements.
+Why: This prevents setup ambiguity and keeps iOS onboarding repeatable while mobile support is still maturing.
+
+## 2026-02-08 07:40
+Context: AGENTS iOS section brevity
+Type: preference
+Rule: Keep AGENTS iOS guidance minimal: supported status + simulator/device script commands only.
+Why: The user wants AGENTS concise and operational, not detailed setup prose.

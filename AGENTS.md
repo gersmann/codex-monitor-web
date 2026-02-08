@@ -408,6 +408,23 @@ npm install
 npm run tauri dev
 ```
 
+## iOS (WIP)
+
+- iOS is supported as WIP.
+- Simulator:
+```bash
+./scripts/build_run_ios.sh
+```
+- USB device:
+```bash
+./scripts/build_run_ios_device.sh --list-devices
+./scripts/build_run_ios_device.sh --device "<device name or identifier>" --team <TEAM_ID>
+```
+- If signing is not ready:
+```bash
+./scripts/build_run_ios_device.sh --open-xcode
+```
+
 ## Release Build
 
 ```bash

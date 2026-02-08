@@ -34,11 +34,10 @@ futures-util = "0.3"
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
 uuid = { version = "1", features = ["v4"] }
 tauri-plugin-dialog = "2"
-git2 = "0.20.3"
+git2 = { version = "0.20.3", features = ["vendored-openssl", "vendored-libgit2"] }
 base64 = "0.22"
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
 ignore = "0.4.25"
-portable-pty = "0.8"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
 libc = "0.2"
 chrono = { version = "0.4", features = ["clock"] }
@@ -51,6 +50,7 @@ tauri-plugin-window-state = "2"
 cpal = "0.15"
 whisper-rs = "0.12"
 sha2 = "0.10"
+portable-pty = "0.8"
 
 [target."cfg(target_os = \"macos\")".dependencies]
 objc2 = "0.6"
