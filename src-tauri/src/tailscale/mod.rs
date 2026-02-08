@@ -10,7 +10,7 @@ use tauri::State;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
-use tokio::time::{sleep, timeout};
+use tokio::time::{sleep, timeout, Instant};
 
 use crate::daemon_binary::resolve_daemon_binary_path;
 use crate::shared::process_core::{kill_child_process_tree, tokio_command};
@@ -248,8 +248,15 @@ async fn send_rpc_request(
 }
 
 async fn read_rpc_response(lines: &mut DaemonLines, expected_id: u64) -> Result<Value, String> {
-    for _ in 0..12 {
-        let line = match timeout(DAEMON_RPC_TIMEOUT, lines.next_line()).await {
+    let deadline = Instant::now() + DAEMON_RPC_TIMEOUT;
+    loop {
+        let now = Instant::now();
+        if now >= deadline {
+            return Err("timed out waiting for daemon response".to_string());
+        }
+        let remaining = deadline - now;
+
+        let line = match timeout(remaining, lines.next_line()).await {
             Ok(Ok(Some(line))) => line,
             Ok(Ok(None)) => return Err("connection closed".to_string()),
             Ok(Err(err)) => return Err(err.to_string()),
@@ -264,7 +271,6 @@ async fn read_rpc_response(lines: &mut DaemonLines, expected_id: u64) -> Result<
             return Ok(parsed);
         }
     }
-    Err("did not receive expected daemon response".to_string())
 }
 
 async fn send_and_expect_result(
@@ -908,10 +914,10 @@ pub(crate) async fn tailscale_daemon_status(
                 listen_addr: runtime.status.listen_addr.clone(),
             },
             DaemonProbe::NotReachable => TcpDaemonStatus {
-                state: TcpDaemonState::Stopped,
-                pid: None,
-                started_at_ms: None,
-                last_error: None,
+                state: runtime.status.state.clone(),
+                pid: runtime.status.pid,
+                started_at_ms: runtime.status.started_at_ms,
+                last_error: runtime.status.last_error.clone(),
                 listen_addr: runtime.status.listen_addr.clone(),
             },
         };
