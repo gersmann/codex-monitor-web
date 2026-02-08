@@ -8,7 +8,7 @@ type UseMobileServerSetupParams = {
   appSettings: AppSettings;
   appSettingsLoading: boolean;
   queueSaveSettings: (next: AppSettings) => Promise<AppSettings>;
-  refreshWorkspaces: () => Promise<void>;
+  refreshWorkspaces: () => Promise<unknown>;
 };
 
 type UseMobileServerSetupResult = {
