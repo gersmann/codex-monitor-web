@@ -10,6 +10,7 @@ import type {
   OrbitRunnerStatus,
   OrbitSignInPollResult,
   OrbitSignOutResult,
+  TcpDaemonStatus,
   TailscaleDaemonCommandPreview,
   TailscaleStatus,
   WorkspaceSettings,
@@ -26,6 +27,9 @@ import {
   orbitSignInPoll,
   orbitSignInStart,
   orbitSignOut,
+  tailscaleDaemonStart,
+  tailscaleDaemonStatus,
+  tailscaleDaemonStop,
   tailscaleDaemonCommandPreview as fetchTailscaleDaemonCommandPreview,
   tailscaleStatus as fetchTailscaleStatus,
 } from "../../../services/tauri";
@@ -63,6 +67,7 @@ import { SettingsShortcutsSection } from "./sections/SettingsShortcutsSection";
 import { SettingsOpenAppsSection } from "./sections/SettingsOpenAppsSection";
 import { SettingsGitSection } from "./sections/SettingsGitSection";
 import { SettingsCodexSection } from "./sections/SettingsCodexSection";
+import { SettingsServerSection } from "./sections/SettingsServerSection";
 import { SettingsFeaturesSection } from "./sections/SettingsFeaturesSection";
 
 const DICTATION_MODELS = [
@@ -407,6 +412,10 @@ export function SettingsView({
   const [tailscaleCommandError, setTailscaleCommandError] = useState<string | null>(
     null,
   );
+  const [tcpDaemonStatus, setTcpDaemonStatus] = useState<TcpDaemonStatus | null>(null);
+  const [tcpDaemonBusyAction, setTcpDaemonBusyAction] = useState<
+    "start" | "stop" | "status" | null
+  >(null);
   const mobilePlatform = useMemo(() => isMobilePlatform(), []);
   const [scaleDraft, setScaleDraft] = useState(
     `${Math.round(clampUiScale(appSettings.uiScale) * 100)}%`,
@@ -899,6 +908,45 @@ export function SettingsView({
     await applyRemoteHost(suggestedHost);
   };
 
+  const runTcpDaemonAction = useCallback(
+    async (
+      action: "start" | "stop" | "status",
+      run: () => Promise<TcpDaemonStatus>,
+    ) => {
+      setTcpDaemonBusyAction(action);
+      try {
+        const status = await run();
+        setTcpDaemonStatus(status);
+      } catch (error) {
+        setTcpDaemonStatus((prev) => ({
+          state: "error",
+          pid: null,
+          startedAtMs: null,
+          lastError:
+            error instanceof Error
+              ? error.message
+              : "Unable to update mobile access daemon status.",
+          listenAddr: prev?.listenAddr ?? null,
+        }));
+      } finally {
+        setTcpDaemonBusyAction(null);
+      }
+    },
+    [],
+  );
+
+  const handleTcpDaemonStart = useCallback(async () => {
+    await runTcpDaemonAction("start", tailscaleDaemonStart);
+  }, [runTcpDaemonAction]);
+
+  const handleTcpDaemonStop = useCallback(async () => {
+    await runTcpDaemonAction("stop", tailscaleDaemonStop);
+  }, [runTcpDaemonAction]);
+
+  const handleTcpDaemonStatus = useCallback(async () => {
+    await runTcpDaemonAction("status", tailscaleDaemonStatus);
+  }, [runTcpDaemonAction]);
+
   const handleCommitOrbitWsUrl = async () => {
     const nextValue = normalizeOverrideValue(orbitWsUrlDraft);
     setOrbitWsUrlDraft(nextValue ?? "");
@@ -1117,27 +1165,26 @@ export function SettingsView({
   };
 
   useEffect(() => {
-    if (appSettings.backendMode !== "remote") {
-      return;
-    }
     if (appSettings.remoteBackendProvider !== "tcp") {
       return;
     }
     if (!mobilePlatform) {
       handleRefreshTailscaleCommandPreview();
+      void handleTcpDaemonStatus();
     }
-    if (tailscaleStatus === null && !tailscaleStatusBusy) {
+    if (tailscaleStatus === null && !tailscaleStatusBusy && !tailscaleStatusError) {
       handleRefreshTailscaleStatus();
     }
   }, [
-    appSettings.backendMode,
     appSettings.remoteBackendProvider,
     appSettings.remoteBackendToken,
     handleRefreshTailscaleCommandPreview,
     handleRefreshTailscaleStatus,
+    handleTcpDaemonStatus,
     mobilePlatform,
     tailscaleStatus,
     tailscaleStatusBusy,
+    tailscaleStatusError,
   ]);
 
   const handleCommitScale = async () => {
@@ -1671,15 +1718,10 @@ export function SettingsView({
               onUpdateAppSettings={onUpdateAppSettings}
             />
           )}
-          {activeSection === "codex" && (
-            <SettingsCodexSection
+          {activeSection === "server" && (
+            <SettingsServerSection
               appSettings={appSettings}
               onUpdateAppSettings={onUpdateAppSettings}
-              codexPathDraft={codexPathDraft}
-              codexArgsDraft={codexArgsDraft}
-              codexDirty={codexDirty}
-              isSavingSettings={isSavingSettings}
-              doctorState={doctorState}
               remoteHostDraft={remoteHostDraft}
               remoteTokenDraft={remoteTokenDraft}
               orbitWsUrlDraft={orbitWsUrlDraft}
@@ -1697,6 +1739,46 @@ export function SettingsView({
               tailscaleCommandPreview={tailscaleCommandPreview}
               tailscaleCommandBusy={tailscaleCommandBusy}
               tailscaleCommandError={tailscaleCommandError}
+              tcpDaemonStatus={tcpDaemonStatus}
+              tcpDaemonBusyAction={tcpDaemonBusyAction}
+              onSetRemoteHostDraft={setRemoteHostDraft}
+              onSetRemoteTokenDraft={setRemoteTokenDraft}
+              onSetOrbitWsUrlDraft={setOrbitWsUrlDraft}
+              onSetOrbitAuthUrlDraft={setOrbitAuthUrlDraft}
+              onSetOrbitRunnerNameDraft={setOrbitRunnerNameDraft}
+              onSetOrbitAccessClientIdDraft={setOrbitAccessClientIdDraft}
+              onSetOrbitAccessClientSecretRefDraft={setOrbitAccessClientSecretRefDraft}
+              onCommitRemoteHost={handleCommitRemoteHost}
+              onCommitRemoteToken={handleCommitRemoteToken}
+              onChangeRemoteProvider={handleChangeRemoteProvider}
+              onRefreshTailscaleStatus={handleRefreshTailscaleStatus}
+              onRefreshTailscaleCommandPreview={handleRefreshTailscaleCommandPreview}
+              onUseSuggestedTailscaleHost={handleUseSuggestedTailscaleHost}
+              onTcpDaemonStart={handleTcpDaemonStart}
+              onTcpDaemonStop={handleTcpDaemonStop}
+              onTcpDaemonStatus={handleTcpDaemonStatus}
+              onCommitOrbitWsUrl={handleCommitOrbitWsUrl}
+              onCommitOrbitAuthUrl={handleCommitOrbitAuthUrl}
+              onCommitOrbitRunnerName={handleCommitOrbitRunnerName}
+              onCommitOrbitAccessClientId={handleCommitOrbitAccessClientId}
+              onCommitOrbitAccessClientSecretRef={handleCommitOrbitAccessClientSecretRef}
+              onOrbitConnectTest={handleOrbitConnectTest}
+              onOrbitSignIn={handleOrbitSignIn}
+              onOrbitSignOut={handleOrbitSignOut}
+              onOrbitRunnerStart={handleOrbitRunnerStart}
+              onOrbitRunnerStop={handleOrbitRunnerStop}
+              onOrbitRunnerStatus={handleOrbitRunnerStatus}
+            />
+          )}
+          {activeSection === "codex" && (
+            <SettingsCodexSection
+              appSettings={appSettings}
+              onUpdateAppSettings={onUpdateAppSettings}
+              codexPathDraft={codexPathDraft}
+              codexArgsDraft={codexArgsDraft}
+              codexDirty={codexDirty}
+              isSavingSettings={isSavingSettings}
+              doctorState={doctorState}
               globalAgentsMeta={globalAgentsMeta}
               globalAgentsError={globalAgentsError}
               globalAgentsContent={globalAgentsContent}
@@ -1717,13 +1799,6 @@ export function SettingsView({
               codexArgsOverrideDrafts={codexArgsOverrideDrafts}
               onSetCodexPathDraft={setCodexPathDraft}
               onSetCodexArgsDraft={setCodexArgsDraft}
-              onSetRemoteHostDraft={setRemoteHostDraft}
-              onSetRemoteTokenDraft={setRemoteTokenDraft}
-              onSetOrbitWsUrlDraft={setOrbitWsUrlDraft}
-              onSetOrbitAuthUrlDraft={setOrbitAuthUrlDraft}
-              onSetOrbitRunnerNameDraft={setOrbitRunnerNameDraft}
-              onSetOrbitAccessClientIdDraft={setOrbitAccessClientIdDraft}
-              onSetOrbitAccessClientSecretRefDraft={setOrbitAccessClientSecretRefDraft}
               onSetGlobalAgentsContent={setGlobalAgentsContent}
               onSetGlobalConfigContent={setGlobalConfigContent}
               onSetCodexBinOverrideDrafts={setCodexBinOverrideDrafts}
@@ -1732,23 +1807,6 @@ export function SettingsView({
               onBrowseCodex={handleBrowseCodex}
               onSaveCodexSettings={handleSaveCodexSettings}
               onRunDoctor={handleRunDoctor}
-              onCommitRemoteHost={handleCommitRemoteHost}
-              onCommitRemoteToken={handleCommitRemoteToken}
-              onChangeRemoteProvider={handleChangeRemoteProvider}
-              onRefreshTailscaleStatus={handleRefreshTailscaleStatus}
-              onRefreshTailscaleCommandPreview={handleRefreshTailscaleCommandPreview}
-              onUseSuggestedTailscaleHost={handleUseSuggestedTailscaleHost}
-              onCommitOrbitWsUrl={handleCommitOrbitWsUrl}
-              onCommitOrbitAuthUrl={handleCommitOrbitAuthUrl}
-              onCommitOrbitRunnerName={handleCommitOrbitRunnerName}
-              onCommitOrbitAccessClientId={handleCommitOrbitAccessClientId}
-              onCommitOrbitAccessClientSecretRef={handleCommitOrbitAccessClientSecretRef}
-              onOrbitConnectTest={handleOrbitConnectTest}
-              onOrbitSignIn={handleOrbitSignIn}
-              onOrbitSignOut={handleOrbitSignOut}
-              onOrbitRunnerStart={handleOrbitRunnerStart}
-              onOrbitRunnerStop={handleOrbitRunnerStop}
-              onOrbitRunnerStatus={handleOrbitRunnerStatus}
               onRefreshGlobalAgents={() => {
                 void refreshGlobalAgents();
               }}

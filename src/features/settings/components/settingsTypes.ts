@@ -15,7 +15,8 @@ export type SettingsSection =
   | "dictation"
   | "shortcuts"
   | "open-apps"
-  | "git";
+  | "git"
+  | "server";
 
 export type CodexSection = SettingsSection | "codex" | "features";
 

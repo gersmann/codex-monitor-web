@@ -80,3 +80,15 @@ Context: Message file-link display controls
 Type: decision
 Rule: Keep file-link parent path display in messages behind `showMessageFilePath`, defaulting to enabled.
 Why: This preserves existing context-rich defaults while allowing users to reduce visual noise in message file references.
+
+## 2026-02-07 21:22
+Context: Settings IA for mobile/backend setup
+Type: preference
+Rule: Keep backend/mobile connectivity controls in a dedicated `Server` settings section (not `Codex`), with explicit mobile-access daemon controls.
+Why: Desktop Codex configuration and remote/mobile server operations are different mental models and should be separated in UX.
+
+## 2026-02-08 06:27
+Context: Server settings desktop/mobile behavior
+Type: preference
+Rule: Keep mobile access controls visible in `Server` regardless of desktop backend mode; `backendMode` only affects whether desktop traffic is local or routed through remote transport.
+Why: The desktop app should stay local by default while still allowing users to configure and operate the mobile daemon path.

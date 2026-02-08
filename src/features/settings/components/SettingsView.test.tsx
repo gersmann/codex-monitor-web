@@ -664,7 +664,7 @@ describe("SettingsView Codex overrides", () => {
     });
   });
 
-  it("renders Orbit controls in remote mode for Orbit provider", async () => {
+  it("renders Orbit controls for Orbit provider even in local backend mode", async () => {
     cleanup();
     render(
       <SettingsView
@@ -683,7 +683,7 @@ describe("SettingsView Codex overrides", () => {
         onToggleTransparency={vi.fn()}
         appSettings={{
           ...baseSettings,
-          backendMode: "remote",
+          backendMode: "local",
           remoteBackendProvider: "orbit",
         }}
         openAppIconById={{}}
@@ -699,7 +699,7 @@ describe("SettingsView Codex overrides", () => {
         onDownloadDictationModel={vi.fn()}
         onCancelDictationDownload={vi.fn()}
         onRemoveDictationModel={vi.fn()}
-        initialSection="codex"
+        initialSection="server"
       />,
     );
 
@@ -715,6 +715,54 @@ describe("SettingsView Codex overrides", () => {
       expect(screen.getByRole("button", { name: "Start Runner" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Stop Runner" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Refresh Status" })).toBeTruthy();
+    });
+  });
+
+  it("renders mobile daemon controls in local backend mode for TCP provider", async () => {
+    cleanup();
+    render(
+      <SettingsView
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={{
+          ...baseSettings,
+          backendMode: "local",
+          remoteBackendProvider: "tcp",
+        }}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        onTestSystemNotification={vi.fn()}
+        dictationModelStatus={null}
+        onDownloadDictationModel={vi.fn()}
+        onCancelDictationDownload={vi.fn()}
+        onRemoveDictationModel={vi.fn()}
+        initialSection="server"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Start daemon" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Stop daemon" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Refresh status" })).toBeTruthy();
+      expect(screen.getByLabelText("Remote backend host")).toBeTruthy();
+      expect(screen.getByLabelText("Remote backend token")).toBeTruthy();
     });
   });
 
@@ -809,7 +857,7 @@ describe("SettingsView Codex overrides", () => {
         onDownloadDictationModel={vi.fn()}
         onCancelDictationDownload={vi.fn()}
         onRemoveDictationModel={vi.fn()}
-        initialSection="codex"
+        initialSection="server"
         orbitServiceClient={orbitServiceClient}
       />,
     );
@@ -855,7 +903,7 @@ describe("SettingsView Codex overrides", () => {
         onDownloadDictationModel={vi.fn()}
         onCancelDictationDownload={vi.fn()}
         onRemoveDictationModel={vi.fn()}
-        initialSection="codex"
+        initialSection="server"
         orbitServiceClient={orbitServiceClient}
       />,
     );
@@ -943,7 +991,7 @@ describe("SettingsView Codex overrides", () => {
         onDownloadDictationModel={vi.fn()}
         onCancelDictationDownload={vi.fn()}
         onRemoveDictationModel={vi.fn()}
-        initialSection="codex"
+        initialSection="server"
         orbitServiceClient={orbitServiceClient}
       />,
     );
@@ -1033,7 +1081,7 @@ describe("SettingsView Codex overrides", () => {
         onDownloadDictationModel={vi.fn()}
         onCancelDictationDownload={vi.fn()}
         onRemoveDictationModel={vi.fn()}
-        initialSection="codex"
+        initialSection="server"
         orbitServiceClient={orbitServiceClient}
       />,
     );

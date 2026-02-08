@@ -141,3 +141,13 @@ Rule: For desktop-integrated CLIs, resolve from PATH plus standard install locat
 Root cause: Implementation assumed the app process inherits the same shell PATH/aliases as user terminal sessions.
 Fix applied: Updated `src-tauri/src/tailscale/mod.rs` to probe candidate binaries and execute status/version via resolved path.
 Prevention rule: Any new CLI integration in Tauri should include explicit path fallback logic and a test for candidate list coverage.
+
+## 2026-02-08 06:34
+Context: TCP mobile daemon status metadata refresh
+Type: mistake
+Event: `tailscale_daemon_status` only updated `listen_addr` when it was `None`, so stopped/error states could show stale listen ports after settings changes.
+Action: Added a shared `sync_tcp_daemon_listen_addr` helper and used it in both status and stop paths; added unit tests for stopped-vs-running behavior.
+Rule: Non-running daemon status responses must re-sync listen metadata from current settings.
+Root cause: Status handler treated listen address as immutable cached state rather than configuration-derived metadata for stopped/error states.
+Fix applied: `src-tauri/src/tailscale/mod.rs` now refreshes listen addr unless daemon is actively running with a known bind, and tests cover both branches.
+Prevention rule: Any status endpoint that reports config-derived fields should recompute those fields on refresh when runtime state is inactive.

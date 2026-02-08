@@ -262,6 +262,28 @@ pub(crate) struct OrbitRunnerStatus {
     pub(crate) orbit_url: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum TcpDaemonState {
+    Stopped,
+    Running,
+    Error,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TcpDaemonStatus {
+    pub(crate) state: TcpDaemonState,
+    #[serde(default)]
+    pub(crate) pid: Option<u32>,
+    #[serde(default)]
+    pub(crate) started_at_ms: Option<i64>,
+    #[serde(default)]
+    pub(crate) last_error: Option<String>,
+    #[serde(default)]
+    pub(crate) listen_addr: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TailscaleStatus {

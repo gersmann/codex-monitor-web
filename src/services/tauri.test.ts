@@ -30,7 +30,10 @@ import {
   sendNotification,
   startReview,
   setThreadName,
+  tailscaleDaemonStart,
   tailscaleDaemonCommandPreview,
+  tailscaleDaemonStatus,
+  tailscaleDaemonStop,
   tailscaleStatus,
   writeGlobalAgentsMd,
   writeGlobalCodexConfigToml,
@@ -259,9 +262,15 @@ describe("tauri invoke wrappers", () => {
 
     await tailscaleStatus();
     await tailscaleDaemonCommandPreview();
+    await tailscaleDaemonStart();
+    await tailscaleDaemonStop();
+    await tailscaleDaemonStatus();
 
     expect(invokeMock).toHaveBeenCalledWith("tailscale_status");
     expect(invokeMock).toHaveBeenCalledWith("tailscale_daemon_command_preview");
+    expect(invokeMock).toHaveBeenCalledWith("tailscale_daemon_start");
+    expect(invokeMock).toHaveBeenCalledWith("tailscale_daemon_stop");
+    expect(invokeMock).toHaveBeenCalledWith("tailscale_daemon_status");
   });
 
   it("reads agent.md for a workspace", async () => {

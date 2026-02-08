@@ -178,7 +178,10 @@ pub fn run() {
             orbit::orbit_runner_stop,
             orbit::orbit_runner_status,
             tailscale::tailscale_status,
-            tailscale::tailscale_daemon_command_preview
+            tailscale::tailscale_daemon_command_preview,
+            tailscale::tailscale_daemon_start,
+            tailscale::tailscale_daemon_stop,
+            tailscale::tailscale_daemon_status
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -8,6 +8,7 @@ import FileText from "lucide-react/dist/esm/icons/file-text";
 import FlaskConical from "lucide-react/dist/esm/icons/flask-conical";
 import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import Layers from "lucide-react/dist/esm/icons/layers";
+import ServerCog from "lucide-react/dist/esm/icons/server-cog";
 import type { CodexSection } from "./settingsTypes";
 
 type SettingsNavProps = {
@@ -81,6 +82,14 @@ export function SettingsNav({ activeSection, onSelectSection }: SettingsNavProps
       >
         <GitBranch aria-hidden />
         Git
+      </button>
+      <button
+        type="button"
+        className={`settings-nav ${activeSection === "server" ? "active" : ""}`}
+        onClick={() => onSelectSection("server")}
+      >
+        <ServerCog aria-hidden />
+        Server
       </button>
       <button
         type="button"

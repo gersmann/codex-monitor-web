@@ -258,6 +258,16 @@ export type OrbitRunnerStatus = {
   orbitUrl: string | null;
 };
 
+export type TcpDaemonState = "stopped" | "running" | "error";
+
+export type TcpDaemonStatus = {
+  state: TcpDaemonState;
+  pid: number | null;
+  startedAtMs: number | null;
+  lastError: string | null;
+  listenAddr: string | null;
+};
+
 export type TailscaleStatus = {
   installed: boolean;
   running: boolean;

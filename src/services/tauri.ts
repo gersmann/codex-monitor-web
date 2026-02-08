@@ -12,6 +12,7 @@ import type {
   OrbitRunnerStatus,
   OrbitSignInPollResult,
   OrbitSignOutResult,
+  TcpDaemonStatus,
   TailscaleDaemonCommandPreview,
   TailscaleStatus,
   WorkspaceInfo,
@@ -625,6 +626,18 @@ export async function tailscaleStatus(): Promise<TailscaleStatus> {
 
 export async function tailscaleDaemonCommandPreview(): Promise<TailscaleDaemonCommandPreview> {
   return invoke<TailscaleDaemonCommandPreview>("tailscale_daemon_command_preview");
+}
+
+export async function tailscaleDaemonStart(): Promise<TcpDaemonStatus> {
+  return invoke<TcpDaemonStatus>("tailscale_daemon_start");
+}
+
+export async function tailscaleDaemonStop(): Promise<TcpDaemonStatus> {
+  return invoke<TcpDaemonStatus>("tailscale_daemon_stop");
+}
+
+export async function tailscaleDaemonStatus(): Promise<TcpDaemonStatus> {
+  return invoke<TcpDaemonStatus>("tailscale_daemon_status");
 }
 
 type MenuAcceleratorUpdate = {
