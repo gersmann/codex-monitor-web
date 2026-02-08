@@ -1,4 +1,5 @@
-use serde_json::json;
+use serde::de::DeserializeOwned;
+use serde_json::{json, Value};
 use tauri::{AppHandle, State};
 
 use crate::remote_backend;
@@ -9,22 +10,77 @@ use crate::types::{
     GitHubPullRequestDiff, GitHubPullRequestsResponse, GitLogResponse,
 };
 
+async fn call_remote_if_enabled(
+    state: &AppState,
+    app: &AppHandle,
+    method: &str,
+    params: Value,
+) -> Result<Option<Value>, String> {
+    if !remote_backend::is_remote_mode(state).await {
+        return Ok(None);
+    }
+
+    remote_backend::call_remote(state, app.clone(), method, params)
+        .await
+        .map(Some)
+}
+
+async fn call_remote_typed_if_enabled<T: DeserializeOwned>(
+    state: &AppState,
+    app: &AppHandle,
+    method: &str,
+    params: Value,
+) -> Result<Option<T>, String> {
+    let Some(response) = call_remote_if_enabled(state, app, method, params).await? else {
+        return Ok(None);
+    };
+
+    serde_json::from_value(response)
+        .map(Some)
+        .map_err(|err| err.to_string())
+}
+
+macro_rules! try_remote_value {
+    ($state:expr, $app:expr, $method:expr, $params:expr) => {
+        if let Some(response) = call_remote_if_enabled(&$state, &$app, $method, $params).await? {
+            return Ok(response);
+        }
+    };
+}
+
+macro_rules! try_remote_typed {
+    ($state:expr, $app:expr, $method:expr, $params:expr, $ty:ty) => {
+        if let Some(response) =
+            call_remote_typed_if_enabled::<$ty>(&$state, &$app, $method, $params).await?
+        {
+            return Ok(response);
+        }
+    };
+}
+
+macro_rules! try_remote_unit {
+    ($state:expr, $app:expr, $method:expr, $params:expr) => {
+        if call_remote_if_enabled(&$state, &$app, $method, $params)
+            .await?
+            .is_some()
+        {
+            return Ok(());
+        }
+    };
+}
+
 #[tauri::command]
 pub(crate) async fn get_git_status(
     workspace_id: String,
     state: State<'_, AppState>,
     app: AppHandle,
-) -> Result<serde_json::Value, String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        return remote_backend::call_remote(
-            &*state,
-            app,
-            "get_git_status",
-            json!({ "workspaceId": workspace_id }),
-        )
-        .await;
-    }
-
+) -> Result<Value, String> {
+    try_remote_value!(
+        state,
+        app,
+        "get_git_status",
+        json!({ "workspaceId": &workspace_id })
+    );
     git_ui_core::get_git_status_core(&state.workspaces, workspace_id).await
 }
 
@@ -35,17 +91,12 @@ pub(crate) async fn stage_git_file(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        remote_backend::call_remote(
-            &*state,
-            app,
-            "stage_git_file",
-            json!({ "workspaceId": workspace_id, "path": path }),
-        )
-        .await?;
-        return Ok(());
-    }
-
+    try_remote_unit!(
+        state,
+        app,
+        "stage_git_file",
+        json!({ "workspaceId": &workspace_id, "path": &path })
+    );
     git_ui_core::stage_git_file_core(&state.workspaces, workspace_id, path).await
 }
 
@@ -55,17 +106,12 @@ pub(crate) async fn stage_git_all(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        remote_backend::call_remote(
-            &*state,
-            app,
-            "stage_git_all",
-            json!({ "workspaceId": workspace_id }),
-        )
-        .await?;
-        return Ok(());
-    }
-
+    try_remote_unit!(
+        state,
+        app,
+        "stage_git_all",
+        json!({ "workspaceId": &workspace_id })
+    );
     git_ui_core::stage_git_all_core(&state.workspaces, workspace_id).await
 }
 
@@ -76,17 +122,12 @@ pub(crate) async fn unstage_git_file(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        remote_backend::call_remote(
-            &*state,
-            app,
-            "unstage_git_file",
-            json!({ "workspaceId": workspace_id, "path": path }),
-        )
-        .await?;
-        return Ok(());
-    }
-
+    try_remote_unit!(
+        state,
+        app,
+        "unstage_git_file",
+        json!({ "workspaceId": &workspace_id, "path": &path })
+    );
     git_ui_core::unstage_git_file_core(&state.workspaces, workspace_id, path).await
 }
 
@@ -97,17 +138,12 @@ pub(crate) async fn revert_git_file(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        remote_backend::call_remote(
-            &*state,
-            app,
-            "revert_git_file",
-            json!({ "workspaceId": workspace_id, "path": path }),
-        )
-        .await?;
-        return Ok(());
-    }
-
+    try_remote_unit!(
+        state,
+        app,
+        "revert_git_file",
+        json!({ "workspaceId": &workspace_id, "path": &path })
+    );
     git_ui_core::revert_git_file_core(&state.workspaces, workspace_id, path).await
 }
 
@@ -117,17 +153,12 @@ pub(crate) async fn revert_git_all(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        remote_backend::call_remote(
-            &*state,
-            app,
-            "revert_git_all",
-            json!({ "workspaceId": workspace_id }),
-        )
-        .await?;
-        return Ok(());
-    }
-
+    try_remote_unit!(
+        state,
+        app,
+        "revert_git_all",
+        json!({ "workspaceId": &workspace_id })
+    );
     git_ui_core::revert_git_all_core(&state.workspaces, workspace_id).await
 }
 
@@ -138,17 +169,12 @@ pub(crate) async fn commit_git(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        remote_backend::call_remote(
-            &*state,
-            app,
-            "commit_git",
-            json!({ "workspaceId": workspace_id, "message": message }),
-        )
-        .await?;
-        return Ok(());
-    }
-
+    try_remote_unit!(
+        state,
+        app,
+        "commit_git",
+        json!({ "workspaceId": &workspace_id, "message": &message })
+    );
     git_ui_core::commit_git_core(&state.workspaces, workspace_id, message).await
 }
 
@@ -158,17 +184,12 @@ pub(crate) async fn push_git(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        remote_backend::call_remote(
-            &*state,
-            app,
-            "push_git",
-            json!({ "workspaceId": workspace_id }),
-        )
-        .await?;
-        return Ok(());
-    }
-
+    try_remote_unit!(
+        state,
+        app,
+        "push_git",
+        json!({ "workspaceId": &workspace_id })
+    );
     git_ui_core::push_git_core(&state.workspaces, workspace_id).await
 }
 
@@ -178,17 +199,12 @@ pub(crate) async fn pull_git(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        remote_backend::call_remote(
-            &*state,
-            app,
-            "pull_git",
-            json!({ "workspaceId": workspace_id }),
-        )
-        .await?;
-        return Ok(());
-    }
-
+    try_remote_unit!(
+        state,
+        app,
+        "pull_git",
+        json!({ "workspaceId": &workspace_id })
+    );
     git_ui_core::pull_git_core(&state.workspaces, workspace_id).await
 }
 
@@ -198,17 +214,12 @@ pub(crate) async fn fetch_git(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        remote_backend::call_remote(
-            &*state,
-            app,
-            "fetch_git",
-            json!({ "workspaceId": workspace_id }),
-        )
-        .await?;
-        return Ok(());
-    }
-
+    try_remote_unit!(
+        state,
+        app,
+        "fetch_git",
+        json!({ "workspaceId": &workspace_id })
+    );
     git_ui_core::fetch_git_core(&state.workspaces, workspace_id).await
 }
 
@@ -218,17 +229,12 @@ pub(crate) async fn sync_git(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        remote_backend::call_remote(
-            &*state,
-            app,
-            "sync_git",
-            json!({ "workspaceId": workspace_id }),
-        )
-        .await?;
-        return Ok(());
-    }
-
+    try_remote_unit!(
+        state,
+        app,
+        "sync_git",
+        json!({ "workspaceId": &workspace_id })
+    );
     git_ui_core::sync_git_core(&state.workspaces, workspace_id).await
 }
 
@@ -239,17 +245,13 @@ pub(crate) async fn list_git_roots(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Vec<String>, String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        let response = remote_backend::call_remote(
-            &*state,
-            app,
-            "list_git_roots",
-            json!({ "workspaceId": workspace_id, "depth": depth }),
-        )
-        .await?;
-        return serde_json::from_value(response).map_err(|err| err.to_string());
-    }
-
+    try_remote_typed!(
+        state,
+        app,
+        "list_git_roots",
+        json!({ "workspaceId": &workspace_id, "depth": depth }),
+        Vec<String>
+    );
     git_ui_core::list_git_roots_core(&state.workspaces, workspace_id, depth).await
 }
 
@@ -272,17 +274,13 @@ pub(crate) async fn get_git_diffs(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Vec<GitFileDiff>, String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        let response = remote_backend::call_remote(
-            &*state,
-            app,
-            "get_git_diffs",
-            json!({ "workspaceId": workspace_id }),
-        )
-        .await?;
-        return serde_json::from_value(response).map_err(|err| err.to_string());
-    }
-
+    try_remote_typed!(
+        state,
+        app,
+        "get_git_diffs",
+        json!({ "workspaceId": &workspace_id }),
+        Vec<GitFileDiff>
+    );
     git_ui_core::get_git_diffs_core(&state.workspaces, &state.app_settings, workspace_id).await
 }
 
@@ -293,17 +291,13 @@ pub(crate) async fn get_git_log(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<GitLogResponse, String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        let response = remote_backend::call_remote(
-            &*state,
-            app,
-            "get_git_log",
-            json!({ "workspaceId": workspace_id, "limit": limit }),
-        )
-        .await?;
-        return serde_json::from_value(response).map_err(|err| err.to_string());
-    }
-
+    try_remote_typed!(
+        state,
+        app,
+        "get_git_log",
+        json!({ "workspaceId": &workspace_id, "limit": limit }),
+        GitLogResponse
+    );
     git_ui_core::get_git_log_core(&state.workspaces, workspace_id, limit).await
 }
 
@@ -314,17 +308,13 @@ pub(crate) async fn get_git_commit_diff(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Vec<GitCommitDiff>, String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        let response = remote_backend::call_remote(
-            &*state,
-            app,
-            "get_git_commit_diff",
-            json!({ "workspaceId": workspace_id, "sha": sha }),
-        )
-        .await?;
-        return serde_json::from_value(response).map_err(|err| err.to_string());
-    }
-
+    try_remote_typed!(
+        state,
+        app,
+        "get_git_commit_diff",
+        json!({ "workspaceId": &workspace_id, "sha": &sha }),
+        Vec<GitCommitDiff>
+    );
     git_ui_core::get_git_commit_diff_core(&state.workspaces, &state.app_settings, workspace_id, sha)
         .await
 }
@@ -335,17 +325,13 @@ pub(crate) async fn get_git_remote(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Option<String>, String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        let response = remote_backend::call_remote(
-            &*state,
-            app,
-            "get_git_remote",
-            json!({ "workspaceId": workspace_id }),
-        )
-        .await?;
-        return serde_json::from_value(response).map_err(|err| err.to_string());
-    }
-
+    try_remote_typed!(
+        state,
+        app,
+        "get_git_remote",
+        json!({ "workspaceId": &workspace_id }),
+        Option<String>
+    );
     git_ui_core::get_git_remote_core(&state.workspaces, workspace_id).await
 }
 
@@ -355,17 +341,13 @@ pub(crate) async fn get_github_issues(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<GitHubIssuesResponse, String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        let response = remote_backend::call_remote(
-            &*state,
-            app,
-            "get_github_issues",
-            json!({ "workspaceId": workspace_id }),
-        )
-        .await?;
-        return serde_json::from_value(response).map_err(|err| err.to_string());
-    }
-
+    try_remote_typed!(
+        state,
+        app,
+        "get_github_issues",
+        json!({ "workspaceId": &workspace_id }),
+        GitHubIssuesResponse
+    );
     git_ui_core::get_github_issues_core(&state.workspaces, workspace_id).await
 }
 
@@ -375,17 +357,13 @@ pub(crate) async fn get_github_pull_requests(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<GitHubPullRequestsResponse, String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        let response = remote_backend::call_remote(
-            &*state,
-            app,
-            "get_github_pull_requests",
-            json!({ "workspaceId": workspace_id }),
-        )
-        .await?;
-        return serde_json::from_value(response).map_err(|err| err.to_string());
-    }
-
+    try_remote_typed!(
+        state,
+        app,
+        "get_github_pull_requests",
+        json!({ "workspaceId": &workspace_id }),
+        GitHubPullRequestsResponse
+    );
     git_ui_core::get_github_pull_requests_core(&state.workspaces, workspace_id).await
 }
 
@@ -396,17 +374,13 @@ pub(crate) async fn get_github_pull_request_diff(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Vec<GitHubPullRequestDiff>, String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        let response = remote_backend::call_remote(
-            &*state,
-            app,
-            "get_github_pull_request_diff",
-            json!({ "workspaceId": workspace_id, "prNumber": pr_number }),
-        )
-        .await?;
-        return serde_json::from_value(response).map_err(|err| err.to_string());
-    }
-
+    try_remote_typed!(
+        state,
+        app,
+        "get_github_pull_request_diff",
+        json!({ "workspaceId": &workspace_id, "prNumber": pr_number }),
+        Vec<GitHubPullRequestDiff>
+    );
     git_ui_core::get_github_pull_request_diff_core(&state.workspaces, workspace_id, pr_number).await
 }
 
@@ -417,17 +391,13 @@ pub(crate) async fn get_github_pull_request_comments(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Vec<GitHubPullRequestComment>, String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        let response = remote_backend::call_remote(
-            &*state,
-            app,
-            "get_github_pull_request_comments",
-            json!({ "workspaceId": workspace_id, "prNumber": pr_number }),
-        )
-        .await?;
-        return serde_json::from_value(response).map_err(|err| err.to_string());
-    }
-
+    try_remote_typed!(
+        state,
+        app,
+        "get_github_pull_request_comments",
+        json!({ "workspaceId": &workspace_id, "prNumber": pr_number }),
+        Vec<GitHubPullRequestComment>
+    );
     git_ui_core::get_github_pull_request_comments_core(&state.workspaces, workspace_id, pr_number)
         .await
 }
@@ -437,17 +407,13 @@ pub(crate) async fn list_git_branches(
     workspace_id: String,
     state: State<'_, AppState>,
     app: AppHandle,
-) -> Result<serde_json::Value, String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        return remote_backend::call_remote(
-            &*state,
-            app,
-            "list_git_branches",
-            json!({ "workspaceId": workspace_id }),
-        )
-        .await;
-    }
-
+) -> Result<Value, String> {
+    try_remote_value!(
+        state,
+        app,
+        "list_git_branches",
+        json!({ "workspaceId": &workspace_id })
+    );
     git_ui_core::list_git_branches_core(&state.workspaces, workspace_id).await
 }
 
@@ -458,17 +424,12 @@ pub(crate) async fn checkout_git_branch(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        remote_backend::call_remote(
-            &*state,
-            app,
-            "checkout_git_branch",
-            json!({ "workspaceId": workspace_id, "name": name }),
-        )
-        .await?;
-        return Ok(());
-    }
-
+    try_remote_unit!(
+        state,
+        app,
+        "checkout_git_branch",
+        json!({ "workspaceId": &workspace_id, "name": &name })
+    );
     git_ui_core::checkout_git_branch_core(&state.workspaces, workspace_id, name).await
 }
 
@@ -479,16 +440,11 @@ pub(crate) async fn create_git_branch(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<(), String> {
-    if remote_backend::is_remote_mode(&*state).await {
-        remote_backend::call_remote(
-            &*state,
-            app,
-            "create_git_branch",
-            json!({ "workspaceId": workspace_id, "name": name }),
-        )
-        .await?;
-        return Ok(());
-    }
-
+    try_remote_unit!(
+        state,
+        app,
+        "create_git_branch",
+        json!({ "workspaceId": &workspace_id, "name": &name })
+    );
     git_ui_core::create_git_branch_core(&state.workspaces, workspace_id, name).await
 }
