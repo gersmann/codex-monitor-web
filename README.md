@@ -49,11 +49,10 @@ CodexMonitor is a Tauri app for orchestrating multiple Codex agents across local
 - Rust toolchain (stable)
 - CMake (required for native dependencies; dictation/Whisper uses it)
 - LLVM/Clang (required on Windows to build dictation dependencies via bindgen)
-- Codex installed on your system and available as `codex` in `PATH`
+- Codex CLI installed and available as `codex` in `PATH` (or configure a custom Codex binary in app/workspace settings)
 - Git CLI (used for worktree operations)
-- GitHub CLI (`gh`) for the Issues panel (optional)
+- GitHub CLI (`gh`) for GitHub Issues/PR integrations (optional)
 
-If the `codex` binary is not in `PATH`, update the backend to pass a custom path per workspace.
 If you hit native build errors, run:
 
 ```bash
@@ -71,7 +70,7 @@ npm install
 Run in dev mode:
 
 ```bash
-npm run tauri dev
+npm run tauri:dev
 ```
 
 ## iOS Support (WIP)
@@ -85,10 +84,12 @@ iOS support is currently in progress.
 ### iOS Prerequisites
 
 - Xcode + Command Line Tools installed.
-- Rust iOS target installed:
+- Rust iOS targets installed:
 
 ```bash
-rustup target add aarch64-apple-ios
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+# Optional (Intel Mac simulator builds):
+rustup target add x86_64-apple-ios
 ```
 
 - Apple signing configured (development team).
@@ -106,6 +107,7 @@ Options:
 - `--simulator "<name>"` to target a specific simulator.
 - `--target aarch64-sim|x86_64-sim` to override architecture.
 - `--skip-build` to reuse the current app bundle.
+- `--no-clean` to preserve `src-tauri/gen/apple/build` between builds.
 
 ### Run on USB Device
 
@@ -120,6 +122,12 @@ Build, install, and launch on a specific device:
 ```bash
 ./scripts/build_run_ios_device.sh --device "<device name or identifier>" --team <TEAM_ID>
 ```
+
+Additional options:
+
+- `--target aarch64` to override architecture.
+- `--skip-build` to reuse the current app bundle.
+- `--bundle-id <id>` to launch a non-default bundle identifier.
 
 First-time device setup usually requires:
 
@@ -138,7 +146,7 @@ If signing is not ready yet, open Xcode from the script flow:
 Build the production Tauri bundle:
 
 ```bash
-npm run tauri build
+npm run tauri:build
 ```
 
 Artifacts will be in `src-tauri/target/release/bundle/` (platform-specific subfolders).
@@ -168,6 +176,17 @@ npm run typecheck
 
 Note: `npm run build` also runs `tsc` before bundling the frontend.
 
+## Validation
+
+Recommended validation commands:
+
+```bash
+npm run lint
+npm run test
+npm run typecheck
+cd src-tauri && cargo check
+```
+
 ## Project Structure
 
 ```
@@ -177,30 +196,40 @@ src/
   styles/           split CSS by area
   types.ts          shared types
 src-tauri/
-  src/lib.rs        Tauri backend + codex app-server client
+  src/lib.rs        Tauri app backend command registry
+  src/bin/codex_monitor_daemon.rs  remote daemon JSON-RPC process
+  src/shared/       shared backend core used by app + daemon
+  src/workspaces/   workspace/worktree adapters
+  src/codex/        codex app-server adapters
+  src/files/        file adapters
   tauri.conf.json   window configuration
 ```
 
 ## Notes
 
 - Workspaces persist to `workspaces.json` under the app data directory.
-- App settings persist to `settings.json` under the app data directory (Codex path, default access mode, UI scale).
+- App settings persist to `settings.json` under the app data directory (theme, backend mode/provider, remote endpoints/tokens, Codex path, default access mode, UI scale).
 - Feature settings are supported in the UI and synced to `$CODEX_HOME/config.toml` (or `~/.codex/config.toml`) on load/save. Stable: Collaboration modes (`features.collaboration_modes`), personality (`personality`), Steer mode (`features.steer`), and Background terminal (`features.unified_exec`). Experimental: Collab mode (`features.collab`) and Apps (`features.apps`).
 - On launch and on window focus, the app reconnects and refreshes thread lists for each workspace.
 - Threads are restored by filtering `thread/list` results using the workspace `cwd`.
 - Selecting a thread always calls `thread/resume` to refresh messages from disk.
 - CLI sessions appear if their `cwd` matches the workspace path; they are not live-streamed unless resumed.
-- The app uses `codex app-server` over stdio; see `src-tauri/src/lib.rs`.
-- Codex sessions use the default Codex home (usually `~/.codex`); if a legacy `.codexmonitor/` exists in a workspace, it is used for that workspace.
+- The app uses `codex app-server` over stdio; see `src-tauri/src/lib.rs` and `src-tauri/src/codex/`.
+- The remote daemon entrypoint is `src-tauri/src/bin/codex_monitor_daemon.rs`; shared domain logic lives in `src-tauri/src/shared/`.
+- Codex home resolves from workspace settings (if set), then legacy `.codexmonitor/`, then `$CODEX_HOME`/`~/.codex`.
 - Worktree agents live under the app data directory (`worktrees/<workspace-id>`); legacy `.codex-worktrees/` paths remain supported, and the app no longer edits repo `.gitignore` files.
 - UI state (panel sizes, reduced transparency toggle, recent thread activity) is stored in `localStorage`.
 - Custom prompts load from `$CODEX_HOME/prompts` (or `~/.codex/prompts`) with optional frontmatter description/argument hints.
 
 ## Tauri IPC Surface
 
-Frontend calls live in `src/services/tauri.ts` and map to commands in `src-tauri/src/lib.rs`. Core commands include:
+Frontend calls live in `src/services/tauri.ts` and map to commands in `src-tauri/src/lib.rs`. The current surface includes:
 
-- Workspace lifecycle: `list_workspaces`, `add_workspace`, `add_worktree`, `remove_workspace`, `remove_worktree`, `connect_workspace`, `update_workspace_settings`.
-- Threads: `start_thread`, `list_threads`, `resume_thread`, `archive_thread`, `send_user_message`, `turn_interrupt`, `respond_to_server_request`.
-- Reviews + models: `start_review`, `model_list`, `account_rate_limits`, `skills_list`.
-- Git + files: `get_git_status`, `get_git_diffs`, `get_git_log`, `get_git_remote`, `list_git_branches`, `checkout_git_branch`, `create_git_branch`, `list_workspace_files`.
+- Settings/config/files: `get_app_settings`, `update_app_settings`, `get_codex_config_path`, `get_config_model`, `file_read`, `file_write`, `codex_doctor`, `menu_set_accelerators`.
+- Workspaces/worktrees: `list_workspaces`, `is_workspace_path_dir`, `add_workspace`, `add_clone`, `add_worktree`, `worktree_setup_status`, `worktree_setup_mark_ran`, `rename_worktree`, `rename_worktree_upstream`, `apply_worktree_changes`, `update_workspace_settings`, `update_workspace_codex_bin`, `remove_workspace`, `remove_worktree`, `connect_workspace`, `list_workspace_files`, `read_workspace_file`, `open_workspace_in`, `get_open_app_icon`.
+- Threads/turns/reviews: `start_thread`, `fork_thread`, `compact_thread`, `list_threads`, `resume_thread`, `archive_thread`, `set_thread_name`, `send_user_message`, `turn_interrupt`, `respond_to_server_request`, `start_review`, `remember_approval_rule`, `get_commit_message_prompt`, `generate_commit_message`, `generate_run_metadata`.
+- Account/models/collaboration: `model_list`, `account_rate_limits`, `account_read`, `skills_list`, `apps_list`, `collaboration_mode_list`, `codex_login`, `codex_login_cancel`, `list_mcp_server_status`.
+- Git/GitHub: `get_git_status`, `list_git_roots`, `get_git_diffs`, `get_git_log`, `get_git_commit_diff`, `get_git_remote`, `stage_git_file`, `stage_git_all`, `unstage_git_file`, `revert_git_file`, `revert_git_all`, `commit_git`, `push_git`, `pull_git`, `fetch_git`, `sync_git`, `list_git_branches`, `checkout_git_branch`, `create_git_branch`, `get_github_issues`, `get_github_pull_requests`, `get_github_pull_request_diff`, `get_github_pull_request_comments`.
+- Prompts: `prompts_list`, `prompts_create`, `prompts_update`, `prompts_delete`, `prompts_move`, `prompts_workspace_dir`, `prompts_global_dir`.
+- Terminal/dictation/notifications/usage: `terminal_open`, `terminal_write`, `terminal_resize`, `terminal_close`, `dictation_model_status`, `dictation_download_model`, `dictation_cancel_download`, `dictation_remove_model`, `dictation_request_permission`, `dictation_start`, `dictation_stop`, `dictation_cancel`, `send_notification_fallback`, `is_macos_debug_build`, `local_usage_snapshot`.
+- Remote backend helpers: `orbit_connect_test`, `orbit_sign_in_start`, `orbit_sign_in_poll`, `orbit_sign_out`, `orbit_runner_start`, `orbit_runner_stop`, `orbit_runner_status`, `tailscale_status`, `tailscale_daemon_command_preview`, `tailscale_daemon_start`, `tailscale_daemon_stop`, `tailscale_daemon_status`.
