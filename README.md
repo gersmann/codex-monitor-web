@@ -81,6 +81,27 @@ iOS support is currently in progress.
 - Current limits: terminal and dictation remain unavailable on mobile builds.
 - Desktop behavior is unchanged: macOS/Linux/Windows remain local-first unless remote mode is explicitly selected.
 
+### iOS + Tailscale Setup (TCP)
+
+Use this when connecting the iOS app to a desktop-hosted daemon over your Tailscale tailnet.
+
+1. Install and sign in to Tailscale on both desktop and iPhone (same tailnet).
+2. On desktop CodexMonitor, open `Settings > Server`.
+3. Keep `Remote provider` set to `TCP (wip)`.
+4. Set a `Remote backend token`.
+5. Start the desktop daemon with `Start daemon` (in `Mobile access daemon`).
+6. In `Tailscale helper`, use `Detect Tailscale` and note the suggested host (for example `your-mac.your-tailnet.ts.net:4732`).
+7. On iOS CodexMonitor, open `Settings > Server`.
+8. Set `Connection type` to `TCP`.
+9. Enter the desktop Tailscale host and the same token.
+10. Tap `Connect & test` and confirm it succeeds.
+
+Notes:
+
+- The desktop daemon must stay running while iOS is connected.
+- If the test fails, confirm both devices are online in Tailscale and that host/token match desktop settings.
+- If you want to use Orbit instead of Tailscale TCP, switch `Connection type` to `Orbit` on iOS and use your desktop Orbit websocket URL/token.
+
 ### iOS Prerequisites
 
 - Xcode + Command Line Tools installed.
