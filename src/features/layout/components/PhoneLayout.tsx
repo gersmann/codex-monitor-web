@@ -71,6 +71,7 @@ export function PhoneLayout({
           {activeWorkspace && !showGitDetail && (
             <>
               <MainTopbar leftNode={topbarLeftNode} className="compact-topbar" />
+              {compactGitBackNode}
               <div className="compact-git">
                 <div className="compact-git-list">{gitDiffPanelNode}</div>
               </div>

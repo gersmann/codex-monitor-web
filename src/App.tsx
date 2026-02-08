@@ -111,6 +111,7 @@ import { useMobileServerSetup } from "./features/mobile/hooks/useMobileServerSet
 import { useWorkspaceHome } from "./features/workspaces/hooks/useWorkspaceHome";
 import { useWorkspaceAgentMd } from "./features/workspaces/hooks/useWorkspaceAgentMd";
 import { pickWorkspacePath } from "./services/tauri";
+import { isMobilePlatform } from "./utils/platformPaths";
 import type {
   AccessMode,
   ComposerEditorSettings,
@@ -190,7 +191,8 @@ function MainApp() {
     handleCopyDebug,
     clearDebugEntries,
   } = useDebugLog();
-  useLiquidGlassEffect({ reduceTransparency, onDebug: addDebugEntry });
+  const shouldReduceTransparency = reduceTransparency || isMobilePlatform();
+  useLiquidGlassEffect({ reduceTransparency: shouldReduceTransparency, onDebug: addDebugEntry });
   const [accessMode, setAccessMode] = useState<AccessMode>("current");
   const [threadListSortKey, setThreadListSortKey] = useState<ThreadListSortKey>(
     () => getStoredThreadListSortKey(),
@@ -1751,7 +1753,8 @@ function MainApp() {
     );
   };
 
-  const showGitDetail = Boolean(selectedDiffPath) && isPhone;
+  const showGitDetail =
+    Boolean(selectedDiffPath) && isPhone && centerMode === "diff";
   const isThreadOpen = Boolean(activeThreadId && showComposer);
 
   useArchiveShortcut({
@@ -1808,7 +1811,7 @@ function MainApp() {
   const appClassName = `app ${isCompact ? "layout-compact" : "layout-desktop"}${
     isPhone ? " layout-phone" : ""
   }${isTablet ? " layout-tablet" : ""}${
-    reduceTransparency ? " reduced-transparency" : ""
+    shouldReduceTransparency ? " reduced-transparency" : ""
   }${!isCompact && sidebarCollapsed ? " sidebar-collapsed" : ""}${
     !isCompact && rightPanelCollapsed ? " right-panel-collapsed" : ""
   }`;
@@ -2022,6 +2025,7 @@ function MainApp() {
     tabletNavTab: tabletTab,
     gitPanelMode,
     onGitPanelModeChange: handleGitPanelModeChange,
+    isPhone,
     gitDiffViewStyle,
     gitDiffIgnoreWhitespaceChanges:
       appSettings.gitDiffIgnoreWhitespaceChanges && diffSource !== "pr",
@@ -2229,8 +2233,16 @@ function MainApp() {
     onResizeDebug: onDebugPanelResizeStart,
     onResizeTerminal: onTerminalPanelResizeStart,
     onBackFromDiff: () => {
-      setSelectedDiffPath(null);
       setCenterMode("chat");
+    },
+    onShowSelectedDiff: () => {
+      if (!selectedDiffPath) {
+        return;
+      }
+      setCenterMode("diff");
+      if (isPhone) {
+        setActiveTab("git");
+      }
     },
     onGoProjects: () => setActiveTab("projects"),
     workspaceDropTargetRef,
