@@ -1521,6 +1521,32 @@ function MainApp() {
     listThreadsForWorkspace
   });
 
+  useEffect(() => {
+    if (appSettings.backendMode !== "remote") {
+      return;
+    }
+
+    const refreshActiveThread = () => {
+      if (!activeWorkspace?.connected || !activeThreadId) {
+        return;
+      }
+      void refreshThread(activeWorkspace.id, activeThreadId);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshActiveThread();
+      }
+    };
+
+    window.addEventListener("focus", refreshActiveThread);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", refreshActiveThread);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [activeThreadId, activeWorkspace, appSettings.backendMode, refreshThread]);
+
   const {
     handleAddWorkspace,
     handleAddWorkspaceFromPath,
