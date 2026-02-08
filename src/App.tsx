@@ -1961,6 +1961,7 @@ function MainApp() {
     onCopyThread: handleCopyThread,
     onToggleTerminal: handleToggleTerminal,
     showTerminalButton: !isCompact,
+    showWorkspaceTools: !isCompact,
     launchScript: launchScriptState.launchScript,
     launchScriptEditorOpen: launchScriptState.editorOpen,
     launchScriptDraft: launchScriptState.draftScript,
