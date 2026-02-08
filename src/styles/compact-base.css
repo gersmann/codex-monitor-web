@@ -31,6 +31,18 @@
   min-height: 0;
 }
 
+.app.layout-compact .sidebar-corner-actions {
+  position: static;
+  left: auto;
+  bottom: auto;
+  margin-top: 8px;
+  align-self: flex-start;
+}
+
+.app.layout-compact .sidebar-account-popover {
+  bottom: calc(100% + 8px);
+}
+
 .compact-topbar {
   padding: 10px 16px 8px;
 }

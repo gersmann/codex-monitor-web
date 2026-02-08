@@ -217,7 +217,7 @@ Use the design-system layer for shared UI shells and tokenized styling.
   - `src/features/design-system/components/panel/PanelPrimitives.tsx`
   - `src/features/design-system/components/popover/PopoverPrimitives.tsx`
   - Toast sub-primitives: `ToastHeader`, `ToastActions`, `ToastError` (in `ToastPrimitives.tsx`)
-  - Panel sub-primitives: `PanelMeta`, `PanelSearchField` (in `PanelPrimitives.tsx`)
+  - Panel sub-primitives: `PanelMeta`, `PanelSearchField`, `PanelNavList`, `PanelNavItem` (in `PanelPrimitives.tsx`)
   - Popover sub-primitives: `PopoverMenuItem` (in `PopoverPrimitives.tsx`)
 - Diff theming and style bridge:
   - `src/features/design-system/diff/diffViewerTheme.ts`
@@ -233,7 +233,7 @@ Naming conventions:
 
 - DS CSS classes use `.ds-*` prefixes.
 - DS CSS variables use `--ds-*` prefixes.
-- DS React primitives use `PascalCase` component names (`ModalShell`, `ToastCard`, `ToastHeader`, `ToastActions`, `ToastError`, `PanelFrame`, `PanelHeader`, `PanelMeta`, `PanelSearchField`, `PopoverSurface`, `PopoverMenuItem`).
+- DS React primitives use `PascalCase` component names (`ModalShell`, `ToastCard`, `ToastHeader`, `ToastActions`, `ToastError`, `PanelFrame`, `PanelHeader`, `PanelMeta`, `PanelSearchField`, `PanelNavList`, `PanelNavItem`, `PopoverSurface`, `PopoverMenuItem`).
 - Feature CSS should keep feature-prefixed classes (`.worktree-*`, `.update-*`) for content/layout specifics.
 
 Do:

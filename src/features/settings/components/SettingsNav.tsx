@@ -9,104 +9,123 @@ import FlaskConical from "lucide-react/dist/esm/icons/flask-conical";
 import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import Layers from "lucide-react/dist/esm/icons/layers";
 import ServerCog from "lucide-react/dist/esm/icons/server-cog";
+import { PanelNavItem, PanelNavList } from "../../design-system/components/panel/PanelPrimitives";
 import type { CodexSection } from "./settingsTypes";
 
 type SettingsNavProps = {
   activeSection: CodexSection;
   onSelectSection: (section: CodexSection) => void;
+  showDisclosure?: boolean;
 };
 
-export function SettingsNav({ activeSection, onSelectSection }: SettingsNavProps) {
+export function SettingsNav({
+  activeSection,
+  onSelectSection,
+  showDisclosure = false,
+}: SettingsNavProps) {
   return (
     <aside className="settings-sidebar">
-      <button
-        type="button"
-        className={`settings-nav ${activeSection === "projects" ? "active" : ""}`}
-        onClick={() => onSelectSection("projects")}
-      >
-        <LayoutGrid aria-hidden />
-        Projects
-      </button>
-      <button
-        type="button"
-        className={`settings-nav ${activeSection === "environments" ? "active" : ""}`}
-        onClick={() => onSelectSection("environments")}
-      >
-        <Layers aria-hidden />
-        Environments
-      </button>
-      <button
-        type="button"
-        className={`settings-nav ${activeSection === "display" ? "active" : ""}`}
-        onClick={() => onSelectSection("display")}
-      >
-        <SlidersHorizontal aria-hidden />
-        Display &amp; Sound
-      </button>
-      <button
-        type="button"
-        className={`settings-nav ${activeSection === "composer" ? "active" : ""}`}
-        onClick={() => onSelectSection("composer")}
-      >
-        <FileText aria-hidden />
-        Composer
-      </button>
-      <button
-        type="button"
-        className={`settings-nav ${activeSection === "dictation" ? "active" : ""}`}
-        onClick={() => onSelectSection("dictation")}
-      >
-        <Mic aria-hidden />
-        Dictation
-      </button>
-      <button
-        type="button"
-        className={`settings-nav ${activeSection === "shortcuts" ? "active" : ""}`}
-        onClick={() => onSelectSection("shortcuts")}
-      >
-        <Keyboard aria-hidden />
-        Shortcuts
-      </button>
-      <button
-        type="button"
-        className={`settings-nav ${activeSection === "open-apps" ? "active" : ""}`}
-        onClick={() => onSelectSection("open-apps")}
-      >
-        <ExternalLink aria-hidden />
-        Open in
-      </button>
-      <button
-        type="button"
-        className={`settings-nav ${activeSection === "git" ? "active" : ""}`}
-        onClick={() => onSelectSection("git")}
-      >
-        <GitBranch aria-hidden />
-        Git
-      </button>
-      <button
-        type="button"
-        className={`settings-nav ${activeSection === "server" ? "active" : ""}`}
-        onClick={() => onSelectSection("server")}
-      >
-        <ServerCog aria-hidden />
-        Server
-      </button>
-      <button
-        type="button"
-        className={`settings-nav ${activeSection === "codex" ? "active" : ""}`}
-        onClick={() => onSelectSection("codex")}
-      >
-        <TerminalSquare aria-hidden />
-        Codex
-      </button>
-      <button
-        type="button"
-        className={`settings-nav ${activeSection === "features" ? "active" : ""}`}
-        onClick={() => onSelectSection("features")}
-      >
-        <FlaskConical aria-hidden />
-        Features
-      </button>
+      <PanelNavList className="settings-nav-list">
+        <PanelNavItem
+          className="settings-nav"
+          icon={<LayoutGrid aria-hidden />}
+          active={activeSection === "projects"}
+          showDisclosure={showDisclosure}
+          onClick={() => onSelectSection("projects")}
+        >
+          Projects
+        </PanelNavItem>
+        <PanelNavItem
+          className="settings-nav"
+          icon={<Layers aria-hidden />}
+          active={activeSection === "environments"}
+          showDisclosure={showDisclosure}
+          onClick={() => onSelectSection("environments")}
+        >
+          Environments
+        </PanelNavItem>
+        <PanelNavItem
+          className="settings-nav"
+          icon={<SlidersHorizontal aria-hidden />}
+          active={activeSection === "display"}
+          showDisclosure={showDisclosure}
+          onClick={() => onSelectSection("display")}
+        >
+          Display &amp; Sound
+        </PanelNavItem>
+        <PanelNavItem
+          className="settings-nav"
+          icon={<FileText aria-hidden />}
+          active={activeSection === "composer"}
+          showDisclosure={showDisclosure}
+          onClick={() => onSelectSection("composer")}
+        >
+          Composer
+        </PanelNavItem>
+        <PanelNavItem
+          className="settings-nav"
+          icon={<Mic aria-hidden />}
+          active={activeSection === "dictation"}
+          showDisclosure={showDisclosure}
+          onClick={() => onSelectSection("dictation")}
+        >
+          Dictation
+        </PanelNavItem>
+        <PanelNavItem
+          className="settings-nav"
+          icon={<Keyboard aria-hidden />}
+          active={activeSection === "shortcuts"}
+          showDisclosure={showDisclosure}
+          onClick={() => onSelectSection("shortcuts")}
+        >
+          Shortcuts
+        </PanelNavItem>
+        <PanelNavItem
+          className="settings-nav"
+          icon={<ExternalLink aria-hidden />}
+          active={activeSection === "open-apps"}
+          showDisclosure={showDisclosure}
+          onClick={() => onSelectSection("open-apps")}
+        >
+          Open in
+        </PanelNavItem>
+        <PanelNavItem
+          className="settings-nav"
+          icon={<GitBranch aria-hidden />}
+          active={activeSection === "git"}
+          showDisclosure={showDisclosure}
+          onClick={() => onSelectSection("git")}
+        >
+          Git
+        </PanelNavItem>
+        <PanelNavItem
+          className="settings-nav"
+          icon={<ServerCog aria-hidden />}
+          active={activeSection === "server"}
+          showDisclosure={showDisclosure}
+          onClick={() => onSelectSection("server")}
+        >
+          Server
+        </PanelNavItem>
+        <PanelNavItem
+          className="settings-nav"
+          icon={<TerminalSquare aria-hidden />}
+          active={activeSection === "codex"}
+          showDisclosure={showDisclosure}
+          onClick={() => onSelectSection("codex")}
+        >
+          Codex
+        </PanelNavItem>
+        <PanelNavItem
+          className="settings-nav"
+          icon={<FlaskConical aria-hidden />}
+          active={activeSection === "features"}
+          showDisclosure={showDisclosure}
+          onClick={() => onSelectSection("features")}
+        >
+          Features
+        </PanelNavItem>
+      </PanelNavList>
     </aside>
   );
 }

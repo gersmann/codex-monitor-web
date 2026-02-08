@@ -134,3 +134,27 @@ Context: iOS frontend layout selection
 Type: preference
 Rule: Force iOS/mobile runtime into phone layout mode so the tab-bar mobile shell is always used at app startup.
 Why: Width-only layout detection can select tablet shell on iOS and hide the expected mobile tab bar.
+
+## 2026-02-08 08:09
+Context: iOS workspace source of truth
+Type: preference
+Rule: In iOS remote mode, workspaces/projects must come from the daemon backend; do not rely on standalone iOS-local project creation.
+Why: Mobile clients are intended to operate against the host daemon state and should reflect daemon-managed workspaces.
+
+## 2026-02-08 08:15
+Context: Settings modal mobile navigation usability
+Type: decision
+Rule: For phone-sized settings viewports (`max-width: 720px`), use master/detail navigation (section list first, detail view second with a back action) instead of horizontal tab-strip navigation.
+Why: Horizontal nav compression breaks section labels and readability on narrow screens; master/detail keeps section selection and content legible.
+
+## 2026-02-08 08:22
+Context: Reusable mobile master-list navigation styling
+Type: decision
+Rule: Use design-system panel navigation primitives (`PanelNavList` + `PanelNavItem`) for section-list style navigation, enabling optional disclosure chevrons for mobile master/detail patterns.
+Why: This keeps section-list interactions visually consistent and reusable across features instead of re-implementing one-off list row styles.
+
+## 2026-02-08 08:33
+Context: Compact sidebar footer/action stacking
+Type: preference
+Rule: In compact/mobile sidebar layouts, place account/settings corner actions in normal flow under the usage widget instead of absolute bottom positioning.
+Why: Absolute positioning overlaps usage bars on narrow viewports and causes control collisions.

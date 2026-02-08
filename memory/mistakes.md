@@ -241,3 +241,23 @@ Rule: On iOS WKWebView, avoid using `visualViewport.height` alone for root layou
 Root cause: Assumed `visualViewport.height` matched full renderable app viewport in Tauri iOS.
 Fix applied: Updated `syncMobileViewportHeight` in `src/main.tsx` to compute `--app-height` with `Math.max(window.innerHeight, visualViewport.height ?? 0)`.
 Prevention rule: Treat root viewport sizing as WKWebView-specific and validate both clipping and bottom anchoring before finalizing.
+
+## 2026-02-08 08:15
+Context: Settings modal mobile master/detail rollout
+Type: mistake
+Event: Initial master/detail gating required both mobile-platform detection and narrow width, which made behavior inconsistent in test/runtime scenarios where width was narrow but platform heuristics varied.
+Action: Switched master/detail trigger to a pure viewport-width predicate (`max-width: 720px`) and validated with dedicated Settings mobile-layout tests.
+Rule: For responsive modal navigation, gate layout by viewport constraints unless platform-specific behavior is strictly required.
+Root cause: Over-constrained layout gating mixed platform heuristics into a screen-size-driven UX requirement.
+Fix applied: Updated `SettingsView` layout gating and added regression coverage in `src/features/settings/components/SettingsView.test.tsx`.
+Prevention rule: Align layout triggers directly to UX constraints (width/height) and keep platform checks only for truly platform-specific capability differences.
+
+## 2026-02-08 08:22
+Context: iOS settings modal vertical placement
+Type: mistake
+Event: Mobile settings modal remained visually too high, overlapping status-bar/notch area and making the top navigation feel collapsed.
+Action: Added mobile safe-area-aware modal sizing/offset to shift the settings card lower on narrow viewports.
+Rule: On iOS-style narrow layouts, modal card placement must account for safe-area top inset explicitly.
+Root cause: Centered modal placement used viewport-only geometry without safe-area compensation for notched displays.
+Fix applied: Updated `src/styles/settings.css` mobile rules to include safe-area-aware height and top offset.
+Prevention rule: Validate modal vertical placement against notch/status-bar safe areas whenever mobile modal dimensions or centering behavior change.

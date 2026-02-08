@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
 import X from "lucide-react/dist/esm/icons/x";
 import type {
   AppSettings,
@@ -168,6 +169,28 @@ const orbitServices: OrbitServiceClient = {
 
 const ORBIT_DEFAULT_POLL_INTERVAL_SECONDS = 5;
 const ORBIT_MAX_INLINE_POLL_SECONDS = 180;
+const SETTINGS_MOBILE_BREAKPOINT_PX = 720;
+
+const SETTINGS_SECTION_LABELS: Record<CodexSection, string> = {
+  projects: "Projects",
+  environments: "Environments",
+  display: "Display & Sound",
+  composer: "Composer",
+  dictation: "Dictation",
+  shortcuts: "Shortcuts",
+  "open-apps": "Open in",
+  git: "Git",
+  server: "Server",
+  codex: "Codex",
+  features: "Features",
+};
+
+const isNarrowSettingsViewport = (): boolean => {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return false;
+  }
+  return window.matchMedia(`(max-width: ${SETTINGS_MOBILE_BREAKPOINT_PX}px)`).matches;
+};
 
 const delay = (durationMs: number): Promise<void> =>
   new Promise((resolve) => {
@@ -417,6 +440,10 @@ export function SettingsView({
     "start" | "stop" | "status" | null
   >(null);
   const mobilePlatform = useMemo(() => isMobilePlatform(), []);
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() =>
+    isNarrowSettingsViewport(),
+  );
+  const [showMobileDetail, setShowMobileDetail] = useState(Boolean(initialSection));
   const [scaleDraft, setScaleDraft] = useState(
     `${Math.round(clampUiScale(appSettings.uiScale) * 100)}%`,
   );
@@ -752,10 +779,43 @@ export function SettingsView({
   }, [workspaceGroups]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+    const query = window.matchMedia(`(max-width: ${SETTINGS_MOBILE_BREAKPOINT_PX}px)`);
+    const applyViewportState = () => {
+      setIsNarrowViewport(query.matches);
+    };
+    applyViewportState();
+    if (typeof query.addEventListener === "function") {
+      query.addEventListener("change", applyViewportState);
+      return () => {
+        query.removeEventListener("change", applyViewportState);
+      };
+    }
+    query.addListener(applyViewportState);
+    return () => {
+      query.removeListener(applyViewportState);
+    };
+  }, []);
+
+  const useMobileMasterDetail = isNarrowViewport;
+
+  useEffect(() => {
+    if (useMobileMasterDetail) {
+      return;
+    }
+    setShowMobileDetail(false);
+  }, [useMobileMasterDetail]);
+
+  useEffect(() => {
     if (initialSection) {
       setActiveSection(initialSection);
+      if (useMobileMasterDetail) {
+        setShowMobileDetail(true);
+      }
     }
-  }, [initialSection]);
+  }, [initialSection, useMobileMasterDetail]);
 
   useEffect(() => {
     if (!environmentWorkspace) {
@@ -1577,6 +1637,21 @@ export function SettingsView({
     void handleCommitOpenApps(openAppDrafts);
   };
 
+  const handleSelectSection = useCallback(
+    (section: CodexSection) => {
+      setActiveSection(section);
+      if (useMobileMasterDetail) {
+        setShowMobileDetail(true);
+      }
+    },
+    [useMobileMasterDetail],
+  );
+
+  const activeSectionLabel = SETTINGS_SECTION_LABELS[activeSection];
+  const settingsBodyClassName = `settings-body${
+    useMobileMasterDetail ? " settings-body-mobile-master-detail" : ""
+  }${useMobileMasterDetail && showMobileDetail ? " is-detail-visible" : ""}`;
+
   return (
     <ModalShell
       className="settings-overlay"
@@ -1597,12 +1672,35 @@ export function SettingsView({
           <X aria-hidden />
         </button>
       </div>
-      <div className="settings-body">
-        <SettingsNav
-          activeSection={activeSection}
-          onSelectSection={setActiveSection}
-        />
-        <div className="settings-content">
+      <div className={settingsBodyClassName}>
+        {(!useMobileMasterDetail || !showMobileDetail) && (
+          <div className="settings-master">
+            <SettingsNav
+              activeSection={activeSection}
+              onSelectSection={handleSelectSection}
+              showDisclosure={useMobileMasterDetail}
+            />
+          </div>
+        )}
+        {(!useMobileMasterDetail || showMobileDetail) && (
+          <div className="settings-detail">
+            {useMobileMasterDetail && (
+              <div className="settings-mobile-detail-header">
+                <button
+                  type="button"
+                  className="settings-mobile-back"
+                  onClick={() => setShowMobileDetail(false)}
+                  aria-label="Back to settings sections"
+                >
+                  <ChevronLeft aria-hidden />
+                  Sections
+                </button>
+                <div className="settings-mobile-detail-title">
+                  {activeSectionLabel}
+                </div>
+              </div>
+            )}
+            <div className="settings-content">
           {activeSection === "projects" && (
             <SettingsProjectsSection
               workspaceGroups={workspaceGroups}
@@ -1834,8 +1932,10 @@ export function SettingsView({
               onUpdateAppSettings={onUpdateAppSettings}
             />
           )}
+            </div>
+          </div>
+        )}
         </div>
-      </div>
     </ModalShell>
   );
 }

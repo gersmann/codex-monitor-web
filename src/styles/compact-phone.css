@@ -17,6 +17,7 @@
   flex-direction: column;
   align-items: stretch;
   overflow-x: hidden;
+  padding-bottom: 16px;
 }
 
 .app.layout-phone .messages-full {
