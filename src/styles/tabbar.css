@@ -9,6 +9,23 @@
   -webkit-app-region: no-drag;
   min-height: var(--tabbar-height, 56px);
   flex-shrink: 0;
+  transition:
+    max-height 140ms ease,
+    min-height 140ms ease,
+    padding 140ms ease,
+    border-top-width 140ms ease,
+    opacity 140ms ease;
+}
+
+html[data-mobile-composer-focus="true"] .app.layout-phone .tabbar {
+  max-height: 0;
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .app.reduced-transparency .tabbar {

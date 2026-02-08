@@ -66,11 +66,26 @@ function syncMobileViewportHeight() {
     document.documentElement.style.setProperty("--app-height", `${nextHeight}px`);
   };
 
+  const setComposerFocusState = () => {
+    const activeElement = document.activeElement;
+    const isComposerTextareaFocused =
+      activeElement instanceof HTMLTextAreaElement &&
+      activeElement.closest(".composer") !== null;
+    document.documentElement.dataset.mobileComposerFocus = isComposerTextareaFocused
+      ? "true"
+      : "false";
+  };
+
   setViewportHeight();
+  setComposerFocusState();
   window.addEventListener("resize", setViewportHeight, { passive: true });
   window.addEventListener("orientationchange", setViewportHeight, { passive: true });
   window.visualViewport?.addEventListener("resize", setViewportHeight, { passive: true });
   window.visualViewport?.addEventListener("scroll", setViewportHeight, { passive: true });
+  document.addEventListener("focusin", setComposerFocusState);
+  document.addEventListener("focusout", () => {
+    requestAnimationFrame(setComposerFocusState);
+  });
 }
 
 disableMobileZoomGestures();

@@ -36,6 +36,7 @@ import { usePromptHistory } from "../hooks/usePromptHistory";
 import { ComposerInput } from "./ComposerInput";
 import { ComposerMetaBar } from "./ComposerMetaBar";
 import { ComposerQueue } from "./ComposerQueue";
+import { isMobilePlatform } from "../../../utils/platformPaths";
 
 type ComposerProps = {
   onSend: (text: string, images: string[]) => void;
@@ -679,7 +680,11 @@ export const Composer = memo(function Composer({
               return;
             }
             event.preventDefault();
+            const dismissKeyboardAfterSend = canSend && isMobilePlatform();
             handleSend();
+            if (dismissKeyboardAfterSend) {
+              textareaRef.current?.blur();
+            }
           }
         }}
         textareaRef={textareaRef}
