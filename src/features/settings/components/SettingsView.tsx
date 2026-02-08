@@ -21,6 +21,7 @@ import type {
 } from "../../../types";
 import {
   getCodexConfigPath,
+  listWorkspaces,
   orbitConnectTest,
   orbitRunnerStart,
   orbitRunnerStatus,
@@ -439,6 +440,11 @@ export function SettingsView({
   const [tcpDaemonBusyAction, setTcpDaemonBusyAction] = useState<
     "start" | "stop" | "status" | null
   >(null);
+  const [mobileConnectBusy, setMobileConnectBusy] = useState(false);
+  const [mobileConnectStatusText, setMobileConnectStatusText] = useState<string | null>(
+    null,
+  );
+  const [mobileConnectStatusError, setMobileConnectStatusError] = useState(false);
   const mobilePlatform = useMemo(() => isMobilePlatform(), []);
   const [isNarrowViewport, setIsNarrowViewport] = useState(() =>
     isNarrowSettingsViewport(),
@@ -884,16 +890,56 @@ export function SettingsView({
     }
   };
 
+  const updateRemoteBackendSettings = useCallback(
+    async ({
+      host,
+      token,
+      provider,
+      orbitWsUrl,
+    }: {
+      host?: string;
+      token?: string | null;
+      provider?: AppSettings["remoteBackendProvider"];
+      orbitWsUrl?: string | null;
+    }) => {
+      const latestSettings = latestSettingsRef.current;
+      const nextHost = host ?? latestSettings.remoteBackendHost;
+      const nextToken =
+        token === undefined ? latestSettings.remoteBackendToken : token;
+      const nextProvider = provider ?? latestSettings.remoteBackendProvider;
+      const nextOrbitWsUrl =
+        orbitWsUrl === undefined ? latestSettings.orbitWsUrl : orbitWsUrl;
+      const nextSettings: AppSettings = {
+        ...latestSettings,
+        remoteBackendHost: nextHost,
+        remoteBackendToken: nextToken,
+        remoteBackendProvider: nextProvider,
+        orbitWsUrl: nextOrbitWsUrl,
+        ...(mobilePlatform
+          ? {
+              backendMode: "remote",
+            }
+          : {}),
+      };
+      const unchanged =
+        nextSettings.remoteBackendHost === latestSettings.remoteBackendHost &&
+        nextSettings.remoteBackendToken === latestSettings.remoteBackendToken &&
+        nextSettings.orbitWsUrl === latestSettings.orbitWsUrl &&
+        nextSettings.backendMode === latestSettings.backendMode &&
+        nextSettings.remoteBackendProvider === latestSettings.remoteBackendProvider;
+      if (unchanged) {
+        return;
+      }
+      await onUpdateAppSettings(nextSettings);
+      latestSettingsRef.current = nextSettings;
+    },
+    [mobilePlatform, onUpdateAppSettings],
+  );
+
   const applyRemoteHost = async (rawValue: string) => {
     const nextHost = rawValue.trim() || "127.0.0.1:4732";
     setRemoteHostDraft(nextHost);
-    if (nextHost === appSettings.remoteBackendHost) {
-      return;
-    }
-    await onUpdateAppSettings({
-      ...appSettings,
-      remoteBackendHost: nextHost,
-    });
+    await updateRemoteBackendSettings({ host: nextHost });
   };
 
   const handleCommitRemoteHost = async () => {
@@ -903,24 +949,75 @@ export function SettingsView({
   const handleCommitRemoteToken = async () => {
     const nextToken = remoteTokenDraft.trim() ? remoteTokenDraft.trim() : null;
     setRemoteTokenDraft(nextToken ?? "");
-    if (nextToken === appSettings.remoteBackendToken) {
+    await updateRemoteBackendSettings({ token: nextToken });
+  };
+
+  const handleMobileConnectTest = () => {
+    void (async () => {
+      const provider = latestSettingsRef.current.remoteBackendProvider;
+      const nextToken = remoteTokenDraft.trim() ? remoteTokenDraft.trim() : null;
+      setRemoteTokenDraft(nextToken ?? "");
+      setMobileConnectBusy(true);
+      setMobileConnectStatusText(null);
+      setMobileConnectStatusError(false);
+      try {
+        if (provider === "tcp") {
+          const nextHost = remoteHostDraft.trim() || "127.0.0.1:4732";
+          setRemoteHostDraft(nextHost);
+          await updateRemoteBackendSettings({
+            host: nextHost,
+            token: nextToken,
+          });
+        } else {
+          const nextOrbitWsUrl = normalizeOverrideValue(orbitWsUrlDraft);
+          setOrbitWsUrlDraft(nextOrbitWsUrl ?? "");
+          if (!nextOrbitWsUrl) {
+            throw new Error("Orbit websocket URL is required.");
+          }
+          await updateRemoteBackendSettings({
+            token: nextToken,
+            orbitWsUrl: nextOrbitWsUrl,
+          });
+        }
+        const workspaces = await listWorkspaces();
+        const workspaceCount = workspaces.length;
+        const workspaceWord = workspaceCount === 1 ? "workspace" : "workspaces";
+        setMobileConnectStatusText(
+          `Connected. ${workspaceCount} ${workspaceWord} reachable on the remote backend.`,
+        );
+      } catch (error) {
+        setMobileConnectStatusError(true);
+        setMobileConnectStatusText(
+          error instanceof Error ? error.message : "Unable to connect to remote backend.",
+        );
+      } finally {
+        setMobileConnectBusy(false);
+      }
+    })();
+  };
+
+  useEffect(() => {
+    if (!mobilePlatform) {
       return;
     }
-    await onUpdateAppSettings({
-      ...appSettings,
-      remoteBackendToken: nextToken,
-    });
-  };
+    setMobileConnectStatusText(null);
+    setMobileConnectStatusError(false);
+  }, [
+    appSettings.remoteBackendProvider,
+    mobilePlatform,
+    orbitWsUrlDraft,
+    remoteHostDraft,
+    remoteTokenDraft,
+  ]);
 
   const handleChangeRemoteProvider = async (
     provider: AppSettings["remoteBackendProvider"],
   ) => {
-    if (provider === appSettings.remoteBackendProvider) {
+    if (provider === latestSettingsRef.current.remoteBackendProvider) {
       return;
     }
-    await onUpdateAppSettings({
-      ...appSettings,
-      remoteBackendProvider: provider,
+    await updateRemoteBackendSettings({
+      provider,
     });
   };
 
@@ -1010,11 +1107,7 @@ export function SettingsView({
   const handleCommitOrbitWsUrl = async () => {
     const nextValue = normalizeOverrideValue(orbitWsUrlDraft);
     setOrbitWsUrlDraft(nextValue ?? "");
-    if (nextValue === appSettings.orbitWsUrl) {
-      return;
-    }
-    await onUpdateAppSettings({
-      ...appSettings,
+    await updateRemoteBackendSettings({
       orbitWsUrl: nextValue,
     });
   };
@@ -1866,6 +1959,11 @@ export function SettingsView({
               onOrbitRunnerStart={handleOrbitRunnerStart}
               onOrbitRunnerStop={handleOrbitRunnerStop}
               onOrbitRunnerStatus={handleOrbitRunnerStatus}
+              isMobilePlatform={mobilePlatform}
+              mobileConnectBusy={mobileConnectBusy}
+              mobileConnectStatusText={mobileConnectStatusText}
+              mobileConnectStatusError={mobileConnectStatusError}
+              onMobileConnectTest={handleMobileConnectTest}
             />
           )}
           {activeSection === "codex" && (
