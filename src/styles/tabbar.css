@@ -8,6 +8,7 @@
   backdrop-filter: blur(24px) saturate(1.2);
   -webkit-app-region: no-drag;
   min-height: var(--tabbar-height, 56px);
+  flex-shrink: 0;
 }
 
 .app.reduced-transparency .tabbar {
@@ -53,10 +54,4 @@
 .tabbar-icon {
   width: 18px;
   height: 18px;
-}
-
-@media (min-width: 521px) {
-  .tabbar {
-    display: none;
-  }
 }

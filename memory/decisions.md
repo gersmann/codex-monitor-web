@@ -128,3 +128,9 @@ Context: AGENTS iOS section brevity
 Type: preference
 Rule: Keep AGENTS iOS guidance minimal: supported status + simulator/device script commands only.
 Why: The user wants AGENTS concise and operational, not detailed setup prose.
+
+## 2026-02-08 07:43
+Context: iOS frontend layout selection
+Type: preference
+Rule: Force iOS/mobile runtime into phone layout mode so the tab-bar mobile shell is always used at app startup.
+Why: Width-only layout detection can select tablet shell on iOS and hide the expected mobile tab bar.

@@ -161,3 +161,83 @@ Rule: In this repo, use explicit runtime-backed tests unless Tokio test-macro su
 Root cause: Assumed Tokio test-macro feature availability from runtime dependency alone.
 Fix applied: Updated the test to build a runtime manually in `src-tauri/src/tailscale/mod.rs`.
 Prevention rule: Prefer `runtime.block_on(...)` for async unit tests in `src-tauri` modules unless existing files already use `#[tokio::test]`.
+
+## 2026-02-08 07:49
+Context: iOS mobile shell viewport/safe-area behavior
+Type: mistake
+Event: A `100dvh` height change for iOS caused bottom tab bar lift/gap while the phone shell still lacked top safe-area inset, creating status-bar overlap.
+Action: Reverted app/root height to `100vh` and added top safe-area padding on phone compact shell.
+Rule: For Tauri iOS webviews, do not switch root container height units without validating safe-area behavior on-device/simulator.
+Root cause: Assumed Safari-style `dvh` behavior would improve iOS viewport stability in WKWebView.
+Fix applied: Updated `src/styles/base.css` and `src/styles/compact-phone.css` for stable phone shell geometry.
+Prevention rule: Validate both status-bar overlap and tab-bar bottom alignment after any viewport/meta/height CSS change.
+
+## 2026-02-08 07:47
+Context: iOS compact layout tab bar visibility
+Type: mistake
+Event: On iOS, pinch-zoom and viewport sizing let the compact tab bar render outside the visible area.
+Action: Forced phone layout on mobile runtime, disabled mobile pinch gestures, and switched root/app height to dynamic viewport units.
+Rule: Mobile shells must use stable non-zooming viewport behavior and `dvh` sizing to keep fixed navigation visible.
+Root cause: Width-only layout detection and `100vh` sizing were combined with zoomable WebView behavior.
+Fix applied: Updated `src/features/layout/hooks/useLayoutMode.ts`, `index.html`, `src/main.tsx`, and `src/styles/base.css`.
+Prevention rule: For iOS/Tauri webview flows, always validate pinch-zoom behavior and bottom-nav visibility before considering layout complete.
+
+## 2026-02-08 07:49
+Context: iOS viewport unit correction after simulator validation
+Type: mistake
+Event: The earlier `dvh` guidance proved incorrect in WKWebView and produced bottom-gap/tab-bar lift.
+Action: Superseded prior guidance by restoring root/app containers to `100vh` and keeping safe-area handling explicit in shell/tabbar CSS.
+Rule: In this app, prefer `100vh` for root/app on iOS Tauri unless device validation proves a different unit is required.
+Root cause: Over-generalized Safari viewport behavior to Tauri WKWebView runtime.
+Fix applied: Reverted `dvh` usage in `src/styles/base.css` and added safe-area top inset in `src/styles/compact-phone.css`.
+Prevention rule: Treat viewport unit changes as platform-runtime specific and always validate in the target Tauri runtime.
+
+## 2026-02-08 07:50
+Context: iOS tab bar disappearing after viewport changes
+Type: mistake
+Event: A global width media query in `tabbar.css` hid the tab bar for widths above 521px, which can occur on iOS with viewport scaling.
+Action: Removed the width-based hide rule and set tab bar to non-shrinking in the phone shell.
+Rule: Do not use global width-based hide rules for mobile navigation when layout mode already controls rendering.
+Root cause: Legacy responsive CSS conflicted with runtime layout gating and iOS viewport behavior.
+Fix applied: Updated `src/styles/tabbar.css` to keep `.tabbar` always rendered and `flex-shrink: 0`.
+Prevention rule: Scope navigation visibility to explicit layout classes/runtime state rather than coarse viewport breakpoints.
+
+## 2026-02-08 07:54
+Context: iOS layout mode still selecting tablet shell
+Type: mistake
+Event: Even after tab bar CSS fixes, iOS sometimes remained in tablet layout because mobile-platform detection did not cover desktop-style iPad user agents.
+Action: Hardened `isMobilePlatform()` to include mobile UA tokens, touch-point checks, and iPad desktop-mode detection.
+Rule: Mobile runtime gating must account for iPadOS desktop-style UA/platform values.
+Root cause: Detection relied mainly on explicit `iphone`/`ipad` platform strings that are not guaranteed in modern iOS webviews.
+Fix applied: Updated `src/utils/platformPaths.ts` and expanded `src/utils/platformPaths.test.ts` coverage.
+Prevention rule: When using platform detection for layout, include tests for desktop-style iPad UA + touch capability.
+
+## 2026-02-08 07:55
+Context: iOS runtime layout gating reliability
+Type: mistake
+Event: Browser-side UA/touch heuristics remained too brittle for reliable iOS shell selection in Tauri.
+Action: Added backend command `is_mobile_runtime` and made `useLayoutMode` trust runtime platform detection before applying responsive width logic.
+Rule: For platform-critical UI gates in Tauri, prefer backend runtime signals over browser heuristics.
+Root cause: Heuristic detection varied across simulator/device WebView identification.
+Fix applied: Updated `src-tauri/src/lib.rs`, `src/services/tauri.ts`, and `src/features/layout/hooks/useLayoutMode.ts`.
+Prevention rule: Route platform-critical decisions through compile-time/runtime backend authority when available.
+
+## 2026-02-08 08:02
+Context: iOS phone shell bottom navigation clipping
+Type: mistake
+Event: Phone tab bar rendered below the visible iOS webview area even though phone layout was active.
+Action: Bound app/root height to runtime `visualViewport.height` on mobile and switched compact shell sizing from fixed `height: 100%` to flex growth.
+Rule: In Tauri iOS webviews, drive root/app height from runtime viewport metrics, not static `100vh` assumptions.
+Root cause: Static CSS viewport height did not consistently match the visible WKWebView viewport after safe-area and gesture-driven viewport changes.
+Fix applied: Added `syncMobileViewportHeight()` in `src/main.tsx`, updated `src/styles/base.css` to use `--app-height`, and updated `src/styles/compact-base.css` shell sizing.
+Prevention rule: After any iOS viewport/safe-area change, verify both top status-bar clearance and bottom tab bar visibility on simulator/device screenshots.
+
+## 2026-02-08 08:04
+Context: iOS phone shell tab bar bottom anchoring
+Type: mistake
+Event: Mobile viewport sync preferred `visualViewport.height`, which fixed clipping but made the app container slightly shorter than the device viewport, so the tab bar floated above the bottom edge.
+Action: Changed mobile app-height calculation to use the larger of `window.innerHeight` and `visualViewport.height`.
+Rule: On iOS WKWebView, avoid using `visualViewport.height` alone for root layout height.
+Root cause: Assumed `visualViewport.height` matched full renderable app viewport in Tauri iOS.
+Fix applied: Updated `syncMobileViewportHeight` in `src/main.tsx` to compute `--app-height` with `Math.max(window.innerHeight, visualViewport.height ?? 0)`.
+Prevention rule: Treat root viewport sizing as WKWebView-specific and validate both clipping and bottom anchoring before finalizing.

@@ -4,7 +4,7 @@ import { isMobilePlatform } from "./platformPaths";
 const globalScope = globalThis as typeof globalThis & { navigator?: Navigator };
 
 function withNavigatorValues(
-  values: Partial<Pick<Navigator, "platform" | "userAgent">>,
+  values: Partial<Pick<Navigator, "platform" | "userAgent" | "maxTouchPoints">>,
   run: () => void,
 ) {
   const hadNavigator = typeof globalScope.navigator !== "undefined";
@@ -19,6 +19,10 @@ function withNavigatorValues(
   const activeNavigator = globalScope.navigator as Navigator;
   const originalPlatform = Object.getOwnPropertyDescriptor(activeNavigator, "platform");
   const originalUserAgent = Object.getOwnPropertyDescriptor(activeNavigator, "userAgent");
+  const originalMaxTouchPoints = Object.getOwnPropertyDescriptor(
+    activeNavigator,
+    "maxTouchPoints",
+  );
   Object.defineProperty(activeNavigator, "platform", {
     configurable: true,
     value: values.platform ?? activeNavigator.platform ?? "",
@@ -26,6 +30,10 @@ function withNavigatorValues(
   Object.defineProperty(activeNavigator, "userAgent", {
     configurable: true,
     value: values.userAgent ?? activeNavigator.userAgent ?? "",
+  });
+  Object.defineProperty(activeNavigator, "maxTouchPoints", {
+    configurable: true,
+    value: values.maxTouchPoints ?? activeNavigator.maxTouchPoints ?? 0,
   });
   try {
     run();
@@ -39,6 +47,11 @@ function withNavigatorValues(
       Object.defineProperty(activeNavigator, "userAgent", originalUserAgent);
     } else {
       delete (activeNavigator as { userAgent?: string }).userAgent;
+    }
+    if (originalMaxTouchPoints) {
+      Object.defineProperty(activeNavigator, "maxTouchPoints", originalMaxTouchPoints);
+    } else {
+      delete (activeNavigator as { maxTouchPoints?: number }).maxTouchPoints;
     }
     if (!hadNavigator) {
       Reflect.deleteProperty(globalScope, "navigator");
@@ -69,6 +82,20 @@ describe("isMobilePlatform", () => {
       },
       () => {
         expect(isMobilePlatform()).toBe(false);
+      },
+    );
+  });
+
+  it("returns true for iPad desktop user agents with touch support", () => {
+    withNavigatorValues(
+      {
+        platform: "MacIntel",
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+        maxTouchPoints: 5,
+      },
+      () => {
+        expect(isMobilePlatform()).toBe(true);
       },
     );
   });

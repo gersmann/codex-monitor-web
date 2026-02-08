@@ -37,13 +37,27 @@ export function isMobilePlatform(): boolean {
       .userAgentData?.platform ?? navigator.platform ?? "";
   const normalizedPlatform = platform.toLowerCase();
   const userAgent = (navigator.userAgent ?? "").toLowerCase();
+  const maxTouchPoints =
+    typeof (navigator as Navigator).maxTouchPoints === "number"
+      ? (navigator as Navigator).maxTouchPoints
+      : 0;
+  const hasTouch = maxTouchPoints > 0;
+  const hasMobileUserAgentToken =
+    userAgent.includes("mobile") ||
+    userAgent.includes("iphone") ||
+    userAgent.includes("ipad") ||
+    userAgent.includes("ipod") ||
+    userAgent.includes("android");
+  const iPadDesktopMode =
+    normalizedPlatform.includes("mac") &&
+    hasTouch &&
+    (hasMobileUserAgentToken || userAgent.includes("like mac os x"));
   return (
     normalizedPlatform.includes("iphone") ||
     normalizedPlatform.includes("ipad") ||
     normalizedPlatform.includes("android") ||
-    userAgent.includes("iphone") ||
-    userAgent.includes("ipad") ||
-    userAgent.includes("android")
+    hasMobileUserAgentToken ||
+    iPadDesktopMode
   );
 }
 

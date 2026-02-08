@@ -36,6 +36,11 @@ mod utils;
 mod window;
 mod workspaces;
 
+#[tauri::command]
+fn is_mobile_runtime() -> bool {
+    cfg!(any(target_os = "ios", target_os = "android"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "linux")]
@@ -199,7 +204,8 @@ pub fn run() {
             tailscale::tailscale_daemon_command_preview,
             tailscale::tailscale_daemon_start,
             tailscale::tailscale_daemon_stop,
-            tailscale::tailscale_daemon_status
+            tailscale::tailscale_daemon_status,
+            is_mobile_runtime
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");

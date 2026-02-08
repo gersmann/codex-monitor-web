@@ -588,6 +588,10 @@ export async function getAppSettings(): Promise<AppSettings> {
   return invoke<AppSettings>("get_app_settings");
 }
 
+export async function isMobileRuntime(): Promise<boolean> {
+  return invoke<boolean>("is_mobile_runtime");
+}
+
 export async function updateAppSettings(settings: AppSettings): Promise<AppSettings> {
   return invoke<AppSettings>("update_app_settings", { settings });
 }

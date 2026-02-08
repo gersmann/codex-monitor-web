@@ -5,6 +5,10 @@
   grid-template-rows: none;
 }
 
+.app.layout-phone .compact-shell {
+  padding-top: env(safe-area-inset-top);
+}
+
 .app.layout-phone .drag-strip {
   height: 22px;
 }
