@@ -106,6 +106,8 @@ import { useWorkspaceLaunchScripts } from "./features/app/hooks/useWorkspaceLaun
 import { useWorktreeSetupScript } from "./features/app/hooks/useWorktreeSetupScript";
 import { useGitCommitController } from "./features/app/hooks/useGitCommitController";
 import { WorkspaceHome } from "./features/workspaces/components/WorkspaceHome";
+import { MobileServerSetupWizard } from "./features/mobile/components/MobileServerSetupWizard";
+import { useMobileServerSetup } from "./features/mobile/hooks/useMobileServerSetup";
 import { useWorkspaceHome } from "./features/workspaces/hooks/useWorkspaceHome";
 import { useWorkspaceAgentMd } from "./features/workspaces/hooks/useWorkspaceAgentMd";
 import { pickWorkspacePath } from "./services/tauri";
@@ -121,7 +123,6 @@ import { useCodeCssVars } from "./features/app/hooks/useCodeCssVars";
 import { useAccountSwitching } from "./features/app/hooks/useAccountSwitching";
 import { useNewAgentDraft } from "./features/app/hooks/useNewAgentDraft";
 import { useSystemNotificationThreadLinks } from "./features/app/hooks/useSystemNotificationThreadLinks";
-import { isMobilePlatform } from "./utils/platformPaths";
 
 const AboutView = lazy(() =>
   import("./features/about/components/AboutView").then((module) => ({
@@ -155,7 +156,6 @@ function getStoredThreadListSortKey(): ThreadListSortKey {
 }
 
 function MainApp() {
-  const updaterEnabled = useMemo(() => !isMobilePlatform(), []);
   const {
     appSettings,
     setAppSettings,
@@ -233,6 +233,19 @@ function MainApp() {
     addDebugEntry,
     queueSaveSettings,
   });
+  const {
+    isMobileRuntime,
+    showMobileSetupWizard,
+    mobileSetupWizardProps,
+    handleMobileConnectSuccess,
+  } = useMobileServerSetup({
+    appSettings,
+    appSettingsLoading,
+    queueSaveSettings,
+    refreshWorkspaces,
+  });
+  const updaterEnabled = !isMobileRuntime;
+
   const workspacesById = useMemo(
     () => new Map(workspaces.map((workspace) => [workspace.id, workspace])),
     [workspaces],
@@ -2402,12 +2415,16 @@ function MainApp() {
           scaleShortcutText,
           onTestNotificationSound: handleTestNotificationSound,
           onTestSystemNotification: handleTestSystemNotification,
+          onMobileConnectSuccess: handleMobileConnectSuccess,
           dictationModelStatus: dictationModel.status,
           onDownloadDictationModel: dictationModel.download,
           onCancelDictationDownload: dictationModel.cancel,
           onRemoveDictationModel: dictationModel.remove,
         }}
       />
+      {showMobileSetupWizard && (
+        <MobileServerSetupWizard {...mobileSetupWizardProps} />
+      )}
     </div>
   );
 }

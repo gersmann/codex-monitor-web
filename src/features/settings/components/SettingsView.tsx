@@ -291,6 +291,7 @@ export type SettingsViewProps = {
   scaleShortcutText: string;
   onTestNotificationSound: () => void;
   onTestSystemNotification: () => void;
+  onMobileConnectSuccess?: () => Promise<void> | void;
   dictationModelStatus?: DictationModelStatus | null;
   onDownloadDictationModel?: () => void;
   onCancelDictationDownload?: () => void;
@@ -385,6 +386,7 @@ export function SettingsView({
   scaleShortcutText,
   onTestNotificationSound,
   onTestSystemNotification,
+  onMobileConnectSuccess,
   dictationModelStatus,
   onDownloadDictationModel,
   onCancelDictationDownload,
@@ -985,6 +987,7 @@ export function SettingsView({
         setMobileConnectStatusText(
           `Connected. ${workspaceCount} ${workspaceWord} reachable on the remote backend.`,
         );
+        await onMobileConnectSuccess?.();
       } catch (error) {
         setMobileConnectStatusError(true);
         setMobileConnectStatusText(
