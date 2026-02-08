@@ -121,6 +121,7 @@ import { useCodeCssVars } from "./features/app/hooks/useCodeCssVars";
 import { useAccountSwitching } from "./features/app/hooks/useAccountSwitching";
 import { useNewAgentDraft } from "./features/app/hooks/useNewAgentDraft";
 import { useSystemNotificationThreadLinks } from "./features/app/hooks/useSystemNotificationThreadLinks";
+import { isMobilePlatform } from "./utils/platformPaths";
 
 const AboutView = lazy(() =>
   import("./features/about/components/AboutView").then((module) => ({
@@ -154,6 +155,7 @@ function getStoredThreadListSortKey(): ThreadListSortKey {
 }
 
 function MainApp() {
+  const updaterEnabled = useMemo(() => !isMobilePlatform(), []);
   const {
     appSettings,
     setAppSettings,
@@ -301,6 +303,7 @@ function MainApp() {
     handleTestNotificationSound,
     handleTestSystemNotification,
   } = useUpdaterController({
+    enabled: updaterEnabled,
     notificationSoundsEnabled: appSettings.notificationSoundsEnabled,
     systemNotificationsEnabled: appSettings.systemNotificationsEnabled,
     getWorkspaceName,
