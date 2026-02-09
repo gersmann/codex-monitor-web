@@ -282,6 +282,49 @@ pub(crate) async fn send_user_message(
 }
 
 #[tauri::command]
+pub(crate) async fn turn_steer(
+    workspace_id: String,
+    thread_id: String,
+    turn_id: String,
+    text: String,
+    images: Option<Vec<String>>,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        let images = images.map(|paths| {
+            paths
+                .into_iter()
+                .map(remote_backend::normalize_path_for_remote)
+                .collect::<Vec<_>>()
+        });
+        return remote_backend::call_remote(
+            &*state,
+            app,
+            "turn_steer",
+            json!({
+                "workspaceId": workspace_id,
+                "threadId": thread_id,
+                "turnId": turn_id,
+                "text": text,
+                "images": images,
+            }),
+        )
+        .await;
+    }
+
+    codex_core::turn_steer_core(
+        &state.sessions,
+        workspace_id,
+        thread_id,
+        turn_id,
+        text,
+        images,
+    )
+    .await
+}
+
+#[tauri::command]
 pub(crate) async fn collaboration_mode_list(
     workspace_id: String,
     state: State<'_, AppState>,

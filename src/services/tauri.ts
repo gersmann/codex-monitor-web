@@ -298,6 +298,22 @@ export async function interruptTurn(
   return invoke("turn_interrupt", { workspaceId, threadId, turnId });
 }
 
+export async function steerTurn(
+  workspaceId: string,
+  threadId: string,
+  turnId: string,
+  text: string,
+  images?: string[],
+) {
+  return invoke("turn_steer", {
+    workspaceId,
+    threadId,
+    turnId,
+    text,
+    images: images ?? null,
+  });
+}
+
 export async function startReview(
   workspaceId: string,
   threadId: string,

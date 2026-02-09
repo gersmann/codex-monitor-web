@@ -128,6 +128,7 @@ pub fn run() {
             workspaces::update_workspace_codex_bin,
             codex::start_thread,
             codex::send_user_message,
+            codex::turn_steer,
             codex::turn_interrupt,
             codex::start_review,
             codex::respond_to_server_request,
