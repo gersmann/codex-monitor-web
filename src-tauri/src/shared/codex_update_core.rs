@@ -32,9 +32,8 @@ fn trim_lines(value: &str, max_len: usize) -> String {
     shortened
 }
 
-async fn run_brew_info(args: &[&str]) -> Result<bool, String> {
+async fn run_brew_check(args: &[&str]) -> Result<bool, String> {
     let mut command = tokio_command("brew");
-    command.arg("info");
     command.args(args);
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
@@ -56,11 +55,11 @@ async fn run_brew_info(args: &[&str]) -> Result<bool, String> {
 }
 
 async fn detect_brew_cask(name: &str) -> Result<bool, String> {
-    run_brew_info(&["--cask", name]).await
+    run_brew_check(&["list", "--cask", "--versions", name]).await
 }
 
 async fn detect_brew_formula(name: &str) -> Result<bool, String> {
-    run_brew_info(&["--formula", name]).await
+    run_brew_check(&["list", "--formula", "--versions", name]).await
 }
 
 async fn run_brew_upgrade(args: &[&str]) -> Result<(bool, String), String> {
