@@ -260,6 +260,7 @@ export function useThreads({
     loadedThreadsRef,
     replaceOnResumeRef,
     applyCollabThreadLinksFromThread,
+    updateThreadParent,
   });
 
   const startThread = useCallback(async () => {
