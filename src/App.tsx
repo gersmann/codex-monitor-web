@@ -93,6 +93,7 @@ import { usePersistComposerSettings } from "./features/app/hooks/usePersistCompo
 import { useSyncSelectedDiffPath } from "./features/app/hooks/useSyncSelectedDiffPath";
 import { useMenuAcceleratorController } from "./features/app/hooks/useMenuAcceleratorController";
 import { useAppMenuEvents } from "./features/app/hooks/useAppMenuEvents";
+import { usePlanReadyActions } from "./features/app/hooks/usePlanReadyActions";
 import { useWorkspaceActions } from "./features/app/hooks/useWorkspaceActions";
 import { useWorkspaceCycling } from "./features/app/hooks/useWorkspaceCycling";
 import { useThreadRows } from "./features/app/hooks/useThreadRows";
@@ -1711,6 +1712,17 @@ function MainApp() {
     ],
   );
 
+  const { handlePlanAccept, handlePlanSubmitChanges } = usePlanReadyActions({
+    activeWorkspace,
+    activeThreadId,
+    collaborationModes,
+    resolvedModel,
+    resolvedEffort,
+    connectWorkspace,
+    sendUserMessageToThread,
+    setSelectedCollaborationModeId,
+  });
+
   const orderValue = (entry: WorkspaceInfo) =>
     typeof entry.settings.sortOrder === "number"
       ? entry.settings.sortOrder
@@ -1880,6 +1892,8 @@ function MainApp() {
     handleApprovalDecision,
     handleApprovalRemember,
     handleUserInputSubmit,
+    onPlanAccept: handlePlanAccept,
+    onPlanSubmitChanges: handlePlanSubmitChanges,
     onOpenSettings: () => openSettings(),
     onOpenDictationSettings: () => openSettings("dictation"),
     onOpenDebug: handleDebugClick,
