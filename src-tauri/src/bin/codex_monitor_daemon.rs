@@ -1109,7 +1109,14 @@ impl DaemonState {
         if diff.trim().is_empty() {
             return Err("No changes to generate commit message for".to_string());
         }
-        Ok(codex_aux_core::build_commit_message_prompt(&diff))
+        let commit_message_prompt = {
+            let settings = self.app_settings.lock().await;
+            settings.commit_message_prompt.clone()
+        };
+        Ok(codex_aux_core::build_commit_message_prompt(
+            &diff,
+            &commit_message_prompt,
+        ))
     }
 
     async fn generate_commit_message(&self, workspace_id: String) -> Result<String, String> {
@@ -1122,7 +1129,14 @@ impl DaemonState {
         if diff.trim().is_empty() {
             return Err("No changes to generate commit message for".to_string());
         }
-        let prompt = codex_aux_core::build_commit_message_prompt(&diff);
+        let commit_message_prompt = {
+            let settings = self.app_settings.lock().await;
+            settings.commit_message_prompt.clone()
+        };
+        let prompt = codex_aux_core::build_commit_message_prompt(
+            &diff,
+            &commit_message_prompt,
+        );
         let response = codex_aux_core::run_background_prompt_core(
             &self.sessions,
             workspace_id,
