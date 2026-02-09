@@ -99,6 +99,7 @@ use workspace_settings::apply_workspace_settings_update;
 
 const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:4732";
 const MAX_IN_FLIGHT_RPC_PER_CONNECTION: usize = 32;
+const DAEMON_NAME: &str = "codex-monitor-daemon";
 
 fn spawn_with_client(
     event_sink: DaemonEventSink,
@@ -165,6 +166,8 @@ struct DaemonState {
     app_settings: Mutex<AppSettings>,
     event_sink: DaemonEventSink,
     codex_login_cancels: Mutex<HashMap<String, CodexLoginCancelState>>,
+    daemon_mode: String,
+    daemon_binary_path: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -179,6 +182,14 @@ impl DaemonState {
         let settings_path = config.data_dir.join("settings.json");
         let workspaces = read_workspaces(&storage_path).unwrap_or_default();
         let app_settings = read_settings(&settings_path).unwrap_or_default();
+        let daemon_mode = if config.orbit_url.is_some() {
+            "orbit".to_string()
+        } else {
+            "tcp".to_string()
+        };
+        let daemon_binary_path = std::env::current_exe()
+            .ok()
+            .and_then(|path| path.to_str().map(str::to_string));
         Self {
             data_dir: config.data_dir.clone(),
             workspaces: Mutex::new(workspaces),
@@ -188,7 +199,19 @@ impl DaemonState {
             app_settings: Mutex::new(app_settings),
             event_sink,
             codex_login_cancels: Mutex::new(HashMap::new()),
+            daemon_mode,
+            daemon_binary_path,
         }
+    }
+
+    fn daemon_info(&self) -> Value {
+        json!({
+            "name": DAEMON_NAME,
+            "version": env!("CARGO_PKG_VERSION"),
+            "pid": std::process::id(),
+            "mode": self.daemon_mode,
+            "binaryPath": self.daemon_binary_path,
+        })
     }
 
     async fn list_workspaces(&self) -> Vec<WorkspaceInfo> {
@@ -1503,6 +1526,8 @@ mod tests {
             app_settings: Mutex::new(AppSettings::default()),
             event_sink: DaemonEventSink { tx },
             codex_login_cancels: Mutex::new(HashMap::new()),
+            daemon_mode: "tcp".to_string(),
+            daemon_binary_path: Some("/tmp/codex-monitor-daemon".to_string()),
         }
     }
 
@@ -1606,6 +1631,34 @@ mod tests {
 
             assert!(result.get("days").and_then(Value::as_array).is_some());
             assert!(result.get("totals").is_some());
+            let _ = std::fs::remove_dir_all(&tmp);
+        });
+    }
+
+    #[test]
+    fn rpc_daemon_info_reports_identity() {
+        run_async_test(async {
+            let tmp = make_temp_dir("rpc-daemon-info");
+            let state = test_state(&tmp);
+
+            let result = rpc::handle_rpc_request(
+                &state,
+                "daemon_info",
+                json!({}),
+                "daemon-test".to_string(),
+            )
+            .await
+            .expect("daemon_info should succeed");
+
+            assert_eq!(
+                result.get("name").and_then(Value::as_str),
+                Some(DAEMON_NAME)
+            );
+            assert_eq!(result.get("mode").and_then(Value::as_str), Some("tcp"));
+            assert_eq!(
+                result.get("version").and_then(Value::as_str),
+                Some(env!("CARGO_PKG_VERSION"))
+            );
             let _ = std::fs::remove_dir_all(&tmp);
         });
     }

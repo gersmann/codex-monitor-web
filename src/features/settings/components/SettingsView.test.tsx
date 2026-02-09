@@ -29,6 +29,7 @@ const baseSettings: AppSettings = {
   orbitAuthUrl: null,
   orbitRunnerName: null,
   orbitAutoStartRunner: false,
+  keepDaemonRunningAfterAppClose: false,
   orbitUseAccess: false,
   orbitAccessClientId: null,
   orbitAccessClientSecretRef: null,

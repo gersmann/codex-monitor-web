@@ -153,6 +153,7 @@ export type AppSettings = {
   orbitAuthUrl: string | null;
   orbitRunnerName: string | null;
   orbitAutoStartRunner: boolean;
+  keepDaemonRunningAfterAppClose: boolean;
   orbitUseAccess: boolean;
   orbitAccessClientId: string | null;
   orbitAccessClientSecretRef: string | null;

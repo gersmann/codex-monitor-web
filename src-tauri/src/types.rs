@@ -461,6 +461,8 @@ pub(crate) struct AppSettings {
     pub(crate) orbit_runner_name: Option<String>,
     #[serde(default, rename = "orbitAutoStartRunner")]
     pub(crate) orbit_auto_start_runner: bool,
+    #[serde(default, rename = "keepDaemonRunningAfterAppClose")]
+    pub(crate) keep_daemon_running_after_app_close: bool,
     #[serde(default, rename = "orbitUseAccess")]
     pub(crate) orbit_use_access: bool,
     #[serde(default, rename = "orbitAccessClientId")]
@@ -1131,6 +1133,7 @@ impl Default for AppSettings {
             orbit_auth_url: None,
             orbit_runner_name: None,
             orbit_auto_start_runner: false,
+            keep_daemon_running_after_app_close: false,
             orbit_use_access: false,
             orbit_access_client_id: None,
             orbit_access_client_secret_ref: None,
@@ -1224,6 +1227,7 @@ mod tests {
         assert!(settings.orbit_auth_url.is_none());
         assert!(settings.orbit_runner_name.is_none());
         assert!(!settings.orbit_auto_start_runner);
+        assert!(!settings.keep_daemon_running_after_app_close);
         assert!(!settings.orbit_use_access);
         assert!(settings.orbit_access_client_id.is_none());
         assert!(settings.orbit_access_client_secret_ref.is_none());
