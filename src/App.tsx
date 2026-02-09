@@ -161,6 +161,7 @@ function MainApp() {
     appSettings,
     setAppSettings,
     doctor,
+    codexUpdate,
     appSettingsLoading,
     reduceTransparency,
     setReduceTransparency,
@@ -2462,6 +2463,7 @@ function MainApp() {
             await queueSaveSettings(next);
           },
           onRunDoctor: doctor,
+          onRunCodexUpdate: codexUpdate,
           onUpdateWorkspaceCodexBin: async (id, codexBin) => {
             await updateWorkspaceCodexBin(id, codexBin);
           },
