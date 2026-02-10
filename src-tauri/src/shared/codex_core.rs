@@ -486,9 +486,10 @@ pub(crate) async fn apps_list_core(
     workspace_id: String,
     cursor: Option<String>,
     limit: Option<u32>,
+    thread_id: Option<String>,
 ) -> Result<Value, String> {
     let session = get_session_clone(sessions, &workspace_id).await?;
-    let params = json!({ "cursor": cursor, "limit": limit });
+    let params = json!({ "cursor": cursor, "limit": limit, "threadId": thread_id });
     session.send_request("app/list", params).await
 }
 

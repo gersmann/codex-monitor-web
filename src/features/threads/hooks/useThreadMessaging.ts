@@ -835,6 +835,7 @@ export function useThreadMessaging({
           activeWorkspace.id,
           null,
           100,
+          threadId,
         )) as Record<string, unknown> | null;
         const result = (response?.result ?? response) as
           | Record<string, unknown>

@@ -442,7 +442,8 @@ pub(super) async fn handle_rpc_request(
             let workspace_id = parse_string(&params, "workspaceId")?;
             let cursor = parse_optional_string(&params, "cursor");
             let limit = parse_optional_u32(&params, "limit");
-            state.apps_list(workspace_id, cursor, limit).await
+            let thread_id = parse_optional_string(&params, "threadId");
+            state.apps_list(workspace_id, cursor, limit, thread_id).await
         }
         "respond_to_server_request" => {
             let workspace_id = parse_string(&params, "workspaceId")?;

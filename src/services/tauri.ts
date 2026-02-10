@@ -538,8 +538,9 @@ export async function getAppsList(
   workspaceId: string,
   cursor?: string | null,
   limit?: number | null,
+  threadId?: string | null,
 ) {
-  return invoke<any>("apps_list", { workspaceId, cursor, limit });
+  return invoke<any>("apps_list", { workspaceId, cursor, limit, threadId });
 }
 
 export async function getPromptsList(workspaceId: string) {

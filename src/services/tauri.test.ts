@@ -7,6 +7,7 @@ import {
   compactThread,
   fetchGit,
   forkThread,
+  getAppsList,
   getGitHubIssues,
   getGitLog,
   getGitStatus,
@@ -208,6 +209,20 @@ describe("tauri invoke wrappers", () => {
       workspaceId: "ws-10",
       cursor: "cursor-1",
       limit: 25,
+    });
+  });
+
+  it("maps workspaceId/cursor/limit/threadId for apps_list", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await getAppsList("ws-11", "cursor-1", 25, "thread-11");
+
+    expect(invokeMock).toHaveBeenCalledWith("apps_list", {
+      workspaceId: "ws-11",
+      cursor: "cursor-1",
+      limit: 25,
+      threadId: "thread-11",
     });
   });
 

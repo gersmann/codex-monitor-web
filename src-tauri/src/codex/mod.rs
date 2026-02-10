@@ -511,6 +511,7 @@ pub(crate) async fn apps_list(
     workspace_id: String,
     cursor: Option<String>,
     limit: Option<u32>,
+    thread_id: Option<String>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Value, String> {
@@ -519,12 +520,17 @@ pub(crate) async fn apps_list(
             &*state,
             app,
             "apps_list",
-            json!({ "workspaceId": workspace_id, "cursor": cursor, "limit": limit }),
+            json!({
+                "workspaceId": workspace_id,
+                "cursor": cursor,
+                "limit": limit,
+                "threadId": thread_id
+            }),
         )
         .await;
     }
 
-    codex_core::apps_list_core(&state.sessions, workspace_id, cursor, limit).await
+    codex_core::apps_list_core(&state.sessions, workspace_id, cursor, limit, thread_id).await
 }
 
 #[tauri::command]

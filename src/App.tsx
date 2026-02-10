@@ -501,11 +501,6 @@ function MainApp() {
     onFocusComposer: () => composerInputRef.current?.focus(),
   });
   const { skills } = useSkills({ activeWorkspace, onDebug: addDebugEntry });
-  const { apps } = useApps({
-    activeWorkspace,
-    enabled: appSettings.experimentalAppsEnabled,
-    onDebug: addDebugEntry,
-  });
   const {
     prompts,
     createPrompt,
@@ -711,6 +706,12 @@ function MainApp() {
     customPrompts: prompts,
     onMessageActivity: queueGitStatusRefresh,
     threadSortKey: threadListSortKey,
+  });
+  const { apps } = useApps({
+    activeWorkspace,
+    activeThreadId,
+    enabled: appSettings.experimentalAppsEnabled,
+    onDebug: addDebugEntry,
   });
 
   const { handleSetThreadListSortKey, handleRefreshAllWorkspaceThreads } =

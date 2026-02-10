@@ -791,8 +791,9 @@ impl DaemonState {
         workspace_id: String,
         cursor: Option<String>,
         limit: Option<u32>,
+        thread_id: Option<String>,
     ) -> Result<Value, String> {
-        codex_core::apps_list_core(&self.sessions, workspace_id, cursor, limit).await
+        codex_core::apps_list_core(&self.sessions, workspace_id, cursor, limit, thread_id).await
     }
 
     async fn respond_to_server_request(
