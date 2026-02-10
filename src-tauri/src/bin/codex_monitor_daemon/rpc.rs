@@ -367,6 +367,8 @@ pub(super) async fn handle_rpc_request(
             let effort = parse_optional_string(&params, "effort");
             let access_mode = parse_optional_string(&params, "accessMode");
             let images = parse_optional_string_array(&params, "images");
+            let app_mentions = parse_optional_value(&params, "appMentions")
+                .and_then(|value| value.as_array().cloned());
             let collaboration_mode = parse_optional_value(&params, "collaborationMode");
             state
                 .send_user_message(
@@ -377,6 +379,7 @@ pub(super) async fn handle_rpc_request(
                     effort,
                     access_mode,
                     images,
+                    app_mentions,
                     collaboration_mode,
                 )
                 .await
@@ -393,8 +396,10 @@ pub(super) async fn handle_rpc_request(
             let turn_id = parse_string(&params, "turnId")?;
             let text = parse_string(&params, "text")?;
             let images = parse_optional_string_array(&params, "images");
+            let app_mentions = parse_optional_value(&params, "appMentions")
+                .and_then(|value| value.as_array().cloned());
             state
-                .turn_steer(workspace_id, thread_id, turn_id, text, images)
+                .turn_steer(workspace_id, thread_id, turn_id, text, images, app_mentions)
                 .await
         }
         "start_review" => {
