@@ -21,6 +21,7 @@
   overflow-x: hidden;
   padding-top: calc(32px + env(safe-area-inset-top));
   padding-bottom: 16px;
+  background: var(--surface-messages);
 }
 
 .app.layout-phone .compact-topbar {
