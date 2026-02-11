@@ -1430,8 +1430,6 @@ function MainApp() {
 
   useTabActivationGuard({
     activeTab,
-    activeWorkspace,
-    isPhone,
     isTablet,
     setActiveTab,
   });
