@@ -257,6 +257,7 @@ where
     };
 
     let repo_path = PathBuf::from(&entry.path);
+    let repo_path_exists = repo_path.is_dir();
     let mut removed_child_ids = Vec::new();
     let mut failures: Vec<(String, String)> = Vec::new();
 
@@ -265,7 +266,15 @@ where
 
         let child_path = PathBuf::from(&child.path);
         if child_path.exists() {
-            if let Err(error) =
+            if !repo_path_exists {
+                if let Err(fs_error) = remove_dir_all(&child_path) {
+                    if continue_on_child_error {
+                        failures.push((child.id.clone(), fs_error));
+                        continue;
+                    }
+                    return Err(fs_error);
+                }
+            } else if let Err(error) =
                 run_git_command(&repo_path, &["worktree", "remove", "--force", &child.path]).await
             {
                 if is_missing_worktree_error(&error) {
@@ -290,7 +299,9 @@ where
         removed_child_ids.push(child.id.clone());
     }
 
-    let _ = run_git_command(&repo_path, &["worktree", "prune", "--expire", "now"]).await;
+    if repo_path_exists {
+        let _ = run_git_command(&repo_path, &["worktree", "prune", "--expire", "now"]).await;
+    }
 
     let mut ids_to_remove = removed_child_ids;
     if failures.is_empty() || !require_all_children_removed_to_remove_parent {

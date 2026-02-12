@@ -274,11 +274,14 @@ where
     };
 
     let parent_path = PathBuf::from(&parent.path);
+    let parent_path_exists = parent_path.is_dir();
     let entry_path = PathBuf::from(&entry.path);
     kill_session_by_id(sessions, &entry.id).await;
 
     if entry_path.exists() {
-        if let Err(error) = run_git_command(
+        if !parent_path_exists {
+            remove_dir_all(&entry_path)?;
+        } else if let Err(error) = run_git_command(
             &parent_path,
             &["worktree", "remove", "--force", &entry.path],
         )
@@ -293,7 +296,9 @@ where
             }
         }
     }
-    let _ = run_git_command(&parent_path, &["worktree", "prune", "--expire", "now"]).await;
+    if parent_path_exists {
+        let _ = run_git_command(&parent_path, &["worktree", "prune", "--expire", "now"]).await;
+    }
 
     {
         let mut workspaces = workspaces.lock().await;
