@@ -1933,6 +1933,7 @@ function MainApp() {
     gitStatus,
     fileStatus,
     perFileDiffGroups,
+    hasActiveGitDiffs: activeDiffs.length > 0,
     selectedDiffPath,
     diffScrollRequestId,
     onSelectDiff: handleSelectDiff,
@@ -2134,9 +2135,17 @@ function MainApp() {
       setCenterMode("chat");
     },
     onShowSelectedDiff: () => {
-      if (!selectedDiffPath) {
+      const fallbackPath =
+        selectedDiffPath ?? activeDiffs[0]?.path;
+
+      if (!fallbackPath) {
         return;
       }
+
+      if (!selectedDiffPath) {
+        setSelectedDiffPath(fallbackPath);
+      }
+
       setCenterMode("diff");
       if (isPhone) {
         setActiveTab("git");

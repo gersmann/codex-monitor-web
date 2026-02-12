@@ -260,6 +260,7 @@ export type LayoutNodesOptions = {
   fileStatus: string;
   perFileDiffGroups: PerFileDiffGroup[];
   selectedDiffPath: string | null;
+  hasActiveGitDiffs: boolean;
   diffScrollRequestId: number;
   onSelectDiff: (path: string) => void;
   onSelectPerFileDiff: (path: string) => void;
