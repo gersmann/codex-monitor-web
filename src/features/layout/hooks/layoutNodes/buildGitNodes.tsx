@@ -71,12 +71,17 @@ export function buildGitNodes(options: LayoutNodesOptions): GitLayoutNodes {
         totalAdditions={options.gitStatus.totalAdditions}
         totalDeletions={options.gitStatus.totalDeletions}
         fileStatus={options.fileStatus}
+        perFileDiffGroups={options.perFileDiffGroups}
         error={options.gitStatus.error}
         logError={options.gitLogError}
         logLoading={options.gitLogLoading}
         stagedFiles={options.gitStatus.stagedFiles}
         unstagedFiles={options.gitStatus.unstagedFiles}
-        onSelectFile={options.onSelectDiff}
+        onSelectFile={
+          options.gitPanelMode === "perFile"
+            ? options.onSelectPerFileDiff
+            : options.onSelectDiff
+        }
         selectedPath={sidebarSelectedDiffPath}
         logEntries={options.gitLogEntries}
         logTotal={options.gitLogTotal}

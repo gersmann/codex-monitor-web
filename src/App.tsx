@@ -339,6 +339,10 @@ function MainApp() {
   });
 
   const { errorToasts, dismissErrorToast } = useErrorToasts();
+  const queueGitStatusRefreshRef = useRef<() => void>(() => {});
+  const handleThreadMessageActivity = useCallback(() => {
+    queueGitStatusRefreshRef.current();
+  }, []);
 
   // Access mode is thread-scoped (best-effort persisted) and falls back to the app default.
 
@@ -363,69 +367,6 @@ function MainApp() {
     handleGitPullRequestCommentsChange,
     resetGitHubPanelState,
   } = useGitHubPanelController();
-
-  const {
-    centerMode,
-    setCenterMode,
-    selectedDiffPath,
-    setSelectedDiffPath,
-    diffScrollRequestId,
-    gitPanelMode,
-    setGitPanelMode,
-    gitDiffViewStyle,
-    setGitDiffViewStyle,
-    filePanelMode,
-    setFilePanelMode,
-    selectedPullRequest,
-    setSelectedPullRequest,
-    selectedCommitSha,
-    setSelectedCommitSha,
-    diffSource,
-    setDiffSource,
-    gitStatus,
-    refreshGitStatus,
-    queueGitStatusRefresh,
-    refreshGitDiffs,
-    gitLogEntries,
-    gitLogTotal,
-    gitLogAhead,
-    gitLogBehind,
-    gitLogAheadEntries,
-    gitLogBehindEntries,
-    gitLogUpstream,
-    gitLogLoading,
-    gitLogError,
-    refreshGitLog,
-    gitCommitDiffs,
-    shouldLoadDiffs,
-    activeDiffs,
-    activeDiffLoading,
-    activeDiffError,
-    handleSelectDiff,
-    handleSelectCommit,
-    handleActiveDiffPath,
-    handleGitPanelModeChange,
-    activeWorkspaceIdRef,
-    activeWorkspaceRef,
-  } = useGitPanelController({
-    activeWorkspace,
-    gitDiffPreloadEnabled: appSettings.preloadGitDiffs,
-    gitDiffIgnoreWhitespaceChanges: appSettings.gitDiffIgnoreWhitespaceChanges,
-    splitChatDiffView: appSettings.splitChatDiffView,
-    isCompact,
-    isTablet,
-    activeTab,
-    tabletTab,
-    setActiveTab,
-    prDiffs: gitPullRequestDiffs,
-    prDiffsLoading: gitPullRequestDiffsLoading,
-    prDiffsError: gitPullRequestDiffsError,
-  });
-
-  const shouldLoadGitHubPanelData =
-    gitPanelMode === "issues" ||
-    gitPanelMode === "prs" ||
-    (shouldLoadDiffs && diffSource === "pr");
 
   useEffect(() => {
     resetGitHubPanelState();
@@ -544,117 +485,8 @@ function MainApp() {
     getWorkspacePromptsDir,
     getGlobalPromptsDir,
   } = useCustomPrompts({ activeWorkspace, onDebug: addDebugEntry });
-  const { branches, checkoutBranch, checkoutPullRequest, createBranch } = useGitBranches({
-    activeWorkspace,
-    onDebug: addDebugEntry
-  });
-  const handleCheckoutBranch = async (name: string) => {
-    await checkoutBranch(name);
-    refreshGitStatus();
-  };
-  const handleCheckoutPullRequest = async (prNumber: number) => {
-    try {
-      await checkoutPullRequest(prNumber);
-      await Promise.resolve(refreshGitStatus());
-      await Promise.resolve(refreshGitLog());
-    } catch (error) {
-      alertError(error);
-    }
-  };
-  const handleCreateBranch = async (name: string) => {
-    await createBranch(name);
-    refreshGitStatus();
-  };
-  const currentBranch = gitStatus.branchName ?? null;
-  const {
-    branchSwitcher,
-    openBranchSwitcher,
-    closeBranchSwitcher,
-    handleBranchSelect,
-  } = useBranchSwitcher({
-    activeWorkspace,
-    checkoutBranch: handleCheckoutBranch,
-    setActiveWorkspaceId,
-  });
-  const isBranchSwitcherEnabled =
-    Boolean(activeWorkspace?.connected) && activeWorkspace?.kind !== "worktree";
-  useBranchSwitcherShortcut({
-    shortcut: appSettings.branchSwitcherShortcut,
-    isEnabled: isBranchSwitcherEnabled,
-    onTrigger: openBranchSwitcher,
-  });
-  const alertError = useCallback((error: unknown) => {
-    alert(error instanceof Error ? error.message : String(error));
-  }, []);
-  const {
-    applyWorktreeChanges: handleApplyWorktreeChanges,
-    revertAllGitChanges: handleRevertAllGitChanges,
-    revertGitFile: handleRevertGitFile,
-    stageGitAll: handleStageGitAll,
-    stageGitFile: handleStageGitFile,
-    unstageGitFile: handleUnstageGitFile,
-    worktreeApplyError,
-    worktreeApplyLoading,
-    worktreeApplySuccess,
-  } = useGitActions({
-    activeWorkspace,
-    onRefreshGitStatus: refreshGitStatus,
-    onRefreshGitDiffs: refreshGitDiffs,
-    onError: alertError,
-  });
-
   const resolvedModel = selectedModel?.model ?? null;
   const resolvedEffort = reasoningSupported ? selectedEffort : null;
-  const { activeGitRoot, handleSetGitRoot, handlePickGitRoot } = useGitRootSelection({
-    activeWorkspace,
-    updateWorkspaceSettings,
-    clearGitRootCandidates,
-    refreshGitStatus,
-  });
-  const fileStatus =
-    gitStatus.error
-      ? "Git status unavailable"
-      : gitStatus.files.length > 0
-        ? `${gitStatus.files.length} file${
-            gitStatus.files.length === 1 ? "" : "s"
-          } changed`
-        : "Working tree clean";
-
-  const { isExpanded: composerEditorExpanded, toggleExpanded: toggleComposerEditorExpanded } =
-    useComposerEditorState();
-
-  const composerEditorSettings = useMemo<ComposerEditorSettings>(
-    () => ({
-      preset: appSettings.composerEditorPreset,
-      expandFenceOnSpace: appSettings.composerFenceExpandOnSpace,
-      expandFenceOnEnter: appSettings.composerFenceExpandOnEnter,
-      fenceLanguageTags: appSettings.composerFenceLanguageTags,
-      fenceWrapSelection: appSettings.composerFenceWrapSelection,
-      autoWrapPasteMultiline: appSettings.composerFenceAutoWrapPasteMultiline,
-      autoWrapPasteCodeLike: appSettings.composerFenceAutoWrapPasteCodeLike,
-      continueListOnShiftEnter: appSettings.composerListContinuation,
-    }),
-    [
-      appSettings.composerEditorPreset,
-      appSettings.composerFenceExpandOnSpace,
-      appSettings.composerFenceExpandOnEnter,
-      appSettings.composerFenceLanguageTags,
-      appSettings.composerFenceWrapSelection,
-      appSettings.composerFenceAutoWrapPasteMultiline,
-      appSettings.composerFenceAutoWrapPasteCodeLike,
-      appSettings.composerListContinuation,
-    ],
-  );
-
-
-  useSyncSelectedDiffPath({
-    diffSource,
-    centerMode,
-    gitPullRequestDiffs,
-    gitCommitDiffs,
-    selectedDiffPath,
-    setSelectedDiffPath,
-  });
 
   const { collaborationModePayload } = useCollaborationModeSelection({
     selectedCollaborationMode,
@@ -739,9 +571,185 @@ function MainApp() {
     steerEnabled: appSettings.steerEnabled,
     threadTitleAutogenerationEnabled: appSettings.threadTitleAutogenerationEnabled,
     customPrompts: prompts,
-    onMessageActivity: queueGitStatusRefresh,
+    onMessageActivity: handleThreadMessageActivity,
     threadSortKey: threadListSortKey,
   });
+  const {
+    centerMode,
+    setCenterMode,
+    selectedDiffPath,
+    setSelectedDiffPath,
+    diffScrollRequestId,
+    gitPanelMode,
+    setGitPanelMode,
+    gitDiffViewStyle,
+    setGitDiffViewStyle,
+    filePanelMode,
+    setFilePanelMode,
+    selectedPullRequest,
+    setSelectedPullRequest,
+    selectedCommitSha,
+    setSelectedCommitSha,
+    diffSource,
+    setDiffSource,
+    gitStatus,
+    refreshGitStatus,
+    queueGitStatusRefresh,
+    refreshGitDiffs,
+    gitLogEntries,
+    gitLogTotal,
+    gitLogAhead,
+    gitLogBehind,
+    gitLogAheadEntries,
+    gitLogBehindEntries,
+    gitLogUpstream,
+    gitLogLoading,
+    gitLogError,
+    refreshGitLog,
+    gitCommitDiffs,
+    shouldLoadDiffs,
+    activeDiffs,
+    activeDiffLoading,
+    activeDiffError,
+    perFileDiffGroups,
+    handleSelectDiff,
+    handleSelectPerFileDiff,
+    handleSelectCommit,
+    handleActiveDiffPath,
+    handleGitPanelModeChange,
+    activeWorkspaceIdRef,
+    activeWorkspaceRef,
+  } = useGitPanelController({
+    activeWorkspace,
+    activeItems,
+    gitDiffPreloadEnabled: appSettings.preloadGitDiffs,
+    gitDiffIgnoreWhitespaceChanges: appSettings.gitDiffIgnoreWhitespaceChanges,
+    splitChatDiffView: appSettings.splitChatDiffView,
+    isCompact,
+    isTablet,
+    activeTab,
+    tabletTab,
+    setActiveTab,
+    prDiffs: gitPullRequestDiffs,
+    prDiffsLoading: gitPullRequestDiffsLoading,
+    prDiffsError: gitPullRequestDiffsError,
+  });
+  queueGitStatusRefreshRef.current = queueGitStatusRefresh;
+
+  const shouldLoadGitHubPanelData =
+    gitPanelMode === "issues" ||
+    gitPanelMode === "prs" ||
+    (shouldLoadDiffs && diffSource === "pr");
+
+  const alertError = useCallback((error: unknown) => {
+    alert(error instanceof Error ? error.message : String(error));
+  }, []);
+  const { branches, checkoutBranch, checkoutPullRequest, createBranch } = useGitBranches({
+    activeWorkspace,
+    onDebug: addDebugEntry
+  });
+  const handleCheckoutBranch = async (name: string) => {
+    await checkoutBranch(name);
+    refreshGitStatus();
+  };
+  const handleCheckoutPullRequest = async (prNumber: number) => {
+    try {
+      await checkoutPullRequest(prNumber);
+      await Promise.resolve(refreshGitStatus());
+      await Promise.resolve(refreshGitLog());
+    } catch (error) {
+      alertError(error);
+    }
+  };
+  const handleCreateBranch = async (name: string) => {
+    await createBranch(name);
+    refreshGitStatus();
+  };
+  const currentBranch = gitStatus.branchName ?? null;
+  const {
+    branchSwitcher,
+    openBranchSwitcher,
+    closeBranchSwitcher,
+    handleBranchSelect,
+  } = useBranchSwitcher({
+    activeWorkspace,
+    checkoutBranch: handleCheckoutBranch,
+    setActiveWorkspaceId,
+  });
+  const isBranchSwitcherEnabled =
+    Boolean(activeWorkspace?.connected) && activeWorkspace?.kind !== "worktree";
+  useBranchSwitcherShortcut({
+    shortcut: appSettings.branchSwitcherShortcut,
+    isEnabled: isBranchSwitcherEnabled,
+    onTrigger: openBranchSwitcher,
+  });
+  const {
+    applyWorktreeChanges: handleApplyWorktreeChanges,
+    revertAllGitChanges: handleRevertAllGitChanges,
+    revertGitFile: handleRevertGitFile,
+    stageGitAll: handleStageGitAll,
+    stageGitFile: handleStageGitFile,
+    unstageGitFile: handleUnstageGitFile,
+    worktreeApplyError,
+    worktreeApplyLoading,
+    worktreeApplySuccess,
+  } = useGitActions({
+    activeWorkspace,
+    onRefreshGitStatus: refreshGitStatus,
+    onRefreshGitDiffs: refreshGitDiffs,
+    onError: alertError,
+  });
+  const { activeGitRoot, handleSetGitRoot, handlePickGitRoot } = useGitRootSelection({
+    activeWorkspace,
+    updateWorkspaceSettings,
+    clearGitRootCandidates,
+    refreshGitStatus,
+  });
+  const fileStatus =
+    gitStatus.error
+      ? "Git status unavailable"
+      : gitStatus.files.length > 0
+        ? `${gitStatus.files.length} file${
+            gitStatus.files.length === 1 ? "" : "s"
+          } changed`
+        : "Working tree clean";
+
+  const { isExpanded: composerEditorExpanded, toggleExpanded: toggleComposerEditorExpanded } =
+    useComposerEditorState();
+
+  const composerEditorSettings = useMemo<ComposerEditorSettings>(
+    () => ({
+      preset: appSettings.composerEditorPreset,
+      expandFenceOnSpace: appSettings.composerFenceExpandOnSpace,
+      expandFenceOnEnter: appSettings.composerFenceExpandOnEnter,
+      fenceLanguageTags: appSettings.composerFenceLanguageTags,
+      fenceWrapSelection: appSettings.composerFenceWrapSelection,
+      autoWrapPasteMultiline: appSettings.composerFenceAutoWrapPasteMultiline,
+      autoWrapPasteCodeLike: appSettings.composerFenceAutoWrapPasteCodeLike,
+      continueListOnShiftEnter: appSettings.composerListContinuation,
+    }),
+    [
+      appSettings.composerEditorPreset,
+      appSettings.composerFenceExpandOnSpace,
+      appSettings.composerFenceExpandOnEnter,
+      appSettings.composerFenceLanguageTags,
+      appSettings.composerFenceWrapSelection,
+      appSettings.composerFenceAutoWrapPasteMultiline,
+      appSettings.composerFenceAutoWrapPasteCodeLike,
+      appSettings.composerListContinuation,
+    ],
+  );
+
+  useSyncSelectedDiffPath({
+    diffSource,
+    centerMode,
+    gitPullRequestDiffs,
+    gitCommitDiffs,
+    perFileDiffGroups,
+    selectedDiffPath,
+    setSelectedDiffPath,
+  });
+
   const { apps } = useApps({
     activeWorkspace,
     activeThreadId,
@@ -1920,9 +1928,11 @@ function MainApp() {
       : undefined,
     gitStatus,
     fileStatus,
+    perFileDiffGroups,
     selectedDiffPath,
     diffScrollRequestId,
     onSelectDiff: handleSelectDiff,
+    onSelectPerFileDiff: handleSelectPerFileDiff,
     diffSource,
     gitLogEntries,
     gitLogTotal,

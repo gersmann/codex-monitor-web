@@ -41,6 +41,8 @@ import type { UpdateState } from "../../../update/hooks/useUpdater";
 import type { TerminalSessionState } from "../../../terminal/hooks/useTerminalSession";
 import type { TerminalTab } from "../../../terminal/hooks/useTerminalTabs";
 import type { ErrorToast } from "../../../../services/toasts";
+import type { GitDiffSource, GitPanelMode } from "../../../git/types";
+import type { PerFileDiffGroup } from "../../../git/utils/perFileThreadDiffs";
 
 export type ThreadActivityStatus = {
   isProcessing: boolean;
@@ -52,6 +54,7 @@ export type ThreadActivityStatus = {
 
 export type GitDiffViewerItem = {
   path: string;
+  displayPath?: string;
   status: string;
   diff: string;
   isImage?: boolean;
@@ -230,8 +233,8 @@ export type LayoutNodesOptions = {
   activeTab: "home" | "projects" | "codex" | "git" | "log";
   onSelectTab: (tab: "home" | "projects" | "codex" | "git" | "log") => void;
   tabletNavTab: "codex" | "git" | "log";
-  gitPanelMode: "diff" | "log" | "issues" | "prs";
-  onGitPanelModeChange: (mode: "diff" | "log" | "issues" | "prs") => void;
+  gitPanelMode: GitPanelMode;
+  onGitPanelModeChange: (mode: GitPanelMode) => void;
   isPhone: boolean;
   gitDiffViewStyle: "split" | "unified";
   gitDiffIgnoreWhitespaceChanges: boolean;
@@ -254,9 +257,11 @@ export type LayoutNodesOptions = {
     error: string | null;
   };
   fileStatus: string;
+  perFileDiffGroups: PerFileDiffGroup[];
   selectedDiffPath: string | null;
   diffScrollRequestId: number;
   onSelectDiff: (path: string) => void;
+  onSelectPerFileDiff: (path: string) => void;
   gitLogEntries: GitLogEntry[];
   gitLogTotal: number;
   gitLogAhead: number;
@@ -308,7 +313,7 @@ export type LayoutNodesOptions = {
   onUnstageGitFile: (path: string) => Promise<void>;
   onRevertGitFile: (path: string) => Promise<void>;
   onRevertAllGitChanges: () => Promise<void>;
-  diffSource: "local" | "pr" | "commit";
+  diffSource: GitDiffSource;
   gitDiffs: GitDiffViewerItem[];
   gitDiffLoading: boolean;
   gitDiffError: string | null;
