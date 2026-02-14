@@ -112,6 +112,10 @@ export function useSettingsViewOrchestration({
     () => projects.some((workspace) => workspace.settings.codexHome != null),
     [projects],
   );
+  const featureWorkspaceId = useMemo(
+    () => projects.find((workspace) => workspace.connected)?.id ?? null,
+    [projects],
+  );
 
   const optionKeyLabel = isMacPlatform() ? "Option" : "Alt";
   const metaKeyLabel = isMacPlatform()
@@ -207,6 +211,7 @@ export function useSettingsViewOrchestration({
 
   const featuresSectionProps = useSettingsFeaturesSection({
     appSettings,
+    featureWorkspaceId,
     hasCodexHomeOverrides,
     onUpdateAppSettings,
   });

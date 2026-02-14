@@ -222,12 +222,37 @@ pub(super) async fn try_handle(
             };
             Some(state.model_list(workspace_id).await)
         }
+        "experimental_feature_list" => {
+            let workspace_id = match parse_string(params, "workspaceId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let cursor = parse_optional_string(params, "cursor");
+            let limit = parse_optional_u32(params, "limit");
+            Some(state.experimental_feature_list(workspace_id, cursor, limit).await)
+        }
         "collaboration_mode_list" => {
             let workspace_id = match parse_string(params, "workspaceId") {
                 Ok(value) => value,
                 Err(err) => return Some(Err(err)),
             };
             Some(state.collaboration_mode_list(workspace_id).await)
+        }
+        "set_codex_feature_flag" => {
+            let feature_key = match parse_string(params, "featureKey") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let enabled = match parse_optional_bool(params, "enabled") {
+                Some(value) => value,
+                None => return Some(Err("missing or invalid `enabled`".to_string())),
+            };
+            Some(
+                state
+                    .set_codex_feature_flag(feature_key, enabled)
+                    .await
+                    .map(|_| json!({ "ok": true })),
+            )
         }
         "account_rate_limits" => {
             let workspace_id = match parse_string(params, "workspaceId") {

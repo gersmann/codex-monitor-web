@@ -282,6 +282,8 @@ pub fn run() {
             git::checkout_git_branch,
             git::create_git_branch,
             codex::model_list,
+            codex::experimental_feature_list,
+            codex::set_codex_feature_flag,
             codex::account_rate_limits,
             codex::account_read,
             codex::codex_login,

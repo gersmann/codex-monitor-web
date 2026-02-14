@@ -11,7 +11,7 @@ import {
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { AppSettings, WorkspaceInfo } from "@/types";
-import { getModelList } from "@services/tauri";
+import { getExperimentalFeatureList, getModelList } from "@services/tauri";
 import { DEFAULT_COMMIT_MESSAGE_PROMPT } from "@utils/commitMessagePrompt";
 import { SettingsView } from "./SettingsView";
 
@@ -27,10 +27,12 @@ vi.mock("@services/tauri", async () => {
   return {
     ...actual,
     getModelList: vi.fn(),
+    getExperimentalFeatureList: vi.fn(),
   };
 });
 
 const getModelListMock = vi.mocked(getModelList);
+const getExperimentalFeatureListMock = vi.mocked(getExperimentalFeatureList);
 
 const baseSettings: AppSettings = {
   codexBin: null,
@@ -195,11 +197,38 @@ const renderFeaturesSection = (
   options: {
     appSettings?: Partial<AppSettings>;
     onUpdateAppSettings?: ComponentProps<typeof SettingsView>["onUpdateAppSettings"];
+    experimentalFeaturesResponse?: unknown;
   } = {},
 ) => {
   cleanup();
   const onUpdateAppSettings =
     options.onUpdateAppSettings ?? vi.fn().mockResolvedValue(undefined);
+  getExperimentalFeatureListMock.mockResolvedValue(
+    (options.experimentalFeaturesResponse as Record<string, unknown>) ?? {
+      data: [
+        {
+          name: "steer",
+          stage: "stable",
+          enabled: true,
+          defaultEnabled: true,
+          displayName: "Steer mode",
+          description:
+            "Send messages immediately. Use Tab to queue while a run is active.",
+          announcement: null,
+        },
+        {
+          name: "unified_exec",
+          stage: "stable",
+          enabled: true,
+          defaultEnabled: true,
+          displayName: "Background terminal",
+          description: "Run long-running terminal commands in the background.",
+          announcement: null,
+        },
+      ],
+      nextCursor: null,
+    },
+  );
   const props: ComponentProps<typeof SettingsView> = {
     reduceTransparency: false,
     onToggleTransparency: vi.fn(),
@@ -207,7 +236,13 @@ const renderFeaturesSection = (
     openAppIconById: {},
     onUpdateAppSettings,
     workspaceGroups: [],
-    groupedWorkspaces: [],
+    groupedWorkspaces: [
+      {
+        id: null,
+        name: "Ungrouped",
+        workspaces: [workspace({ id: "w-features", name: "Features Workspace", connected: true })],
+      },
+    ],
     ungroupedLabel: "Ungrouped",
     onClose: vi.fn(),
     onMoveWorkspace: vi.fn(),
@@ -1503,7 +1538,7 @@ describe("SettingsView Features", () => {
       appSettings: { steerEnabled: true },
     });
 
-    const steerTitle = screen.getByText("Steer mode");
+    const steerTitle = await screen.findByText("Steer mode");
     const steerRow = steerTitle.closest(".settings-toggle-row");
     expect(steerRow).not.toBeNull();
 
@@ -1524,7 +1559,7 @@ describe("SettingsView Features", () => {
       appSettings: { unifiedExecEnabled: true },
     });
 
-    const terminalTitle = screen.getByText("Background terminal");
+    const terminalTitle = await screen.findByText("Background terminal");
     const terminalRow = terminalTitle.closest(".settings-toggle-row");
     expect(terminalRow).not.toBeNull();
 

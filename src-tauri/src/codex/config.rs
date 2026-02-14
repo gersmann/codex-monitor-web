@@ -59,6 +59,14 @@ pub(crate) fn write_apps_enabled(enabled: bool) -> Result<(), String> {
     write_feature_flag("apps", enabled)
 }
 
+pub(crate) fn write_feature_enabled(feature_key: &str, enabled: bool) -> Result<(), String> {
+    let key = feature_key.trim();
+    if key.is_empty() {
+        return Err("feature key is empty".to_string());
+    }
+    write_feature_flag(key, enabled)
+}
+
 pub(crate) fn write_personality(personality: &str) -> Result<(), String> {
     let Some(root) = resolve_default_codex_home() else {
         return Ok(());

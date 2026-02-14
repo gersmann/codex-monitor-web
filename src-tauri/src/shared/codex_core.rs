@@ -334,6 +334,17 @@ pub(crate) async fn model_list_core(
     session.send_request("model/list", json!({})).await
 }
 
+pub(crate) async fn experimental_feature_list_core(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    workspace_id: String,
+    cursor: Option<String>,
+    limit: Option<u32>,
+) -> Result<Value, String> {
+    let session = get_session_clone(sessions, &workspace_id).await?;
+    let params = json!({ "cursor": cursor, "limit": limit });
+    session.send_request("experimentalFeature/list", params).await
+}
+
 pub(crate) async fn account_rate_limits_core(
     sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
     workspace_id: String,

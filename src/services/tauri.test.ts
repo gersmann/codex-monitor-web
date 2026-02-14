@@ -9,6 +9,7 @@ import {
   fetchGit,
   forkThread,
   getAppsList,
+  getExperimentalFeatureList,
   getGitHubIssues,
   getGitLog,
   getGitStatus,
@@ -32,6 +33,7 @@ import {
   sendUserMessage,
   steerTurn,
   sendNotification,
+  setCodexFeatureFlag,
   startReview,
   setThreadName,
   tailscaleDaemonStart,
@@ -238,6 +240,31 @@ describe("tauri invoke wrappers", () => {
       cursor: "cursor-1",
       limit: 25,
       threadId: "thread-11",
+    });
+  });
+
+  it("maps workspaceId/cursor/limit for experimental_feature_list", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await getExperimentalFeatureList("ws-11", "cursor-2", 50);
+
+    expect(invokeMock).toHaveBeenCalledWith("experimental_feature_list", {
+      workspaceId: "ws-11",
+      cursor: "cursor-2",
+      limit: 50,
+    });
+  });
+
+  it("maps feature key and enabled for set_codex_feature_flag", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    await setCodexFeatureFlag("collab", true);
+
+    expect(invokeMock).toHaveBeenCalledWith("set_codex_feature_flag", {
+      featureKey: "collab",
+      enabled: true,
     });
   });
 

@@ -524,6 +524,10 @@ impl DaemonState {
             .await
     }
 
+    async fn set_codex_feature_flag(&self, feature_key: String, enabled: bool) -> Result<(), String> {
+        codex_config::write_feature_enabled(feature_key.as_str(), enabled)
+    }
+
     async fn orbit_connect_test(&self) -> Result<OrbitConnectTestResult, String> {
         let settings = self.app_settings.lock().await.clone();
         let ws_url = shared::orbit_core::orbit_ws_url_from_settings(&settings)?;
@@ -763,6 +767,15 @@ impl DaemonState {
 
     async fn model_list(&self, workspace_id: String) -> Result<Value, String> {
         codex_core::model_list_core(&self.sessions, workspace_id).await
+    }
+
+    async fn experimental_feature_list(
+        &self,
+        workspace_id: String,
+        cursor: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Value, String> {
+        codex_core::experimental_feature_list_core(&self.sessions, workspace_id, cursor, limit).await
     }
 
     async fn collaboration_mode_list(&self, workspace_id: String) -> Result<Value, String> {

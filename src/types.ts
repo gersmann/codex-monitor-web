@@ -254,6 +254,23 @@ export type OrbitConnectTestResult = {
   details?: string | null;
 };
 
+export type CodexFeatureStage =
+  | "under_development"
+  | "beta"
+  | "stable"
+  | "deprecated"
+  | "removed";
+
+export type CodexFeature = {
+  name: string;
+  stage: CodexFeatureStage;
+  enabled: boolean;
+  defaultEnabled: boolean;
+  displayName: string | null;
+  description: string | null;
+  announcement: string | null;
+};
+
 export type OrbitDeviceCodeStart = {
   deviceCode: string;
   userCode: string | null;

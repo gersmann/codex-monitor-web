@@ -152,6 +152,7 @@ fn can_retry_after_disconnect(method: &str) -> bool {
             | "apps_list"
             | "collaboration_mode_list"
             | "connect_workspace"
+            | "experimental_feature_list"
             | "file_read"
             | "get_config_model"
             | "get_git_commit_diff"
