@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import type { Dispatch, MutableRefObject } from "react";
 import * as Sentry from "@sentry/react";
 import type {
@@ -26,7 +26,6 @@ import {
   extractRpcErrorMessage,
   parseReviewTarget,
 } from "@threads/utils/threadNormalize";
-import { isUnsupportedTurnSteerError } from "@threads/utils/threadRpc";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 import { useReviewPrompt } from "./useReviewPrompt";
 import { formatRelativeTime } from "@utils/time";
@@ -113,8 +112,6 @@ export function useThreadMessaging({
   updateThreadParent,
   registerDetachedReviewChild,
 }: UseThreadMessagingOptions) {
-  const steerSupportedByWorkspaceRef = useRef<Record<string, boolean>>({});
-
   const sendMessageToThread = useCallback(
     async (
       workspace: WorkspaceInfo,
@@ -157,29 +154,8 @@ export function useThreadMessaging({
 
       const isProcessing = threadStatusById[threadId]?.isProcessing ?? false;
       const activeTurnId = activeTurnIdByThread[threadId] ?? null;
-      const steerSupported = steerSupportedByWorkspaceRef.current[workspace.id] !== false;
       const shouldSteer =
-        isProcessing && steerEnabled && Boolean(activeTurnId) && steerSupported;
-      if (isProcessing && steerEnabled) {
-        const optimisticText = finalText;
-        if (optimisticText || images.length > 0) {
-          dispatch({
-            type: "upsertItem",
-            workspaceId: workspace.id,
-            threadId,
-            item: {
-              id: `optimistic-user-${Date.now()}-${Math.random()
-                .toString(36)
-                .slice(2, 8)}`,
-              kind: "message",
-              role: "user",
-              text: optimisticText,
-              images: images.length > 0 ? images : undefined,
-            },
-            hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
-          });
-        }
-      }
+        isProcessing && steerEnabled && Boolean(activeTurnId);
       Sentry.metrics.count("prompt_sent", 1, {
         attributes: {
           workspace_id: workspace.id,
@@ -217,7 +193,7 @@ export function useThreadMessaging({
           collaborationMode: sanitizedCollaborationMode,
         },
       });
-      let requestMode: "start" | "steer" = shouldSteer ? "steer" : "start";
+      const requestMode: "start" | "steer" = shouldSteer ? "steer" : "start";
       try {
         const startTurn = () => {
           const payload: {
@@ -245,49 +221,26 @@ export function useThreadMessaging({
           );
         };
 
-        let response: Record<string, unknown>;
-        if (shouldSteer) {
-          try {
-            response = (await (appMentions.length > 0
-              ? steerTurnService(
-                workspace.id,
-                threadId,
-                activeTurnId ?? "",
-                finalText,
-                images,
-                appMentions,
-              )
-              : steerTurnService(
-                workspace.id,
-                threadId,
-                activeTurnId ?? "",
-                finalText,
-                images,
-              ))) as Record<string, unknown>;
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            if (!isUnsupportedTurnSteerError(message)) {
-              throw error;
-            }
-            steerSupportedByWorkspaceRef.current[workspace.id] = false;
-            requestMode = "start";
-            response = (await startTurn()) as Record<string, unknown>;
-          }
-        } else {
-          response = (await startTurn()) as Record<string, unknown>;
-        }
+        const response: Record<string, unknown> = shouldSteer
+          ? (await (appMentions.length > 0
+            ? steerTurnService(
+              workspace.id,
+              threadId,
+              activeTurnId ?? "",
+              finalText,
+              images,
+              appMentions,
+            )
+            : steerTurnService(
+              workspace.id,
+              threadId,
+              activeTurnId ?? "",
+              finalText,
+              images,
+            ))) as Record<string, unknown>
+          : (await startTurn()) as Record<string, unknown>;
 
-        let rpcError = extractRpcErrorMessage(response);
-        if (
-          rpcError
-          && requestMode === "steer"
-          && isUnsupportedTurnSteerError(rpcError)
-        ) {
-          steerSupportedByWorkspaceRef.current[workspace.id] = false;
-          requestMode = "start";
-          response = (await startTurn()) as Record<string, unknown>;
-          rpcError = extractRpcErrorMessage(response);
-        }
+        const rpcError = extractRpcErrorMessage(response);
 
         onDebug?.({
           id: `${Date.now()}-${requestMode === "steer" ? "server-turn-steer" : "server-turn-start"}`,

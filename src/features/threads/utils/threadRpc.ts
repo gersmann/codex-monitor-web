@@ -61,13 +61,3 @@ export function getResumedActiveTurnId(thread: Record<string, unknown>): string 
   }
   return null;
 }
-
-export function isUnsupportedTurnSteerError(message: string): boolean {
-  const normalized = message.toLowerCase();
-  const mentionsSteerMethod =
-    normalized.includes("turn/steer") || normalized.includes("turn_steer");
-  return normalized.includes("unknown variant `turn/steer`")
-    || normalized.includes("unknown variant \"turn/steer\"")
-    || (normalized.includes("unknown request") && mentionsSteerMethod)
-    || (normalized.includes("unknown method") && mentionsSteerMethod);
-}
