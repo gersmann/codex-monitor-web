@@ -1572,6 +1572,29 @@ describe("SettingsView Features", () => {
       );
     });
   });
+
+  it("shows fallback description when Codex omits feature description", async () => {
+    renderFeaturesSection({
+      experimentalFeaturesResponse: {
+        data: [
+          {
+            name: "responses_websockets",
+            stage: "underDevelopment",
+            enabled: false,
+            defaultEnabled: false,
+            displayName: null,
+            description: null,
+            announcement: null,
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+
+    await screen.findByText(
+      "Use Responses API WebSocket transport for OpenAI by default.",
+    );
+  });
 });
 
 describe("SettingsView mobile layout", () => {
