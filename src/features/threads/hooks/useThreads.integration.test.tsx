@@ -783,6 +783,56 @@ describe("useThreads UX integration", () => {
     ]);
   });
 
+  it("classifies live spawned threads from thread source metadata", () => {
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      handlers?.onThreadStarted?.("ws-1", {
+        id: "thread-child-live",
+        preview: "Child live",
+        source: {
+          subAgent: {
+            thread_spawn: {
+              parent_thread_id: "thread-parent-live",
+              depth: 1,
+            },
+          },
+        },
+      });
+    });
+
+    expect(result.current.threadParentById["thread-child-live"]).toBe("thread-parent-live");
+    expect(result.current.isSubagentThread("ws-1", "thread-child-live")).toBe(true);
+  });
+
+  it("classifies live spawned threads from collab tool events", () => {
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      handlers?.onItemCompleted?.("ws-1", "thread-parent-live", {
+        type: "collabToolCall",
+        id: "item-collab-live",
+        senderThreadId: "thread-parent-live",
+        newThreadId: "thread-child-live-collab",
+      });
+    });
+
+    expect(result.current.threadParentById["thread-child-live-collab"]).toBe(
+      "thread-parent-live",
+    );
+    expect(result.current.isSubagentThread("ws-1", "thread-child-live-collab")).toBe(true);
+  });
+
   it("keeps parent unlocked and pings parent when detached child exits", async () => {
     vi.mocked(startReview).mockResolvedValue({
       result: { reviewThreadId: "thread-review-1" },

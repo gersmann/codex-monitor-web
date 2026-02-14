@@ -570,6 +570,28 @@ export function SettingsDisplaySection({
           <span className="settings-toggle-knob" />
         </button>
       </div>
+      <div className="settings-toggle-row">
+        <div>
+          <div className="settings-toggle-title">Sub-agent notifications</div>
+          <div className="settings-toggle-subtitle">
+            Include spawned sub-agent threads in system notifications.
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`settings-toggle ${appSettings.subagentSystemNotificationsEnabled ? "on" : ""}`}
+          onClick={() =>
+            void onUpdateAppSettings({
+              ...appSettings,
+              subagentSystemNotificationsEnabled:
+                !appSettings.subagentSystemNotificationsEnabled,
+            })
+          }
+          aria-pressed={appSettings.subagentSystemNotificationsEnabled}
+        >
+          <span className="settings-toggle-knob" />
+        </button>
+      </div>
       <div className="settings-sound-actions">
         <button
           type="button"

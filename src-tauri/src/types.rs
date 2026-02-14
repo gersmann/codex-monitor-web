@@ -614,6 +614,11 @@ pub(crate) struct AppSettings {
     )]
     pub(crate) system_notifications_enabled: bool,
     #[serde(
+        default = "default_subagent_system_notifications_enabled",
+        rename = "subagentSystemNotificationsEnabled"
+    )]
+    pub(crate) subagent_system_notifications_enabled: bool,
+    #[serde(
         default = "default_experimental_collab_enabled",
         rename = "experimentalCollabEnabled"
     )]
@@ -942,6 +947,10 @@ fn default_system_notifications_enabled() -> bool {
     true
 }
 
+fn default_subagent_system_notifications_enabled() -> bool {
+    true
+}
+
 fn default_split_chat_diff_view() -> bool {
     false
 }
@@ -1212,6 +1221,7 @@ impl Default for AppSettings {
             code_font_size: default_code_font_size(),
             notification_sounds_enabled: true,
             system_notifications_enabled: true,
+            subagent_system_notifications_enabled: true,
             split_chat_diff_view: default_split_chat_diff_view(),
             preload_git_diffs: default_preload_git_diffs(),
             git_diff_ignore_whitespace_changes: default_git_diff_ignore_whitespace_changes(),
@@ -1378,6 +1388,7 @@ mod tests {
         assert_eq!(settings.code_font_size, 11);
         assert!(settings.notification_sounds_enabled);
         assert!(settings.system_notifications_enabled);
+        assert!(settings.subagent_system_notifications_enabled);
         assert!(!settings.split_chat_diff_view);
         assert!(settings.preload_git_diffs);
         assert!(!settings.git_diff_ignore_whitespace_changes);

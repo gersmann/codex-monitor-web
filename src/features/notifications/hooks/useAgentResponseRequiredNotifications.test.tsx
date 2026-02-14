@@ -188,6 +188,38 @@ describe("useAgentResponseRequiredNotifications", () => {
     });
   });
 
+  it("mutes subagent response-required notifications when disabled", async () => {
+    const userInputRequests: RequestUserInputRequest[] = [
+      {
+        workspace_id: "ws-1",
+        request_id: 20,
+        params: {
+          thread_id: "child-thread",
+          turn_id: "turn-1",
+          item_id: "item-1",
+          questions: [{ id: "q-1", header: "Question one", question: "Choose one" }],
+        },
+      },
+    ];
+
+    renderHook(() =>
+      useAgentResponseRequiredNotifications({
+        enabled: true,
+        isWindowFocused: false,
+        approvals: [],
+        userInputRequests,
+        subagentNotificationsEnabled: false,
+        isSubagentThread: (_workspaceId, threadId) => threadId === "child-thread",
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(sendNotification).not.toHaveBeenCalled();
+  });
+
   it("queues plan notifications that arrive inside the throttle window", async () => {
     renderHook(() =>
       useAgentResponseRequiredNotifications({

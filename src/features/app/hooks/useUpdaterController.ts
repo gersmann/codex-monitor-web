@@ -13,6 +13,8 @@ type Params = {
   enabled?: boolean;
   notificationSoundsEnabled: boolean;
   systemNotificationsEnabled: boolean;
+  subagentSystemNotificationsEnabled: boolean;
+  isSubagentThread?: (workspaceId: string, threadId: string) => boolean;
   getWorkspaceName?: (workspaceId: string) => string | undefined;
   onThreadNotificationSent?: (workspaceId: string, threadId: string) => void;
   onDebug: (entry: DebugEntry) => void;
@@ -24,6 +26,8 @@ export function useUpdaterController({
   enabled = true,
   notificationSoundsEnabled,
   systemNotificationsEnabled,
+  subagentSystemNotificationsEnabled,
+  isSubagentThread,
   getWorkspaceName,
   onThreadNotificationSent,
   onDebug,
@@ -69,6 +73,8 @@ export function useUpdaterController({
 
   useAgentSystemNotifications({
     enabled: systemNotificationsEnabled,
+    subagentNotificationsEnabled: subagentSystemNotificationsEnabled,
+    isSubagentThread,
     isWindowFocused,
     getWorkspaceName,
     onThreadNotificationSent,

@@ -28,6 +28,7 @@ import {
   saveCustomName,
   saveDetachedReviewLinks,
 } from "@threads/utils/threadStorage";
+import { getParentThreadIdFromSource } from "@threads/utils/threadRpc";
 
 type UseThreadsOptions = {
   activeWorkspace: WorkspaceInfo | null;
@@ -45,6 +46,10 @@ type UseThreadsOptions = {
   onMessageActivity?: () => void;
   threadSortKey?: ThreadListSortKey;
 };
+
+function buildWorkspaceThreadKey(workspaceId: string, threadId: string) {
+  return `${workspaceId}:${threadId}`;
+}
 
 export function useThreads({
   activeWorkspace,
@@ -87,6 +92,7 @@ export function useThreads({
   const detachedReviewStartedNoticeRef = useRef<Set<string>>(new Set());
   const detachedReviewCompletedNoticeRef = useRef<Set<string>>(new Set());
   const detachedReviewParentByChildRef = useRef<Record<string, string>>({});
+  const subagentThreadByWorkspaceThreadRef = useRef<Record<string, true>>({});
   const detachedReviewLinksByWorkspaceRef = useRef(loadDetachedReviewLinks());
   planByThreadRef.current = state.planByThread;
   itemsByThreadRef.current = state.itemsByThread;
@@ -173,10 +179,33 @@ export function useThreads({
     [customNamesRef, dispatch, onDebug],
   );
 
+  const onSubagentThreadDetected = useCallback(
+    (workspaceId: string, threadId: string) => {
+      if (!workspaceId || !threadId) {
+        return;
+      }
+      subagentThreadByWorkspaceThreadRef.current[
+        buildWorkspaceThreadKey(workspaceId, threadId)
+      ] = true;
+    },
+    [],
+  );
+
+  const isSubagentThread = useCallback(
+    (workspaceId: string, threadId: string) =>
+      Boolean(
+        subagentThreadByWorkspaceThreadRef.current[
+          buildWorkspaceThreadKey(workspaceId, threadId)
+        ],
+      ),
+    [],
+  );
+
   const { applyCollabThreadLinks, applyCollabThreadLinksFromThread, updateThreadParent } =
     useThreadLinking({
       dispatch,
       threadParentById: state.threadParentById,
+      onSubagentThreadDetected,
     });
 
   const handleWorkspaceConnected = useCallback(
@@ -348,13 +377,36 @@ export function useThreads({
     [handleAccountUpdated],
   );
 
+  const handleThreadStarted = useCallback(
+    (workspaceId: string, thread: Record<string, unknown>) => {
+      threadHandlers.onThreadStarted(workspaceId, thread);
+      const threadId = String(thread.id ?? "").trim();
+      if (!threadId) {
+        return;
+      }
+      const sourceParentId = getParentThreadIdFromSource(thread.source);
+      if (!sourceParentId) {
+        return;
+      }
+      updateThreadParent(sourceParentId, [threadId]);
+      onSubagentThreadDetected(workspaceId, threadId);
+    },
+    [onSubagentThreadDetected, threadHandlers, updateThreadParent],
+  );
+
   const handlers = useMemo(
     () => ({
       ...threadHandlers,
+      onThreadStarted: handleThreadStarted,
       onAccountUpdated: handleAccountUpdated,
       onAccountLoginCompleted: handleAccountLoginCompleted,
     }),
-    [threadHandlers, handleAccountUpdated, handleAccountLoginCompleted],
+    [
+      threadHandlers,
+      handleThreadStarted,
+      handleAccountUpdated,
+      handleAccountLoginCompleted,
+    ],
   );
 
   useAppServerEvents(handlers);
@@ -383,6 +435,7 @@ export function useThreads({
     replaceOnResumeRef,
     applyCollabThreadLinksFromThread,
     updateThreadParent,
+    onSubagentThreadDetected,
   });
 
   const startThread = useCallback(async () => {
@@ -541,6 +594,7 @@ export function useThreads({
     userInputRequests: state.userInputRequests,
     threadsByWorkspace: state.threadsByWorkspace,
     threadParentById: state.threadParentById,
+    isSubagentThread,
     threadStatusById: state.threadStatusById,
     threadResumeLoadingById: state.threadResumeLoadingById,
     threadListLoadingByWorkspace: state.threadListLoadingByWorkspace,

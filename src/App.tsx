@@ -327,24 +327,6 @@ function MainApp() {
     (workspaceId: string, threadId: string) => void
   >(() => {});
 
-  const {
-    updaterState,
-    startUpdate,
-    dismissUpdate,
-    handleTestNotificationSound,
-    handleTestSystemNotification,
-  } = useUpdaterController({
-    enabled: updaterEnabled,
-    notificationSoundsEnabled: appSettings.notificationSoundsEnabled,
-    systemNotificationsEnabled: appSettings.systemNotificationsEnabled,
-    getWorkspaceName,
-    onThreadNotificationSent: (workspaceId, threadId) =>
-      recordPendingThreadLinkRef.current(workspaceId, threadId),
-    onDebug: addDebugEntry,
-    successSoundUrl,
-    errorSoundUrl,
-  });
-
   const { errorToasts, dismissErrorToast } = useErrorToasts();
   const queueGitStatusRefreshRef = useRef<() => void>(() => {});
   const handleThreadMessageActivity = useCallback(() => {
@@ -510,6 +492,7 @@ function MainApp() {
     userInputRequests,
     threadsByWorkspace,
     threadParentById,
+    isSubagentThread,
     threadStatusById,
     threadResumeLoadingById,
     threadListLoadingByWorkspace,
@@ -584,6 +567,26 @@ function MainApp() {
     customPrompts: prompts,
     onMessageActivity: handleThreadMessageActivity,
     threadSortKey: threadListSortKey,
+  });
+  const {
+    updaterState,
+    startUpdate,
+    dismissUpdate,
+    handleTestNotificationSound,
+    handleTestSystemNotification,
+  } = useUpdaterController({
+    enabled: updaterEnabled,
+    notificationSoundsEnabled: appSettings.notificationSoundsEnabled,
+    systemNotificationsEnabled: appSettings.systemNotificationsEnabled,
+    subagentSystemNotificationsEnabled:
+      appSettings.subagentSystemNotificationsEnabled,
+    isSubagentThread,
+    getWorkspaceName,
+    onThreadNotificationSent: (workspaceId, threadId) =>
+      recordPendingThreadLinkRef.current(workspaceId, threadId),
+    onDebug: addDebugEntry,
+    successSoundUrl,
+    errorSoundUrl,
   });
   const {
     centerMode,
@@ -824,6 +827,9 @@ function MainApp() {
 
   useResponseRequiredNotificationsController({
     systemNotificationsEnabled: appSettings.systemNotificationsEnabled,
+    subagentSystemNotificationsEnabled:
+      appSettings.subagentSystemNotificationsEnabled,
+    isSubagentThread,
     approvals,
     userInputRequests,
     getWorkspaceName,

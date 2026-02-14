@@ -84,6 +84,7 @@ const baseSettings: AppSettings = {
   codeFontSize: 11,
   notificationSoundsEnabled: true,
   systemNotificationsEnabled: true,
+  subagentSystemNotificationsEnabled: true,
   splitChatDiffView: false,
   preloadGitDiffs: true,
   gitDiffIgnoreWhitespaceChanges: false,
@@ -577,6 +578,28 @@ describe("SettingsView Display", () => {
     await waitFor(() => {
       expect(onUpdateAppSettings).toHaveBeenCalledWith(
         expect.objectContaining({ notificationSoundsEnabled: true }),
+      );
+    });
+  });
+
+  it("toggles sub-agent system notifications", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({
+      onUpdateAppSettings,
+      appSettings: { subagentSystemNotificationsEnabled: false },
+    });
+
+    const row = screen
+      .getByText("Sub-agent notifications")
+      .closest(".settings-toggle-row") as HTMLElement | null;
+    if (!row) {
+      throw new Error("Expected sub-agent notifications row");
+    }
+    fireEvent.click(within(row).getByRole("button"));
+
+    await waitFor(() => {
+      expect(onUpdateAppSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ subagentSystemNotificationsEnabled: true }),
       );
     });
   });

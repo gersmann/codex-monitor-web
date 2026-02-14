@@ -6,11 +6,13 @@ import { asString, normalizeStringList } from "@threads/utils/threadNormalize";
 type UseThreadLinkingOptions = {
   dispatch: Dispatch<ThreadAction>;
   threadParentById: Record<string, string>;
+  onSubagentThreadDetected?: (workspaceId: string, threadId: string) => void;
 };
 
 export function useThreadLinking({
   dispatch,
   threadParentById,
+  onSubagentThreadDetected,
 }: UseThreadLinkingOptions) {
   const wouldCreateThreadCycle = useCallback(
     (parentId: string, childId: string) => {
@@ -54,7 +56,11 @@ export function useThreadLinking({
   );
 
   const applyCollabThreadLinks = useCallback(
-    (fallbackThreadId: string, item: Record<string, unknown>) => {
+    (
+      workspaceId: string,
+      fallbackThreadId: string,
+      item: Record<string, unknown>,
+    ) => {
       const itemType = asString(item?.type ?? "");
       if (itemType !== "collabToolCall" && itemType !== "collabAgentToolCall") {
         return;
@@ -70,12 +76,22 @@ export function useThreadLinking({
         ...normalizeStringList(item.newThreadId ?? item.new_thread_id),
       ];
       updateThreadParent(parentId, receivers);
+      receivers.forEach((receiver) => {
+        if (!receiver) {
+          return;
+        }
+        onSubagentThreadDetected?.(workspaceId, receiver);
+      });
     },
-    [updateThreadParent],
+    [onSubagentThreadDetected, updateThreadParent],
   );
 
   const applyCollabThreadLinksFromThread = useCallback(
-    (fallbackThreadId: string, thread: Record<string, unknown>) => {
+    (
+      workspaceId: string,
+      fallbackThreadId: string,
+      thread: Record<string, unknown>,
+    ) => {
       const turns = Array.isArray(thread.turns) ? thread.turns : [];
       turns.forEach((turn) => {
         const turnRecord = turn as Record<string, unknown>;
@@ -83,7 +99,7 @@ export function useThreadLinking({
           ? (turnRecord.items as Record<string, unknown>[])
           : [];
         turnItems.forEach((item) => {
-          applyCollabThreadLinks(fallbackThreadId, item);
+          applyCollabThreadLinks(workspaceId, fallbackThreadId, item);
         });
       });
     },

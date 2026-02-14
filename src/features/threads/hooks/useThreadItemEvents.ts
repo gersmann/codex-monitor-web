@@ -17,6 +17,7 @@ type UseThreadItemEventsOptions = {
     timestamp?: number,
   ) => void;
   applyCollabThreadLinks: (
+    workspaceId: string,
     threadId: string,
     item: Record<string, unknown>,
   ) => void;
@@ -51,7 +52,7 @@ export function useThreadItemEvents({
       if (shouldMarkProcessing) {
         markProcessing(threadId, true);
       }
-      applyCollabThreadLinks(threadId, item);
+      applyCollabThreadLinks(workspaceId, threadId, item);
       const itemType = asString(item?.type ?? "");
       if (itemType === "enteredReviewMode") {
         markReviewing(threadId, true);

@@ -218,6 +218,7 @@ export type AppSettings = {
   codeFontSize: number;
   notificationSoundsEnabled: boolean;
   systemNotificationsEnabled: boolean;
+  subagentSystemNotificationsEnabled: boolean;
   splitChatDiffView: boolean;
   preloadGitDiffs: boolean;
   gitDiffIgnoreWhitespaceChanges: boolean;

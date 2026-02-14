@@ -32,6 +32,7 @@ type ThreadEventHandlersOptions = {
   onDebug?: (entry: DebugEntry) => void;
   onWorkspaceConnected: (workspaceId: string) => void;
   applyCollabThreadLinks: (
+    workspaceId: string,
     threadId: string,
     item: Record<string, unknown>,
   ) => void;

@@ -66,6 +66,7 @@ describe("useThreadActions", () => {
     };
     const applyCollabThreadLinksFromThread = vi.fn();
     const updateThreadParent = vi.fn();
+    const onSubagentThreadDetected = vi.fn();
 
     const args: Parameters<typeof useThreadActions>[0] = {
       dispatch,
@@ -81,6 +82,7 @@ describe("useThreadActions", () => {
       replaceOnResumeRef,
       applyCollabThreadLinksFromThread,
       updateThreadParent,
+      onSubagentThreadDetected,
       ...overrides,
     };
 
@@ -93,6 +95,7 @@ describe("useThreadActions", () => {
       threadActivityRef: args.threadActivityRef,
       applyCollabThreadLinksFromThread: args.applyCollabThreadLinksFromThread,
       updateThreadParent: args.updateThreadParent,
+      onSubagentThreadDetected: args.onSubagentThreadDetected,
       ...utils,
     };
   }
@@ -272,6 +275,7 @@ describe("useThreadActions", () => {
 
     expect(resumeThread).toHaveBeenCalledWith("ws-1", "thread-2");
     expect(applyCollabThreadLinksFromThread).toHaveBeenCalledWith(
+      "ws-1",
       "thread-2",
       expect.objectContaining({ id: "thread-2" }),
     );
@@ -323,13 +327,14 @@ describe("useThreadActions", () => {
     vi.mocked(buildItemsFromThread).mockReturnValue([]);
     vi.mocked(isReviewingFromThread).mockReturnValue(false);
 
-    const { result, updateThreadParent } = renderActions();
+    const { result, updateThreadParent, onSubagentThreadDetected } = renderActions();
 
     await act(async () => {
       await result.current.resumeThreadForWorkspace("ws-1", "child-thread", true);
     });
 
     expect(updateThreadParent).toHaveBeenCalledWith("parent-thread", ["child-thread"]);
+    expect(onSubagentThreadDetected).toHaveBeenCalledWith("ws-1", "child-thread");
   });
 
   it("does not hydrate status from resume when local items are preserved", async () => {
@@ -623,13 +628,14 @@ describe("useThreadActions", () => {
       return value ?? 0;
     });
 
-    const { result, updateThreadParent } = renderActions();
+    const { result, updateThreadParent, onSubagentThreadDetected } = renderActions();
 
     await act(async () => {
       await result.current.listThreadsForWorkspace(workspace);
     });
 
     expect(updateThreadParent).toHaveBeenCalledWith("parent-thread", ["child-thread"]);
+    expect(onSubagentThreadDetected).toHaveBeenCalledWith("ws-1", "child-thread");
   });
 
   it("matches thread cwd on Windows paths even when path casing differs", async () => {

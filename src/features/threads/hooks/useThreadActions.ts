@@ -53,10 +53,12 @@ type UseThreadActionsOptions = {
   loadedThreadsRef: MutableRefObject<Record<string, boolean>>;
   replaceOnResumeRef: MutableRefObject<Record<string, boolean>>;
   applyCollabThreadLinksFromThread: (
+    workspaceId: string,
     threadId: string,
     thread: Record<string, unknown>,
   ) => void;
   updateThreadParent: (parentId: string, childIds: string[]) => void;
+  onSubagentThreadDetected: (workspaceId: string, threadId: string) => void;
 };
 
 export function useThreadActions({
@@ -74,6 +76,7 @@ export function useThreadActions({
   replaceOnResumeRef,
   applyCollabThreadLinksFromThread,
   updateThreadParent,
+  onSubagentThreadDetected,
 }: UseThreadActionsOptions) {
   const resumeInFlightByThreadRef = useRef<Record<string, number>>({});
 
@@ -182,10 +185,11 @@ export function useThreadActions({
           | null;
         if (thread) {
           dispatch({ type: "ensureThread", workspaceId, threadId });
-          applyCollabThreadLinksFromThread(threadId, thread);
+          applyCollabThreadLinksFromThread(workspaceId, threadId, thread);
           const sourceParentId = getParentThreadIdFromSource(thread.source);
           if (sourceParentId) {
             updateThreadParent(sourceParentId, [threadId]);
+            onSubagentThreadDetected(workspaceId, threadId);
           }
           const items = buildItemsFromThread(thread);
           const localItems = itemsByThread[threadId] ?? [];
@@ -289,6 +293,7 @@ export function useThreadActions({
       itemsByThread,
       loadedThreadsRef,
       onDebug,
+      onSubagentThreadDetected,
       replaceOnResumeRef,
       threadStatusById,
       updateThreadParent,
@@ -478,6 +483,7 @@ export function useThreadActions({
           const sourceParentId = getParentThreadIdFromSource(thread.source);
           if (sourceParentId) {
             updateThreadParent(sourceParentId, [threadId]);
+            onSubagentThreadDetected(workspace.id, threadId);
           }
           const timestamp = getThreadTimestamp(thread);
           if (timestamp > (nextActivityByThread[threadId] ?? 0)) {
@@ -584,6 +590,7 @@ export function useThreadActions({
       threadActivityRef,
       threadSortKey,
       updateThreadParent,
+      onSubagentThreadDetected,
     ],
   );
 
