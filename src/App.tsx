@@ -2378,13 +2378,15 @@ function MainApp() {
   ) : null;
 
   const mainMessagesNode = showWorkspaceHome ? workspaceHomeNode : messagesNode;
+  const showCompactThreadConnectionIndicator =
+    showCompactCodexThreadActions && Boolean(activeThreadId) && activeItems.length > 0;
   const compactThreadConnectionState: "live" | "polling" | "disconnected" =
     !activeWorkspace?.connected
       ? "disconnected"
       : appSettings.backendMode === "remote"
         ? remoteThreadConnectionState
         : "live";
-  const codexTopbarActionsNode = showCompactCodexThreadActions ? (
+  const codexTopbarActionsNode = showCompactThreadConnectionIndicator ? (
     <span
       className={`compact-workspace-live-indicator ${
         compactThreadConnectionState === "live"
