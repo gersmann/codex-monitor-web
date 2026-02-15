@@ -1547,6 +1547,7 @@ function MainApp() {
     activeThreadIsProcessing: Boolean(
       activeThreadId && threadStatusById[activeThreadId]?.isProcessing,
     ),
+    reconnectWorkspace: connectWorkspace,
     refreshThread,
   });
 
