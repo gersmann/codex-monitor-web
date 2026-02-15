@@ -243,6 +243,8 @@ pub fn run() {
             codex::generate_commit_message,
             codex::generate_run_metadata,
             codex::resume_thread,
+            codex::thread_live_subscribe,
+            codex::thread_live_unsubscribe,
             codex::fork_thread,
             codex::list_threads,
             codex::list_mcp_server_status,

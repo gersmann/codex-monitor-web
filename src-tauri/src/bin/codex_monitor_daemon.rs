@@ -649,6 +649,60 @@ impl DaemonState {
         codex_core::resume_thread_core(&self.sessions, workspace_id, thread_id).await
     }
 
+    async fn thread_live_subscribe(
+        &self,
+        workspace_id: String,
+        thread_id: String,
+    ) -> Result<Value, String> {
+        codex_core::thread_live_subscribe_core(
+            &self.sessions,
+            workspace_id.clone(),
+            thread_id.clone(),
+        )
+        .await?;
+        let subscription_id = format!("{}:{}", workspace_id, thread_id);
+        self.event_sink.emit_app_server_event(AppServerEvent {
+            workspace_id: workspace_id.clone(),
+            message: json!({
+                "method": "thread/live_attached",
+                "params": {
+                    "workspaceId": workspace_id,
+                    "threadId": thread_id,
+                    "subscriptionId": subscription_id,
+                }
+            }),
+        });
+        Ok(json!({
+            "subscriptionId": subscription_id,
+            "state": "live",
+        }))
+    }
+
+    async fn thread_live_unsubscribe(
+        &self,
+        workspace_id: String,
+        thread_id: String,
+    ) -> Result<Value, String> {
+        codex_core::thread_live_unsubscribe_core(
+            &self.sessions,
+            workspace_id.clone(),
+            thread_id.clone(),
+        )
+        .await?;
+        self.event_sink.emit_app_server_event(AppServerEvent {
+            workspace_id: workspace_id.clone(),
+            message: json!({
+                "method": "thread/live_detached",
+                "params": {
+                    "workspaceId": workspace_id,
+                    "threadId": thread_id,
+                    "reason": "manual",
+                }
+            }),
+        });
+        Ok(json!({ "ok": true }))
+    }
+
     async fn fork_thread(&self, workspace_id: String, thread_id: String) -> Result<Value, String> {
         codex_core::fork_thread_core(&self.sessions, workspace_id, thread_id).await
     }

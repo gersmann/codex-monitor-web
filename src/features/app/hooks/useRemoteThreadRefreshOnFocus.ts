@@ -7,6 +7,7 @@ type UseRemoteThreadRefreshOnFocusOptions = {
   activeWorkspace: WorkspaceInfo | null;
   activeThreadId: string | null;
   activeThreadIsProcessing?: boolean;
+  suspendPolling?: boolean;
   reconnectWorkspace?: (workspace: WorkspaceInfo) => Promise<unknown> | unknown;
   refreshThread: (workspaceId: string, threadId: string) => Promise<unknown> | unknown;
 };
@@ -16,6 +17,7 @@ export function useRemoteThreadRefreshOnFocus({
   activeWorkspace,
   activeThreadId,
   activeThreadIsProcessing = false,
+  suspendPolling = false,
   reconnectWorkspace,
   refreshThread,
 }: UseRemoteThreadRefreshOnFocusOptions) {
@@ -113,6 +115,7 @@ export function useRemoteThreadRefreshOnFocus({
       }
       if (
         !canRefresh() ||
+        suspendPolling ||
         activeThreadIsProcessing ||
         !windowFocused ||
         document.visibilityState !== "visible"
@@ -127,7 +130,9 @@ export function useRemoteThreadRefreshOnFocus({
 
     const handleFocus = () => {
       windowFocused = true;
-      refreshActiveThread();
+      if (!suspendPolling) {
+        refreshActiveThread();
+      }
       updatePolling();
     };
 
@@ -139,7 +144,9 @@ export function useRemoteThreadRefreshOnFocus({
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         windowFocused = true;
-        refreshActiveThread();
+        if (!suspendPolling) {
+          refreshActiveThread();
+        }
       }
       updatePolling();
     };
@@ -199,6 +206,7 @@ export function useRemoteThreadRefreshOnFocus({
     activeThreadId,
     activeThreadIsProcessing,
     backendMode,
+    suspendPolling,
     workspaceId,
   ]);
 }

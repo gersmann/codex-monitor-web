@@ -913,6 +913,14 @@ export async function resumeThread(workspaceId: string, threadId: string) {
   return invoke<any>("resume_thread", { workspaceId, threadId });
 }
 
+export async function threadLiveSubscribe(workspaceId: string, threadId: string) {
+  return invoke<any>("thread_live_subscribe", { workspaceId, threadId });
+}
+
+export async function threadLiveUnsubscribe(workspaceId: string, threadId: string) {
+  return invoke<any>("thread_live_unsubscribe", { workspaceId, threadId });
+}
+
 export async function archiveThread(workspaceId: string, threadId: string) {
   return invoke<any>("archive_thread", { workspaceId, threadId });
 }
