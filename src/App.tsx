@@ -1544,6 +1544,9 @@ function MainApp() {
     backendMode: appSettings.backendMode,
     activeWorkspace,
     activeThreadId,
+    activeThreadIsProcessing: Boolean(
+      activeThreadId && threadStatusById[activeThreadId]?.isProcessing,
+    ),
     refreshThread,
   });
 
