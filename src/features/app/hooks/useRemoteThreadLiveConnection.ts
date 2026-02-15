@@ -308,30 +308,6 @@ export function useRemoteThreadLiveConnection({
   }, [reconnectLive, reconcileDisconnectedState, setState]);
 
   useEffect(() => {
-    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-    if (backendMode !== "remote") {
-      return;
-    }
-    heartbeatTimer = setInterval(() => {
-      if (connectionStateRef.current !== "live") {
-        return;
-      }
-      if (!activeThreadIsProcessingRef.current) {
-        return;
-      }
-      const ageMs = Date.now() - lastThreadEventAtRef.current;
-      if (ageMs > 15000) {
-        reconcileDisconnectedState();
-      }
-    }, 5000);
-    return () => {
-      if (heartbeatTimer) {
-        clearInterval(heartbeatTimer);
-      }
-    };
-  }, [backendMode, reconcileDisconnectedState]);
-
-  useEffect(() => {
     let unlistenWindowFocus: (() => void) | null = null;
     let unlistenWindowBlur: (() => void) | null = null;
     let didCleanup = false;
