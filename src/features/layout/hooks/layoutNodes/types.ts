@@ -116,6 +116,8 @@ export type LayoutNodesOptions = {
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   activeItems: ConversationItem[];
+  showPollingFetchStatus?: boolean;
+  pollingIntervalMs?: number;
   activeRateLimits: RateLimitSnapshot | null;
   usageShowRemaining: boolean;
   accountInfo: AccountSnapshot | null;

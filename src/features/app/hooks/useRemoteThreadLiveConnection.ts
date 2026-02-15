@@ -192,8 +192,7 @@ export function useRemoteThreadLiveConnection({
         }
 
         activeSubscriptionKeyRef.current = keyForThread(workspaceId, threadId);
-        lastThreadEventAtRef.current = Date.now();
-        setState("live");
+        setState("polling");
         return true;
       } catch {
         if (sequence === reconnectSequenceRef.current) {
@@ -266,9 +265,8 @@ export function useRemoteThreadLiveConnection({
       if (method === "thread/live_attached") {
         const threadId = extractThreadId(method, params);
         if (threadId === selectedThreadId) {
-          lastThreadEventAtRef.current = Date.now();
           activeSubscriptionKeyRef.current = keyForThread(activeWorkspaceId, threadId);
-          setState("live");
+          setState("polling");
         }
         return;
       }

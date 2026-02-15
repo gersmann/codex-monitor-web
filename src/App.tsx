@@ -125,7 +125,10 @@ import { useThreadListActions } from "@app/hooks/useThreadListActions";
 import { useSidebarLayoutActions } from "@app/hooks/useSidebarLayoutActions";
 import { useGitRootSelection } from "@app/hooks/useGitRootSelection";
 import { useTabActivationGuard } from "@app/hooks/useTabActivationGuard";
-import { useRemoteThreadRefreshOnFocus } from "@app/hooks/useRemoteThreadRefreshOnFocus";
+import {
+  REMOTE_THREAD_POLL_INTERVAL_MS,
+  useRemoteThreadRefreshOnFocus,
+} from "@app/hooks/useRemoteThreadRefreshOnFocus";
 import { useRemoteThreadLiveConnection } from "@app/hooks/useRemoteThreadLiveConnection";
 import { useAppBootstrapOrchestration } from "@app/bootstrap/useAppBootstrapOrchestration";
 import {
@@ -1864,6 +1867,11 @@ function MainApp() {
     Boolean(activeWorkspace) &&
     isCompact &&
     ((isPhone && activeTab === "codex") || (isTablet && tabletTab === "codex"));
+  const showMobilePollingFetchStatus =
+    showCompactCodexThreadActions &&
+    Boolean(activeWorkspace?.connected) &&
+    appSettings.backendMode === "remote" &&
+    remoteThreadConnectionState === "polling";
 
   const {
     sidebarNode,
@@ -1907,6 +1915,8 @@ function MainApp() {
     activeWorkspaceId,
     activeThreadId,
     activeItems,
+    showPollingFetchStatus: showMobilePollingFetchStatus,
+    pollingIntervalMs: REMOTE_THREAD_POLL_INTERVAL_MS,
     activeRateLimits,
     usageShowRemaining: appSettings.usageShowRemaining,
     accountInfo: activeAccount,

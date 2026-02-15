@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { WorkspaceInfo } from "../../../types";
 
+export const REMOTE_THREAD_POLL_INTERVAL_MS = 12000;
+
 type UseRemoteThreadRefreshOnFocusOptions = {
   backendMode: string;
   activeWorkspace: WorkspaceInfo | null;
@@ -122,7 +124,7 @@ export function useRemoteThreadRefreshOnFocus({
       ) {
         return;
       }
-      const pollIntervalMs = 12000;
+      const pollIntervalMs = REMOTE_THREAD_POLL_INTERVAL_MS;
       pollTimer = setInterval(() => {
         runRefresh();
       }, pollIntervalMs);
