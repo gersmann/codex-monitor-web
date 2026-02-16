@@ -21,7 +21,6 @@ mod menu;
 #[path = "menu_mobile.rs"]
 mod menu;
 mod notifications;
-mod orbit;
 mod prompts;
 mod remote_backend;
 mod rules;
@@ -57,8 +56,6 @@ fn keep_daemon_running_after_close(app_handle: &tauri::AppHandle) -> bool {
 
 #[cfg(desktop)]
 async fn stop_managed_daemons_for_exit(app_handle: tauri::AppHandle) {
-    let state = app_handle.state::<state::AppState>();
-    let _ = orbit::orbit_runner_stop(state).await;
     let state = app_handle.state::<state::AppState>();
     let _ = tailscale::tailscale_daemon_stop(state).await;
 }
@@ -139,48 +136,6 @@ pub fn run() {
                                     let state = app_handle.state::<state::AppState>();
                                     let _ = tailscale::tailscale_daemon_start(state).await;
                                 }
-                            }
-                        }
-                    }
-
-                    if matches!(settings.backend_mode, crate::types::BackendMode::Remote)
-                        && matches!(
-                            settings.remote_backend_provider,
-                            crate::types::RemoteBackendProvider::Orbit
-                        )
-                    {
-                        if settings.orbit_auto_start_runner {
-                            if settings.keep_daemon_running_after_app_close {
-                                // Avoid duplicate detached Orbit runners across relaunches.
-                                // orbit_runner_start can still be called manually from Settings.
-                                let state = app_handle.state::<state::AppState>();
-                                let _ = orbit::orbit_runner_status(state).await;
-                            } else {
-                                let state = app_handle.state::<state::AppState>();
-                                let _ = orbit::orbit_runner_start(state).await;
-                            }
-                        } else {
-                            let state = app_handle.state::<state::AppState>();
-                            if let Ok(status) = orbit::orbit_runner_status(state).await {
-                                if matches!(status.state, crate::types::OrbitRunnerState::Running) {
-                                    // Enforce version for a currently running managed runner.
-                                    let state = app_handle.state::<state::AppState>();
-                                    let _ = orbit::orbit_runner_start(state).await;
-                                }
-                            }
-                        }
-                    } else if matches!(
-                        settings.remote_backend_provider,
-                        crate::types::RemoteBackendProvider::Orbit
-                    ) {
-                        // Local mode with Orbit selected: only enforce version if runner is already running.
-                        let state = app_handle.state::<state::AppState>();
-                        if let Ok(status) = orbit::orbit_runner_status(state).await {
-                            if matches!(status.state, crate::types::OrbitRunnerState::Running)
-                                && !settings.keep_daemon_running_after_app_close
-                            {
-                                let state = app_handle.state::<state::AppState>();
-                                let _ = orbit::orbit_runner_start(state).await;
                             }
                         }
                     }
@@ -314,13 +269,6 @@ pub fn run() {
             local_usage::local_usage_snapshot,
             notifications::is_macos_debug_build,
             notifications::send_notification_fallback,
-            orbit::orbit_connect_test,
-            orbit::orbit_sign_in_start,
-            orbit::orbit_sign_in_poll,
-            orbit::orbit_sign_out,
-            orbit::orbit_runner_start,
-            orbit::orbit_runner_stop,
-            orbit::orbit_runner_status,
             tailscale::tailscale_status,
             tailscale::tailscale_daemon_command_preview,
             tailscale::tailscale_daemon_start,
