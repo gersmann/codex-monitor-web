@@ -14,6 +14,7 @@ import {
   getGitLog,
   getGitStatus,
   getOpenAppIcon,
+  listThreads,
   listMcpServerStatus,
   readGlobalAgentsMd,
   readGlobalCodexConfigToml,
@@ -219,6 +220,21 @@ describe("tauri invoke wrappers", () => {
       workspaceId: "ws-10",
       cursor: "cursor-1",
       limit: 25,
+    });
+  });
+
+  it("maps workspaceId/cursor/limit/sortKey/cwd for list_threads", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await listThreads("ws-10", "cursor-1", 25, "updated_at", "/tmp/codex");
+
+    expect(invokeMock).toHaveBeenCalledWith("list_threads", {
+      workspaceId: "ws-10",
+      cursor: "cursor-1",
+      limit: 25,
+      sortKey: "updated_at",
+      cwd: "/tmp/codex",
     });
   });
 
