@@ -680,7 +680,7 @@ export const ToolRow = memo(function ToolRow({
           <Markdown
             value={summary.output}
             className="tool-inline-output markdown"
-            codeBlock
+            codeBlock={item.toolType !== "plan"}
             showFilePath={showMessageFilePath}
             workspacePath={workspacePath}
             onOpenFileLink={onOpenFileLink}
