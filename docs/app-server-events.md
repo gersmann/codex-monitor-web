@@ -1,4 +1,4 @@
-# App-Server Events Reference (Codex `825a4af42feef5ceacfe97f1b1eb838c18004e3b`)
+# App-Server Events Reference (Codex `189f592014e1cd468d7a21a83966d68c2abc8a38`)
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
@@ -102,7 +102,10 @@ events are currently not routed:
 - `rawResponseItem/completed`
 - `item/mcpToolCall/progress`
 - `mcpServer/oauthLogin/completed`
+- `model/rerouted`
+- `thread/archived`
 - `thread/compacted` (deprecated; intentionally not routed)
+- `thread/unarchived`
 - `deprecationNotice`
 - `configWarning`
 - `windows/worldWritableWarning`
@@ -142,9 +145,9 @@ Compared against Codex v2 request methods, CodexMonitor currently does not send:
 - `thread/backgroundTerminals/clean`
 - `thread/loaded/list`
 - `thread/read`
-- `skills/remote/read`
-- `skills/remote/write`
 - `skills/config/write`
+- `skills/remote/export`
+- `skills/remote/list`
 - `mock/experimentalMethod`
 - `mcpServer/oauth/login`
 - `config/mcpServer/reload`
