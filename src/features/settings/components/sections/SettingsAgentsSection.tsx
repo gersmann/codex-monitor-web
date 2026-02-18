@@ -55,6 +55,7 @@ export function SettingsAgentsSection({
 
   const [createName, setCreateName] = useState("");
   const [createDescription, setCreateDescription] = useState("");
+  const [createDeveloperInstructions, setCreateDeveloperInstructions] = useState("");
   const [createModel, setCreateModel] = useState("");
   const [createReasoningEffort, setCreateReasoningEffort] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
@@ -63,13 +64,14 @@ export function SettingsAgentsSection({
   const [pendingDeleteAgentName, setPendingDeleteAgentName] = useState<string | null>(null);
   const [editNameDraft, setEditNameDraft] = useState("");
   const [editDescriptionDraft, setEditDescriptionDraft] = useState("");
+  const [editDeveloperInstructionsDraft, setEditDeveloperInstructionsDraft] = useState("");
   const [renameManagedFile, setRenameManagedFile] = useState(true);
   const [editError, setEditError] = useState<string | null>(null);
 
   const [configEditorAgentName, setConfigEditorAgentName] = useState<string | null>(null);
   const [configEditorContent, setConfigEditorContent] = useState("");
   const [configEditorDirty, setConfigEditorDirty] = useState(false);
-  const canGenerateCreateDescription = createDescription.trim().length > 0;
+  const canGenerateCreateFromName = createName.trim().length > 0;
   const effectiveModelOptions = modelOptions.length > 0 ? modelOptions : FALLBACK_AGENT_MODELS;
 
   useEffect(() => {
@@ -78,11 +80,6 @@ export function SettingsAgentsSection({
     }
     setMaxThreadsDraft(String(settings.maxThreads));
   }, [settings]);
-
-  const configEditorAgent = useMemo(
-    () => settings?.agents.find((agent) => agent.name === configEditorAgentName) ?? null,
-    [configEditorAgentName, settings?.agents],
-  );
 
   const parseMaxThreads = (rawValue: string): number | null => {
     const value = Number.parseInt(rawValue.trim(), 10);
@@ -195,6 +192,7 @@ export function SettingsAgentsSection({
     const success = await onCreateAgent({
       name,
       description: createDescription.trim() || null,
+      developerInstructions: createDeveloperInstructions.trim() || null,
       template: "blank",
       model: createModel || null,
       reasoningEffort: createReasoningEffort || null,
@@ -202,6 +200,7 @@ export function SettingsAgentsSection({
     if (success) {
       setCreateName("");
       setCreateDescription("");
+      setCreateDeveloperInstructions("");
       setCreateReasoningEffort("");
     }
   };
@@ -210,6 +209,7 @@ export function SettingsAgentsSection({
     setEditingName(agent.name);
     setEditNameDraft(agent.name);
     setEditDescriptionDraft(agent.description ?? "");
+    setEditDeveloperInstructionsDraft(agent.developerInstructions ?? "");
     setRenameManagedFile(true);
     setEditError(null);
   };
@@ -223,13 +223,25 @@ export function SettingsAgentsSection({
       setEditError("Agent name is required.");
       return;
     }
+    const editingAgent = settings?.agents.find((agent) => agent.name === editingName) ?? null;
+    const previousDeveloperInstructions =
+      editingAgent?.developerInstructions?.trim() ?? "";
+    const nextDeveloperInstructions = editDeveloperInstructionsDraft.trim();
+    const developerInstructionsChanged =
+      nextDeveloperInstructions !== previousDeveloperInstructions;
     setEditError(null);
-    const success = await onUpdateAgent({
+    const updateInput: Parameters<typeof onUpdateAgent>[0] = {
       originalName: editingName,
       name: nextName,
       description: editDescriptionDraft.trim() || null,
       renameManagedFile,
-    });
+    };
+    if (developerInstructionsChanged) {
+      // Send only when explicitly changed so metadata edits don't depend on parsing
+      // potentially-invalid per-agent config TOML files.
+      updateInput.developerInstructions = editDeveloperInstructionsDraft;
+    }
+    const success = await onUpdateAgent(updateInput);
     if (success) {
       if (configEditorAgentName === editingName) {
         setConfigEditorAgentName(nextName);
@@ -367,40 +379,36 @@ export function SettingsAgentsSection({
         Add a custom role under <code>[agents.&lt;name&gt;]</code> and create its config file.
       </div>
       <div className="settings-field settings-agents-form">
-        <label className="settings-label" htmlFor="settings-agent-create-name">
-          Name
-        </label>
-        <input
-          id="settings-agent-create-name"
-          className="settings-input"
-          value={createName}
-          onChange={(event) => setCreateName(event.target.value)}
-          placeholder="researcher"
-          disabled={creatingAgent}
-        />
         <div className="settings-agents-description-row">
-          <label className="settings-label" htmlFor="settings-agent-create-description">
-            Description
+          <label className="settings-label" htmlFor="settings-agent-create-name">
+            Name
           </label>
           <button
             type="button"
             className="ghost settings-icon-button settings-agents-generate-button"
             onClick={() => {
-              if (!canGenerateCreateDescription || createDescriptionGenerating) {
+              if (createDescriptionGenerating || !canGenerateCreateFromName) {
                 return;
               }
               void (async () => {
-                const generated = await onGenerateCreateDescription(createDescription);
+                const generated = await onGenerateCreateDescription({
+                  name: createName,
+                  description: createDescription,
+                  developerInstructions: createDeveloperInstructions,
+                });
                 if (generated != null) {
-                  setCreateDescription(generated);
+                  if (generated.description.trim().length > 0) {
+                    setCreateDescription(generated.description);
+                  }
+                  if (generated.developerInstructions.trim().length > 0) {
+                    setCreateDeveloperInstructions(generated.developerInstructions);
+                  }
                 }
               })();
             }}
-            disabled={
-              creatingAgent || createDescriptionGenerating || !canGenerateCreateDescription
-            }
-            title="Improve description with AI"
-            aria-label="Improve description for new agent"
+            disabled={creatingAgent || createDescriptionGenerating || !canGenerateCreateFromName}
+            title="Generate description and developer instructions with AI"
+            aria-label="Generate fields for new agent"
           >
             {createDescriptionGenerating ? (
               <MagicSparkleLoaderIcon className="settings-agents-generate-loader" />
@@ -409,12 +417,35 @@ export function SettingsAgentsSection({
             )}
           </button>
         </div>
+        <input
+          id="settings-agent-create-name"
+          className="settings-input"
+          value={createName}
+          onChange={(event) => setCreateName(event.target.value)}
+          placeholder="researcher"
+          disabled={creatingAgent}
+        />
+        <label className="settings-label" htmlFor="settings-agent-create-description">
+          Description
+        </label>
         <textarea
           id="settings-agent-create-description"
-          className="settings-agents-textarea"
+          className="settings-agents-textarea settings-agents-textarea--compact"
           value={createDescription}
           onChange={(event) => setCreateDescription(event.target.value)}
-          placeholder="Research-focused role."
+          placeholder="Short role summary."
+          rows={2}
+          disabled={creatingAgent}
+        />
+        <label className="settings-label" htmlFor="settings-agent-create-developer-instructions">
+          Developer instructions
+        </label>
+        <textarea
+          id="settings-agent-create-developer-instructions"
+          className="settings-agents-textarea"
+          value={createDeveloperInstructions}
+          onChange={(event) => setCreateDeveloperInstructions(event.target.value)}
+          placeholder="Multiline per-agent developer instructions."
           disabled={creatingAgent}
         />
         <div className="settings-agents-model-row">
@@ -489,7 +520,8 @@ export function SettingsAgentsSection({
         const isDeleting = deletingAgentName === agent.name;
         const isReadingConfig = readingConfigAgentName === agent.name;
         const isWritingConfig = writingConfigAgentName === agent.name;
-        const canGenerateEditDescription = editDescriptionDraft.trim().length > 0;
+        const isConfigEditorOpen = configEditorAgentName === agent.name;
+        const canGenerateEditFromName = editNameDraft.trim().length > 0;
         return (
           <div className="settings-field settings-agent-card" key={agent.name}>
             <div className="settings-agent-card-header">
@@ -499,8 +531,14 @@ export function SettingsAgentsSection({
                   {agent.description || "No description."}
                 </div>
               </div>
+            </div>
+
+            <div className="settings-help settings-help-inline">
+              <code>{agent.configFile || "(missing config_file)"}</code>
+            </div>
+            <div className="settings-agents-actions">
               {!isPendingDelete && (
-                <div className="settings-agents-actions">
+                <>
                   <button
                     type="button"
                     className="ghost"
@@ -517,39 +555,8 @@ export function SettingsAgentsSection({
                   >
                     Delete
                   </button>
-                </div>
+                </>
               )}
-              {isPendingDelete && (
-                <div className="settings-agents-actions">
-                  <span className="settings-help settings-help-inline">
-                    Delete agent and managed config file?
-                  </span>
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() => {
-                      setPendingDeleteAgentName(null);
-                    }}
-                    disabled={isDeleting}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() => void handleConfirmDeleteAgent(agent.name)}
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? "Deleting..." : "Confirm Delete"}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="settings-help settings-help-inline">
-              <code>{agent.configFile || "(missing config_file)"}</code>
-            </div>
-            <div className="settings-agents-actions">
               <button
                 type="button"
                 className="ghost"
@@ -569,45 +576,69 @@ export function SettingsAgentsSection({
                 <span className="settings-help settings-help-inline">External path</span>
               )}
             </div>
+            {isPendingDelete && (
+              <div className="settings-agents-actions">
+                <span className="settings-help settings-help-inline">
+                  Delete agent and managed config file?
+                </span>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => {
+                    setPendingDeleteAgentName(null);
+                  }}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => void handleConfirmDeleteAgent(agent.name)}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? "Deleting..." : "Confirm Delete"}
+                </button>
+              </div>
+            )}
 
             {isEditing && (
               <div className="settings-agents-edit-form">
-                <label className="settings-label" htmlFor={`settings-agent-edit-name-${agent.name}`}>
-                  Name
-                </label>
-                <input
-                  id={`settings-agent-edit-name-${agent.name}`}
-                  className="settings-input"
-                  value={editNameDraft}
-                  onChange={(event) => setEditNameDraft(event.target.value)}
-                  disabled={isUpdating}
-                />
                 <div className="settings-agents-description-row">
                   <label
                     className="settings-label"
-                    htmlFor={`settings-agent-edit-description-${agent.name}`}
+                    htmlFor={`settings-agent-edit-name-${agent.name}`}
                   >
-                    Description
+                    Name
                   </label>
                   <button
                     type="button"
                     className="ghost settings-icon-button settings-agents-generate-button"
                     onClick={() => {
-                      if (!canGenerateEditDescription || editDescriptionGenerating) {
+                      if (editDescriptionGenerating || !canGenerateEditFromName) {
                         return;
                       }
                       void (async () => {
-                        const generated = await onGenerateEditDescription(editDescriptionDraft);
+                        const generated = await onGenerateEditDescription({
+                          name: editNameDraft || agent.name,
+                          description: editDescriptionDraft,
+                          developerInstructions: editDeveloperInstructionsDraft,
+                        });
                         if (generated != null) {
-                          setEditDescriptionDraft(generated);
+                          if (generated.description.trim().length > 0) {
+                            setEditDescriptionDraft(generated.description);
+                          }
+                          if (generated.developerInstructions.trim().length > 0) {
+                            setEditDeveloperInstructionsDraft(generated.developerInstructions);
+                          }
                         }
                       })();
                     }}
                     disabled={
-                      isUpdating || editDescriptionGenerating || !canGenerateEditDescription
+                      isUpdating || editDescriptionGenerating || !canGenerateEditFromName
                     }
-                    title="Improve description with AI"
-                    aria-label={`Improve description for ${agent.name}`}
+                    title="Generate description and developer instructions with AI"
+                    aria-label={`Generate fields for ${agent.name}`}
                   >
                     {editDescriptionGenerating ? (
                       <MagicSparkleLoaderIcon className="settings-agents-generate-loader" />
@@ -616,11 +647,42 @@ export function SettingsAgentsSection({
                     )}
                   </button>
                 </div>
+                <input
+                  id={`settings-agent-edit-name-${agent.name}`}
+                  className="settings-input"
+                  value={editNameDraft}
+                  onChange={(event) => setEditNameDraft(event.target.value)}
+                  disabled={isUpdating}
+                />
+                <label
+                  className="settings-label"
+                  htmlFor={`settings-agent-edit-description-${agent.name}`}
+                >
+                  Description
+                </label>
                 <textarea
                   id={`settings-agent-edit-description-${agent.name}`}
-                  className="settings-agents-textarea"
+                  className="settings-agents-textarea settings-agents-textarea--compact"
                   value={editDescriptionDraft}
                   onChange={(event) => setEditDescriptionDraft(event.target.value)}
+                  placeholder="Short role summary."
+                  rows={2}
+                  disabled={isUpdating}
+                />
+                <label
+                  className="settings-label"
+                  htmlFor={`settings-agent-edit-developer-instructions-${agent.name}`}
+                >
+                  Developer instructions
+                </label>
+                <textarea
+                  id={`settings-agent-edit-developer-instructions-${agent.name}`}
+                  className="settings-agents-textarea"
+                  value={editDeveloperInstructionsDraft}
+                  onChange={(event) =>
+                    setEditDeveloperInstructionsDraft(event.target.value)
+                  }
+                  placeholder="Multiline per-agent developer instructions."
                   disabled={isUpdating}
                 />
                 <label className="settings-checkbox">
@@ -655,50 +717,50 @@ export function SettingsAgentsSection({
                 {editError && <div className="settings-agents-error">{editError}</div>}
               </div>
             )}
+
+            {isConfigEditorOpen && (
+              <div className="settings-field settings-agents-editor">
+                <div className="settings-agents-header">
+                  <div>
+                    <div className="settings-toggle-title">{agent.name} config file</div>
+                    <div className="settings-toggle-subtitle">
+                      <code>{agent.configFile}</code>
+                    </div>
+                  </div>
+                  <div className="settings-agents-actions">
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        setConfigEditorAgentName(null);
+                        setConfigEditorDirty(false);
+                      }}
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => void handleSaveConfigEditor()}
+                      disabled={!configEditorDirty || writingConfigAgentName === agent.name}
+                    >
+                      {isWritingConfig ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  className="settings-agents-textarea"
+                  value={configEditorContent}
+                  onChange={(event) => {
+                    setConfigEditorContent(event.target.value);
+                    setConfigEditorDirty(true);
+                  }}
+                />
+              </div>
+            )}
           </div>
         );
       })}
-
-      {configEditorAgent && (
-        <div className="settings-field settings-agents-editor">
-          <div className="settings-agents-header">
-            <div>
-              <div className="settings-toggle-title">{configEditorAgent.name} config file</div>
-              <div className="settings-toggle-subtitle">
-                <code>{configEditorAgent.configFile}</code>
-              </div>
-            </div>
-            <div className="settings-agents-actions">
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => {
-                  setConfigEditorAgentName(null);
-                  setConfigEditorDirty(false);
-                }}
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => void handleSaveConfigEditor()}
-                disabled={!configEditorDirty || writingConfigAgentName === configEditorAgent.name}
-              >
-                {writingConfigAgentName === configEditorAgent.name ? "Saving..." : "Save"}
-              </button>
-            </div>
-          </div>
-          <textarea
-            className="settings-agents-textarea"
-            value={configEditorContent}
-            onChange={(event) => {
-              setConfigEditorContent(event.target.value);
-              setConfigEditorDirty(true);
-            }}
-          />
-        </div>
-      )}
 
       {isLoading && <div className="settings-help">Loading agents settings...</div>}
       {openPathError && <div className="settings-agents-error">{openPathError}</div>}

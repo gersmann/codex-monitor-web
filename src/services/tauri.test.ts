@@ -502,6 +502,7 @@ describe("tauri invoke wrappers", () => {
     await createAgent({
       name: "researcher",
       description: "Research-focused role",
+      developerInstructions: "Investigate root cause first.",
       template: "blank",
       model: "gpt-5-codex",
       reasoningEffort: "medium",
@@ -511,6 +512,7 @@ describe("tauri invoke wrappers", () => {
       input: {
         name: "researcher",
         description: "Research-focused role",
+        developerInstructions: "Investigate root cause first.",
         template: "blank",
         model: "gpt-5-codex",
         reasoningEffort: "medium",
@@ -526,6 +528,7 @@ describe("tauri invoke wrappers", () => {
       originalName: "researcher",
       name: "code_reviewer",
       description: "Review-focused role",
+      developerInstructions: "Focus on correctness and regression risk.",
       renameManagedFile: true,
     });
 
@@ -534,6 +537,7 @@ describe("tauri invoke wrappers", () => {
         originalName: "researcher",
         name: "code_reviewer",
         description: "Review-focused role",
+        developerInstructions: "Focus on correctness and regression risk.",
         renameManagedFile: true,
       },
     });
@@ -581,7 +585,11 @@ describe("tauri invoke wrappers", () => {
 
   it("generates an improved agent description", async () => {
     const invokeMock = vi.mocked(invoke);
-    invokeMock.mockResolvedValueOnce("Trigger: when triaging flaky tests\nRole: isolate causes and suggest stable fixes");
+    invokeMock.mockResolvedValueOnce({
+      description: "Stabilizes flaky test suites",
+      developerInstructions:
+        "Reproduce failures first.\nPrefer deterministic fixes.\nAdd targeted coverage.",
+    });
 
     await generateAgentDescription("ws-agent", "tests");
 

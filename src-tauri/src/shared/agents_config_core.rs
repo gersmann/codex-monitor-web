@@ -20,6 +20,7 @@ const DEFAULT_REASONING_EFFORT: &str = "medium";
 pub(crate) struct AgentSummaryDto {
     pub name: String,
     pub description: Option<String>,
+    pub developer_instructions: Option<String>,
     pub config_file: String,
     pub resolved_path: String,
     pub managed_by_app: bool,
@@ -47,6 +48,7 @@ pub(crate) struct SetAgentsCoreInput {
 pub(crate) struct CreateAgentInput {
     pub name: String,
     pub description: Option<String>,
+    pub developer_instructions: Option<String>,
     pub template: Option<String>,
     pub model: Option<String>,
     pub reasoning_effort: Option<String>,
@@ -58,6 +60,7 @@ pub(crate) struct UpdateAgentInput {
     pub original_name: String,
     pub name: String,
     pub description: Option<String>,
+    pub developer_instructions: Option<String>,
     pub rename_managed_file: Option<bool>,
 }
 
@@ -112,6 +115,7 @@ pub(crate) fn set_agents_core_settings_core(
 pub(crate) fn create_agent_core(input: CreateAgentInput) -> Result<AgentsSettingsDto, String> {
     let name = normalize_agent_name(input.name.as_str())?;
     let description = normalize_optional_string(input.description.as_deref());
+    let developer_instructions = normalize_optional_string(input.developer_instructions.as_deref());
 
     let codex_home = resolve_codex_home()?;
     let (_, mut document) = config_toml_core::load_global_config_document(&codex_home)?;
@@ -135,6 +139,7 @@ pub(crate) fn create_agent_core(input: CreateAgentInput) -> Result<AgentsSetting
         input.template.as_deref(),
         input.model.as_deref(),
         input.reasoning_effort.as_deref(),
+        developer_instructions.as_deref(),
     );
     std::fs::write(&target_path, template_content)
         .map_err(|err| format!("Failed to create agent config file: {err}"))?;
@@ -161,12 +166,15 @@ pub(crate) fn update_agent_core(input: UpdateAgentInput) -> Result<AgentsSetting
     let original_name = normalize_agent_lookup_name(input.original_name.as_str())?;
     let name = normalize_agent_name(input.name.as_str())?;
     let description = normalize_optional_string(input.description.as_deref());
+    let developer_instructions_input = input.developer_instructions.clone();
+    let developer_instructions = normalize_optional_string(input.developer_instructions.as_deref());
     let rename_managed_file = input.rename_managed_file.unwrap_or(true);
 
     let codex_home = resolve_codex_home()?;
     let (_, mut document) = config_toml_core::load_global_config_document(&codex_home)?;
 
     let mut maybe_renamed_paths: Option<(PathBuf, PathBuf)> = None;
+    let mut maybe_config_content_backup: Option<(PathBuf, Option<Vec<u8>>)> = None;
 
     {
         let agents = config_toml_core::ensure_table(&mut document, "agents")?;
@@ -213,16 +221,70 @@ pub(crate) fn update_agent_core(input: UpdateAgentInput) -> Result<AgentsSetting
         } else {
             let _ = role.remove("description");
         }
-        if let Some(config_file) = next_config_file {
+        if let Some(config_file) = next_config_file.as_deref() {
             role["config_file"] = value(config_file);
         } else {
             let _ = role.remove("config_file");
+        }
+
+        if developer_instructions_input.is_some() {
+            if let Some(config_file) = next_config_file.as_deref() {
+                if let Some(relative_path) = managed_relative_path_from_config(config_file) {
+                    let target =
+                        resolve_safe_managed_abs_path_for_write(&codex_home, &relative_path)?;
+                    let previous = match upsert_developer_instructions_in_agent_config_file(
+                        &target,
+                        developer_instructions.as_deref(),
+                    ) {
+                        Ok(value) => value,
+                        Err(err) => {
+                            if let Some((old_path, new_path)) = maybe_renamed_paths.as_ref() {
+                                if new_path.exists() {
+                                    let _ = std::fs::rename(new_path, old_path);
+                                }
+                            }
+                            return Err(err);
+                        }
+                    };
+                    maybe_config_content_backup = Some((target, previous));
+                } else {
+                    if let Some((old_path, new_path)) = maybe_renamed_paths.as_ref() {
+                        if new_path.exists() {
+                            let _ = std::fs::rename(new_path, old_path);
+                        }
+                    }
+                    return Err(format!(
+                        "agent '{name}' config_file is external; edit that file directly to change developer_instructions"
+                    ));
+                }
+            } else {
+                if let Some((old_path, new_path)) = maybe_renamed_paths.as_ref() {
+                    if new_path.exists() {
+                        let _ = std::fs::rename(new_path, old_path);
+                    }
+                }
+                return Err(format!(
+                    "agent '{name}' does not define config_file; cannot update developer_instructions"
+                ));
+            }
         }
 
         agents[&name] = Item::Table(role);
     }
 
     if let Err(err) = config_toml_core::persist_global_config_document(&codex_home, &document) {
+        if let Some((path, backup)) = maybe_config_content_backup {
+            match backup {
+                Some(bytes) => {
+                    let _ = std::fs::write(&path, bytes);
+                }
+                None => {
+                    if path.exists() {
+                        let _ = std::fs::remove_file(&path);
+                    }
+                }
+            }
+        }
         if let Some((old_path, new_path)) = maybe_renamed_paths {
             if new_path.exists() {
                 let _ = std::fs::rename(new_path, old_path);
@@ -338,6 +400,8 @@ fn collect_agents(codex_home: &Path, document: &Document) -> Vec<AgentSummaryDto
         }
         let description = read_role_description(item);
         let config_file = read_role_config_file(item).unwrap_or_default();
+        let developer_instructions =
+            read_role_developer_instructions(codex_home, config_file.as_str());
         let resolved_path = resolve_config_file_path_for_display(codex_home, config_file.as_str())
             .map(|path| path.to_string_lossy().to_string())
             .unwrap_or_else(|| codex_home.to_string_lossy().to_string());
@@ -349,6 +413,7 @@ fn collect_agents(codex_home: &Path, document: &Document) -> Vec<AgentSummaryDto
         result.push(AgentSummaryDto {
             name: name.to_string(),
             description,
+            developer_instructions,
             config_file,
             resolved_path,
             managed_by_app,
@@ -474,6 +539,20 @@ fn read_role_description(item: &Item) -> Option<String> {
 fn read_role_config_file(item: &Item) -> Option<String> {
     item.as_table_like()
         .and_then(|table| table.get("config_file"))
+        .and_then(Item::as_str)
+        .and_then(|value| normalize_optional_string(Some(value)))
+}
+
+fn read_role_developer_instructions(codex_home: &Path, config_file: &str) -> Option<String> {
+    let relative_path = managed_relative_path_from_config(config_file)?;
+    let path = resolve_safe_managed_abs_path_for_read(codex_home, &relative_path).ok()?;
+    if !path.is_file() {
+        return None;
+    }
+    let contents = std::fs::read_to_string(path).ok()?;
+    let document = parse_agent_config_document(contents.as_str()).ok()?;
+    document
+        .get("developer_instructions")
         .and_then(Item::as_str)
         .and_then(|value| normalize_optional_string(Some(value)))
 }
@@ -607,10 +686,65 @@ fn assert_managed_path_without_symlinks(
     Ok(())
 }
 
+fn parse_agent_config_document(contents: &str) -> Result<Document, String> {
+    if contents.trim().is_empty() {
+        return Ok(Document::new());
+    }
+    contents
+        .parse::<Document>()
+        .map_err(|err| format!("Failed to parse agent config file: {err}"))
+}
+
+fn upsert_developer_instructions_in_agent_config_file(
+    path: &Path,
+    developer_instructions: Option<&str>,
+) -> Result<Option<Vec<u8>>, String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|err| format!("Failed to create agents directory: {err}"))?;
+    }
+
+    let previous = if path.exists() {
+        Some(
+            std::fs::read(path)
+                .map_err(|err| format!("Failed to read agent config file before update: {err}"))?,
+        )
+    } else {
+        None
+    };
+
+    let existing = if let Some(bytes) = previous.as_ref() {
+        std::str::from_utf8(bytes)
+            .map_err(|err| format!("Agent config file is not valid UTF-8: {err}"))?
+    } else {
+        ""
+    };
+    let mut document = parse_agent_config_document(existing)?;
+
+    if let Some(value_raw) = developer_instructions {
+        if let Some(value_normalized) = normalize_optional_string(Some(value_raw)) {
+            document["developer_instructions"] = value(value_normalized);
+        } else {
+            let _ = document.remove("developer_instructions");
+        }
+    } else {
+        let _ = document.remove("developer_instructions");
+    }
+
+    let mut rendered = document.to_string();
+    if !rendered.ends_with('\n') {
+        rendered.push('\n');
+    }
+    std::fs::write(path, rendered)
+        .map_err(|err| format!("Failed to update agent config file: {err}"))?;
+    Ok(previous)
+}
+
 fn build_template_content(
     template: Option<&str>,
     model: Option<&str>,
     reasoning_effort: Option<&str>,
+    developer_instructions: Option<&str>,
 ) -> String {
     let template = template.map(str::trim).unwrap_or(TEMPLATE_BLANK);
     let model = normalize_optional_string(model).unwrap_or_else(|| DEFAULT_AGENT_MODEL.to_string());
@@ -620,6 +754,11 @@ fn build_template_content(
     overrides["model"] = value(model.as_str());
     if !reasoning_effort.is_empty() {
         overrides["model_reasoning_effort"] = value(reasoning_effort.as_str());
+    }
+    if let Some(instructions) = developer_instructions {
+        if let Some(normalized) = normalize_optional_string(Some(instructions)) {
+            overrides["developer_instructions"] = value(normalized);
+        }
     }
     match template {
         TEMPLATE_BLANK => {
@@ -772,12 +911,20 @@ mod tests {
 
     #[test]
     fn build_template_content_uses_provided_model_and_reasoning() {
+        let content =
+            build_template_content(Some("blank"), Some("gpt-5.1"), Some("high"), None);
+        assert!(content.contains("model = \"gpt-5.1\""));
+        assert!(content.contains("model_reasoning_effort = \"high\""));
+    }
+
+    #[test]
+    fn build_template_content_includes_developer_instructions() {
         let content = build_template_content(
             Some("blank"),
             Some("gpt-5.1"),
-            Some("high"),
+            Some("medium"),
+            Some("Investigate root causes first.\nCall out risks."),
         );
-        assert!(content.contains("model = \"gpt-5.1\""));
-        assert!(content.contains("model_reasoning_effort = \"high\""));
+        assert!(content.contains("developer_instructions"));
     }
 }

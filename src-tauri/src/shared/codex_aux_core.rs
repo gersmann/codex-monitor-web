@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::ErrorKind;
@@ -17,6 +18,13 @@ Follow conventional commit format (e.g., feat:, fix:, refactor:, docs:, etc.). \
 Keep the summary line under 72 characters. \
 Only output the commit message, nothing else.\n\n\
 Changes:\n{diff}";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GeneratedAgentConfiguration {
+    pub description: String,
+    pub developer_instructions: String,
+}
 
 pub(crate) fn build_commit_message_prompt(diff: &str, template: &str) -> String {
     let base = if template.trim().is_empty() {
@@ -62,26 +70,29 @@ Task:\n{cleaned_prompt}"
 
 pub(crate) fn build_agent_description_prompt(description: &str) -> String {
     format!(
-        "You improve custom coding-agent descriptions.\n\
-Given the user's raw description, rewrite it so it clearly defines:\n\
-- Trigger: when to use this agent.\n\
-- Role: what the agent is responsible for.\n\n\
+        "You generate custom coding-agent configuration text.\n\
+Return ONLY a JSON object with exactly these keys:\n\
+- description: short role summary, one sentence, 4-12 words.\n\
+- developerInstructions: multiline instructions for the agent.\n\n\
 Requirements:\n\
 - Preserve the user's intent, even when the input is short.\n\
-- Be specific and actionable.\n\
-- Keep each line concise (roughly 8-20 words).\n\
-- Return EXACTLY two lines and nothing else:\n\
-Trigger: <text>\n\
-Role: <text>\n\n\
-User description:\n\
+- Keep description concise and practical.\n\
+- developerInstructions should be actionable and specific.\n\
+- developerInstructions must be 3-8 lines.\n\
+- Do not include markdown fences.\n\n\
+Example:\n\
+{{\"description\":\"Investigates flaky tests and stabilizes suites\",\"developerInstructions\":\"Investigate flaky test failures and identify root causes.\\nReproduce failures deterministically before proposing changes.\\nPrefer minimal, safe fixes and add targeted regression coverage.\"}}\n\n\
+User prompt:\n\
 {description}"
     )
 }
 
-pub(crate) fn parse_agent_description_value(raw: &str) -> Result<String, String> {
+pub(crate) fn parse_agent_description_value(
+    raw: &str,
+) -> Result<GeneratedAgentConfiguration, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        return Err("No agent description was generated".to_string());
+        return Err("No agent configuration was generated".to_string());
     }
 
     let cleaned = trimmed
@@ -91,41 +102,99 @@ pub(crate) fn parse_agent_description_value(raw: &str) -> Result<String, String>
         .collect::<Vec<_>>()
         .join("\n");
     if cleaned.trim().is_empty() {
-        return Err("No agent description was generated".to_string());
+        return Err("No agent configuration was generated".to_string());
     }
 
-    let mut trigger: Option<String> = None;
-    let mut role: Option<String> = None;
-    for line in cleaned.lines().map(str::trim) {
-        let normalized = line
-            .trim_start_matches(|ch: char| {
-                ch == '-'
-                    || ch == '*'
-                    || ch == '.'
-                    || ch == ')'
-                    || ch.is_ascii_digit()
-                    || ch.is_whitespace()
-            })
-            .trim();
-        if let Some((key, value)) = normalized.split_once(':') {
+    if let Some(json_value) = extract_json_value(cleaned.as_str()) {
+        let description = json_value
+            .get("description")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        let developer_instructions = json_value
+            .get("developerInstructions")
+            .or_else(|| json_value.get("developer_instructions"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        if description.is_some() || developer_instructions.is_some() {
+            return Ok(GeneratedAgentConfiguration {
+                description: description.unwrap_or_default(),
+                developer_instructions: developer_instructions.unwrap_or_default(),
+            });
+        }
+    }
+
+    let cleaned_lines = cleaned
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>();
+
+    let mut description: Option<String> = None;
+    let mut developer_instructions: Option<String> = None;
+    for (index, line) in cleaned_lines.iter().enumerate() {
+        if let Some((key, value)) = line.split_once(':') {
             let key = key.trim().to_ascii_lowercase();
             let value = value.trim();
-            if value.is_empty() {
-                continue;
-            }
             match key.as_str() {
-                "trigger" if trigger.is_none() => trigger = Some(value.to_string()),
-                "role" if role.is_none() => role = Some(value.to_string()),
+                "description" if description.is_none() && !value.is_empty() => {
+                    description = Some(value.to_string())
+                }
+                "developer instructions" | "developer_instructions" | "instructions"
+                    if developer_instructions.is_none() =>
+                {
+                    let trailing = cleaned_lines
+                        .iter()
+                        .skip(index + 1)
+                        .copied()
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    let trailing = trailing.trim();
+                    let combined = if value.is_empty() {
+                        trailing.to_string()
+                    } else if trailing.is_empty() {
+                        value.to_string()
+                    } else {
+                        format!("{value}\n{trailing}")
+                    };
+                    if !combined.trim().is_empty() {
+                        developer_instructions = Some(combined);
+                    }
+                }
                 _ => {}
             }
         }
     }
 
-    if let (Some(trigger), Some(role)) = (trigger, role) {
-        return Ok(format!("Trigger: {trigger}\nRole: {role}"));
+    if description.is_some() || developer_instructions.is_some() {
+        return Ok(GeneratedAgentConfiguration {
+            description: description.unwrap_or_default(),
+            developer_instructions: developer_instructions.unwrap_or_default(),
+        });
     }
 
-    Ok(cleaned.trim().to_string())
+    if let Some((first, rest)) = cleaned.split_once('\n') {
+        let description = first.trim();
+        let developer_instructions = rest.trim();
+        if !description.is_empty() || !developer_instructions.is_empty() {
+            return Ok(GeneratedAgentConfiguration {
+                description: description.to_string(),
+                developer_instructions: developer_instructions.to_string(),
+            });
+        }
+    }
+
+    if !cleaned.is_empty() {
+        return Ok(GeneratedAgentConfiguration {
+            description: cleaned,
+            developer_instructions: String::new(),
+        });
+    }
+
+    Err("No valid agent configuration was generated".to_string())
 }
 
 pub(crate) fn parse_run_metadata_value(raw: &str) -> Result<Value, String> {
@@ -526,7 +595,7 @@ pub(crate) async fn generate_agent_description_core<F>(
     workspace_id: String,
     description: &str,
     on_hide_thread: F,
-) -> Result<String, String>
+) -> Result<GeneratedAgentConfiguration, String>
 where
     F: Fn(&str, &str),
 {
@@ -541,8 +610,8 @@ where
         workspace_id,
         prompt,
         on_hide_thread,
-        "Timeout waiting for agent description generation",
-        "Unknown error during agent description generation",
+        "Timeout waiting for agent configuration generation",
+        "Unknown error during agent configuration generation",
     )
     .await?;
 
@@ -583,22 +652,42 @@ mod tests {
     }
 
     #[test]
-    fn parse_agent_description_value_normalizes_trigger_and_role() {
-        let raw = "Trigger: when a task needs broad repository discovery\nRole: map files, flows, and constraints before edits";
+    fn parse_agent_description_value_parses_json_shape() {
+        let raw = r#"{"description":"Researches large codebases","developerInstructions":"Map relevant modules first.\nSummarize findings before proposing edits.\nCall out risks and unknowns."}"#;
         let parsed = parse_agent_description_value(raw).expect("parse description");
+        assert_eq!(parsed.description, "Researches large codebases");
+        assert!(parsed
+            .developer_instructions
+            .contains("Map relevant modules first."));
+    }
+
+    #[test]
+    fn parse_agent_description_value_handles_labeled_fallback() {
+        let raw = "Description: Stabilizes flaky test suites\nDeveloper Instructions: Reproduce failures first.\nAdd targeted regression tests.";
+        let parsed = parse_agent_description_value(raw).expect("parse description");
+        assert_eq!(parsed.description, "Stabilizes flaky test suites");
         assert_eq!(
-            parsed,
-            "Trigger: when a task needs broad repository discovery\nRole: map files, flows, and constraints before edits"
+            parsed.developer_instructions,
+            "Reproduce failures first.\nAdd targeted regression tests."
         );
     }
 
     #[test]
-    fn parse_agent_description_value_handles_code_fences() {
-        let raw = "```text\nTrigger: when code has failing tests\nRole: diagnose root cause and implement a safe fix\n```";
-        let parsed = parse_agent_description_value(raw).expect("parse description");
+    fn parse_agent_description_value_allows_partial_output() {
+        let raw = r#"{"description":"Refactors large React components"}"#;
+        let parsed = parse_agent_description_value(raw).expect("parse partial");
+        assert_eq!(parsed.description, "Refactors large React components");
+        assert_eq!(parsed.developer_instructions, "");
+    }
+
+    #[test]
+    fn parse_agent_description_value_accepts_single_line_plain_text() {
+        let raw = "Refactors large React components for performance";
+        let parsed = parse_agent_description_value(raw).expect("parse single-line fallback");
         assert_eq!(
-            parsed,
-            "Trigger: when code has failing tests\nRole: diagnose root cause and implement a safe fix"
+            parsed.description,
+            "Refactors large React components for performance"
         );
+        assert_eq!(parsed.developer_instructions, "");
     }
 }

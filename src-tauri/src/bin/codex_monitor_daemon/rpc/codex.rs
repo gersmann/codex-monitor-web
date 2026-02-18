@@ -486,7 +486,7 @@ pub(super) async fn try_handle(
                 state
                     .generate_agent_description(workspace_id, description)
                     .await
-                    .map(Value::String),
+                    .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string())),
             )
         }
         _ => None,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { AgentsSettings } from "@services/tauri";
+import type { AgentsSettings, GeneratedAgentConfiguration } from "@services/tauri";
 import type { ModelOption, WorkspaceInfo } from "@/types";
 import {
   connectWorkspace,
@@ -34,6 +34,7 @@ export type SettingsAgentsSectionProps = {
   onCreateAgent: (input: {
     name: string;
     description?: string | null;
+    developerInstructions?: string | null;
     template?: "blank";
     model?: string | null;
     reasoningEffort?: string | null;
@@ -42,6 +43,7 @@ export type SettingsAgentsSectionProps = {
     originalName: string;
     name: string;
     description?: string | null;
+    developerInstructions?: string | null;
     renameManagedFile?: boolean;
   }) => Promise<boolean>;
   onDeleteAgent: (input: {
@@ -52,8 +54,16 @@ export type SettingsAgentsSectionProps = {
   onWriteAgentConfig: (agentName: string, content: string) => Promise<boolean>;
   createDescriptionGenerating: boolean;
   editDescriptionGenerating: boolean;
-  onGenerateCreateDescription: (description: string) => Promise<string | null>;
-  onGenerateEditDescription: (description: string) => Promise<string | null>;
+  onGenerateCreateDescription: (seed: {
+    name?: string;
+    description: string;
+    developerInstructions: string;
+  }) => Promise<GeneratedAgentConfiguration | null>;
+  onGenerateEditDescription: (seed: {
+    name?: string;
+    description: string;
+    developerInstructions: string;
+  }) => Promise<GeneratedAgentConfiguration | null>;
   modelOptions: ModelOption[];
   modelOptionsLoading: boolean;
   modelOptionsError: string | null;
@@ -155,6 +165,7 @@ export const useSettingsAgentsSection = ({
     async (input: {
       name: string;
       description?: string | null;
+      developerInstructions?: string | null;
       template?: "blank";
       model?: string | null;
       reasoningEffort?: string | null;
@@ -180,6 +191,7 @@ export const useSettingsAgentsSection = ({
       originalName: string;
       name: string;
       description?: string | null;
+      developerInstructions?: string | null;
       renameManagedFile?: boolean;
     }): Promise<boolean> => {
       setUpdatingAgentName(input.originalName);
@@ -259,16 +271,30 @@ export const useSettingsAgentsSection = ({
   const generateDescription = useCallback(
     async (
       target: "create" | "edit",
-      description: string,
-    ): Promise<string | null> => {
-      const trimmed = description.trim();
-      if (!trimmed) {
-        return null;
-      }
+      seed: { name?: string; description: string; developerInstructions: string },
+    ): Promise<GeneratedAgentConfiguration | null> => {
+      const nameSeed = seed.name?.trim() ?? "";
+      const descriptionSeed = seed.description.trim();
+      const developerInstructionsSeed = seed.developerInstructions.trim();
       if (!sourceWorkspaceId || !sourceWorkspaceName) {
-        setError("Add a workspace before generating an agent description.");
+        setError("Add a workspace before generating agent configuration.");
         return null;
       }
+
+      const promptSeed = [
+        nameSeed ? `Agent name:\n${nameSeed}` : null,
+        descriptionSeed ? `Description seed:\n${descriptionSeed}` : null,
+        developerInstructionsSeed
+          ? `Developer instructions seed:\n${developerInstructionsSeed}`
+          : null,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .join("\n\n")
+        .trim();
+      const effectivePromptSeed =
+        promptSeed.length > 0
+          ? promptSeed
+          : "Create a practical custom coding agent configuration.";
 
       setGeneratingDescriptionTarget(target);
       setError(null);
@@ -276,15 +302,19 @@ export const useSettingsAgentsSection = ({
         if (!sourceWorkspaceConnected) {
           await connectWorkspace(sourceWorkspaceId);
         }
-        const generated = await generateAgentDescription(sourceWorkspaceId, trimmed);
-        const next = generated.trim();
-        if (!next) {
-          setError("Generated description was empty.");
+        const generated = await generateAgentDescription(sourceWorkspaceId, effectivePromptSeed);
+        const nextDescription = generated.description.trim();
+        const nextInstructions = generated.developerInstructions.trim();
+        if (!nextDescription && !nextInstructions) {
+          setError("Generated agent configuration was empty.");
           return null;
         }
-        return next;
+        return {
+          description: nextDescription,
+          developerInstructions: nextInstructions,
+        };
       } catch (generateError) {
-        setError(toErrorMessage(generateError, "Unable to generate agent description."));
+        setError(toErrorMessage(generateError, "Unable to generate agent configuration."));
         return null;
       } finally {
         setGeneratingDescriptionTarget((current) =>
@@ -317,10 +347,8 @@ export const useSettingsAgentsSection = ({
     onWriteAgentConfig,
     createDescriptionGenerating: generatingDescriptionTarget === "create",
     editDescriptionGenerating: generatingDescriptionTarget === "edit",
-    onGenerateCreateDescription: (description: string) =>
-      generateDescription("create", description),
-    onGenerateEditDescription: (description: string) =>
-      generateDescription("edit", description),
+    onGenerateCreateDescription: (seed) => generateDescription("create", seed),
+    onGenerateEditDescription: (seed) => generateDescription("edit", seed),
     modelOptions,
     modelOptionsLoading,
     modelOptionsError,

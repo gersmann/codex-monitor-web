@@ -413,6 +413,7 @@
 .settings-agents-actions {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -465,6 +466,11 @@
   font-size: 13px;
   line-height: 1.5;
   padding: 10px 12px;
+}
+
+.settings-agents-textarea--compact {
+  min-height: 56px;
+  line-height: 1.35;
 }
 
 .settings-agents-textarea:focus {

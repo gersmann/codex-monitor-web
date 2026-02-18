@@ -965,7 +965,7 @@ pub(crate) async fn generate_agent_description(
     description: String,
     state: State<'_, AppState>,
     app: AppHandle,
-) -> Result<String, String> {
+) -> Result<crate::shared::codex_aux_core::GeneratedAgentConfiguration, String> {
     if remote_backend::is_remote_mode(&*state).await {
         let value = remote_backend::call_remote(
             &*state,

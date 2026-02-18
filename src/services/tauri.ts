@@ -118,6 +118,7 @@ export type AgentMdResponse = TextFileResponse;
 export type AgentSummary = {
   name: string;
   description: string | null;
+  developerInstructions: string | null;
   configFile: string;
   resolvedPath: string;
   managedByApp: boolean;
@@ -139,6 +140,7 @@ export type SetAgentsCoreInput = {
 export type CreateAgentInput = {
   name: string;
   description?: string | null;
+  developerInstructions?: string | null;
   template?: "blank" | string | null;
   model?: string | null;
   reasoningEffort?: string | null;
@@ -148,6 +150,7 @@ export type UpdateAgentInput = {
   originalName: string;
   name: string;
   description?: string | null;
+  developerInstructions?: string | null;
   renameManagedFile?: boolean;
 };
 
@@ -1001,10 +1004,15 @@ export async function generateCommitMessage(
   return invoke("generate_commit_message", { workspaceId });
 }
 
+export type GeneratedAgentConfiguration = {
+  description: string;
+  developerInstructions: string;
+};
+
 export async function generateAgentDescription(
   workspaceId: string,
   description: string,
-): Promise<string> {
+): Promise<GeneratedAgentConfiguration> {
   return invoke("generate_agent_description", { workspaceId, description });
 }
 

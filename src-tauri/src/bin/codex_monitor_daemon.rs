@@ -1205,7 +1205,7 @@ impl DaemonState {
         &self,
         workspace_id: String,
         description: String,
-    ) -> Result<String, String> {
+    ) -> Result<codex_aux_core::GeneratedAgentConfiguration, String> {
         codex_aux_core::generate_agent_description_core(
             &self.sessions,
             workspace_id,
