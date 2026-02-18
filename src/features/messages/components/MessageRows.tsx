@@ -262,7 +262,7 @@ function toolIconForSummary(
   if (label === "read") {
     return FileText;
   }
-  if (label === "searched") {
+  if (label === "searched" || label === "searching") {
     return Search;
   }
 
