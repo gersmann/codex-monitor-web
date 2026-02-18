@@ -21,6 +21,10 @@
         "dragDropEnabled": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 19,
+          "y": 24
+        },
         "transparent": true,
         "devtools": true
       }
@@ -29,9 +33,7 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": [
-          "**/*"
-        ]
+        "scope": ["**/*"]
       }
     }
   },
@@ -40,10 +42,7 @@
     "targets": "all",
     "createUpdaterArtifacts": true,
     "iOS": {
-      "frameworks": [
-        "libz.tbd",
-        "libiconv.tbd"
-      ]
+      "frameworks": ["libz.tbd", "libiconv.tbd"]
     },
     "icon": [
       "icons/32x32.png",
