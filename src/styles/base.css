@@ -98,6 +98,14 @@ body {
   left: calc(10px + var(--titlebar-inset-left, 0px));
 }
 
+.app.sidebar-collapsed .titlebar-toggle-left {
+  left: calc(
+    10px
+    + var(--titlebar-inset-left, 0px)
+    + var(--titlebar-collapsed-left-extra, 0px)
+  );
+}
+
 .titlebar-toggle-right {
   right: 10px;
 }
