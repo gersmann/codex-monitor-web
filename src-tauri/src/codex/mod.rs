@@ -958,3 +958,44 @@ pub(crate) async fn generate_run_metadata(
     )
     .await
 }
+
+#[tauri::command]
+pub(crate) async fn generate_agent_description(
+    workspace_id: String,
+    description: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<String, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        let value = remote_backend::call_remote(
+            &*state,
+            app,
+            "generate_agent_description",
+            json!({ "workspaceId": workspace_id, "description": description }),
+        )
+        .await?;
+        return serde_json::from_value(value).map_err(|err| err.to_string());
+    }
+
+    crate::shared::codex_aux_core::generate_agent_description_core(
+        &state.sessions,
+        workspace_id,
+        &description,
+        |workspace_id, thread_id| {
+            let _ = app.emit(
+                "app-server-event",
+                AppServerEvent {
+                    workspace_id: workspace_id.to_string(),
+                    message: json!({
+                        "method": "codex/backgroundThread",
+                        "params": {
+                            "threadId": thread_id,
+                            "action": "hide"
+                        }
+                    }),
+                },
+            );
+        },
+    )
+    .await
+}

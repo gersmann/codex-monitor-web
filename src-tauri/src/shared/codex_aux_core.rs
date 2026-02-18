@@ -60,6 +60,74 @@ Task:\n{cleaned_prompt}"
     )
 }
 
+pub(crate) fn build_agent_description_prompt(description: &str) -> String {
+    format!(
+        "You improve custom coding-agent descriptions.\n\
+Given the user's raw description, rewrite it so it clearly defines:\n\
+- Trigger: when to use this agent.\n\
+- Role: what the agent is responsible for.\n\n\
+Requirements:\n\
+- Preserve the user's intent, even when the input is short.\n\
+- Be specific and actionable.\n\
+- Keep each line concise (roughly 8-20 words).\n\
+- Return EXACTLY two lines and nothing else:\n\
+Trigger: <text>\n\
+Role: <text>\n\n\
+User description:\n\
+{description}"
+    )
+}
+
+pub(crate) fn parse_agent_description_value(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("No agent description was generated".to_string());
+    }
+
+    let cleaned = trimmed
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("```"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if cleaned.trim().is_empty() {
+        return Err("No agent description was generated".to_string());
+    }
+
+    let mut trigger: Option<String> = None;
+    let mut role: Option<String> = None;
+    for line in cleaned.lines().map(str::trim) {
+        let normalized = line
+            .trim_start_matches(|ch: char| {
+                ch == '-'
+                    || ch == '*'
+                    || ch == '.'
+                    || ch == ')'
+                    || ch.is_ascii_digit()
+                    || ch.is_whitespace()
+            })
+            .trim();
+        if let Some((key, value)) = normalized.split_once(':') {
+            let key = key.trim().to_ascii_lowercase();
+            let value = value.trim();
+            if value.is_empty() {
+                continue;
+            }
+            match key.as_str() {
+                "trigger" if trigger.is_none() => trigger = Some(value.to_string()),
+                "role" if role.is_none() => role = Some(value.to_string()),
+                _ => {}
+            }
+        }
+    }
+
+    if let (Some(trigger), Some(role)) = (trigger, role) {
+        return Ok(format!("Trigger: {trigger}\nRole: {role}"));
+    }
+
+    Ok(cleaned.trim().to_string())
+}
+
 pub(crate) fn parse_run_metadata_value(raw: &str) -> Result<Value, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -453,9 +521,39 @@ where
     parse_run_metadata_value(&response)
 }
 
+pub(crate) async fn generate_agent_description_core<F>(
+    sessions: &Mutex<HashMap<String, Arc<WorkspaceSession>>>,
+    workspace_id: String,
+    description: &str,
+    on_hide_thread: F,
+) -> Result<String, String>
+where
+    F: Fn(&str, &str),
+{
+    let cleaned_description = description.trim();
+    if cleaned_description.is_empty() {
+        return Err("Description is required.".to_string());
+    }
+
+    let prompt = build_agent_description_prompt(cleaned_description);
+    let response = run_background_prompt_core(
+        sessions,
+        workspace_id,
+        prompt,
+        on_hide_thread,
+        "Timeout waiting for agent description generation",
+        "Unknown error during agent description generation",
+    )
+    .await?;
+
+    parse_agent_description_value(&response)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{build_commit_message_prompt_for_diff, parse_run_metadata_value};
+    use super::{
+        build_commit_message_prompt_for_diff, parse_agent_description_value, parse_run_metadata_value,
+    };
 
     #[test]
     fn build_commit_message_prompt_for_diff_requires_changes() {
@@ -481,6 +579,26 @@ mod tests {
         assert_eq!(
             result.expect_err("should fail"),
             "Missing title in metadata"
+        );
+    }
+
+    #[test]
+    fn parse_agent_description_value_normalizes_trigger_and_role() {
+        let raw = "Trigger: when a task needs broad repository discovery\nRole: map files, flows, and constraints before edits";
+        let parsed = parse_agent_description_value(raw).expect("parse description");
+        assert_eq!(
+            parsed,
+            "Trigger: when a task needs broad repository discovery\nRole: map files, flows, and constraints before edits"
+        );
+    }
+
+    #[test]
+    fn parse_agent_description_value_handles_code_fences() {
+        let raw = "```text\nTrigger: when code has failing tests\nRole: diagnose root cause and implement a safe fix\n```";
+        let parsed = parse_agent_description_value(raw).expect("parse description");
+        assert_eq!(
+            parsed,
+            "Trigger: when code has failing tests\nRole: diagnose root cause and implement a safe fix"
         );
     }
 }

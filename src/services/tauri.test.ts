@@ -45,6 +45,7 @@ import {
   updateAgent,
   deleteAgent,
   readAgentConfigToml,
+  generateAgentDescription,
   writeAgentConfigToml,
   writeAgentMd,
 } from "./tauri";
@@ -575,6 +576,18 @@ describe("tauri invoke wrappers", () => {
     expect(invokeMock).toHaveBeenCalledWith("write_agent_config_toml", {
       agentName: "researcher",
       content: "model = \"gpt-5-codex\"",
+    });
+  });
+
+  it("generates an improved agent description", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce("Trigger: when triaging flaky tests\nRole: isolate causes and suggest stable fixes");
+
+    await generateAgentDescription("ws-agent", "tests");
+
+    expect(invokeMock).toHaveBeenCalledWith("generate_agent_description", {
+      workspaceId: "ws-agent",
+      description: "tests",
     });
   });
 

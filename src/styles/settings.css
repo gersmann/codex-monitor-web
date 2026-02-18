@@ -420,6 +420,13 @@
   margin-bottom: 8px;
 }
 
+.settings-agents-description-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .settings-icon-button {
   width: 28px;
   height: 28px;
@@ -433,6 +440,17 @@
 .settings-icon-button svg {
   width: 14px;
   height: 14px;
+}
+
+.settings-agents-generate-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.settings-agents-generate-loader {
+  width: 14px;
+  height: 14px;
+  animation: settings-spin 1s linear infinite;
 }
 
 .settings-agents-textarea {
@@ -558,6 +576,15 @@
 
 .settings-agent-card + .settings-agent-card {
   margin-top: 12px;
+}
+
+@keyframes settings-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .settings-agent-card-header {

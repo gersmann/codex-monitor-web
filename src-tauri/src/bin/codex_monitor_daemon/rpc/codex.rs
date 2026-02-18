@@ -473,6 +473,22 @@ pub(super) async fn try_handle(
             };
             Some(state.generate_run_metadata(workspace_id, prompt).await)
         }
+        "generate_agent_description" => {
+            let workspace_id = match parse_string(params, "workspaceId") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let description = match parse_string(params, "description") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(
+                state
+                    .generate_agent_description(workspace_id, description)
+                    .await
+                    .map(Value::String),
+            )
+        }
         _ => None,
     }
 }

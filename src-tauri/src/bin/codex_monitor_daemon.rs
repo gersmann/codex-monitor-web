@@ -1201,6 +1201,22 @@ impl DaemonState {
         .await
     }
 
+    async fn generate_agent_description(
+        &self,
+        workspace_id: String,
+        description: String,
+    ) -> Result<String, String> {
+        codex_aux_core::generate_agent_description_core(
+            &self.sessions,
+            workspace_id,
+            &description,
+            |workspace_id, thread_id| {
+                emit_background_thread_hide(&self.event_sink, workspace_id, thread_id);
+            },
+        )
+        .await
+    }
+
     async fn local_usage_snapshot(
         &self,
         days: Option<u32>,

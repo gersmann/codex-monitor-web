@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { ModelOption } from "@/types";
+import {
+  MagicSparkleIcon,
+  MagicSparkleLoaderIcon,
+} from "@/features/shared/components/MagicSparkleIcon";
 import type { SettingsAgentsSectionProps } from "@settings/hooks/useSettingsAgentsSection";
 import { fileManagerName, openInFileManagerLabel } from "@utils/platformPaths";
 
@@ -29,6 +33,8 @@ export function SettingsAgentsSection({
   deletingAgentName,
   readingConfigAgentName,
   writingConfigAgentName,
+  createDescriptionGenerating,
+  editDescriptionGenerating,
   error,
   onRefresh,
   onSetMultiAgentEnabled,
@@ -38,6 +44,8 @@ export function SettingsAgentsSection({
   onDeleteAgent,
   onReadAgentConfig,
   onWriteAgentConfig,
+  onGenerateCreateDescription,
+  onGenerateEditDescription,
   modelOptions,
   modelOptionsLoading,
   modelOptionsError,
@@ -61,6 +69,7 @@ export function SettingsAgentsSection({
   const [configEditorAgentName, setConfigEditorAgentName] = useState<string | null>(null);
   const [configEditorContent, setConfigEditorContent] = useState("");
   const [configEditorDirty, setConfigEditorDirty] = useState(false);
+  const canGenerateCreateDescription = createDescription.trim().length > 0;
   const effectiveModelOptions = modelOptions.length > 0 ? modelOptions : FALLBACK_AGENT_MODELS;
 
   useEffect(() => {
@@ -369,9 +378,37 @@ export function SettingsAgentsSection({
           placeholder="researcher"
           disabled={creatingAgent}
         />
-        <label className="settings-label" htmlFor="settings-agent-create-description">
-          Description
-        </label>
+        <div className="settings-agents-description-row">
+          <label className="settings-label" htmlFor="settings-agent-create-description">
+            Description
+          </label>
+          <button
+            type="button"
+            className="ghost settings-icon-button settings-agents-generate-button"
+            onClick={() => {
+              if (!canGenerateCreateDescription || createDescriptionGenerating) {
+                return;
+              }
+              void (async () => {
+                const generated = await onGenerateCreateDescription(createDescription);
+                if (generated != null) {
+                  setCreateDescription(generated);
+                }
+              })();
+            }}
+            disabled={
+              creatingAgent || createDescriptionGenerating || !canGenerateCreateDescription
+            }
+            title="Improve description with AI"
+            aria-label="Improve description for new agent"
+          >
+            {createDescriptionGenerating ? (
+              <MagicSparkleLoaderIcon className="settings-agents-generate-loader" />
+            ) : (
+              <MagicSparkleIcon />
+            )}
+          </button>
+        </div>
         <textarea
           id="settings-agent-create-description"
           className="settings-agents-textarea"
@@ -452,6 +489,7 @@ export function SettingsAgentsSection({
         const isDeleting = deletingAgentName === agent.name;
         const isReadingConfig = readingConfigAgentName === agent.name;
         const isWritingConfig = writingConfigAgentName === agent.name;
+        const canGenerateEditDescription = editDescriptionDraft.trim().length > 0;
         return (
           <div className="settings-field settings-agent-card" key={agent.name}>
             <div className="settings-agent-card-header">
@@ -544,12 +582,40 @@ export function SettingsAgentsSection({
                   onChange={(event) => setEditNameDraft(event.target.value)}
                   disabled={isUpdating}
                 />
-                <label
-                  className="settings-label"
-                  htmlFor={`settings-agent-edit-description-${agent.name}`}
-                >
-                  Description
-                </label>
+                <div className="settings-agents-description-row">
+                  <label
+                    className="settings-label"
+                    htmlFor={`settings-agent-edit-description-${agent.name}`}
+                  >
+                    Description
+                  </label>
+                  <button
+                    type="button"
+                    className="ghost settings-icon-button settings-agents-generate-button"
+                    onClick={() => {
+                      if (!canGenerateEditDescription || editDescriptionGenerating) {
+                        return;
+                      }
+                      void (async () => {
+                        const generated = await onGenerateEditDescription(editDescriptionDraft);
+                        if (generated != null) {
+                          setEditDescriptionDraft(generated);
+                        }
+                      })();
+                    }}
+                    disabled={
+                      isUpdating || editDescriptionGenerating || !canGenerateEditDescription
+                    }
+                    title="Improve description with AI"
+                    aria-label={`Improve description for ${agent.name}`}
+                  >
+                    {editDescriptionGenerating ? (
+                      <MagicSparkleLoaderIcon className="settings-agents-generate-loader" />
+                    ) : (
+                      <MagicSparkleIcon />
+                    )}
+                  </button>
+                </div>
                 <textarea
                   id={`settings-agent-edit-description-${agent.name}`}
                   className="settings-agents-textarea"

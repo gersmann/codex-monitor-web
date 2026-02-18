@@ -1001,6 +1001,13 @@ export async function generateCommitMessage(
   return invoke("generate_commit_message", { workspaceId });
 }
 
+export async function generateAgentDescription(
+  workspaceId: string,
+  description: string,
+): Promise<string> {
+  return invoke("generate_agent_description", { workspaceId, description });
+}
+
 export async function sendNotification(
   title: string,
   body: string,

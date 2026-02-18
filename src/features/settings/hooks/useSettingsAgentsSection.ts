@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import type { AgentsSettings } from "@services/tauri";
 import type { ModelOption, WorkspaceInfo } from "@/types";
 import {
+  connectWorkspace,
   createAgent,
   deleteAgent,
+  generateAgentDescription,
   getAgentsSettings,
   readAgentConfigToml,
   setAgentsCoreSettings,
@@ -48,6 +50,10 @@ export type SettingsAgentsSectionProps = {
   }) => Promise<boolean>;
   onReadAgentConfig: (agentName: string) => Promise<string | null>;
   onWriteAgentConfig: (agentName: string, content: string) => Promise<boolean>;
+  createDescriptionGenerating: boolean;
+  editDescriptionGenerating: boolean;
+  onGenerateCreateDescription: (description: string) => Promise<string | null>;
+  onGenerateEditDescription: (description: string) => Promise<string | null>;
   modelOptions: ModelOption[];
   modelOptionsLoading: boolean;
   modelOptionsError: string | null;
@@ -74,7 +80,13 @@ export const useSettingsAgentsSection = ({
   const [deletingAgentName, setDeletingAgentName] = useState<string | null>(null);
   const [readingConfigAgentName, setReadingConfigAgentName] = useState<string | null>(null);
   const [writingConfigAgentName, setWritingConfigAgentName] = useState<string | null>(null);
+  const [generatingDescriptionTarget, setGeneratingDescriptionTarget] = useState<
+    "create" | "edit" | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
+  const sourceWorkspaceId = projects[0]?.id ?? null;
+  const sourceWorkspaceName = projects[0]?.name ?? null;
+  const sourceWorkspaceConnected = projects[0]?.connected ?? false;
   const {
     models: modelOptions,
     isLoading: modelOptionsLoading,
@@ -244,6 +256,45 @@ export const useSettingsAgentsSection = ({
     [refresh],
   );
 
+  const generateDescription = useCallback(
+    async (
+      target: "create" | "edit",
+      description: string,
+    ): Promise<string | null> => {
+      const trimmed = description.trim();
+      if (!trimmed) {
+        return null;
+      }
+      if (!sourceWorkspaceId || !sourceWorkspaceName) {
+        setError("Add a workspace before generating an agent description.");
+        return null;
+      }
+
+      setGeneratingDescriptionTarget(target);
+      setError(null);
+      try {
+        if (!sourceWorkspaceConnected) {
+          await connectWorkspace(sourceWorkspaceId);
+        }
+        const generated = await generateAgentDescription(sourceWorkspaceId, trimmed);
+        const next = generated.trim();
+        if (!next) {
+          setError("Generated description was empty.");
+          return null;
+        }
+        return next;
+      } catch (generateError) {
+        setError(toErrorMessage(generateError, "Unable to generate agent description."));
+        return null;
+      } finally {
+        setGeneratingDescriptionTarget((current) =>
+          current === target ? null : current,
+        );
+      }
+    },
+    [sourceWorkspaceConnected, sourceWorkspaceId, sourceWorkspaceName],
+  );
+
   return {
     settings,
     isLoading,
@@ -264,6 +315,12 @@ export const useSettingsAgentsSection = ({
     onDeleteAgent,
     onReadAgentConfig,
     onWriteAgentConfig,
+    createDescriptionGenerating: generatingDescriptionTarget === "create",
+    editDescriptionGenerating: generatingDescriptionTarget === "edit",
+    onGenerateCreateDescription: (description: string) =>
+      generateDescription("create", description),
+    onGenerateEditDescription: (description: string) =>
+      generateDescription("edit", description),
     modelOptions,
     modelOptionsLoading,
     modelOptionsError,
