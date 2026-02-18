@@ -1,4 +1,14 @@
 use super::*;
+use serde::de::DeserializeOwned;
+
+fn parse_input<T: DeserializeOwned>(params: &Value) -> Result<T, String> {
+    let input_value = params
+        .as_object()
+        .and_then(|map| map.get("input"))
+        .cloned()
+        .ok_or_else(|| "missing `input`".to_string())?;
+    serde_json::from_value(input_value).map_err(|err| err.to_string())
+}
 
 pub(super) async fn try_handle(
     state: &DaemonState,
@@ -273,6 +283,88 @@ pub(super) async fn try_handle(
             Some(
                 state
                     .set_codex_feature_flag(feature_key, enabled)
+                    .await
+                    .map(|_| json!({ "ok": true })),
+            )
+        }
+        "get_agents_settings" => Some(
+            state
+                .get_agents_settings()
+                .await
+                .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string())),
+        ),
+        "set_agents_core_settings" => {
+            let input = match parse_input::<agents_config_core::SetAgentsCoreInput>(params) {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(
+                state
+                    .set_agents_core_settings(input)
+                    .await
+                    .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string())),
+            )
+        }
+        "create_agent" => {
+            let input = match parse_input::<agents_config_core::CreateAgentInput>(params) {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(
+                state
+                    .create_agent(input)
+                    .await
+                    .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string())),
+            )
+        }
+        "update_agent" => {
+            let input = match parse_input::<agents_config_core::UpdateAgentInput>(params) {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(
+                state
+                    .update_agent(input)
+                    .await
+                    .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string())),
+            )
+        }
+        "delete_agent" => {
+            let input = match parse_input::<agents_config_core::DeleteAgentInput>(params) {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(
+                state
+                    .delete_agent(input)
+                    .await
+                    .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string())),
+            )
+        }
+        "read_agent_config_toml" => {
+            let agent_name = match parse_string(params, "agentName") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(
+                state
+                    .read_agent_config_toml(agent_name)
+                    .await
+                    .and_then(|value| serde_json::to_value(value).map_err(|err| err.to_string())),
+            )
+        }
+        "write_agent_config_toml" => {
+            let agent_name = match parse_string(params, "agentName") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            let content = match parse_string(params, "content") {
+                Ok(value) => value,
+                Err(err) => return Some(Err(err)),
+            };
+            Some(
+                state
+                    .write_agent_config_toml(agent_name, content)
                     .await
                     .map(|_| json!({ "ok": true })),
             )

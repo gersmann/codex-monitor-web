@@ -115,6 +115,46 @@ export type TextFileResponse = {
 export type GlobalAgentsResponse = TextFileResponse;
 export type GlobalCodexConfigResponse = TextFileResponse;
 export type AgentMdResponse = TextFileResponse;
+export type AgentSummary = {
+  name: string;
+  description: string | null;
+  configFile: string;
+  resolvedPath: string;
+  managedByApp: boolean;
+  fileExists: boolean;
+};
+
+export type AgentsSettings = {
+  configPath: string;
+  multiAgentEnabled: boolean;
+  maxThreads: number;
+  agents: AgentSummary[];
+};
+
+export type SetAgentsCoreInput = {
+  multiAgentEnabled: boolean;
+  maxThreads: number;
+};
+
+export type CreateAgentInput = {
+  name: string;
+  description?: string | null;
+  template?: "blank" | string | null;
+  model?: string | null;
+  reasoningEffort?: string | null;
+};
+
+export type UpdateAgentInput = {
+  originalName: string;
+  name: string;
+  description?: string | null;
+  renameManagedFile?: boolean;
+};
+
+export type DeleteAgentInput = {
+  name: string;
+  deleteManagedFile?: boolean;
+};
 
 type FileScope = "workspace" | "global";
 type FileKind = "agents" | "config";
@@ -150,6 +190,39 @@ export async function readGlobalCodexConfigToml(): Promise<GlobalCodexConfigResp
 
 export async function writeGlobalCodexConfigToml(content: string): Promise<void> {
   return fileWrite("global", "config", content);
+}
+
+export async function getAgentsSettings(): Promise<AgentsSettings> {
+  return invoke<AgentsSettings>("get_agents_settings");
+}
+
+export async function setAgentsCoreSettings(
+  input: SetAgentsCoreInput,
+): Promise<AgentsSettings> {
+  return invoke<AgentsSettings>("set_agents_core_settings", { input });
+}
+
+export async function createAgent(input: CreateAgentInput): Promise<AgentsSettings> {
+  return invoke<AgentsSettings>("create_agent", { input });
+}
+
+export async function updateAgent(input: UpdateAgentInput): Promise<AgentsSettings> {
+  return invoke<AgentsSettings>("update_agent", { input });
+}
+
+export async function deleteAgent(input: DeleteAgentInput): Promise<AgentsSettings> {
+  return invoke<AgentsSettings>("delete_agent", { input });
+}
+
+export async function readAgentConfigToml(agentName: string): Promise<string> {
+  return invoke<string>("read_agent_config_toml", { agentName });
+}
+
+export async function writeAgentConfigToml(
+  agentName: string,
+  content: string,
+): Promise<void> {
+  return invoke("write_agent_config_toml", { agentName, content });
 }
 
 export async function getConfigModel(workspaceId: string): Promise<string | null> {

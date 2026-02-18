@@ -10,6 +10,7 @@ import {
   fetchGit,
   forkThread,
   getAppsList,
+  getAgentsSettings,
   getExperimentalFeatureList,
   getGitHubIssues,
   getGitLog,
@@ -29,6 +30,7 @@ import {
   steerTurn,
   sendNotification,
   setCodexFeatureFlag,
+  setAgentsCoreSettings,
   startReview,
   setThreadName,
   tailscaleDaemonStart,
@@ -39,6 +41,11 @@ import {
   pickWorkspacePaths,
   writeGlobalAgentsMd,
   writeGlobalCodexConfigToml,
+  createAgent,
+  updateAgent,
+  deleteAgent,
+  readAgentConfigToml,
+  writeAgentConfigToml,
   writeAgentMd,
 } from "./tauri";
 
@@ -454,6 +461,120 @@ describe("tauri invoke wrappers", () => {
       kind: "config",
       workspaceId: undefined,
       content: "model = \"gpt-5\"",
+    });
+  });
+
+  it("reads agents settings", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      configPath: "/Users/me/.codex/config.toml",
+      multiAgentEnabled: true,
+      maxThreads: 6,
+      agents: [],
+    });
+
+    await getAgentsSettings();
+
+    expect(invokeMock).toHaveBeenCalledWith("get_agents_settings");
+  });
+
+  it("updates core agents settings", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({
+      configPath: "/Users/me/.codex/config.toml",
+      multiAgentEnabled: false,
+      maxThreads: 4,
+      agents: [],
+    });
+
+    await setAgentsCoreSettings({ multiAgentEnabled: false, maxThreads: 4 });
+
+    expect(invokeMock).toHaveBeenCalledWith("set_agents_core_settings", {
+      input: { multiAgentEnabled: false, maxThreads: 4 },
+    });
+  });
+
+  it("creates an agent", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await createAgent({
+      name: "researcher",
+      description: "Research-focused role",
+      template: "blank",
+      model: "gpt-5-codex",
+      reasoningEffort: "medium",
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("create_agent", {
+      input: {
+        name: "researcher",
+        description: "Research-focused role",
+        template: "blank",
+        model: "gpt-5-codex",
+        reasoningEffort: "medium",
+      },
+    });
+  });
+
+  it("updates an agent", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await updateAgent({
+      originalName: "researcher",
+      name: "code_reviewer",
+      description: "Review-focused role",
+      renameManagedFile: true,
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("update_agent", {
+      input: {
+        originalName: "researcher",
+        name: "code_reviewer",
+        description: "Review-focused role",
+        renameManagedFile: true,
+      },
+    });
+  });
+
+  it("deletes an agent", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await deleteAgent({
+      name: "researcher",
+      deleteManagedFile: true,
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("delete_agent", {
+      input: {
+        name: "researcher",
+        deleteManagedFile: true,
+      },
+    });
+  });
+
+  it("reads an agent config file", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce("model = \"gpt-5-codex\"");
+
+    await readAgentConfigToml("researcher");
+
+    expect(invokeMock).toHaveBeenCalledWith("read_agent_config_toml", {
+      agentName: "researcher",
+    });
+  });
+
+  it("writes an agent config file", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await writeAgentConfigToml("researcher", "model = \"gpt-5-codex\"");
+
+    expect(invokeMock).toHaveBeenCalledWith("write_agent_config_toml", {
+      agentName: "researcher",
+      content: "model = \"gpt-5-codex\"",
     });
   });
 

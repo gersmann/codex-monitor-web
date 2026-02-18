@@ -460,6 +460,39 @@
   border: 1px solid rgba(236, 72, 153, 0.2);
 }
 
+.settings-agents-number-input {
+  width: 92px;
+  text-align: right;
+}
+
+.settings-agents-form,
+.settings-agents-editor,
+.settings-agent-card,
+.settings-agents-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-agent-card + .settings-agent-card {
+  margin-top: 12px;
+}
+
+.settings-agent-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
 .settings-download-progress {
   display: flex;
   flex-direction: column;
