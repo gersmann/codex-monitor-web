@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import * as notification from "@tauri-apps/plugin-notification";
 import {
+  exportMarkdownFile,
   addWorkspace,
   compactThread,
   createGitHubRepo,
@@ -47,6 +48,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
+  save: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-notification", () => ({
@@ -98,6 +100,36 @@ describe("tauri invoke wrappers", () => {
     openMock.mockResolvedValueOnce(["/tmp/one", "/tmp/two"]);
 
     await expect(pickWorkspacePaths()).resolves.toEqual(["/tmp/one", "/tmp/two"]);
+  });
+
+  it("returns null when markdown export is cancelled", async () => {
+    const saveMock = vi.mocked(save);
+    const invokeMock = vi.mocked(invoke);
+    saveMock.mockResolvedValueOnce(null);
+
+    await expect(exportMarkdownFile("# Plan")).resolves.toBeNull();
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "write_text_file",
+      expect.anything(),
+    );
+  });
+
+  it("writes markdown to the selected path", async () => {
+    const saveMock = vi.mocked(save);
+    const invokeMock = vi.mocked(invoke);
+    saveMock.mockResolvedValueOnce("/tmp/plan.md");
+
+    await expect(exportMarkdownFile("# Plan", "my-plan.md")).resolves.toBe("/tmp/plan.md");
+
+    expect(saveMock).toHaveBeenCalledWith({
+      title: "Export plan as Markdown",
+      defaultPath: "my-plan.md",
+      filters: [{ name: "Markdown", extensions: ["md"] }],
+    });
+    expect(invokeMock).toHaveBeenCalledWith("write_text_file", {
+      path: "/tmp/plan.md",
+      content: "# Plan",
+    });
   });
 
   it("maps workspace_id to workspaceId for git status", async () => {

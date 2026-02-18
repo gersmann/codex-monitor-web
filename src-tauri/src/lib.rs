@@ -170,6 +170,7 @@ pub fn run() {
             settings::get_codex_config_path,
             files::file_read,
             files::file_write,
+            files::write_text_file,
             codex::get_config_model,
             menu::menu_set_accelerators,
             codex::codex_doctor,

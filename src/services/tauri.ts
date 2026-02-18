@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Options as NotificationOptions } from "@tauri-apps/plugin-notification";
 import type {
   AppSettings,
@@ -65,6 +65,27 @@ export async function pickImageFiles(): Promise<string[]> {
     return [];
   }
   return Array.isArray(selection) ? selection : [selection];
+}
+
+export async function exportMarkdownFile(
+  content: string,
+  defaultFileName = "plan.md",
+): Promise<string | null> {
+  const selection = await save({
+    title: "Export plan as Markdown",
+    defaultPath: defaultFileName,
+    filters: [
+      {
+        name: "Markdown",
+        extensions: ["md"],
+      },
+    ],
+  });
+  if (!selection) {
+    return null;
+  }
+  await invoke("write_text_file", { path: selection, content });
+  return selection;
 }
 
 export async function listWorkspaces(): Promise<WorkspaceInfo[]> {
