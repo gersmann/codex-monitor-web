@@ -309,10 +309,10 @@ describe("tauri invoke wrappers", () => {
     const invokeMock = vi.mocked(invoke);
     invokeMock.mockResolvedValueOnce(undefined);
 
-    await setCodexFeatureFlag("collab", true);
+    await setCodexFeatureFlag("apps", true);
 
     expect(invokeMock).toHaveBeenCalledWith("set_codex_feature_flag", {
-      featureKey: "collab",
+      featureKey: "apps",
       enabled: true,
     });
   });
