@@ -1,4 +1,4 @@
-# App-Server Events Reference (Codex `189f592014e1cd468d7a21a83966d68c2abc8a38`)
+# App-Server Events Reference (Codex `227352257c9cfb0f509b01dc1a30057c874bb93f`)
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
@@ -29,6 +29,7 @@ Thread/turn/item handlers:
 - `src/features/threads/hooks/useThreadItemEvents.ts`
 - `src/features/threads/hooks/useThreadApprovalEvents.ts`
 - `src/features/threads/hooks/useThreadUserInputEvents.ts`
+- `src/features/skills/hooks/useSkills.ts`
 
 State updates:
 - `src/features/threads/hooks/useThreadsReducer.ts`
@@ -106,9 +107,11 @@ events are currently not routed:
 - `mcpServer/oauthLogin/completed`
 - `model/rerouted`
 - `thread/compacted` (deprecated; intentionally not routed)
+- `thread/status/changed`
 - `deprecationNotice`
 - `configWarning`
 - `windows/worldWritableWarning`
+- `windowsSandbox/setupCompleted`
 
 ## Supported Requests (CodexMonitor -> App-Server, v2)
 
@@ -158,6 +161,7 @@ Compared against Codex v2 request methods, CodexMonitor currently does not send:
 - `config/value/write`
 - `config/batchWrite`
 - `configRequirements/read`
+- `windowsSandbox/setupStart`
 
 ## Server Requests (App-Server -> CodexMonitor, v2)
 
