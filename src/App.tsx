@@ -1850,6 +1850,7 @@ function MainApp() {
     connectWorkspace,
     sendUserMessageToThread,
     setSelectedCollaborationModeId,
+    persistThreadCodexParams,
   });
 
   const { handleMoveWorkspace } = useWorkspaceOrderingOrchestration({
