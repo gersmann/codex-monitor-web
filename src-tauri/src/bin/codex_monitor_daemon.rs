@@ -1231,7 +1231,11 @@ impl DaemonState {
         codex_aux_core::codex_doctor_core(&self.app_settings, codex_bin, codex_args).await
     }
 
-    async fn generate_commit_message(&self, workspace_id: String) -> Result<String, String> {
+    async fn generate_commit_message(
+        &self,
+        workspace_id: String,
+        commit_message_model_id: Option<String>,
+    ) -> Result<String, String> {
         let repo_root = git_ui_core::resolve_repo_root_for_workspace_core(
             &self.workspaces,
             workspace_id.clone(),
@@ -1247,6 +1251,7 @@ impl DaemonState {
             workspace_id,
             &diff,
             &commit_message_prompt,
+            commit_message_model_id.as_deref(),
             |workspace_id, thread_id| {
                 emit_background_thread_hide(&self.event_sink, workspace_id, thread_id);
             },

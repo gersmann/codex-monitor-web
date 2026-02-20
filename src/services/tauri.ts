@@ -1024,8 +1024,9 @@ export async function setThreadName(
 
 export async function generateCommitMessage(
   workspaceId: string,
+  commitMessageModelId: string | null,
 ): Promise<string> {
-  return invoke("generate_commit_message", { workspaceId });
+  return invoke("generate_commit_message", { workspaceId, commitMessageModelId });
 }
 
 export type GeneratedAgentConfiguration = {
