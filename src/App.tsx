@@ -66,7 +66,10 @@ import { useWorkspaceFileListing } from "@app/hooks/useWorkspaceFileListing";
 import { useGitBranches } from "@/features/git/hooks/useGitBranches";
 import { useBranchSwitcher } from "@/features/git/hooks/useBranchSwitcher";
 import { useBranchSwitcherShortcut } from "@/features/git/hooks/useBranchSwitcherShortcut";
-import { useWorkspaceRefreshOnFocus } from "@/features/workspaces/hooks/useWorkspaceRefreshOnFocus";
+import {
+  REMOTE_WORKSPACE_REFRESH_INTERVAL_MS,
+  useWorkspaceRefreshOnFocus,
+} from "@/features/workspaces/hooks/useWorkspaceRefreshOnFocus";
 import { useWorkspaceRestore } from "@/features/workspaces/hooks/useWorkspaceRestore";
 import { useRenameWorktreePrompt } from "@/features/workspaces/hooks/useRenameWorktreePrompt";
 import { useLayoutController } from "@app/hooks/useLayoutController";
@@ -1691,7 +1694,9 @@ function MainApp() {
   useWorkspaceRefreshOnFocus({
     workspaces,
     refreshWorkspaces,
-    listThreadsForWorkspace
+    listThreadsForWorkspace,
+    backendMode: appSettings.backendMode,
+    pollIntervalMs: REMOTE_WORKSPACE_REFRESH_INTERVAL_MS,
   });
 
   useRemoteThreadRefreshOnFocus({
