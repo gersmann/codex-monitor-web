@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AppSettings,
   DebugEntry,
+  WorkspaceGroup,
   WorkspaceInfo,
   WorkspaceSettings,
 } from "../../../types";
@@ -13,7 +14,10 @@ import {
   getWorkspaceGroupNameById,
   sortWorkspaceGroups,
 } from "../domain/workspaceGroups";
-import { useWorkspaceCrud } from "./useWorkspaceCrud";
+import {
+  useWorkspaceCrud,
+  type AddWorkspacesFromPathsResult,
+} from "./useWorkspaceCrud";
 import { useWorkspaceGroupOps } from "./useWorkspaceGroupOps";
 import { useWorktreeOps } from "./useWorktreeOps";
 
@@ -24,7 +28,53 @@ export type UseWorkspacesOptions = {
   onUpdateAppSettings?: (next: AppSettings) => Promise<AppSettings>;
 };
 
-export function useWorkspaces(options: UseWorkspacesOptions = {}) {
+export type UseWorkspacesResult = {
+  workspaces: WorkspaceInfo[];
+  workspaceGroups: WorkspaceGroup[];
+  groupedWorkspaces: ReturnType<typeof buildGroupedWorkspaces>;
+  getWorkspaceGroupName: (workspaceId: string) => string | null;
+  ungroupedLabel: string;
+  activeWorkspace: WorkspaceInfo | null;
+  activeWorkspaceId: string | null;
+  setActiveWorkspaceId: (workspaceId: string | null) => void;
+  addWorkspaceFromPath: (path: string, options?: { activate?: boolean }) => Promise<WorkspaceInfo | null>;
+  addWorkspaceFromGitUrl: (
+    url: string,
+    destinationPath: string,
+    targetFolderName?: string | null,
+    options?: { activate?: boolean },
+  ) => Promise<WorkspaceInfo | null>;
+  addWorkspacesFromPaths: (paths: string[]) => Promise<AddWorkspacesFromPathsResult>;
+  filterWorkspacePaths: (paths: string[]) => Promise<string[]>;
+  addCloneAgent: (source: WorkspaceInfo, copyName: string, copiesFolder: string) => Promise<WorkspaceInfo | null>;
+  addWorktreeAgent: (
+    parent: WorkspaceInfo,
+    branch: string,
+    options?: {
+      activate?: boolean;
+      displayName?: string | null;
+      copyAgentsMd?: boolean;
+    },
+  ) => Promise<WorkspaceInfo | null>;
+  connectWorkspace: (entry: WorkspaceInfo) => Promise<void>;
+  markWorkspaceConnected: (id: string) => void;
+  updateWorkspaceSettings: (workspaceId: string, patch: Partial<WorkspaceSettings>) => Promise<WorkspaceInfo>;
+  updateWorkspaceCodexBin: (workspaceId: string, codexBin: string | null) => Promise<WorkspaceInfo>;
+  createWorkspaceGroup: (name: string) => Promise<WorkspaceGroup | null>;
+  renameWorkspaceGroup: (groupId: string, name: string) => Promise<true | null>;
+  moveWorkspaceGroup: (groupId: string, direction: "up" | "down") => Promise<true | null>;
+  deleteWorkspaceGroup: (groupId: string) => Promise<true | null>;
+  assignWorkspaceGroup: (workspaceId: string, groupId: string | null) => Promise<true | null>;
+  removeWorkspace: (workspaceId: string) => Promise<void>;
+  removeWorktree: (workspaceId: string) => Promise<void>;
+  renameWorktree: (workspaceId: string, branch: string) => Promise<WorkspaceInfo>;
+  renameWorktreeUpstream: (workspaceId: string, oldBranch: string, newBranch: string) => Promise<void>;
+  deletingWorktreeIds: Set<string>;
+  hasLoaded: boolean;
+  refreshWorkspaces: () => Promise<WorkspaceInfo[] | undefined>;
+};
+
+export function useWorkspaces(options: UseWorkspacesOptions = {}): UseWorkspacesResult {
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -32,7 +82,6 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
   const { onDebug, defaultCodexBin, appSettings, onUpdateAppSettings } = options;
 
   const {
-    addWorkspace,
     addWorkspaceFromPath,
     addWorkspaceFromGitUrl,
     addWorkspacesFromPaths,
@@ -44,7 +93,6 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     updateWorkspaceCodexBin,
     updateWorkspaceSettings,
   } = useWorkspaceCrud({
-    appSettings,
     defaultCodexBin,
     onDebug,
     workspaces,
@@ -103,7 +151,6 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     renameWorktreeUpstream,
   } = useWorktreeOps({
     onDebug,
-    workspaces,
     setWorkspaces,
     setActiveWorkspaceId,
   });
@@ -132,7 +179,6 @@ export function useWorkspaces(options: UseWorkspacesOptions = {}) {
     activeWorkspace,
     activeWorkspaceId,
     setActiveWorkspaceId,
-    addWorkspace,
     addWorkspaceFromPath,
     addWorkspaceFromGitUrl,
     addWorkspacesFromPaths,

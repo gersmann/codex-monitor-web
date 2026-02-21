@@ -1,28 +1,19 @@
 import { useCallback } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import * as Sentry from "@sentry/react";
-import { ask, message } from "@tauri-apps/plugin-dialog";
-import type {
-  AppSettings,
-  DebugEntry,
-  WorkspaceInfo,
-  WorkspaceSettings,
-} from "../../../types";
-import { isMobilePlatform } from "../../../utils/platformPaths";
+import type { DebugEntry, WorkspaceInfo, WorkspaceSettings } from "../../../types";
 import {
   addWorkspace as addWorkspaceService,
   addWorkspaceFromGitUrl as addWorkspaceFromGitUrlService,
   connectWorkspace as connectWorkspaceService,
   isWorkspacePathDir as isWorkspacePathDirService,
   listWorkspaces,
-  pickWorkspacePaths,
   removeWorkspace as removeWorkspaceService,
   updateWorkspaceCodexBin as updateWorkspaceCodexBinService,
   updateWorkspaceSettings as updateWorkspaceSettingsService,
 } from "../../../services/tauri";
 
 type UseWorkspaceCrudOptions = {
-  appSettings?: AppSettings;
   defaultCodexBin?: string | null;
   onDebug?: (entry: DebugEntry) => void;
   workspaces: WorkspaceInfo[];
@@ -32,32 +23,24 @@ type UseWorkspaceCrudOptions = {
   setHasLoaded: Dispatch<SetStateAction<boolean>>;
 };
 
+export type AddWorkspacesFromPathsFailure = {
+  path: string;
+  message: string;
+};
+
+export type AddWorkspacesFromPathsResult = {
+  added: WorkspaceInfo[];
+  firstAdded: WorkspaceInfo | null;
+  skippedExisting: string[];
+  skippedInvalid: string[];
+  failures: AddWorkspacesFromPathsFailure[];
+};
+
 function normalizeWorkspacePathKey(value: string) {
   return value.trim().replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
-function parseWorkspacePathInput(value: string) {
-  return value
-    .split(/\r?\n|,|;/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
-function promptWorkspacePathsForMobileRemote(): string[] {
-  if (typeof window === "undefined" || typeof window.prompt !== "function") {
-    return [];
-  }
-  const input = window.prompt(
-    "Enter one or more project paths on the connected server.\nUse one path per line (or comma-separated).",
-  );
-  if (!input) {
-    return [];
-  }
-  return parseWorkspacePathInput(input);
-}
-
 export function useWorkspaceCrud({
-  appSettings,
   defaultCodexBin,
   onDebug,
   workspaces,
@@ -181,13 +164,13 @@ export function useWorkspaceCrud({
   );
 
   const addWorkspacesFromPaths = useCallback(
-    async (paths: string[]) => {
+    async (paths: string[]): Promise<AddWorkspacesFromPathsResult> => {
       const existingPaths = new Set(
         workspaces.map((entry) => normalizeWorkspacePathKey(entry.path)),
       );
       const skippedExisting: string[] = [];
       const skippedInvalid: string[] = [];
-      const failures: { path: string; message: string }[] = [];
+      const failures: AddWorkspacesFromPathsFailure[] = [];
       const added: WorkspaceInfo[] = [];
 
       const seenSelections = new Set<string>();
@@ -242,71 +225,16 @@ export function useWorkspaceCrud({
         }
       }
 
-      const hasIssues =
-        skippedExisting.length > 0 || skippedInvalid.length > 0 || failures.length > 0;
-      if (hasIssues) {
-        const lines: string[] = [];
-        lines.push(`Added ${added.length} workspace${added.length === 1 ? "" : "s"}.`);
-        if (skippedExisting.length > 0) {
-          lines.push(
-            `Skipped ${skippedExisting.length} already added workspace${
-              skippedExisting.length === 1 ? "" : "s"
-            }.`,
-          );
-        }
-        if (skippedInvalid.length > 0) {
-          lines.push(
-            `Skipped ${skippedInvalid.length} invalid path${
-              skippedInvalid.length === 1 ? "" : "s"
-            } (not a folder).`,
-          );
-        }
-        if (failures.length > 0) {
-          lines.push(
-            `Failed to add ${failures.length} workspace${
-              failures.length === 1 ? "" : "s"
-            }.`,
-          );
-          const details = failures
-            .slice(0, 3)
-            .map(({ path, message }) => `- ${path}: ${message}`);
-          if (failures.length > 3) {
-            details.push(`- …and ${failures.length - 3} more`);
-          }
-          lines.push("");
-          lines.push("Failures:");
-          lines.push(...details);
-        }
-
-        const summary = lines.join("\n");
-        const title =
-          failures.length > 0 ? "Some workspaces failed to add" : "Some workspaces were skipped";
-        void message(summary, {
-          title,
-          kind: failures.length > 0 ? "error" : "warning",
-        });
-      }
-
-      return added[0] ?? null;
+      return {
+        added,
+        firstAdded: added[0] ?? null,
+        skippedExisting,
+        skippedInvalid,
+        failures,
+      };
     },
     [addWorkspaceFromPath, workspaces],
   );
-
-  const addWorkspace = useCallback(async () => {
-    if (isMobilePlatform() && appSettings?.backendMode === "remote") {
-      const manualPaths = promptWorkspacePathsForMobileRemote();
-      if (manualPaths.length === 0) {
-        return null;
-      }
-      return addWorkspacesFromPaths(manualPaths);
-    }
-
-    const selection = await pickWorkspacePaths();
-    if (selection.length === 0) {
-      return null;
-    }
-    return addWorkspacesFromPaths(selection);
-  }, [addWorkspacesFromPaths, appSettings?.backendMode]);
 
   const filterWorkspacePaths = useCallback(async (paths: string[]) => {
     const trimmed = paths.map((path) => path.trim()).filter(Boolean);
@@ -462,36 +390,11 @@ export function useWorkspaceCrud({
 
   const removeWorkspace = useCallback(
     async (workspaceId: string) => {
-      const workspace = workspaces.find((entry) => entry.id === workspaceId);
-      const workspaceName = workspace?.name || "this workspace";
-      const worktreeCount = workspaces.filter(
-        (entry) => entry.parentId === workspaceId,
-      ).length;
       const childIds = new Set(
         workspaces
           .filter((entry) => entry.parentId === workspaceId)
           .map((entry) => entry.id),
       );
-      const detail =
-        worktreeCount > 0
-          ? `\n\nThis will also delete ${worktreeCount} worktree${
-              worktreeCount === 1 ? "" : "s"
-            } on disk.`
-          : "";
-
-      const confirmed = await ask(
-        `Are you sure you want to delete "${workspaceName}"?\n\nThis will remove the workspace from CodexMonitor.${detail}`,
-        {
-          title: "Delete Workspace",
-          kind: "warning",
-          okLabel: "Delete",
-          cancelLabel: "Cancel",
-        },
-      );
-
-      if (!confirmed) {
-        return;
-      }
 
       onDebug?.({
         id: `${Date.now()}-client-remove-workspace`,
@@ -520,17 +423,13 @@ export function useWorkspaceCrud({
           label: "workspace/remove error",
           payload: errorMessage,
         });
-        void message(errorMessage, {
-          title: "Delete workspace failed",
-          kind: "error",
-        });
+        throw error;
       }
     },
     [onDebug, setActiveWorkspaceId, setWorkspaces, workspaces],
   );
 
   return {
-    addWorkspace,
     addWorkspaceFromPath,
     addWorkspaceFromGitUrl,
     addWorkspacesFromPaths,

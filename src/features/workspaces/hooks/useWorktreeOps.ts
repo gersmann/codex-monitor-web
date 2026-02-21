@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import * as Sentry from "@sentry/react";
-import { ask, message } from "@tauri-apps/plugin-dialog";
 import type { DebugEntry, WorkspaceInfo } from "../../../types";
 import {
   addClone as addCloneService,
@@ -13,14 +12,12 @@ import {
 
 type UseWorktreeOpsOptions = {
   onDebug?: (entry: DebugEntry) => void;
-  workspaces: WorkspaceInfo[];
   setWorkspaces: Dispatch<SetStateAction<WorkspaceInfo[]>>;
   setActiveWorkspaceId: Dispatch<SetStateAction<string | null>>;
 };
 
 export function useWorktreeOps({
   onDebug,
-  workspaces,
   setWorkspaces,
   setActiveWorkspaceId,
 }: UseWorktreeOpsOptions) {
@@ -136,23 +133,6 @@ export function useWorktreeOps({
 
   const removeWorktree = useCallback(
     async (workspaceId: string) => {
-      const workspace = workspaces.find((entry) => entry.id === workspaceId);
-      const workspaceName = workspace?.name || "this worktree";
-
-      const confirmed = await ask(
-        `Are you sure you want to delete "${workspaceName}"?\n\nThis will close the agent, remove its worktree, and delete it from CodexMonitor.`,
-        {
-          title: "Delete Worktree",
-          kind: "warning",
-          okLabel: "Delete",
-          cancelLabel: "Cancel",
-        },
-      );
-
-      if (!confirmed) {
-        return;
-      }
-
       setDeletingWorktreeIds((prev) => {
         const next = new Set(prev);
         next.add(workspaceId);
@@ -178,10 +158,7 @@ export function useWorktreeOps({
           label: "worktree/remove error",
           payload: errorMessage,
         });
-        void message(errorMessage, {
-          title: "Delete worktree failed",
-          kind: "error",
-        });
+        throw error;
       } finally {
         setDeletingWorktreeIds((prev) => {
           const next = new Set(prev);
@@ -190,7 +167,7 @@ export function useWorktreeOps({
         });
       }
     },
-    [onDebug, setActiveWorkspaceId, setWorkspaces, workspaces],
+    [onDebug, setActiveWorkspaceId, setWorkspaces],
   );
 
   const renameWorktree = useCallback(
