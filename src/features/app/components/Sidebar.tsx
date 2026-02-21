@@ -35,6 +35,7 @@ import { useThreadRows } from "../hooks/useThreadRows";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { getUsageLabels } from "../utils/usageLabels";
 import { formatRelativeTimeShort } from "../../../utils/time";
+import type { ThreadStatusById } from "../../../utils/threadStatus";
 
 const COLLAPSED_GROUPS_STORAGE_KEY = "codexmonitor.collapsedGroups";
 const UNGROUPED_COLLAPSE_ID = "__ungrouped__";
@@ -55,10 +56,7 @@ type SidebarProps = {
   startingDraftThreadWorkspaceId?: string | null;
   threadsByWorkspace: Record<string, ThreadSummary[]>;
   threadParentById: Record<string, string>;
-  threadStatusById: Record<
-    string,
-    { isProcessing: boolean; hasUnread: boolean; isReviewing: boolean }
-  >;
+  threadStatusById: ThreadStatusById;
   threadListLoadingByWorkspace: Record<string, boolean>;
   threadListPagingByWorkspace: Record<string, boolean>;
   threadListCursorByWorkspace: Record<string, string | null>;
