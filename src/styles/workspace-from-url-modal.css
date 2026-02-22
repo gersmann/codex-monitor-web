@@ -1,5 +1,6 @@
 .workspace-from-url-modal-card {
   width: min(640px, calc(100vw - 24px));
+  border-radius: 16px;
 }
 
 .workspace-from-url-modal-content {
