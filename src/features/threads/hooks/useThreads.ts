@@ -548,6 +548,7 @@ export function useThreads({
     threadsByWorkspace: state.threadsByWorkspace,
     activeThreadIdByWorkspace: state.activeThreadIdByWorkspace,
     activeTurnIdByThread: state.activeTurnIdByThread,
+    threadParentById: state.threadParentById,
     threadListCursorByWorkspace: state.threadListCursorByWorkspace,
     threadStatusById: state.threadStatusById,
     threadSortKey,
