@@ -80,6 +80,7 @@ import {
   SidebarCollapseButton,
   TitlebarExpandControls,
 } from "@/features/layout/components/SidebarToggleControls";
+import { WindowCaptionControls } from "@/features/layout/components/WindowCaptionControls";
 import { useUpdaterController } from "@app/hooks/useUpdaterController";
 import { useResponseRequiredNotificationsController } from "@app/hooks/useResponseRequiredNotificationsController";
 import { useErrorToasts } from "@/features/notifications/hooks/useErrorToasts";
@@ -2131,7 +2132,10 @@ function MainApp() {
     onDeleteWorktree: handleSidebarDeleteWorktree,
     onLoadOlderThreads: handleSidebarLoadOlderThreads,
     onReloadWorkspaceThreads: handleSidebarReloadWorkspaceThreads,
-    updaterState,
+    updaterState:
+      settingsOpen && settingsSection === "about"
+        ? { stage: "idle" as const }
+        : updaterState,
     onUpdate: startUpdate,
     onDismissUpdate: dismissUpdate,
     postUpdateNotice,
@@ -2610,8 +2614,9 @@ function MainApp() {
 
   return (
     <div className={`${appClassName}${isResizing ? " is-resizing" : ""}`} style={appStyle} ref={appRef}>
-      <div className="drag-strip" id="titlebar" data-tauri-drag-region />
+      <div className="drag-strip" id="titlebar" />
       <TitlebarExpandControls {...sidebarToggleProps} />
+      <WindowCaptionControls />
       {shouldLoadGitHubPanelData ? (
         <Suspense fallback={null}>
           <GitHubPanelData
