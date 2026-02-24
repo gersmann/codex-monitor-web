@@ -2570,15 +2570,13 @@ function MainApp() {
   ) : null;
 
   const mainMessagesNode = showWorkspaceHome ? workspaceHomeNode : messagesNode;
-  const showCompactThreadConnectionIndicator =
-    showCompactCodexThreadActions && Boolean(activeThreadId) && activeItems.length > 0;
+  const showThreadConnectionIndicator =
+    Boolean(activeWorkspace) && appSettings.backendMode === "remote";
   const compactThreadConnectionState: "live" | "polling" | "disconnected" =
     !activeWorkspace?.connected
       ? "disconnected"
-      : appSettings.backendMode === "remote"
-        ? remoteThreadConnectionState
-        : "live";
-  const codexTopbarActionsNode = showCompactThreadConnectionIndicator ? (
+      : remoteThreadConnectionState;
+  const topbarActionsNode = showThreadConnectionIndicator ? (
     <span
       className={`compact-workspace-live-indicator ${
         compactThreadConnectionState === "live"
@@ -2653,7 +2651,7 @@ function MainApp() {
         homeNode={homeNode}
         mainHeaderNode={mainHeaderNode}
         desktopTopbarLeftNode={desktopTopbarLeftNodeWithToggle}
-        codexTopbarActionsNode={codexTopbarActionsNode}
+        topbarActionsNode={topbarActionsNode}
         tabletNavNode={tabletNavNode}
         tabBarNode={tabBarNode}
         gitDiffPanelNode={gitDiffPanelNode}

@@ -62,6 +62,7 @@ type DesktopLayoutProps = {
   showHome: boolean;
   showWorkspace: boolean;
   topbarLeftNode: ReactNode;
+  topbarActionsNode?: ReactNode;
   centerMode: "chat" | "diff";
   preloadGitDiffs: boolean;
   splitChatDiffView: boolean;
@@ -88,6 +89,7 @@ export function DesktopLayout({
   showHome,
   showWorkspace,
   topbarLeftNode,
+  topbarActionsNode,
   centerMode,
   preloadGitDiffs,
   splitChatDiffView,
@@ -153,7 +155,7 @@ export function DesktopLayout({
 
         {showWorkspace && (
           <>
-            <MainTopbar leftNode={topbarLeftNode} />
+            <MainTopbar leftNode={topbarLeftNode} actionsNode={topbarActionsNode} />
             {approvalToastsNode}
             <div className={`content${splitChatDiffView ? " content-split" : ""}`}>
               {splitChatDiffView ? (
