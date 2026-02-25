@@ -13,6 +13,9 @@ When updating this document:
 4. Compare Codex server request methods vs CodexMonitor inbound request handling.
 5. Update supported and missing lists below.
 
+Related project skill:
+- `.codex/skills/app-server-events-sync/SKILL.md`
+
 ## Where To Look In CodexMonitor
 
 Primary app-server event source of truth (methods + typed parsing helpers):
