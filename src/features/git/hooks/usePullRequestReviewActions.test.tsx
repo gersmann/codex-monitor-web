@@ -55,6 +55,8 @@ function renderActions(
 ) {
   const options: Parameters<typeof usePullRequestReviewActions>[0] = {
     activeWorkspace: workspace,
+    activeThreadId: "thread-active",
+    reviewDeliveryMode: "detached",
     pullRequest,
     pullRequestDiffs: diffs,
     pullRequestComments: comments,
@@ -68,7 +70,7 @@ function renderActions(
 }
 
 describe("usePullRequestReviewActions", () => {
-  it("always starts a new thread for PR review", async () => {
+  it("starts a new thread for detached PR review", async () => {
     const { result, options } = renderActions();
 
     await act(async () => {
@@ -130,5 +132,24 @@ describe("usePullRequestReviewActions", () => {
 
     expect(options.startThreadForWorkspace).toHaveBeenCalledTimes(1);
     expect(options.sendUserMessageToThread).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses the active thread for inline PR review", async () => {
+    const { result, options } = renderActions({
+      activeThreadId: "thread-active",
+      reviewDeliveryMode: "inline",
+    });
+
+    await act(async () => {
+      await result.current.runPullRequestReview({ intent: "full" });
+    });
+
+    expect(options.startThreadForWorkspace).not.toHaveBeenCalled();
+    expect(options.sendUserMessageToThread).toHaveBeenCalledWith(
+      workspace,
+      "thread-active",
+      expect.any(String),
+      [],
+    );
   });
 });

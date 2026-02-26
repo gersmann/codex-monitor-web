@@ -1833,6 +1833,8 @@ function MainApp() {
     runPullRequestReview,
   } = usePullRequestReviewActions({
     activeWorkspace,
+    activeThreadId,
+    reviewDeliveryMode: appSettings.reviewDeliveryMode,
     pullRequest: selectedPullRequest,
     pullRequestDiffs: gitPullRequestDiffs,
     pullRequestComments: gitPullRequestComments,
