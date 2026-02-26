@@ -247,7 +247,9 @@ pub(crate) async fn list_threads_core(
             "cli",
             "vscode",
             "appServer",
-            "subAgent",
+            // Intentionally exclude generic "subAgent" to avoid pulling
+            // parentless internal sessions (for example memory consolidation).
+            // Keep explicit sub-agent kinds so parent-linked child threads stay visible.
             "subAgentReview",
             "subAgentCompact",
             "subAgentThreadSpawn",

@@ -118,6 +118,7 @@ export type ThreadSummary = {
   createdAt?: number;
   modelId?: string | null;
   effort?: string | null;
+  isSubagent?: boolean;
 };
 
 export type ThreadListSortKey = "created_at" | "updated_at";

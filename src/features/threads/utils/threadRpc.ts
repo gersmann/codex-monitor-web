@@ -7,12 +7,36 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+export function isSubagentThreadSource(source: unknown): boolean {
+  if (typeof source === "string") {
+    const normalized = source.trim().toLowerCase();
+    return normalized.startsWith("subagent") || normalized.startsWith("sub_agent");
+  }
+
+  const sourceRecord = asRecord(source);
+  if (!sourceRecord) {
+    return false;
+  }
+
+  const subAgent =
+    sourceRecord.subAgent ?? sourceRecord.sub_agent ?? sourceRecord.subagent;
+  if (subAgent === null || subAgent === undefined) {
+    return false;
+  }
+  if (typeof subAgent === "string") {
+    return subAgent.trim().length > 0;
+  }
+  return typeof subAgent === "object";
+}
+
 export function getParentThreadIdFromSource(source: unknown): string | null {
   const sourceRecord = asRecord(source);
   if (!sourceRecord) {
     return null;
   }
-  const subAgent = asRecord(sourceRecord.subAgent ?? sourceRecord.sub_agent);
+  const subAgent = asRecord(
+    sourceRecord.subAgent ?? sourceRecord.sub_agent ?? sourceRecord.subagent,
+  );
   if (!subAgent) {
     return null;
   }
@@ -45,7 +69,11 @@ export function getParentThreadIdFromThread(
     return directParentId;
   }
   const spawnRaw =
-    thread.threadSpawn ?? thread.thread_spawn ?? thread.spawn ?? thread.subAgent;
+    thread.threadSpawn ??
+    thread.thread_spawn ??
+    thread.spawn ??
+    thread.subAgent ??
+    thread.subagent;
   const spawn =
     spawnRaw && typeof spawnRaw === "object"
       ? (spawnRaw as Record<string, unknown>)

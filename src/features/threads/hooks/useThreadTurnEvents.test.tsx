@@ -174,6 +174,69 @@ describe("useThreadTurnEvents", () => {
     expect(safeMessageActivity).not.toHaveBeenCalled();
   });
 
+  it("ignores parentless subagent thread started events without hiding them", () => {
+    const { result, dispatch, recordThreadActivity, safeMessageActivity } =
+      makeOptions();
+
+    act(() => {
+      result.current.onThreadStarted("ws-1", {
+        id: "thread-subagent-orphan",
+        preview: "Memory helper",
+        updatedAt: 1_700_000_000_250,
+        source: { subagent: "memory_consolidation" },
+      });
+    });
+
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "ensureThread",
+        workspaceId: "ws-1",
+        threadId: "thread-subagent-orphan",
+      }),
+    );
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "hideThread",
+        workspaceId: "ws-1",
+        threadId: "thread-subagent-orphan",
+      }),
+    );
+    expect(recordThreadActivity).not.toHaveBeenCalled();
+    expect(safeMessageActivity).not.toHaveBeenCalled();
+  });
+
+  it("keeps subagent thread started events when a parent id exists", () => {
+    const { result, dispatch } = makeOptions();
+
+    act(() => {
+      result.current.onThreadStarted("ws-1", {
+        id: "thread-subagent-child",
+        preview: "Spawned helper",
+        updatedAt: 1_700_000_000_300,
+        source: {
+          subAgent: {
+            thread_spawn: {
+              parent_thread_id: "thread-parent",
+            },
+          },
+        },
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "thread-subagent-child",
+    });
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "hideThread",
+        workspaceId: "ws-1",
+        threadId: "thread-subagent-child",
+      }),
+    );
+  });
+
   it("applies thread name updates when no custom name exists", () => {
     const { result, dispatch, getCustomName } = makeOptions();
     getCustomName.mockReturnValue(undefined);

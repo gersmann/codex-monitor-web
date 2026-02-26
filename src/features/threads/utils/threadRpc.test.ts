@@ -3,6 +3,7 @@ import {
   getParentThreadIdFromThread,
   getResumedActiveTurnId,
   getResumedTurnState,
+  isSubagentThreadSource,
 } from "./threadRpc";
 
 describe("threadRpc", () => {
@@ -102,5 +103,28 @@ describe("threadRpc", () => {
         },
       }),
     ).toBe("thread-parent-source");
+  });
+
+  it("extracts parent thread ids from lowercase subagent source metadata", () => {
+    expect(
+      getParentThreadIdFromThread({
+        id: "thread-child",
+        source: {
+          subagent: {
+            thread_spawn: {
+              parent_thread_id: "thread-parent-lowercase",
+            },
+          },
+        },
+      }),
+    ).toBe("thread-parent-lowercase");
+  });
+
+  it("detects subagent source metadata in object and string forms", () => {
+    expect(isSubagentThreadSource({ subAgent: { review: true } })).toBe(true);
+    expect(isSubagentThreadSource({ sub_agent: "memory_consolidation" })).toBe(true);
+    expect(isSubagentThreadSource("subagent_review")).toBe(true);
+    expect(isSubagentThreadSource("vscode")).toBe(false);
+    expect(isSubagentThreadSource({})).toBe(false);
   });
 });

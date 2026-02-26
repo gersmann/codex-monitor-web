@@ -31,6 +31,7 @@ import {
 import {
   getParentThreadIdFromThread,
   getResumedTurnState,
+  isSubagentThreadSource,
 } from "@threads/utils/threadRpc";
 import { saveThreadActivity } from "@threads/utils/threadStorage";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
@@ -521,6 +522,7 @@ export function useThreadActions({
             : preview
           : fallbackName;
       const metadata = extractThreadCodexMetadata(thread);
+      const isSubagent = isSubagentThreadSource(thread.source);
       return {
         id,
         name,
@@ -528,6 +530,7 @@ export function useThreadActions({
         createdAt: getThreadCreatedTimestamp(thread),
         ...(metadata.modelId ? { modelId: metadata.modelId } : {}),
         ...(metadata.effort ? { effort: metadata.effort } : {}),
+        ...(isSubagent ? { isSubagent: true } : {}),
       };
     },
     [getCustomName],

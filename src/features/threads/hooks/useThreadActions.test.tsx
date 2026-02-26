@@ -1140,6 +1140,51 @@ describe("useThreadActions", () => {
     );
   });
 
+  it("marks thread summaries as subagent when source indicates subagent", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "subagent-thread",
+            cwd: "/tmp/codex",
+            preview: "Review helper",
+            updated_at: 4500,
+            source: {
+              sub_agent: "review",
+            },
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(getThreadTimestamp).mockImplementation((thread) => {
+      const value = (thread as Record<string, unknown>).updated_at as number;
+      return value ?? 0;
+    });
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-1",
+      sortKey: "updated_at",
+      preserveAnchors: true,
+      threads: [
+        {
+          id: "subagent-thread",
+          name: "Review helper",
+          updatedAt: 4500,
+          createdAt: 0,
+          isSubagent: true,
+        },
+      ],
+    });
+  });
+
   it("matches windows workspace threads client-side", async () => {
     const windowsWorkspace: WorkspaceInfo = {
       ...workspace,

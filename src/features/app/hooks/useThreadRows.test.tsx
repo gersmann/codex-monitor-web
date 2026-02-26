@@ -125,4 +125,29 @@ describe("useThreadRows", () => {
       ["thread-child", 1],
     ]);
   });
+
+  it("hides subagent threads when no parent id is known", () => {
+    const threads: ThreadSummary[] = [
+      { id: "thread-root", name: "Root", updatedAt: 1 },
+      { id: "thread-subagent-orphan", name: "Orphan", updatedAt: 2, isSubagent: true },
+      { id: "thread-subagent-child", name: "Child", updatedAt: 3, isSubagent: true },
+    ];
+    const getPinTimestamp = vi.fn(() => null);
+    const { result } = renderHook(() =>
+      useThreadRows({ "thread-subagent-child": "thread-root" }),
+    );
+
+    const rows = result.current.getThreadRows(
+      threads,
+      true,
+      "ws-1",
+      getPinTimestamp,
+      0,
+    );
+
+    expect(rows.unpinnedRows.map((row) => [row.thread.id, row.depth])).toEqual([
+      ["thread-root", 0],
+      ["thread-subagent-child", 1],
+    ]);
+  });
 });

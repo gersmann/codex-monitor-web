@@ -9,6 +9,10 @@ import {
   normalizeRateLimits,
   normalizeTokenUsage,
 } from "@threads/utils/threadNormalize";
+import {
+  getParentThreadIdFromThread,
+  isSubagentThreadSource,
+} from "@threads/utils/threadRpc";
 import type { ThreadAction } from "./useThreadsReducer";
 
 type UseThreadTurnEventsOptions = {
@@ -114,6 +118,12 @@ export function useThreadTurnEvents({
         return;
       }
       if (isThreadHidden(workspaceId, threadId)) {
+        return;
+      }
+      const sourceParentId = getParentThreadIdFromThread(thread);
+      if (isSubagentThreadSource(thread.source) && !sourceParentId) {
+        // Some thread/started payloads omit parent metadata initially.
+        // Ignore these until richer data (for example thread/list) can link safely.
         return;
       }
       dispatch({ type: "ensureThread", workspaceId, threadId });

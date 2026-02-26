@@ -50,7 +50,13 @@ export function useThreadRows(threadParentById: Record<string, string>) {
         return cachedEntry.result;
       }
 
-      const threadIds = new Set(threads.map((thread) => thread.id));
+      const visibleThreads = threads.filter((thread) => {
+        if (!thread.isSubagent) {
+          return true;
+        }
+        return Boolean(threadParentById[thread.id]);
+      });
+      const threadIds = new Set(visibleThreads.map((thread) => thread.id));
       const childrenByParent = new Map<string, ThreadSummary[]>();
       const roots: ThreadSummary[] = [];
       const resolveVisibleParentId = (threadId: string) => {
@@ -66,7 +72,7 @@ export function useThreadRows(threadParentById: Record<string, string>) {
         return null;
       };
 
-      threads.forEach((thread) => {
+      visibleThreads.forEach((thread) => {
         const parentId = resolveVisibleParentId(thread.id);
         if (parentId) {
           const list = childrenByParent.get(parentId) ?? [];
