@@ -1,6 +1,7 @@
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
+import { SettingsSection } from "@/features/design-system/components/settings/SettingsPrimitives";
 import type { OpenAppTarget } from "@/types";
 import {
   fileManagerName,
@@ -40,11 +41,10 @@ export function SettingsOpenAppsSection({
   onSelectOpenAppDefault,
 }: SettingsOpenAppsSectionProps) {
   return (
-    <section className="settings-section">
-      <div className="settings-section-title">Open in</div>
-      <div className="settings-section-subtitle">
-        Customize the Open in menu shown in the title bar and file previews.
-      </div>
+    <SettingsSection
+      title="Open in"
+      subtitle="Customize the Open in menu shown in the title bar and file previews."
+    >
       <div className="settings-open-apps">
         {openAppDrafts.map((target, index) => {
           const iconSrc =
@@ -228,6 +228,6 @@ export function SettingsOpenAppsSection({
             : "Apps run as an executable with optional args."}
         </div>
       </div>
-    </section>
+    </SettingsSection>
   );
 }

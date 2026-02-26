@@ -5,6 +5,7 @@ import {
   type AppBuildType,
 } from "@services/tauri";
 import { useUpdater } from "@/features/update/hooks/useUpdater";
+import { SettingsSection } from "@/features/design-system/components/settings/SettingsPrimitives";
 
 function formatBytes(value: number) {
   if (!Number.isFinite(value) || value <= 0) {
@@ -75,7 +76,7 @@ export function SettingsAboutSection() {
     : new Date(parsedBuildDate).toLocaleString();
 
   return (
-    <section className="settings-section">
+    <SettingsSection title="About" subtitle="App version, build metadata, and update controls.">
       <div className="settings-field">
         <div className="settings-help">
           Version: <code>{__APP_VERSION__}</code>
@@ -163,6 +164,6 @@ export function SettingsAboutSection() {
           )}
         </div>
       </div>
-    </section>
+    </SettingsSection>
   );
 }

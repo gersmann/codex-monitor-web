@@ -2,6 +2,10 @@ import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import type { Dispatch, SetStateAction } from "react";
+import {
+  SettingsSection,
+  SettingsSubsection,
+} from "@/features/design-system/components/settings/SettingsPrimitives";
 import type { WorkspaceGroup, WorkspaceInfo } from "@/types";
 
 type GroupedWorkspaces = Array<{
@@ -54,15 +58,14 @@ export function SettingsProjectsSection({
   onDeleteWorkspace,
 }: SettingsProjectsSectionProps) {
   return (
-    <section className="settings-section">
-      <div className="settings-section-title">Projects</div>
-      <div className="settings-section-subtitle">
-        Group related workspaces and reorder projects within each group.
-      </div>
-      <div className="settings-subsection-title">Groups</div>
-      <div className="settings-subsection-subtitle">
-        Create group labels for related repositories.
-      </div>
+    <SettingsSection
+      title="Projects"
+      subtitle="Group related workspaces and reorder projects within each group."
+    >
+      <SettingsSubsection
+        title="Groups"
+        subtitle="Create group labels for related repositories."
+      />
       <div className="settings-groups">
         <div className="settings-group-create">
           <input
@@ -185,10 +188,10 @@ export function SettingsProjectsSection({
           <div className="settings-empty">No groups yet.</div>
         )}
       </div>
-      <div className="settings-subsection-title">Projects</div>
-      <div className="settings-subsection-subtitle">
-        Assign projects to groups and adjust their order.
-      </div>
+      <SettingsSubsection
+        title="Projects"
+        subtitle="Assign projects to groups and adjust their order."
+      />
       <div className="settings-projects">
         {groupedWorkspaces.map((group) => (
           <div key={group.id ?? "ungrouped"} className="settings-project-group">
@@ -255,6 +258,6 @@ export function SettingsProjectsSection({
         ))}
         {projects.length === 0 && <div className="settings-empty">No projects yet.</div>}
       </div>
-    </section>
+    </SettingsSection>
   );
 }

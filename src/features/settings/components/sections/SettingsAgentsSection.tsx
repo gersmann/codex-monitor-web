@@ -7,6 +7,12 @@ import {
 } from "@/features/shared/components/MagicSparkleIcon";
 import type { SettingsAgentsSectionProps } from "@settings/hooks/useSettingsAgentsSection";
 import { fileManagerName, openInFileManagerLabel } from "@utils/platformPaths";
+import {
+  SettingsSection,
+  SettingsSubsection,
+  SettingsToggleRow,
+  SettingsToggleSwitch,
+} from "@/features/design-system/components/settings/SettingsPrimitives";
 
 const FALLBACK_AGENT_MODELS: ModelOption[] = [
   {
@@ -344,23 +350,19 @@ export function SettingsAgentsSection({
   };
 
   return (
-    <section className="settings-section">
-      <div className="settings-section-title">Agents</div>
-      <div className="settings-section-subtitle">
-        Configure multi-agent mode, limits, and custom agent roles.
-      </div>
+    <SettingsSection
+      title="Agents"
+      subtitle="Configure multi-agent mode, limits, and custom agent roles."
+    >
       <div className="settings-help settings-agents-builtins-help">
         Built-in roles from Codex are still available: <code>default</code>, <code>explorer</code>,
         and <code>worker</code>.
       </div>
 
-      <div className="settings-toggle-row">
-        <div>
-          <div className="settings-toggle-title">Config file</div>
-          <div className="settings-toggle-subtitle">
-            Open global Codex config in {fileManagerName()}.
-          </div>
-        </div>
+      <SettingsToggleRow
+        title="Config file"
+        subtitle={<>Open global Codex config in {fileManagerName()}.</>}
+      >
         <div className="settings-agents-actions">
           <button type="button" className="ghost" onClick={onRefresh} disabled={isLoading}>
             Refresh
@@ -374,33 +376,31 @@ export function SettingsAgentsSection({
             {openInFileManagerLabel()}
           </button>
         </div>
-      </div>
+      </SettingsToggleRow>
 
-      <div className="settings-toggle-row">
-        <div>
-          <div className="settings-toggle-title">Enable Multi-Agent</div>
-          <div className="settings-toggle-subtitle">
+      <SettingsToggleRow
+        title="Enable Multi-Agent"
+        subtitle={
+          <>
             Writes <code>features.multi_agent</code> in config.toml.
-          </div>
-        </div>
-        <button
-          type="button"
-          className={`settings-toggle ${settings?.multiAgentEnabled ? "on" : ""}`}
+          </>
+        }
+      >
+        <SettingsToggleSwitch
+          pressed={settings?.multiAgentEnabled ?? false}
           onClick={() => void handleToggleMultiAgent()}
-          aria-pressed={settings?.multiAgentEnabled ?? false}
           disabled={!settings || isUpdatingCore}
-        >
-          <span className="settings-toggle-knob" />
-        </button>
-      </div>
+        />
+      </SettingsToggleRow>
 
-      <div className="settings-toggle-row">
-        <div>
-          <div className="settings-toggle-title">Max Threads</div>
-          <div className="settings-toggle-subtitle">
+      <SettingsToggleRow
+        title="Max Threads"
+        subtitle={
+          <>
             Maximum open agent threads. Valid range: <code>1-12</code>. Changes save immediately.
-          </div>
-        </div>
+          </>
+        }
+      >
         <div className="settings-agents-stepper" role="group" aria-label="Maximum agent threads">
           <button
             type="button"
@@ -428,15 +428,16 @@ export function SettingsAgentsSection({
             ▲
           </button>
         </div>
-      </div>
+      </SettingsToggleRow>
 
-      <div className="settings-toggle-row">
-        <div>
-          <div className="settings-toggle-title">Max Depth</div>
-          <div className="settings-toggle-subtitle">
+      <SettingsToggleRow
+        title="Max Depth"
+        subtitle={
+          <>
             Maximum nested spawn depth. Valid range: <code>1-4</code>. Changes save immediately.
-          </div>
-        </div>
+          </>
+        }
+      >
         <div className="settings-agents-stepper" role="group" aria-label="Maximum agent depth">
           <button
             type="button"
@@ -464,12 +465,16 @@ export function SettingsAgentsSection({
             ▲
           </button>
         </div>
-      </div>
+      </SettingsToggleRow>
 
-      <div className="settings-subsection-title">Create Agent</div>
-      <div className="settings-subsection-subtitle">
-        Add a custom role under <code>[agents.&lt;name&gt;]</code> and create its config file.
-      </div>
+      <SettingsSubsection
+        title="Create Agent"
+        subtitle={
+          <>
+            Add a custom role under <code>[agents.&lt;name&gt;]</code> and create its config file.
+          </>
+        }
+      />
       <div className="settings-field settings-agents-form">
         <div className="settings-agents-description-row">
           <label className="settings-label" htmlFor="settings-agent-create-name">
@@ -596,10 +601,10 @@ export function SettingsAgentsSection({
         {createError && <div className="settings-agents-error">{createError}</div>}
       </div>
 
-      <div className="settings-subsection-title">Configured Agents</div>
-      <div className="settings-subsection-subtitle">
-        Manage custom roles and their per-agent config files.
-      </div>
+      <SettingsSubsection
+        title="Configured Agents"
+        subtitle="Manage custom roles and their per-agent config files."
+      />
 
       {settings && settings.agents.length === 0 && !isLoading && (
         <div className="settings-help">No custom agents configured yet.</div>
@@ -857,6 +862,6 @@ export function SettingsAgentsSection({
       {isLoading && <div className="settings-help">Loading agents settings...</div>}
       {openPathError && <div className="settings-agents-error">{openPathError}</div>}
       {error && <div className="settings-agents-error">{error}</div>}
-    </section>
+    </SettingsSection>
   );
 }

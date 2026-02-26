@@ -1,4 +1,9 @@
 import type { AppSettings } from "@/types";
+import {
+  SettingsSection,
+  SettingsToggleRow,
+  SettingsToggleSwitch,
+} from "@/features/design-system/components/settings/SettingsPrimitives";
 
 type ComposerPreset = AppSettings["composerEditorPreset"];
 
@@ -21,11 +26,10 @@ export function SettingsComposerSection({
 }: SettingsComposerSectionProps) {
   const steerUnavailable = !appSettings.steerEnabled;
   return (
-    <section className="settings-section">
-      <div className="settings-section-title">Composer</div>
-      <div className="settings-section-subtitle">
-        Control helpers and formatting behavior inside the message editor.
-      </div>
+    <SettingsSection
+      title="Composer"
+      subtitle="Control helpers and formatting behavior inside the message editor."
+    >
       <div className="settings-field">
         <div className="settings-field-label">Follow-up behavior</div>
         <div className="settings-segmented" aria-label="Follow-up behavior">
@@ -79,27 +83,20 @@ export function SettingsComposerSection({
           Choose the default while a run is active. Press {followUpShortcutLabel} to send the
           opposite behavior for one message.
         </div>
-        <div className="settings-toggle-row">
-          <div>
-            <div className="settings-toggle-title">Show follow-up hint while processing</div>
-            <div className="settings-toggle-subtitle">
-              Displays queue/steer shortcut guidance above the composer.
-            </div>
-          </div>
-          <button
-            type="button"
-            className={`settings-toggle ${appSettings.composerFollowUpHintEnabled ? "on" : ""}`}
+        <SettingsToggleRow
+          title="Show follow-up hint while processing"
+          subtitle="Displays queue/steer shortcut guidance above the composer."
+        >
+          <SettingsToggleSwitch
+            pressed={appSettings.composerFollowUpHintEnabled}
             onClick={() =>
               void onUpdateAppSettings({
                 ...appSettings,
                 composerFollowUpHintEnabled: !appSettings.composerFollowUpHintEnabled,
               })
             }
-            aria-pressed={appSettings.composerFollowUpHintEnabled}
-          >
-            <span className="settings-toggle-knob" />
-          </button>
-        </div>
+          />
+        </SettingsToggleRow>
         {steerUnavailable && (
           <div className="settings-help">
             Steer is unavailable in the current Codex config. Follow-ups will queue.
@@ -135,100 +132,72 @@ export function SettingsComposerSection({
       </div>
       <div className="settings-divider" />
       <div className="settings-subsection-title">Code fences</div>
-      <div className="settings-toggle-row">
-        <div>
-          <div className="settings-toggle-title">Expand fences on Space</div>
-          <div className="settings-toggle-subtitle">
-            Typing ``` then Space inserts a fenced block.
-          </div>
-        </div>
-        <button
-          type="button"
-          className={`settings-toggle ${appSettings.composerFenceExpandOnSpace ? "on" : ""}`}
+      <SettingsToggleRow
+        title="Expand fences on Space"
+        subtitle="Typing ``` then Space inserts a fenced block."
+      >
+        <SettingsToggleSwitch
+          pressed={appSettings.composerFenceExpandOnSpace}
           onClick={() =>
             void onUpdateAppSettings({
               ...appSettings,
               composerFenceExpandOnSpace: !appSettings.composerFenceExpandOnSpace,
             })
           }
-          aria-pressed={appSettings.composerFenceExpandOnSpace}
-        >
-          <span className="settings-toggle-knob" />
-        </button>
-      </div>
-      <div className="settings-toggle-row">
-        <div>
-          <div className="settings-toggle-title">Expand fences on Enter</div>
-          <div className="settings-toggle-subtitle">
-            Use Enter to expand ``` lines when enabled.
-          </div>
-        </div>
-        <button
-          type="button"
-          className={`settings-toggle ${appSettings.composerFenceExpandOnEnter ? "on" : ""}`}
+        />
+      </SettingsToggleRow>
+      <SettingsToggleRow
+        title="Expand fences on Enter"
+        subtitle="Use Enter to expand ``` lines when enabled."
+      >
+        <SettingsToggleSwitch
+          pressed={appSettings.composerFenceExpandOnEnter}
           onClick={() =>
             void onUpdateAppSettings({
               ...appSettings,
               composerFenceExpandOnEnter: !appSettings.composerFenceExpandOnEnter,
             })
           }
-          aria-pressed={appSettings.composerFenceExpandOnEnter}
-        >
-          <span className="settings-toggle-knob" />
-        </button>
-      </div>
-      <div className="settings-toggle-row">
-        <div>
-          <div className="settings-toggle-title">Support language tags</div>
-          <div className="settings-toggle-subtitle">
-            Allows ```lang + Space to include a language.
-          </div>
-        </div>
-        <button
-          type="button"
-          className={`settings-toggle ${appSettings.composerFenceLanguageTags ? "on" : ""}`}
+        />
+      </SettingsToggleRow>
+      <SettingsToggleRow
+        title="Support language tags"
+        subtitle="Allows ```lang + Space to include a language."
+      >
+        <SettingsToggleSwitch
+          pressed={appSettings.composerFenceLanguageTags}
           onClick={() =>
             void onUpdateAppSettings({
               ...appSettings,
               composerFenceLanguageTags: !appSettings.composerFenceLanguageTags,
             })
           }
-          aria-pressed={appSettings.composerFenceLanguageTags}
-        >
-          <span className="settings-toggle-knob" />
-        </button>
-      </div>
-      <div className="settings-toggle-row">
-        <div>
-          <div className="settings-toggle-title">Wrap selection in fences</div>
-          <div className="settings-toggle-subtitle">
-            Wraps selected text when creating a fence.
-          </div>
-        </div>
-        <button
-          type="button"
-          className={`settings-toggle ${appSettings.composerFenceWrapSelection ? "on" : ""}`}
+        />
+      </SettingsToggleRow>
+      <SettingsToggleRow
+        title="Wrap selection in fences"
+        subtitle="Wraps selected text when creating a fence."
+      >
+        <SettingsToggleSwitch
+          pressed={appSettings.composerFenceWrapSelection}
           onClick={() =>
             void onUpdateAppSettings({
               ...appSettings,
               composerFenceWrapSelection: !appSettings.composerFenceWrapSelection,
             })
           }
-          aria-pressed={appSettings.composerFenceWrapSelection}
-        >
-          <span className="settings-toggle-knob" />
-        </button>
-      </div>
-      <div className="settings-toggle-row">
-        <div>
-          <div className="settings-toggle-title">Copy blocks without fences</div>
-          <div className="settings-toggle-subtitle">
+        />
+      </SettingsToggleRow>
+      <SettingsToggleRow
+        title="Copy blocks without fences"
+        subtitle={
+          <>
             When enabled, Copy is plain text. Hold {optionKeyLabel} to include ``` fences.
-          </div>
-        </div>
-        <button
-          type="button"
-          className={`settings-toggle ${appSettings.composerCodeBlockCopyUseModifier ? "on" : ""}`}
+          </>
+        }
+      >
+        <SettingsToggleSwitch
+          pressed={appSettings.composerCodeBlockCopyUseModifier}
           onClick={() =>
             void onUpdateAppSettings({
               ...appSettings,
@@ -236,23 +205,16 @@ export function SettingsComposerSection({
                 !appSettings.composerCodeBlockCopyUseModifier,
             })
           }
-          aria-pressed={appSettings.composerCodeBlockCopyUseModifier}
-        >
-          <span className="settings-toggle-knob" />
-        </button>
-      </div>
+        />
+      </SettingsToggleRow>
       <div className="settings-divider" />
       <div className="settings-subsection-title">Pasting</div>
-      <div className="settings-toggle-row">
-        <div>
-          <div className="settings-toggle-title">Auto-wrap multi-line paste</div>
-          <div className="settings-toggle-subtitle">
-            Wraps multi-line paste inside a fenced block.
-          </div>
-        </div>
-        <button
-          type="button"
-          className={`settings-toggle ${appSettings.composerFenceAutoWrapPasteMultiline ? "on" : ""}`}
+      <SettingsToggleRow
+        title="Auto-wrap multi-line paste"
+        subtitle="Wraps multi-line paste inside a fenced block."
+      >
+        <SettingsToggleSwitch
+          pressed={appSettings.composerFenceAutoWrapPasteMultiline}
           onClick={() =>
             void onUpdateAppSettings({
               ...appSettings,
@@ -260,21 +222,14 @@ export function SettingsComposerSection({
                 !appSettings.composerFenceAutoWrapPasteMultiline,
             })
           }
-          aria-pressed={appSettings.composerFenceAutoWrapPasteMultiline}
-        >
-          <span className="settings-toggle-knob" />
-        </button>
-      </div>
-      <div className="settings-toggle-row">
-        <div>
-          <div className="settings-toggle-title">Auto-wrap code-like single lines</div>
-          <div className="settings-toggle-subtitle">
-            Wraps long single-line code snippets on paste.
-          </div>
-        </div>
-        <button
-          type="button"
-          className={`settings-toggle ${appSettings.composerFenceAutoWrapPasteCodeLike ? "on" : ""}`}
+        />
+      </SettingsToggleRow>
+      <SettingsToggleRow
+        title="Auto-wrap code-like single lines"
+        subtitle="Wraps long single-line code snippets on paste."
+      >
+        <SettingsToggleSwitch
+          pressed={appSettings.composerFenceAutoWrapPasteCodeLike}
           onClick={() =>
             void onUpdateAppSettings({
               ...appSettings,
@@ -282,34 +237,24 @@ export function SettingsComposerSection({
                 !appSettings.composerFenceAutoWrapPasteCodeLike,
             })
           }
-          aria-pressed={appSettings.composerFenceAutoWrapPasteCodeLike}
-        >
-          <span className="settings-toggle-knob" />
-        </button>
-      </div>
+        />
+      </SettingsToggleRow>
       <div className="settings-divider" />
       <div className="settings-subsection-title">Lists</div>
-      <div className="settings-toggle-row">
-        <div>
-          <div className="settings-toggle-title">Continue lists on Shift+Enter</div>
-          <div className="settings-toggle-subtitle">
-            Continues numbered and bulleted lists when the line has content.
-          </div>
-        </div>
-        <button
-          type="button"
-          className={`settings-toggle ${appSettings.composerListContinuation ? "on" : ""}`}
+      <SettingsToggleRow
+        title="Continue lists on Shift+Enter"
+        subtitle="Continues numbered and bulleted lists when the line has content."
+      >
+        <SettingsToggleSwitch
+          pressed={appSettings.composerListContinuation}
           onClick={() =>
             void onUpdateAppSettings({
               ...appSettings,
               composerListContinuation: !appSettings.composerListContinuation,
             })
           }
-          aria-pressed={appSettings.composerListContinuation}
-        >
-          <span className="settings-toggle-knob" />
-        </button>
-      </div>
-    </section>
+        />
+      </SettingsToggleRow>
+    </SettingsSection>
   );
 }

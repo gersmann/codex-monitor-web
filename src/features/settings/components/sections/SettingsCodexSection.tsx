@@ -7,6 +7,10 @@ import type {
   CodexUpdateResult,
   ModelOption,
 } from "@/types";
+import {
+  SettingsSection,
+  SettingsToggleRow,
+} from "@/features/design-system/components/settings/SettingsPrimitives";
 import { FileEditorCard } from "@/features/shared/components/FileEditorCard";
 
 type SettingsCodexSectionProps = {
@@ -224,11 +228,10 @@ export function SettingsCodexSection({
   ]);
 
   return (
-    <section className="settings-section">
-      <div className="settings-section-title">Codex</div>
-      <div className="settings-section-subtitle">
-        Configure the Codex CLI used by CodexMonitor and validate the install.
-      </div>
+    <SettingsSection
+      title="Codex"
+      subtitle="Configure the Codex CLI used by CodexMonitor and validate the install."
+    >
       <div className="settings-field">
         <label className="settings-field-label" htmlFor="codex-path">
           Default Codex path
@@ -391,21 +394,22 @@ export function SettingsCodexSection({
         Default parameters
       </div>
 
-      <div className="settings-toggle-row">
-        <div>
-          <label className="settings-toggle-title" htmlFor="default-model">
+      <SettingsToggleRow
+        title={
+          <label htmlFor="default-model">
             Model
           </label>
-          <div className="settings-toggle-subtitle">
-            {defaultModelsConnectedWorkspaceCount === 0
-              ? "Add a workspace to load available models."
-              : defaultModelsLoading
-                ? "Loading models from the first workspace…"
-                : defaultModelsError
-                  ? `Couldn’t load models: ${defaultModelsError}`
-                  : "Sourced from the first workspace and used when there is no thread-specific override."}
-          </div>
-        </div>
+        }
+        subtitle={
+          defaultModelsConnectedWorkspaceCount === 0
+            ? "Add a workspace to load available models."
+            : defaultModelsLoading
+              ? "Loading models from the first workspace…"
+              : defaultModelsError
+                ? `Couldn’t load models: ${defaultModelsError}`
+                : "Sourced from the first workspace and used when there is no thread-specific override."
+        }
+      >
         <div className="settings-field-row">
           <select
             id="default-model"
@@ -435,19 +439,20 @@ export function SettingsCodexSection({
             Refresh
           </button>
         </div>
-      </div>
+      </SettingsToggleRow>
 
-      <div className="settings-toggle-row">
-        <div>
-          <label className="settings-toggle-title" htmlFor="default-effort">
+      <SettingsToggleRow
+        title={
+          <label htmlFor="default-effort">
             Reasoning effort
           </label>
-          <div className="settings-toggle-subtitle">
-            {reasoningSupported
-              ? "Available options depend on the selected model."
-              : "The selected model does not expose reasoning effort options."}
-          </div>
-        </div>
+        }
+        subtitle={
+          reasoningSupported
+            ? "Available options depend on the selected model."
+            : "The selected model does not expose reasoning effort options."
+        }
+      >
         <select
           id="default-effort"
           className="settings-select"
@@ -468,17 +473,16 @@ export function SettingsCodexSection({
             </option>
           ))}
         </select>
-      </div>
+      </SettingsToggleRow>
 
-      <div className="settings-toggle-row">
-        <div>
-          <label className="settings-toggle-title" htmlFor="default-access">
+      <SettingsToggleRow
+        title={
+          <label htmlFor="default-access">
             Access mode
           </label>
-          <div className="settings-toggle-subtitle">
-            Used when there is no thread-specific override.
-          </div>
-        </div>
+        }
+        subtitle="Used when there is no thread-specific override."
+      >
         <select
           id="default-access"
           className="settings-select"
@@ -494,7 +498,7 @@ export function SettingsCodexSection({
           <option value="current">On-request</option>
           <option value="full-access">Full access</option>
         </select>
-      </div>
+      </SettingsToggleRow>
       <div className="settings-field">
         <label className="settings-field-label" htmlFor="review-delivery">
           Review mode
@@ -580,6 +584,6 @@ export function SettingsCodexSection({
           help: "settings-help",
         }}
       />
-    </section>
+    </SettingsSection>
   );
 }

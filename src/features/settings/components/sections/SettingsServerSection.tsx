@@ -8,6 +8,11 @@ import type {
   TcpDaemonStatus,
 } from "@/types";
 import { ModalShell } from "@/features/design-system/components/modal/ModalShell";
+import {
+  SettingsSection,
+  SettingsToggleRow,
+  SettingsToggleSwitch,
+} from "@/features/design-system/components/settings/SettingsPrimitives";
 
 type AddRemoteBackendDraft = {
   name: string;
@@ -173,13 +178,14 @@ export function SettingsServerSection({
   };
 
   return (
-    <section className="settings-section">
-      <div className="settings-section-title">Server</div>
-      <div className="settings-section-subtitle">
-        {isMobileSimplified
+    <SettingsSection
+      title="Server"
+      subtitle={
+        isMobileSimplified
           ? "Configure TCP host/token from your desktop setup, then run a connection test."
-          : "Configure how CodexMonitor exposes TCP backend access for mobile and remote clients. Desktop usage remains local unless you explicitly connect through remote mode."}
-      </div>
+          : "Configure how CodexMonitor exposes TCP backend access for mobile and remote clients. Desktop usage remains local unless you explicitly connect through remote mode."
+      }
+    >
 
       {!isMobileSimplified && (
         <div className="settings-field">
@@ -328,27 +334,20 @@ export function SettingsServerSection({
         )}
 
         {!isMobileSimplified && (
-          <div className="settings-toggle-row">
-            <div>
-              <div className="settings-toggle-title">Keep daemon running after app closes</div>
-              <div className="settings-toggle-subtitle">
-                If disabled, CodexMonitor stops managed TCP daemon processes before exit.
-              </div>
-            </div>
-            <button
-              type="button"
-              className={`settings-toggle ${appSettings.keepDaemonRunningAfterAppClose ? "on" : ""}`}
+          <SettingsToggleRow
+            title="Keep daemon running after app closes"
+            subtitle="If disabled, CodexMonitor stops managed TCP daemon processes before exit."
+          >
+            <SettingsToggleSwitch
+              pressed={appSettings.keepDaemonRunningAfterAppClose}
               onClick={() =>
                 void onUpdateAppSettings({
                   ...appSettings,
                   keepDaemonRunningAfterAppClose: !appSettings.keepDaemonRunningAfterAppClose,
                 })
               }
-              aria-pressed={appSettings.keepDaemonRunningAfterAppClose}
-            >
-              <span className="settings-toggle-knob" />
-            </button>
-          </div>
+            />
+          </SettingsToggleRow>
         )}
 
         <div className="settings-field">
@@ -663,6 +662,6 @@ export function SettingsServerSection({
           </div>
         </ModalShell>
       )}
-    </section>
+    </SettingsSection>
   );
 }

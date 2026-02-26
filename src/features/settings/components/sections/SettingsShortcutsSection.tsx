@@ -1,4 +1,8 @@
 import { useMemo, useState, type KeyboardEvent } from "react";
+import {
+  SettingsSection,
+  SettingsSubsection,
+} from "@/features/design-system/components/settings/SettingsPrimitives";
 import { formatShortcut, getDefaultInterruptShortcut } from "@utils/shortcuts";
 import { isMacPlatform } from "@utils/platformPaths";
 import type {
@@ -230,11 +234,10 @@ export function SettingsShortcutsSection({
   }, [groups, normalizedSearchQuery]);
 
   return (
-    <section className="settings-section">
-      <div className="settings-section-title">Shortcuts</div>
-      <div className="settings-section-subtitle">
-        Customize keyboard shortcuts for file actions, composer, panels, and navigation.
-      </div>
+    <SettingsSection
+      title="Shortcuts"
+      subtitle="Customize keyboard shortcuts for file actions, composer, panels, and navigation."
+    >
       <div className="settings-field settings-shortcuts-search">
         <label className="settings-field-label" htmlFor="settings-shortcuts-search">
           Search shortcuts
@@ -262,8 +265,7 @@ export function SettingsShortcutsSection({
       {filteredGroups.map((group, index) => (
         <div key={group.title}>
           {index > 0 && <div className="settings-divider" />}
-          <div className="settings-subsection-title">{group.title}</div>
-          <div className="settings-subsection-subtitle">{group.subtitle}</div>
+          <SettingsSubsection title={group.title} subtitle={group.subtitle} />
           {group.items.map((item) => (
             <ShortcutField
               key={item.settingKey}
@@ -280,6 +282,6 @@ export function SettingsShortcutsSection({
           No shortcuts match {normalizedSearchQuery ? `"${searchQuery.trim()}"` : "your search"}.
         </div>
       )}
-    </section>
+    </SettingsSection>
   );
 }

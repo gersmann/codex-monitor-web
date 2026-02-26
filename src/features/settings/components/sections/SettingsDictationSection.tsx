@@ -1,4 +1,9 @@
 import type { AppSettings, DictationModelStatus } from "@/types";
+import {
+  SettingsSection,
+  SettingsToggleRow,
+  SettingsToggleSwitch,
+} from "@/features/design-system/components/settings/SettingsPrimitives";
 import { formatDownloadSize } from "@utils/formatting";
 
 type DictationModelOption = {
@@ -38,21 +43,16 @@ export function SettingsDictationSection({
   const dictationProgress = dictationModelStatus?.progress ?? null;
 
   return (
-    <section className="settings-section">
-      <div className="settings-section-title">Dictation</div>
-      <div className="settings-section-subtitle">
-        Enable microphone dictation with on-device transcription.
-      </div>
-      <div className="settings-toggle-row">
-        <div>
-          <div className="settings-toggle-title">Enable dictation</div>
-          <div className="settings-toggle-subtitle">
-            Downloads the selected Whisper model on first use.
-          </div>
-        </div>
-        <button
-          type="button"
-          className={`settings-toggle ${appSettings.dictationEnabled ? "on" : ""}`}
+    <SettingsSection
+      title="Dictation"
+      subtitle="Enable microphone dictation with on-device transcription."
+    >
+      <SettingsToggleRow
+        title="Enable dictation"
+        subtitle="Downloads the selected Whisper model on first use."
+      >
+        <SettingsToggleSwitch
+          pressed={appSettings.dictationEnabled}
           onClick={() => {
             const nextEnabled = !appSettings.dictationEnabled;
             void onUpdateAppSettings({
@@ -74,11 +74,8 @@ export function SettingsDictationSection({
               onDownloadDictationModel();
             }
           }}
-          aria-pressed={appSettings.dictationEnabled}
-        >
-          <span className="settings-toggle-knob" />
-        </button>
-      </div>
+        />
+      </SettingsToggleRow>
       <div className="settings-field">
         <label className="settings-field-label" htmlFor="dictation-model">
           Dictation model
@@ -232,6 +229,6 @@ export function SettingsDictationSection({
           </div>
         </div>
       )}
-    </section>
+    </SettingsSection>
   );
 }

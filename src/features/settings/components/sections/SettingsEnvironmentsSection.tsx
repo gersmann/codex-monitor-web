@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
+import { SettingsSection } from "@/features/design-system/components/settings/SettingsPrimitives";
 import type { WorkspaceInfo } from "@/types";
 import { pushErrorToast } from "@services/toasts";
 
@@ -28,11 +29,10 @@ export function SettingsEnvironmentsSection({
   onSaveEnvironmentSetup,
 }: SettingsEnvironmentsSectionProps) {
   return (
-    <section className="settings-section">
-      <div className="settings-section-title">Environments</div>
-      <div className="settings-section-subtitle">
-        Configure per-project setup scripts that run after worktree creation.
-      </div>
+    <SettingsSection
+      title="Environments"
+      subtitle="Configure per-project setup scripts that run after worktree creation."
+    >
       {mainWorkspaces.length === 0 ? (
         <div className="settings-empty">No projects yet.</div>
       ) : (
@@ -124,6 +124,6 @@ export function SettingsEnvironmentsSection({
           </div>
         </>
       )}
-    </section>
+    </SettingsSection>
   );
 }
