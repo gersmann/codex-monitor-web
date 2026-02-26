@@ -12,12 +12,17 @@ import type {
   PullRequestReviewIntent,
 } from "../../../types";
 import { parseDiff, type ParsedDiffLine } from "../../../utils/diff";
+import { highlightLine, languageFromPath } from "../../../utils/syntax";
 import {
   DIFF_VIEWER_SCROLL_CSS,
 } from "../../design-system/diff/diffViewerTheme";
 import { splitPath } from "./GitDiffPanel.utils";
 import type { GitDiffViewerItem } from "./GitDiffViewer.types";
-import { normalizePatchName, parseRawDiffLines } from "./GitDiffViewer.utils";
+import {
+  isFallbackRawDiffLineHighlightable,
+  normalizePatchName,
+  parseRawDiffLines,
+} from "./GitDiffViewer.utils";
 
 type HoveredDiffLine =
   | {
@@ -117,6 +122,10 @@ export const DiffCard = memo(function DiffCard({
     [displayPath],
   );
   const displayDir = dir ? `${dir}/` : "";
+  const fallbackLanguage = useMemo(
+    () => languageFromPath(displayPath),
+    [displayPath],
+  );
 
   const fileDiff = useMemo(() => {
     if (!entry.diff.trim()) {
@@ -287,14 +296,26 @@ export const DiffCard = memo(function DiffCard({
         </div>
       ) : entry.diff.trim().length > 0 && parsedLines.length > 0 ? (
         <div className="diff-viewer-output diff-viewer-output-flat diff-viewer-output-raw">
-          {parsedLines.map((line, index) => (
-            <div
-              key={index}
-              className={`diff-viewer-raw-line diff-viewer-raw-line-${line.type}`}
-            >
-              {line.text}
-            </div>
-          ))}
+          {parsedLines.map((line, index) => {
+            const highlighted = highlightLine(
+              line.text,
+              isFallbackRawDiffLineHighlightable(line.type)
+                ? fallbackLanguage
+                : null,
+            );
+
+            return (
+              <div
+                key={index}
+                className={`diff-viewer-raw-line diff-viewer-raw-line-${line.type}`}
+              >
+                <span
+                  className="diff-line-content"
+                  dangerouslySetInnerHTML={{ __html: highlighted }}
+                />
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="diff-viewer-placeholder">{placeholder}</div>

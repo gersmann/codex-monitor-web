@@ -2,12 +2,17 @@ import { useMemo } from "react";
 import { parsePatchFiles, type FileDiffMetadata } from "@pierre/diffs";
 import { FileDiff, WorkerPoolContextProvider } from "@pierre/diffs/react";
 import { parseDiff } from "../../../utils/diff";
+import { highlightLine, languageFromPath } from "../../../utils/syntax";
 import { workerFactory } from "../../../utils/diffsWorker";
 import {
   DIFF_VIEWER_HIGHLIGHTER_OPTIONS,
   DIFF_VIEWER_SCROLL_CSS,
 } from "../../design-system/diff/diffViewerTheme";
-import { normalizePatchName, parseRawDiffLines } from "./GitDiffViewer.utils";
+import {
+  isFallbackRawDiffLineHighlightable,
+  normalizePatchName,
+  parseRawDiffLines,
+} from "./GitDiffViewer.utils";
 
 type PierreDiffBlockProps = {
   diff: string;
@@ -60,6 +65,10 @@ export function PierreDiffBlock({
     }
     return parseRawDiffLines(diff);
   }, [diff]);
+  const fallbackLanguage = useMemo(
+    () => languageFromPath(displayPath),
+    [displayPath],
+  );
 
   const diffOptions = useMemo(
     () => ({
@@ -91,14 +100,26 @@ export function PierreDiffBlock({
         </div>
       ) : (
         <div className="diff-viewer-output diff-viewer-output-flat diff-viewer-output-raw">
-          {parsedLines.map((line, index) => (
-            <div
-              key={index}
-              className={`diff-viewer-raw-line diff-viewer-raw-line-${line.type}`}
-            >
-              {line.text}
-            </div>
-          ))}
+          {parsedLines.map((line, index) => {
+            const highlighted = highlightLine(
+              line.text,
+              isFallbackRawDiffLineHighlightable(line.type)
+                ? fallbackLanguage
+                : null,
+            );
+
+            return (
+              <div
+                key={index}
+                className={`diff-viewer-raw-line diff-viewer-raw-line-${line.type}`}
+              >
+                <span
+                  className="diff-line-content"
+                  dangerouslySetInnerHTML={{ __html: highlighted }}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </WorkerPoolContextProvider>

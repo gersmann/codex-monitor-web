@@ -124,5 +124,9 @@ describe("GitDiffViewer", () => {
     expect(screen.queryByText("Diff unavailable.")).toBeNull();
     expect(screen.getByText("added line")).toBeTruthy();
     expect(screen.getByText("removed line")).toBeTruthy();
+
+    const rawLines = Array.from(document.querySelectorAll(".diff-viewer-raw-line"));
+    expect(rawLines[1]?.className).toContain("diff-viewer-raw-line-add");
+    expect(rawLines[2]?.className).toContain("diff-viewer-raw-line-del");
   });
 });
