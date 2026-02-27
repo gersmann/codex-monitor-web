@@ -667,7 +667,7 @@ export const Composer = memo(function Composer({
         </div>
       )}
       {contextActions.length > 0 ? (
-        <div className="composer-context-actions" role="toolbar" aria-label="PR review tools">
+        <div className="composer-context-actions" role="toolbar" aria-label="Review tools">
           {contextActions.map((action) => (
             <button
               key={action.id}

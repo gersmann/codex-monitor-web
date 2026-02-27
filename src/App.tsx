@@ -1844,6 +1844,17 @@ function MainApp() {
     sendUserMessageToThread,
   });
 
+  const selectedCommitEntry = useMemo(() => {
+    if (!selectedCommitSha) {
+      return null;
+    }
+    return (
+      [...gitLogAheadEntries, ...gitLogBehindEntries, ...gitLogEntries].find(
+        (entry) => entry.sha === selectedCommitSha,
+      ) ?? null
+    );
+  }, [gitLogAheadEntries, gitLogBehindEntries, gitLogEntries, selectedCommitSha]);
+
   const {
     handleSelectPullRequest,
     resetPullRequestSelection,
@@ -1853,6 +1864,7 @@ function MainApp() {
   } = usePullRequestComposer({
     activeWorkspace,
     selectedPullRequest,
+    selectedCommit: selectedCommitEntry,
     filePanelMode,
     gitPanelMode,
     centerMode,
@@ -1867,6 +1879,7 @@ function MainApp() {
     pullRequestReviewActions,
     pullRequestReviewLaunching: isLaunchingPullRequestReview,
     runPullRequestReview,
+    startReview,
     clearActiveImages,
     handleSend,
   });

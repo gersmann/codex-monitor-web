@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import type {
   AppMention,
   ComposerSendIntent,
+  GitLogEntry,
   GitHubPullRequest,
   PullRequestReviewAction,
   PullRequestReviewIntent,
@@ -24,6 +25,7 @@ type ComposerContextAction = {
 type UsePullRequestComposerOptions = {
   activeWorkspace: WorkspaceInfo | null;
   selectedPullRequest: GitHubPullRequest | null;
+  selectedCommit: GitLogEntry | null;
   filePanelMode: "git" | "files" | "prompts";
   gitPanelMode: GitPanelMode;
   centerMode: "chat" | "diff";
@@ -43,6 +45,7 @@ type UsePullRequestComposerOptions = {
     images?: string[];
     activateThread?: boolean;
   }) => Promise<string | null>;
+  startReview: (text: string) => Promise<void>;
   clearActiveImages: () => void;
   handleSend: (
     text: string,
@@ -55,6 +58,7 @@ type UsePullRequestComposerOptions = {
 export function usePullRequestComposer({
   activeWorkspace,
   selectedPullRequest,
+  selectedCommit,
   filePanelMode,
   gitPanelMode,
   centerMode,
@@ -69,6 +73,7 @@ export function usePullRequestComposer({
   pullRequestReviewActions,
   pullRequestReviewLaunching,
   runPullRequestReview,
+  startReview,
   clearActiveImages,
   handleSend,
 }: UsePullRequestComposerOptions) {
@@ -79,6 +84,15 @@ export function usePullRequestComposer({
       gitPanelMode === "prs" &&
       centerMode === "diff",
     [centerMode, filePanelMode, gitPanelMode, selectedPullRequest],
+  );
+
+  const isCommitComposer = useMemo(
+    () =>
+      Boolean(selectedCommit) &&
+      filePanelMode === "git" &&
+      gitPanelMode === "log" &&
+      centerMode === "diff",
+    [centerMode, filePanelMode, gitPanelMode, selectedCommit],
   );
 
   const handleSelectPullRequest = useCallback(
@@ -173,32 +187,54 @@ export function usePullRequestComposer({
   );
 
   const composerContextActions = useMemo<ComposerContextAction[]>(() => {
-    if (!isPullRequestComposer || !activeWorkspace || !selectedPullRequest) {
-      return [];
+    if (isPullRequestComposer && activeWorkspace && selectedPullRequest) {
+      return pullRequestReviewActions.map((action) => ({
+        id: action.id,
+        label: action.label,
+        title: `${action.label} for PR #${selectedPullRequest.number}`,
+        disabled: pullRequestReviewLaunching,
+        onSelect: async () => {
+          const reviewThreadId = await runPullRequestReview({
+            intent: action.intent,
+            activateThread: true,
+          });
+          if (reviewThreadId) {
+            clearActiveImages();
+          }
+        },
+      }));
     }
-    return pullRequestReviewActions.map((action) => ({
-      id: action.id,
-      label: action.label,
-      title: `${action.label} for PR #${selectedPullRequest.number}`,
-      disabled: pullRequestReviewLaunching,
-      onSelect: async () => {
-        const reviewThreadId = await runPullRequestReview({
-          intent: action.intent,
-          activateThread: true,
-        });
-        if (reviewThreadId) {
-          clearActiveImages();
-        }
-      },
-    }));
+
+    if (isCommitComposer && activeWorkspace && selectedCommit) {
+      const shortSha = selectedCommit.sha.slice(0, 7);
+      const summary = selectedCommit.summary.replace(/\s+/g, " ").trim();
+      const reviewCommand = summary
+        ? `/review commit ${selectedCommit.sha} ${summary}`
+        : `/review commit ${selectedCommit.sha}`;
+      return [
+        {
+          id: "commit-review",
+          label: "Review Commit",
+          title: `Review commit ${shortSha}`,
+          onSelect: async () => {
+            await startReview(reviewCommand);
+          },
+        },
+      ];
+    }
+
+    return [];
   }, [
     activeWorkspace,
     clearActiveImages,
+    isCommitComposer,
     isPullRequestComposer,
     pullRequestReviewLaunching,
     pullRequestReviewActions,
     runPullRequestReview,
+    selectedCommit,
     selectedPullRequest,
+    startReview,
   ]);
 
   const composerSendLabel = isPullRequestComposer ? "Ask PR" : undefined;

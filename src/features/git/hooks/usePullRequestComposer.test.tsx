@@ -2,6 +2,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type {
+  GitLogEntry,
   GitHubPullRequest,
   PullRequestReviewAction,
   WorkspaceInfo,
@@ -31,6 +32,13 @@ const reviewActions: PullRequestReviewAction[] = [
   { id: "pr-review-risks", label: "Risk Scan", intent: "risks" },
 ];
 
+const selectedCommit: GitLogEntry = {
+  sha: "abcdef1234567890",
+  summary: "Tighten sidebar commit selection",
+  author: "octocat",
+  timestamp: 1_706_246_400,
+};
+
 const connectedWorkspace: WorkspaceInfo = {
   id: "workspace-1",
   name: "CodexMonitor",
@@ -42,6 +50,7 @@ const connectedWorkspace: WorkspaceInfo = {
 const makeOptions = (overrides: Partial<Parameters<typeof usePullRequestComposer>[0]> = {}) => ({
   activeWorkspace: connectedWorkspace,
   selectedPullRequest: null,
+  selectedCommit: null,
   filePanelMode: "git" as const,
   gitPanelMode: "prs" as const,
   centerMode: "diff" as const,
@@ -56,6 +65,7 @@ const makeOptions = (overrides: Partial<Parameters<typeof usePullRequestComposer
   pullRequestReviewActions: reviewActions,
   pullRequestReviewLaunching: false,
   runPullRequestReview: vi.fn().mockResolvedValue("thread-review-1"),
+  startReview: vi.fn().mockResolvedValue(undefined),
   clearActiveImages: vi.fn(),
   handleSend: vi.fn().mockResolvedValue(undefined),
   ...overrides,
@@ -225,5 +235,33 @@ describe("usePullRequestComposer", () => {
         activateThread: true,
       }),
     );
+  });
+
+  it("exposes commit review action when a commit is selected in log mode", () => {
+    const options = makeOptions({
+      selectedCommit,
+      gitPanelMode: "log",
+    });
+    const { result } = renderHook(() => usePullRequestComposer(options));
+
+    expect(result.current.composerContextActions).toHaveLength(1);
+    expect(result.current.composerContextActions[0]?.label).toBe("Review Commit");
+  });
+
+  it("runs commit review action via /review commit command", async () => {
+    const options = makeOptions({
+      selectedCommit,
+      gitPanelMode: "log",
+    });
+    const { result } = renderHook(() => usePullRequestComposer(options));
+
+    await act(async () => {
+      await result.current.composerContextActions[0]?.onSelect();
+    });
+
+    expect(options.startReview).toHaveBeenCalledWith(
+      "/review commit abcdef1234567890 Tighten sidebar commit selection",
+    );
+    expect(options.runPullRequestReview).not.toHaveBeenCalled();
   });
 });
