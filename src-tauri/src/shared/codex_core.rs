@@ -249,11 +249,11 @@ pub(crate) async fn list_threads_core(
             "appServer",
             // Intentionally exclude generic "subAgent" to avoid pulling
             // parentless internal sessions (for example memory consolidation).
-            // Keep explicit sub-agent kinds so parent-linked child threads stay visible.
+            // Keep only explicit parent-linked sub-agent kinds so internal
+            // background jobs (for example memory consolidation) stay hidden.
             "subAgentReview",
             "subAgentCompact",
             "subAgentThreadSpawn",
-            "subAgentOther",
             "unknown"
         ]
     });
