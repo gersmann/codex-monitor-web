@@ -1185,6 +1185,48 @@ describe("useThreadActions", () => {
     });
   });
 
+  it("hides memory consolidation subagent threads from thread/list", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "memory-thread",
+            cwd: "/tmp/codex",
+            preview: "Memory helper",
+            updated_at: 4500,
+            source: {
+              subagent: "memory_consolidation",
+            },
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(getThreadTimestamp).mockImplementation((thread) => {
+      const value = (thread as Record<string, unknown>).updated_at as number;
+      return value ?? 0;
+    });
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "hideThread",
+      workspaceId: "ws-1",
+      threadId: "memory-thread",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-1",
+      sortKey: "updated_at",
+      preserveAnchors: true,
+      threads: [],
+    });
+  });
+
   it("matches windows workspace threads client-side", async () => {
     const windowsWorkspace: WorkspaceInfo = {
       ...workspace,

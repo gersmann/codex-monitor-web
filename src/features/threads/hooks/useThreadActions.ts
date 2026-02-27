@@ -32,6 +32,7 @@ import {
   getParentThreadIdFromThread,
   getResumedTurnState,
   isSubagentThreadSource,
+  shouldHideSubagentThreadFromSidebar,
 } from "@threads/utils/threadRpc";
 import { saveThreadActivity } from "@threads/utils/threadStorage";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
@@ -522,6 +523,9 @@ export function useThreadActions({
             : preview
           : fallbackName;
       const metadata = extractThreadCodexMetadata(thread);
+      if (shouldHideSubagentThreadFromSidebar(thread.source)) {
+        return null;
+      }
       const isSubagent = isSubagentThreadSource(thread.source);
       return {
         id,
@@ -633,8 +637,12 @@ export function useThreadActions({
             if (!workspaceId) {
               return;
             }
-            matchingThreadsByWorkspace[workspaceId]?.push(thread);
             const threadId = String(thread?.id ?? "");
+            if (threadId && shouldHideSubagentThreadFromSidebar(thread.source)) {
+              dispatch({ type: "hideThread", workspaceId, threadId });
+              return;
+            }
+            matchingThreadsByWorkspace[workspaceId]?.push(thread);
             if (!threadId) {
               return;
             }
@@ -915,7 +923,15 @@ export function useThreadActions({
                   workspacePathLookup,
                   allowedWorkspaceIds,
                 );
-                return workspaceId === workspace.id;
+                if (workspaceId !== workspace.id) {
+                  return false;
+                }
+                const threadId = String(thread?.id ?? "");
+                if (threadId && shouldHideSubagentThreadFromSidebar(thread.source)) {
+                  dispatch({ type: "hideThread", workspaceId, threadId });
+                  return false;
+                }
+                return true;
               },
             ),
           );

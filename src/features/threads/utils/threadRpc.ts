@@ -1,10 +1,70 @@
 import { asString } from "./threadNormalize";
 
+const SIDEBAR_HIDDEN_SUBAGENT_KINDS = new Set(["memory_consolidation"]);
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") {
     return null;
   }
   return value as Record<string, unknown>;
+}
+
+function normalizeSubagentKind(value: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]/g, "_");
+  if (normalized.startsWith("subagent_")) {
+    return normalized.slice("subagent_".length);
+  }
+  if (normalized.startsWith("sub_agent_")) {
+    return normalized.slice("sub_agent_".length);
+  }
+  return normalized;
+}
+
+function getSubagentKind(source: unknown): string | null {
+  if (typeof source === "string") {
+    const normalized = normalizeSubagentKind(source);
+    return normalized || null;
+  }
+
+  const sourceRecord = asRecord(source);
+  if (!sourceRecord) {
+    return null;
+  }
+
+  const subAgentRaw =
+    sourceRecord.subAgent ?? sourceRecord.sub_agent ?? sourceRecord.subagent;
+  if (typeof subAgentRaw === "string") {
+    const normalized = normalizeSubagentKind(subAgentRaw);
+    return normalized || null;
+  }
+
+  const subAgentRecord = asRecord(subAgentRaw);
+  if (!subAgentRecord) {
+    return null;
+  }
+
+  const explicitKind = asString(
+    subAgentRecord.kind ??
+      subAgentRecord.type ??
+      subAgentRecord.name ??
+      subAgentRecord.id,
+  );
+  if (explicitKind) {
+    const normalized = normalizeSubagentKind(explicitKind);
+    return normalized || null;
+  }
+
+  const candidateKeys = Object.keys(subAgentRecord).filter(
+    (key) => key !== "thread_spawn" && key !== "threadSpawn",
+  );
+  if (candidateKeys.length !== 1) {
+    return null;
+  }
+  const normalized = normalizeSubagentKind(candidateKeys[0] ?? "");
+  return normalized || null;
 }
 
 export function isSubagentThreadSource(source: unknown): boolean {
@@ -27,6 +87,14 @@ export function isSubagentThreadSource(source: unknown): boolean {
     return subAgent.trim().length > 0;
   }
   return typeof subAgent === "object";
+}
+
+export function shouldHideSubagentThreadFromSidebar(source: unknown): boolean {
+  const subagentKind = getSubagentKind(source);
+  if (!subagentKind) {
+    return false;
+  }
+  return SIDEBAR_HIDDEN_SUBAGENT_KINDS.has(subagentKind);
 }
 
 export function getParentThreadIdFromSource(source: unknown): string | null {

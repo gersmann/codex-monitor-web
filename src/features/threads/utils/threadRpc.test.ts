@@ -4,6 +4,7 @@ import {
   getResumedActiveTurnId,
   getResumedTurnState,
   isSubagentThreadSource,
+  shouldHideSubagentThreadFromSidebar,
 } from "./threadRpc";
 
 describe("threadRpc", () => {
@@ -126,5 +127,21 @@ describe("threadRpc", () => {
     expect(isSubagentThreadSource("subagent_review")).toBe(true);
     expect(isSubagentThreadSource("vscode")).toBe(false);
     expect(isSubagentThreadSource({})).toBe(false);
+  });
+
+  it("hides only memory consolidation subagents from sidebar", () => {
+    expect(
+      shouldHideSubagentThreadFromSidebar({ subagent: "memory_consolidation" }),
+    ).toBe(true);
+    expect(
+      shouldHideSubagentThreadFromSidebar({ subAgent: { memory_consolidation: true } }),
+    ).toBe(true);
+    expect(shouldHideSubagentThreadFromSidebar("subagent_memory_consolidation")).toBe(
+      true,
+    );
+    expect(shouldHideSubagentThreadFromSidebar({ subAgent: { review: true } })).toBe(
+      false,
+    );
+    expect(shouldHideSubagentThreadFromSidebar("subagent_review")).toBe(false);
   });
 });

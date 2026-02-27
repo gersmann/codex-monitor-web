@@ -174,7 +174,7 @@ describe("useThreadTurnEvents", () => {
     expect(safeMessageActivity).not.toHaveBeenCalled();
   });
 
-  it("ignores parentless subagent thread started events without hiding them", () => {
+  it("hides memory consolidation thread started events", () => {
     const { result, dispatch, recordThreadActivity, safeMessageActivity } =
       makeOptions();
 
@@ -194,13 +194,11 @@ describe("useThreadTurnEvents", () => {
         threadId: "thread-subagent-orphan",
       }),
     );
-    expect(dispatch).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "hideThread",
-        workspaceId: "ws-1",
-        threadId: "thread-subagent-orphan",
-      }),
-    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "hideThread",
+      workspaceId: "ws-1",
+      threadId: "thread-subagent-orphan",
+    });
     expect(recordThreadActivity).not.toHaveBeenCalled();
     expect(safeMessageActivity).not.toHaveBeenCalled();
   });
