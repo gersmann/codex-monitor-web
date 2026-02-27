@@ -236,6 +236,7 @@ function MainApp() {
     addWorkspacesFromPaths,
     mobileRemoteWorkspacePathPrompt,
     updateMobileRemoteWorkspacePathInput,
+    appendMobileRemoteWorkspacePathFromRecent,
     cancelMobileRemoteWorkspacePathPrompt,
     submitMobileRemoteWorkspacePathPrompt,
     addCloneAgent,
@@ -2710,6 +2711,9 @@ function MainApp() {
         onWorkspaceFromUrlPromptConfirm={submitWorkspaceFromUrlPrompt}
         mobileRemoteWorkspacePathPrompt={mobileRemoteWorkspacePathPrompt}
         onMobileRemoteWorkspacePathPromptChange={updateMobileRemoteWorkspacePathInput}
+        onMobileRemoteWorkspacePathPromptRecentPathSelect={
+          appendMobileRemoteWorkspacePathFromRecent
+        }
         onMobileRemoteWorkspacePathPromptCancel={cancelMobileRemoteWorkspacePathPrompt}
         onMobileRemoteWorkspacePathPromptConfirm={submitMobileRemoteWorkspacePathPrompt}
         branchSwitcher={branchSwitcher}

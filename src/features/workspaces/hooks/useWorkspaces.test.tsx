@@ -356,6 +356,170 @@ describe("useWorkspaces.addWorkspacesFromPaths", () => {
     expect(addResult!.skippedInvalid).toEqual(["/tmp/not-a-dir"]);
     expect(addResult!.failures).toHaveLength(0);
   });
+
+  it("tries raw tilde paths before inferred home-prefix expansion", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    const isWorkspacePathDirMock = vi.mocked(isWorkspacePathDir);
+    const addWorkspaceMock = vi.mocked(addWorkspace);
+
+    listWorkspacesMock.mockResolvedValue([
+      {
+        ...workspaceOne,
+        id: "existing",
+        path: "/Users/vlad/dev/existing",
+      },
+    ]);
+    isWorkspacePathDirMock.mockImplementation(async (path: string) => path === "~/dev/personal");
+    addWorkspaceMock.mockResolvedValue({
+      ...workspaceTwo,
+      id: "added-home",
+      path: "/Users/vlad/dev/personal",
+    });
+
+    const { result } = renderHook(() => useWorkspaces());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    let addResult: Awaited<ReturnType<typeof result.current.addWorkspacesFromPaths>>;
+    await act(async () => {
+      addResult = await result.current.addWorkspacesFromPaths(["~/dev/personal"]);
+    });
+
+    expect(isWorkspacePathDirMock).toHaveBeenCalledWith("~/dev/personal");
+    expect(isWorkspacePathDirMock).not.toHaveBeenCalledWith("/Users/vlad/dev/personal");
+    expect(addWorkspaceMock).toHaveBeenCalledWith("~/dev/personal");
+    expect(addWorkspaceMock).not.toHaveBeenCalledWith("/Users/vlad/dev/personal");
+    expect(addResult!.added).toHaveLength(1);
+    expect(addResult!.skippedInvalid).toHaveLength(0);
+    expect(addResult!.failures).toHaveLength(0);
+  });
+
+  it("skips raw tilde paths when an equivalent inferred path already exists", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    const isWorkspacePathDirMock = vi.mocked(isWorkspacePathDir);
+    const addWorkspaceMock = vi.mocked(addWorkspace);
+
+    listWorkspacesMock.mockResolvedValue([
+      {
+        ...workspaceOne,
+        id: "existing-home",
+        path: "/Users/vlad/dev/personal",
+      },
+    ]);
+    isWorkspacePathDirMock.mockImplementation(async (path: string) => path === "~/dev/personal");
+
+    const { result } = renderHook(() => useWorkspaces());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    let addResult: Awaited<ReturnType<typeof result.current.addWorkspacesFromPaths>>;
+    await act(async () => {
+      addResult = await result.current.addWorkspacesFromPaths(["~/dev/personal"]);
+    });
+
+    expect(isWorkspacePathDirMock).toHaveBeenCalledWith("~/dev/personal");
+    expect(isWorkspacePathDirMock).toHaveBeenCalledWith("/Users/vlad/dev/personal");
+    expect(addWorkspaceMock).not.toHaveBeenCalled();
+    expect(addResult!.added).toHaveLength(0);
+    expect(addResult!.skippedExisting).toEqual(["~/dev/personal"]);
+    expect(addResult!.skippedInvalid).toHaveLength(0);
+    expect(addResult!.failures).toHaveLength(0);
+  });
+
+  it("falls back to inferred home-prefix expansion when raw tilde path is invalid", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    const isWorkspacePathDirMock = vi.mocked(isWorkspacePathDir);
+    const addWorkspaceMock = vi.mocked(addWorkspace);
+
+    listWorkspacesMock.mockResolvedValue([
+      {
+        ...workspaceOne,
+        id: "existing",
+        path: "/Users/vlad/dev/existing",
+      },
+    ]);
+    isWorkspacePathDirMock.mockImplementation(async (path: string) => path === "/Users/vlad/dev/personal");
+    addWorkspaceMock.mockResolvedValue({
+      ...workspaceTwo,
+      id: "added-home",
+      path: "/Users/vlad/dev/personal",
+    });
+
+    const { result } = renderHook(() => useWorkspaces());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    let addResult: Awaited<ReturnType<typeof result.current.addWorkspacesFromPaths>>;
+    await act(async () => {
+      addResult = await result.current.addWorkspacesFromPaths(["~/dev/personal"]);
+    });
+
+    expect(isWorkspacePathDirMock).toHaveBeenNthCalledWith(1, "~/dev/personal");
+    expect(isWorkspacePathDirMock).toHaveBeenNthCalledWith(2, "/Users/vlad/dev/personal");
+    expect(addWorkspaceMock).toHaveBeenCalledWith("/Users/vlad/dev/personal");
+    expect(addResult!.added).toHaveLength(1);
+    expect(addResult!.skippedInvalid).toHaveLength(0);
+    expect(addResult!.failures).toHaveLength(0);
+  });
+
+  it("does not skip when an earlier inferred fallback candidate already exists", async () => {
+    const listWorkspacesMock = vi.mocked(listWorkspaces);
+    const isWorkspacePathDirMock = vi.mocked(isWorkspacePathDir);
+    const addWorkspaceMock = vi.mocked(addWorkspace);
+
+    listWorkspacesMock.mockResolvedValue([
+      {
+        ...workspaceOne,
+        id: "existing-srv",
+        path: "/srv/codex-monitor/project",
+      },
+      {
+        ...workspaceTwo,
+        id: "existing-home",
+        path: "/Users/vlad/dev/existing",
+      },
+    ]);
+    isWorkspacePathDirMock.mockImplementation(async (path: string) => {
+      if (path === "~/project") {
+        return false;
+      }
+      if (path === "/srv/codex-monitor/project") {
+        return true;
+      }
+      return path === "/Users/vlad/project";
+    });
+    addWorkspaceMock.mockResolvedValue({
+      ...workspaceOne,
+      id: "added-home",
+      path: "/Users/vlad/project",
+    });
+
+    const { result } = renderHook(() => useWorkspaces());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    let addResult: Awaited<ReturnType<typeof result.current.addWorkspacesFromPaths>>;
+    await act(async () => {
+      addResult = await result.current.addWorkspacesFromPaths(["~/project"]);
+    });
+
+    expect(isWorkspacePathDirMock).toHaveBeenNthCalledWith(1, "~/project");
+    expect(isWorkspacePathDirMock).toHaveBeenNthCalledWith(2, "/srv/codex-monitor/project");
+    expect(isWorkspacePathDirMock).toHaveBeenNthCalledWith(3, "/Users/vlad/project");
+    expect(addWorkspaceMock).toHaveBeenCalledWith("/Users/vlad/project");
+    expect(addResult!.added).toHaveLength(1);
+    expect(addResult!.skippedExisting).toHaveLength(0);
+    expect(addResult!.skippedInvalid).toHaveLength(0);
+    expect(addResult!.failures).toHaveLength(0);
+  });
 });
 
 
