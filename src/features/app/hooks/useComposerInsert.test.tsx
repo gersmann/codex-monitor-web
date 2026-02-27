@@ -10,7 +10,7 @@ describe("useComposerInsert", () => {
     textarea.value = "Hello";
     textarea.selectionStart = 5;
     textarea.selectionEnd = 5;
-    const textareaRef: RefObject<HTMLTextAreaElement> = { current: textarea };
+    const textareaRef: RefObject<HTMLTextAreaElement | null> = { current: textarea };
     const onDraftChange = vi.fn();
 
     const { result } = renderHook(() =>
@@ -34,7 +34,7 @@ describe("useComposerInsert", () => {
     textarea.value = "Hello";
     textarea.selectionStart = 5;
     textarea.selectionEnd = 5;
-    const textareaRef: RefObject<HTMLTextAreaElement> = { current: textarea };
+    const textareaRef: RefObject<HTMLTextAreaElement | null> = { current: textarea };
     const onDraftChange = vi.fn();
 
     const { result } = renderHook(() =>
@@ -51,5 +51,33 @@ describe("useComposerInsert", () => {
     });
 
     expect(onDraftChange).not.toHaveBeenCalled();
+  });
+
+  it("keeps callback stable across draft changes and uses latest draft", () => {
+    const textareaRef: RefObject<HTMLTextAreaElement | null> = { current: null };
+    const onDraftChange = vi.fn();
+
+    const { result, rerender } = renderHook(
+      ({ draftText }) =>
+        useComposerInsert({
+          isEnabled: true,
+          draftText,
+          onDraftChange,
+          textareaRef,
+        }),
+      {
+        initialProps: { draftText: "Hello" },
+      },
+    );
+
+    const initialCallback = result.current;
+    rerender({ draftText: "Hello world" });
+    expect(result.current).toBe(initialCallback);
+
+    act(() => {
+      result.current("./src");
+    });
+
+    expect(onDraftChange).toHaveBeenCalledWith("Hello world ./src");
   });
 });

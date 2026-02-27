@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { RefObject } from "react";
 
 type UseComposerInsertArgs = {
@@ -14,13 +14,20 @@ export function useComposerInsert({
   onDraftChange,
   textareaRef,
 }: UseComposerInsertArgs) {
+  // Keep insert callback stable so message list memoization is not invalidated on each keystroke.
+  const draftTextRef = useRef(draftText);
+
+  useEffect(() => {
+    draftTextRef.current = draftText;
+  }, [draftText]);
+
   return useCallback(
     (insertText: string) => {
       if (!isEnabled) {
         return;
       }
       const textarea = textareaRef.current;
-      const currentText = draftText ?? "";
+      const currentText = draftTextRef.current ?? "";
       const start = textarea?.selectionStart ?? currentText.length;
       const end = textarea?.selectionEnd ?? start;
       const before = currentText.slice(0, start);
@@ -46,6 +53,6 @@ export function useComposerInsert({
         node.dispatchEvent(new Event("select", { bubbles: true }));
       });
     },
-    [isEnabled, draftText, onDraftChange, textareaRef],
+    [isEnabled, onDraftChange, textareaRef],
   );
 }
