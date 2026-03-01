@@ -188,6 +188,10 @@ export function useThreads({
     }
   }, [onMessageActivity]);
 
+  const setThreadLoaded = useCallback((threadId: string, isLoaded: boolean) => {
+    loadedThreadsRef.current[threadId] = isLoaded;
+  }, []);
+
   const renameThread = useCallback(
     (workspaceId: string, threadId: string, newName: string) => {
       saveCustomName(workspaceId, threadId, newName);
@@ -391,6 +395,7 @@ export function useThreads({
     getCurrentRateLimits,
     getCustomName,
     isThreadHidden,
+    setThreadLoaded,
     markProcessing,
     markReviewing,
     setActiveTurnId,

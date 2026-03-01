@@ -15,6 +15,7 @@ type ThreadEventHandlersOptions = {
   getCurrentRateLimits?: (workspaceId: string) => RateLimitSnapshot | null;
   getCustomName: (workspaceId: string, threadId: string) => string | undefined;
   isThreadHidden: (workspaceId: string, threadId: string) => boolean;
+  setThreadLoaded: (threadId: string, isLoaded: boolean) => void;
   markProcessing: (threadId: string, isProcessing: boolean) => void;
   markReviewing: (threadId: string, isReviewing: boolean) => void;
   setActiveTurnId: (threadId: string, turnId: string | null) => void;
@@ -50,6 +51,7 @@ export function useThreadEventHandlers({
   getCurrentRateLimits,
   getCustomName,
   isThreadHidden,
+  setThreadLoaded,
   markProcessing,
   markReviewing,
   setActiveTurnId,
@@ -104,6 +106,7 @@ export function useThreadEventHandlers({
     onTurnStarted,
     onTurnCompleted,
     onThreadStatusChanged,
+    onThreadClosed,
     onTurnPlanUpdated,
     onTurnDiffUpdated,
     onThreadTokenUsageUpdated,
@@ -115,6 +118,7 @@ export function useThreadEventHandlers({
     getCurrentRateLimits,
     getCustomName,
     isThreadHidden,
+    setThreadLoaded,
     markProcessing,
     markReviewing,
     setActiveTurnId,
@@ -175,6 +179,7 @@ export function useThreadEventHandlers({
       onTurnStarted,
       onTurnCompleted,
       onThreadStatusChanged,
+      onThreadClosed,
       onTurnPlanUpdated,
       onTurnDiffUpdated,
       onThreadTokenUsageUpdated,
@@ -205,6 +210,7 @@ export function useThreadEventHandlers({
       onTurnStarted,
       onTurnCompleted,
       onThreadStatusChanged,
+      onThreadClosed,
       onTurnPlanUpdated,
       onTurnDiffUpdated,
       onThreadTokenUsageUpdated,

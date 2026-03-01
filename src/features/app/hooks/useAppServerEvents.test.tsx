@@ -50,6 +50,7 @@ describe("useAppServerEvents", () => {
       onThreadStarted: vi.fn(),
       onThreadNameUpdated: vi.fn(),
       onThreadStatusChanged: vi.fn(),
+      onThreadClosed: vi.fn(),
       onThreadArchived: vi.fn(),
       onThreadUnarchived: vi.fn(),
       onBackgroundThreadAction: vi.fn(),
@@ -162,6 +163,17 @@ describe("useAppServerEvents", () => {
       "thread-2",
       { type: "active" },
     );
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "thread/closed",
+          params: { threadId: "thread-2" },
+        },
+      });
+    });
+    expect(handlers.onThreadClosed).toHaveBeenCalledWith("ws-1", "thread-2");
 
     act(() => {
       listener?.({

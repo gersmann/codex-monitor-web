@@ -35,6 +35,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   const isThreadHidden = vi.fn(() => false);
   const markProcessing = vi.fn();
   const markReviewing = vi.fn();
+  const setThreadLoaded = vi.fn();
   const setActiveTurnId = vi.fn();
   const getActiveTurnId = vi.fn(
     (threadId: string) => overrides.activeTurnByThread?.[threadId] ?? null,
@@ -61,6 +62,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
       isThreadHidden,
       markProcessing,
       markReviewing,
+      setThreadLoaded,
       setActiveTurnId,
       getActiveTurnId,
       pendingInterruptsRef,
@@ -77,6 +79,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
     isThreadHidden,
     markProcessing,
     markReviewing,
+    setThreadLoaded,
     setActiveTurnId,
     getActiveTurnId,
     getCurrentRateLimits,
@@ -449,7 +452,13 @@ describe("useThreadTurnEvents", () => {
   });
 
   it("clears processing, active turn, and pending interrupt for non-active thread status", () => {
-    const { result, markProcessing, setActiveTurnId, pendingInterruptsRef } =
+    const {
+      result,
+      markProcessing,
+      setActiveTurnId,
+      setThreadLoaded,
+      pendingInterruptsRef,
+    } =
       makeOptions({ pendingInterrupts: ["thread-1"] });
 
     act(() => {
@@ -459,6 +468,39 @@ describe("useThreadTurnEvents", () => {
     });
 
     expect(markProcessing).toHaveBeenCalledWith("thread-1", false);
+    expect(setActiveTurnId).toHaveBeenCalledWith("thread-1", null);
+    expect(setThreadLoaded).not.toHaveBeenCalled();
+    expect(pendingInterruptsRef.current.has("thread-1")).toBe(false);
+  });
+
+  it("marks thread as unloaded when status changes to notLoaded", () => {
+    const { result, setThreadLoaded, markReviewing } = makeOptions();
+
+    act(() => {
+      result.current.onThreadStatusChanged("ws-1", "thread-1", { type: "notLoaded" });
+    });
+
+    expect(setThreadLoaded).toHaveBeenCalledWith("thread-1", false);
+    expect(markReviewing).toHaveBeenCalledWith("thread-1", false);
+  });
+
+  it("clears runtime state and marks unloaded on thread closed", () => {
+    const {
+      result,
+      markProcessing,
+      markReviewing,
+      setThreadLoaded,
+      setActiveTurnId,
+      pendingInterruptsRef,
+    } = makeOptions({ pendingInterrupts: ["thread-1"] });
+
+    act(() => {
+      result.current.onThreadClosed("ws-1", "thread-1");
+    });
+
+    expect(setThreadLoaded).toHaveBeenCalledWith("thread-1", false);
+    expect(markProcessing).toHaveBeenCalledWith("thread-1", false);
+    expect(markReviewing).toHaveBeenCalledWith("thread-1", false);
     expect(setActiveTurnId).toHaveBeenCalledWith("thread-1", null);
     expect(pendingInterruptsRef.current.has("thread-1")).toBe(false);
   });
@@ -535,6 +577,7 @@ describe("useThreadTurnEvents", () => {
     const isThreadHidden = vi.fn(() => false);
     const markProcessing = vi.fn();
     const markReviewing = vi.fn();
+    const setThreadLoaded = vi.fn();
     const setActiveTurnId = vi.fn();
     const getActiveTurnId = vi.fn(() => null);
     const pushThreadErrorMessage = vi.fn();
@@ -553,6 +596,7 @@ describe("useThreadTurnEvents", () => {
         isThreadHidden,
         markProcessing,
         markReviewing,
+        setThreadLoaded,
         setActiveTurnId,
         getActiveTurnId,
         pendingInterruptsRef,

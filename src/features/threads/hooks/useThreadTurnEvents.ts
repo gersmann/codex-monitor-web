@@ -23,6 +23,7 @@ type UseThreadTurnEventsOptions = {
   getCurrentRateLimits?: (workspaceId: string) => RateLimitSnapshot | null;
   getCustomName: (workspaceId: string, threadId: string) => string | undefined;
   isThreadHidden: (workspaceId: string, threadId: string) => boolean;
+  setThreadLoaded: (threadId: string, isLoaded: boolean) => void;
   markProcessing: (threadId: string, isProcessing: boolean) => void;
   markReviewing: (threadId: string, isReviewing: boolean) => void;
   setActiveTurnId: (threadId: string, turnId: string | null) => void;
@@ -50,6 +51,7 @@ export function useThreadTurnEvents({
   getCurrentRateLimits,
   getCustomName,
   isThreadHidden,
+  setThreadLoaded,
   markProcessing,
   markReviewing,
   setActiveTurnId,
@@ -297,13 +299,42 @@ export function useThreadTurnEvents({
         statusType === "systemerror"
       ) {
         markProcessing(threadId, false);
+        if (statusType === "notloaded") {
+          setThreadLoaded(threadId, false);
+          markReviewing(threadId, false);
+        }
         hasOptimisticActiveTurnByThreadRef.current[threadId] = false;
         immediateActiveTurnIdByThreadRef.current[threadId] = null;
         setActiveTurnId(threadId, null);
         pendingInterruptsRef.current.delete(threadId);
       }
     },
-    [markProcessing, pendingInterruptsRef, setActiveTurnId],
+    [
+      markProcessing,
+      markReviewing,
+      pendingInterruptsRef,
+      setActiveTurnId,
+      setThreadLoaded,
+    ],
+  );
+
+  const onThreadClosed = useCallback(
+    (_workspaceId: string, threadId: string) => {
+      setThreadLoaded(threadId, false);
+      markProcessing(threadId, false);
+      markReviewing(threadId, false);
+      hasOptimisticActiveTurnByThreadRef.current[threadId] = false;
+      immediateActiveTurnIdByThreadRef.current[threadId] = null;
+      setActiveTurnId(threadId, null);
+      pendingInterruptsRef.current.delete(threadId);
+    },
+    [
+      markProcessing,
+      markReviewing,
+      pendingInterruptsRef,
+      setActiveTurnId,
+      setThreadLoaded,
+    ],
   );
 
   const onTurnPlanUpdated = useCallback(
@@ -405,6 +436,7 @@ export function useThreadTurnEvents({
     onTurnStarted,
     onTurnCompleted,
     onThreadStatusChanged,
+    onThreadClosed,
     onTurnPlanUpdated,
     onTurnDiffUpdated,
     onThreadTokenUsageUpdated,

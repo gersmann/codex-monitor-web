@@ -64,6 +64,7 @@ routed in `useAppServerEvents.ts` or handled in feature-specific subscriptions.
 - `turn/started`
 - `thread/started`
 - `thread/archived`
+- `thread/closed`
 - `thread/name/updated`
 - `thread/status/changed`
 - `thread/unarchived`
@@ -113,7 +114,6 @@ events are currently not routed:
 - `model/rerouted`
 - `rawResponseItem/completed`
 - `serverRequest/resolved`
-- `thread/closed`
 - `thread/compacted` (deprecated; intentionally not routed)
 - `thread/realtime/closed`
 - `thread/realtime/error`
