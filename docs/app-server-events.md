@@ -1,4 +1,4 @@
-# App-Server Events Reference (Codex `9501669a2485969a78b8bdea3da4b3b2a626e0d3`)
+# App-Server Events Reference (Codex `6a673e7339161cf5aa6711324bfe873846234b6b`)
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
@@ -106,13 +106,20 @@ CodexMonitor status:
 Compared against Codex app-server protocol v2 notifications, the following
 events are currently not routed:
 
-- `rawResponseItem/completed`
+- `configWarning`
+- `deprecationNotice`
 - `item/mcpToolCall/progress`
 - `mcpServer/oauthLogin/completed`
 - `model/rerouted`
+- `rawResponseItem/completed`
+- `serverRequest/resolved`
+- `thread/closed`
 - `thread/compacted` (deprecated; intentionally not routed)
-- `deprecationNotice`
-- `configWarning`
+- `thread/realtime/closed`
+- `thread/realtime/error`
+- `thread/realtime/itemAdded`
+- `thread/realtime/outputAudio/delta`
+- `thread/realtime/started`
 - `windows/worldWritableWarning`
 - `windowsSandbox/setupCompleted`
 
@@ -146,24 +153,31 @@ These are v2 request methods CodexMonitor currently sends to Codex app-server:
 
 Compared against Codex v2 request methods, CodexMonitor currently does not send:
 
-- `thread/unarchive`
-- `thread/rollback`
-- `thread/backgroundTerminals/clean`
-- `thread/loaded/list`
-- `thread/read`
+- `account/logout`
+- `command/exec`
+- `config/batchWrite`
+- `config/mcpServer/reload`
+- `config/read`
+- `config/value/write`
+- `configRequirements/read`
+- `externalAgentConfig/detect`
+- `externalAgentConfig/import`
+- `feedback/upload`
+- `mcpServer/oauth/login`
+- `mock/experimentalMethod`
 - `skills/config/write`
 - `skills/remote/export`
 - `skills/remote/list`
-- `mock/experimentalMethod`
-- `mcpServer/oauth/login`
-- `config/mcpServer/reload`
-- `account/logout`
-- `feedback/upload`
-- `command/exec`
-- `config/read`
-- `config/value/write`
-- `config/batchWrite`
-- `configRequirements/read`
+- `thread/backgroundTerminals/clean`
+- `thread/loaded/list`
+- `thread/read`
+- `thread/realtime/appendAudio`
+- `thread/realtime/appendText`
+- `thread/realtime/start`
+- `thread/realtime/stop`
+- `thread/rollback`
+- `thread/unarchive`
+- `thread/unsubscribe`
 - `windowsSandbox/setupStart`
 
 ## Server Requests (App-Server -> CodexMonitor, v2)
@@ -214,7 +228,7 @@ Use this workflow to update request support lists:
 3. List Codex server request methods:
    - `awk '/server_request_definitions! \\{/,/\\/\\/\\/ DEPRECATED APIs below/' ../Codex/codex-rs/app-server-protocol/src/protocol/common.rs | rg -N -o '=>\\s*\"[^\"]+\"\\s*\\{' | sed -E 's/.*\"([^\"]+)\".*/\\1/' | sort -u`
 4. List CodexMonitor outgoing requests:
-   - `perl -0777 -ne 'while(/send_request\\(\\s*\"([^\"]+)\"/g){print \"$1\\n\"}' $(rg --files src-tauri/src -g '*.rs') | sort -u`
+   - `perl -0777 -ne 'while(/send_request_for_workspace\\(\\s*&[^,]+\\s*,\\s*\"([^\"]+)\"/g){print \"$1\\n\"}' src-tauri/src/shared/codex_core.rs | sort -u`
 5. Update the Supported Requests, Missing Client Requests, and Server Requests sections.
 
 ## Schema Drift Workflow (Best)
