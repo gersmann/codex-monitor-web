@@ -1,8 +1,9 @@
-import type { MouseEvent } from "react";
+import { useMemo, useState, type MouseEvent } from "react";
 
 import type { ThreadSummary } from "../../../types";
 import type { ThreadStatusById } from "../../../utils/threadStatus";
 import { ThreadRow } from "./ThreadRow";
+import { buildThreadRowVisibility } from "./threadRowVisibility";
 
 type ThreadListRow = {
   thread: ThreadSummary;
@@ -60,14 +61,45 @@ export function ThreadList({
   onShowThreadMenu,
 }: ThreadListProps) {
   const indentUnit = nested ? 10 : 14;
+  const [collapsedThreadKeys, setCollapsedThreadKeys] = useState<Set<string>>(new Set());
+
+  const toggleThreadSubagents = (threadId: string) => {
+    const threadKey = `${workspaceId}:${threadId}`;
+    setCollapsedThreadKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(threadKey)) {
+        next.delete(threadKey);
+      } else {
+        next.add(threadKey);
+      }
+      return next;
+    });
+  };
+
+  const pinnedVisibility = useMemo(
+    () =>
+      buildThreadRowVisibility(
+        pinnedRows,
+        (row) => collapsedThreadKeys.has(`${workspaceId}:${row.thread.id}`),
+      ),
+    [collapsedThreadKeys, pinnedRows, workspaceId],
+  );
+  const unpinnedVisibility = useMemo(
+    () =>
+      buildThreadRowVisibility(
+        unpinnedRows,
+        (row) => collapsedThreadKeys.has(`${workspaceId}:${row.thread.id}`),
+      ),
+    [collapsedThreadKeys, unpinnedRows, workspaceId],
+  );
 
   return (
     <div className={`thread-list${nested ? " thread-list-nested" : ""}`}>
-      {pinnedRows.map(({ thread, depth }) => (
+      {pinnedVisibility.visibleRows.map((row) => (
         <ThreadRow
-          key={thread.id}
-          thread={thread}
-          depth={depth}
+          key={row.thread.id}
+          thread={row.thread}
+          depth={row.depth}
           workspaceId={workspaceId}
           indentUnit={indentUnit}
           activeWorkspaceId={activeWorkspaceId}
@@ -79,16 +111,19 @@ export function ThreadList({
           isThreadPinned={isThreadPinned}
           onSelectThread={onSelectThread}
           onShowThreadMenu={onShowThreadMenu}
+          hasSubagentChildren={pinnedVisibility.rowsWithChildren.has(row)}
+          subagentsExpanded={!collapsedThreadKeys.has(`${workspaceId}:${row.thread.id}`)}
+          onToggleSubagents={(_, threadId) => toggleThreadSubagents(threadId)}
         />
       ))}
-      {pinnedRows.length > 0 && unpinnedRows.length > 0 && (
+      {pinnedVisibility.visibleRows.length > 0 && unpinnedVisibility.visibleRows.length > 0 && (
         <div className="thread-list-separator" aria-hidden="true" />
       )}
-      {unpinnedRows.map(({ thread, depth }) => (
+      {unpinnedVisibility.visibleRows.map((row) => (
         <ThreadRow
-          key={thread.id}
-          thread={thread}
-          depth={depth}
+          key={row.thread.id}
+          thread={row.thread}
+          depth={row.depth}
           workspaceId={workspaceId}
           indentUnit={indentUnit}
           activeWorkspaceId={activeWorkspaceId}
@@ -100,6 +135,9 @@ export function ThreadList({
           isThreadPinned={isThreadPinned}
           onSelectThread={onSelectThread}
           onShowThreadMenu={onShowThreadMenu}
+          hasSubagentChildren={unpinnedVisibility.rowsWithChildren.has(row)}
+          subagentsExpanded={!collapsedThreadKeys.has(`${workspaceId}:${row.thread.id}`)}
+          onToggleSubagents={(_, threadId) => toggleThreadSubagents(threadId)}
         />
       ))}
       {totalThreadRoots > 3 && (
