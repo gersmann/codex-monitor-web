@@ -488,6 +488,56 @@ describe("useThreadMessaging telemetry", () => {
     );
   });
 
+  it("routes uncommitted review to an explicit workspace override", async () => {
+    const ensureThreadForActiveWorkspace = vi.fn(async () => "thread-active");
+    const ensureThreadForWorkspace = vi.fn(async () => "thread-override");
+
+    const { result } = renderHook(() =>
+      useThreadMessaging({
+        activeWorkspace: workspace,
+        activeThreadId: "thread-active",
+        accessMode: "current",
+        model: null,
+        effort: null,
+        collaborationMode: null,
+        reviewDeliveryMode: "detached",
+        steerEnabled: false,
+        customPrompts: [],
+        threadStatusById: {},
+        activeTurnIdByThread: {},
+        rateLimitsByWorkspace: {},
+        pendingInterruptsRef: { current: new Set<string>() },
+        dispatch: vi.fn(),
+        getCustomName: vi.fn(() => undefined),
+        markProcessing: vi.fn(),
+        markReviewing: vi.fn(),
+        setActiveTurnId: vi.fn(),
+        recordThreadActivity: vi.fn(),
+        safeMessageActivity: vi.fn(),
+        onDebug: vi.fn(),
+        pushThreadErrorMessage: vi.fn(),
+        ensureThreadForActiveWorkspace,
+        ensureThreadForWorkspace,
+        refreshThread: vi.fn(async () => null),
+        forkThreadForWorkspace: vi.fn(async () => null),
+        updateThreadParent: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.startUncommittedReview("ws-2");
+    });
+
+    expect(ensureThreadForActiveWorkspace).not.toHaveBeenCalled();
+    expect(ensureThreadForWorkspace).toHaveBeenCalledWith("ws-2");
+    expect(startReviewService).toHaveBeenCalledWith(
+      "ws-2",
+      "thread-override",
+      { type: "uncommittedChanges" },
+      "detached",
+    );
+  });
+
   it("names detached commit review child threads from commit context", async () => {
     vi.mocked(startReviewService).mockResolvedValueOnce({
       result: {

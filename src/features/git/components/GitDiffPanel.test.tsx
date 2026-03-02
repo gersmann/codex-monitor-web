@@ -120,6 +120,7 @@ describe("GitDiffPanel", () => {
     render(
       <GitDiffPanel
         {...baseProps}
+        workspaceId="ws-2"
         onReviewUncommittedChanges={onReviewUncommittedChanges}
         unstagedFiles={[
           { path: "src/file.ts", status: "M", additions: 4, deletions: 1 },
@@ -132,6 +133,7 @@ describe("GitDiffPanel", () => {
     });
     fireEvent.click(reviewButton);
     expect(onReviewUncommittedChanges).toHaveBeenCalledTimes(1);
+    expect(onReviewUncommittedChanges).toHaveBeenCalledWith("ws-2");
   });
 
   it("adds a show in file manager option for file context menus", async () => {

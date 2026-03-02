@@ -59,7 +59,7 @@ type MessagesProps = {
   ) => void;
   onPlanAccept?: () => void;
   onPlanSubmitChanges?: (changes: string) => void;
-  onOpenThreadLink?: (threadId: string) => void;
+  onOpenThreadLink?: (threadId: string, workspaceId?: string | null) => void;
   onQuoteMessage?: (text: string) => void;
 };
 
@@ -120,6 +120,12 @@ export const Messages = memo(function Messages({
     workspacePath,
     openTargets,
     selectedOpenAppId,
+  );
+  const handleOpenThreadLink = useCallback(
+    (threadId: string) => {
+      onOpenThreadLink?.(threadId, workspaceId ?? null);
+    },
+    [onOpenThreadLink, workspaceId],
   );
 
   const isNearBottom = useCallback(
@@ -387,7 +393,7 @@ export const Messages = memo(function Messages({
           workspacePath={workspacePath}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
-          onOpenThreadLink={onOpenThreadLink}
+          onOpenThreadLink={handleOpenThreadLink}
         />
       );
     }
@@ -405,7 +411,7 @@ export const Messages = memo(function Messages({
           workspacePath={workspacePath}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
-          onOpenThreadLink={onOpenThreadLink}
+          onOpenThreadLink={handleOpenThreadLink}
         />
       );
     }
@@ -418,7 +424,7 @@ export const Messages = memo(function Messages({
           workspacePath={workspacePath}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
-          onOpenThreadLink={onOpenThreadLink}
+          onOpenThreadLink={handleOpenThreadLink}
         />
       );
     }
@@ -437,7 +443,7 @@ export const Messages = memo(function Messages({
           workspacePath={workspacePath}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
-          onOpenThreadLink={onOpenThreadLink}
+          onOpenThreadLink={handleOpenThreadLink}
           onRequestAutoScroll={requestAutoScroll}
         />
       );

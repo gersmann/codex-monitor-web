@@ -169,7 +169,7 @@ export type LayoutNodesOptions = {
   onAddCloneAgent: (workspace: WorkspaceInfo) => Promise<void>;
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
   onSelectThread: (workspaceId: string, threadId: string) => void;
-  onOpenThreadLink: (threadId: string) => void;
+  onOpenThreadLink: (threadId: string, workspaceId?: string | null) => void;
   onDeleteThread: (workspaceId: string, threadId: string) => void;
   onSyncThread: (workspaceId: string, threadId: string) => void;
   pinThread: (workspaceId: string, threadId: string) => boolean;
@@ -333,7 +333,7 @@ export type LayoutNodesOptions = {
   onUnstageGitFile: (path: string) => Promise<void>;
   onRevertGitFile: (path: string) => Promise<void>;
   onRevertAllGitChanges: () => Promise<void>;
-  onReviewUncommittedChanges: () => Promise<void>;
+  onReviewUncommittedChanges: (workspaceId?: string | null) => Promise<void>;
   diffSource: GitDiffSource;
   gitDiffs: GitDiffViewerItem[];
   gitDiffLoading: boolean;

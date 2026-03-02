@@ -422,20 +422,25 @@ export function useThreadUiOrchestration({
   );
 
   const handleOpenThreadLink = useCallback(
-    (threadId: string) => {
-      if (!activeWorkspaceId) {
+    (threadId: string, workspaceId?: string | null) => {
+      const targetWorkspaceId = workspaceId ?? activeWorkspaceId;
+      if (!targetWorkspaceId) {
         return;
       }
       exitDiffView();
       resetPullRequestSelection();
       clearDraftState();
-      setActiveThreadId(threadId, activeWorkspaceId);
+      if (targetWorkspaceId !== activeWorkspaceId) {
+        selectWorkspace(targetWorkspaceId);
+      }
+      setActiveThreadId(threadId, targetWorkspaceId);
     },
     [
       activeWorkspaceId,
       clearDraftState,
       exitDiffView,
       resetPullRequestSelection,
+      selectWorkspace,
       setActiveThreadId,
     ],
   );

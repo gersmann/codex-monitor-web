@@ -2338,7 +2338,8 @@ function MainApp() {
     onUnstageGitFile: handleUnstageGitFile,
     onRevertGitFile: handleRevertGitFile,
     onRevertAllGitChanges: handleRevertAllGitChanges,
-    onReviewUncommittedChanges: startUncommittedReview,
+    onReviewUncommittedChanges: (workspaceId) =>
+      startUncommittedReview(workspaceId ?? activeWorkspace?.id ?? null),
     gitDiffs: activeDiffs,
     gitDiffLoading: activeDiffLoading,
     gitDiffError: activeDiffError,

@@ -687,9 +687,13 @@ export function useThreadMessaging({
     ],
   );
 
-  const startUncommittedReview = useCallback(async () => {
-    await startReviewTarget({ type: "uncommittedChanges" });
-  }, [startReviewTarget]);
+  const startUncommittedReview = useCallback(
+    async (workspaceId?: string | null) => {
+      const workspaceOverride = workspaceId ?? undefined;
+      await startReviewTarget({ type: "uncommittedChanges" }, workspaceOverride);
+    },
+    [startReviewTarget],
+  );
 
   const startStatus = useCallback(
     async (_text: string) => {

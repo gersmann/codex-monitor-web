@@ -8,6 +8,7 @@ import type { PendingNewThreadSeed } from "@threads/utils/threadCodexParamsSeed"
 import {
   useThreadCodexSyncOrchestration,
   useThreadSelectionHandlersOrchestration,
+  useThreadUiOrchestration,
 } from "./useThreadOrchestration";
 
 vi.mock("@/services/toasts", () => ({
@@ -265,5 +266,47 @@ describe("useThreadCodexSyncOrchestration seed behavior", () => {
     });
 
     expect(params.patchThreadCodexParams).not.toHaveBeenCalled();
+  });
+});
+
+describe("useThreadUiOrchestration", () => {
+  it("opens thread links in their source workspace", () => {
+    const setActiveTab = vi.fn() as unknown as Dispatch<
+      SetStateAction<"home" | "projects" | "codex" | "git" | "log">
+    >;
+    const params = {
+      activeWorkspaceId: "ws-1",
+      activeThreadId: "thread-1",
+      accessMode: "current" as const,
+      selectedCollaborationModeId: null,
+      selectedCodexArgsOverride: null,
+      pendingNewThreadSeedRef: {
+        current: null,
+      } as MutableRefObject<PendingNewThreadSeed | null>,
+      runWithDraftStart: vi.fn(async (runner: () => Promise<void>) => runner()),
+      handleComposerSend: vi.fn(async () => undefined),
+      clearDraftState: vi.fn(),
+      exitDiffView: vi.fn(),
+      resetPullRequestSelection: vi.fn(),
+      selectWorkspace: vi.fn(),
+      setActiveThreadId: vi.fn(),
+      setActiveTab,
+      isCompact: false,
+      removeThread: vi.fn(),
+      clearDraftForThread: vi.fn(),
+      removeImagesForThread: vi.fn(),
+    };
+
+    const { result } = renderHook(() => useThreadUiOrchestration(params));
+
+    act(() => {
+      result.current.handleOpenThreadLink("thread-review-1", "ws-2");
+    });
+
+    expect(params.exitDiffView).toHaveBeenCalledTimes(1);
+    expect(params.resetPullRequestSelection).toHaveBeenCalledTimes(1);
+    expect(params.clearDraftState).toHaveBeenCalledTimes(1);
+    expect(params.selectWorkspace).toHaveBeenCalledWith("ws-2");
+    expect(params.setActiveThreadId).toHaveBeenCalledWith("thread-review-1", "ws-2");
   });
 });

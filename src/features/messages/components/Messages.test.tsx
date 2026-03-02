@@ -195,7 +195,7 @@ describe("Messages", () => {
     );
 
     fireEvent.click(screen.getByText("Open review thread"));
-    expect(onOpenThreadLink).toHaveBeenCalledWith("thread-review-1");
+    expect(onOpenThreadLink).toHaveBeenCalledWith("thread-review-1", "ws-1");
   });
 
   it("renders file references as compact links and opens them", () => {
