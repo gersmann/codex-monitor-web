@@ -57,10 +57,12 @@ export function SidebarCornerActions({
           <MenuTrigger
             isOpen={accountMenuOpen}
             popupRole="dialog"
-            className="ghost sidebar-corner-button"
+            className="ghost sidebar-corner-button ds-tooltip-trigger"
             onClick={toggleAccountMenu}
             aria-label="Account"
             title="Account"
+            data-tooltip="Account"
+            data-tooltip-align="start"
           >
             <User size={14} aria-hidden />
           </MenuTrigger>
@@ -101,21 +103,25 @@ export function SidebarCornerActions({
         </div>
       )}
       <button
-        className="ghost sidebar-corner-button"
+        className="ghost sidebar-corner-button ds-tooltip-trigger"
         type="button"
         onClick={onOpenSettings}
         aria-label="Open settings"
         title="Settings"
+        data-tooltip="Settings"
+        data-tooltip-align="start"
       >
         <Settings size={14} aria-hidden />
       </button>
       {showDebugButton && (
         <button
-          className="ghost sidebar-corner-button"
+          className="ghost sidebar-corner-button ds-tooltip-trigger"
           type="button"
           onClick={onOpenDebug}
           aria-label="Open debug log"
           title="Debug log"
+          data-tooltip="Debug log"
+          data-tooltip-align="start"
         >
           <ScrollText size={14} aria-hidden />
         </button>

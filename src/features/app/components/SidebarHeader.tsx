@@ -126,10 +126,13 @@ export function SidebarHeader({
       <div className="sidebar-header-title">
         <div className="sidebar-title-group">
           <button
-            className="sidebar-title-add"
+            className="sidebar-title-add ds-tooltip-trigger"
             onClick={onAddWorkspace}
             data-tauri-drag-region="false"
             aria-label="Add workspaces"
+            data-tooltip="Add workspaces"
+            data-tooltip-align="start"
+            data-tooltip-placement="bottom"
             type="button"
           >
             <FolderPlus aria-hidden />
@@ -149,11 +152,14 @@ export function SidebarHeader({
           <MenuTrigger
             isOpen={sortMenuOpen}
             activeClassName="is-active"
-            className="ghost sidebar-sort-toggle"
+            className="ghost sidebar-sort-toggle ds-tooltip-trigger"
             onClick={sortMenu.toggle}
             data-tauri-drag-region="false"
             aria-label="Organize and sort threads"
             title="Organize and sort threads"
+            data-tooltip="Organize and sort threads"
+            data-tooltip-align="end"
+            data-tooltip-placement="bottom"
           >
             <ListFilter aria-hidden />
           </MenuTrigger>
@@ -230,12 +236,15 @@ export function SidebarHeader({
           )}
         </div>
         <button
-          className="ghost sidebar-refresh-toggle"
+          className="ghost sidebar-refresh-toggle ds-tooltip-trigger"
           onClick={onRefreshAllThreads}
           data-tauri-drag-region="false"
           aria-label="Refresh all workspace threads"
           type="button"
           title="Refresh all workspace threads"
+          data-tooltip="Refresh all workspace threads"
+          data-tooltip-align="end"
+          data-tooltip-placement="bottom"
           disabled={refreshDisabled}
           aria-busy={refreshInProgress}
         >
@@ -245,10 +254,13 @@ export function SidebarHeader({
           />
         </button>
         <button
-          className={`ghost sidebar-search-toggle${isSearchOpen ? " is-active" : ""}`}
+          className={`ghost sidebar-search-toggle ds-tooltip-trigger${isSearchOpen ? " is-active" : ""}`}
           onClick={onToggleSearch}
           data-tauri-drag-region="false"
           aria-label="Toggle search"
+          data-tooltip={isSearchOpen ? "Close search" : "Search threads"}
+          data-tooltip-align="end"
+          data-tooltip-placement="bottom"
           aria-pressed={isSearchOpen}
           type="button"
         >
