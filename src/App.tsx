@@ -7,6 +7,7 @@ import "./styles/ds-toast.css";
 import "./styles/ds-panel.css";
 import "./styles/ds-diff.css";
 import "./styles/ds-popover.css";
+import "./styles/ds-tooltip.css";
 import "./styles/buttons.css";
 import "./styles/sidebar.css";
 import "./styles/home.css";

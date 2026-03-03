@@ -540,7 +540,7 @@ export function GitDiffModeContent({
                         />
                         <button
                             type="button"
-                            className="commit-message-generate-button diff-row-action"
+                            className="commit-message-generate-button diff-row-action ds-tooltip-trigger"
                             onClick={() => {
                                 if (!canGenerateCommitMessage) {
                                     return;
@@ -551,6 +551,7 @@ export function GitDiffModeContent({
                             title={generateCommitMessageTooltip}
                             data-tooltip={generateCommitMessageTooltip}
                             data-tooltip-placement="bottom"
+                            data-tooltip-align="end"
                             aria-label="Generate commit message"
                         >
                             {commitMessageLoading ? (
