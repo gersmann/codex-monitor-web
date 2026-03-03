@@ -9,6 +9,7 @@ import {
   remarkFileLinks,
   toFileLink,
 } from "../../../utils/remarkFileLinks";
+import { resolveMountedWorkspacePath } from "../utils/mountedWorkspacePaths";
 
 type MarkdownProps = {
   value: string;
@@ -178,6 +179,242 @@ function normalizeUrlLine(line: string) {
     return null;
   }
   return withoutBullet;
+}
+
+function safeDecodeURIComponent(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
+function safeDecodeFileLink(url: string) {
+  try {
+    return decodeFileLink(url);
+  } catch {
+    return null;
+  }
+}
+
+const FILE_LINE_SUFFIX_PATTERN = /:\d+(?::\d+)?$/;
+const FILE_HASH_LINE_SUFFIX_PATTERN = /^#L(\d+)(?:C(\d+))?$/i;
+const LIKELY_LOCAL_ABSOLUTE_PATH_PREFIXES = [
+  "/Users/",
+  "/home/",
+  "/tmp/",
+  "/var/",
+  "/opt/",
+  "/etc/",
+  "/private/",
+  "/Volumes/",
+  "/mnt/",
+  "/usr/",
+  "/workspace/",
+  "/workspaces/",
+  "/root/",
+  "/srv/",
+  "/data/",
+];
+const WORKSPACE_ROUTE_PREFIXES = ["/workspace/", "/workspaces/"];
+const LOCAL_WORKSPACE_ROUTE_SEGMENTS = new Set(["reviews", "settings"]);
+
+function stripPathLineSuffix(value: string) {
+  return value.replace(FILE_LINE_SUFFIX_PATTERN, "");
+}
+
+function hasLikelyFileName(path: string) {
+  const normalizedPath = stripPathLineSuffix(path).replace(/[\\/]+$/, "");
+  const lastSegment = normalizedPath.split(/[\\/]/).pop() ?? "";
+  if (!lastSegment || lastSegment === "." || lastSegment === "..") {
+    return false;
+  }
+  if (lastSegment.startsWith(".") && lastSegment.length > 1) {
+    return true;
+  }
+  return lastSegment.includes(".");
+}
+
+function hasLikelyLocalAbsolutePrefix(path: string) {
+  const normalizedPath = path.replace(/\\/g, "/");
+  return LIKELY_LOCAL_ABSOLUTE_PATH_PREFIXES.some((prefix) =>
+    normalizedPath.startsWith(prefix),
+  );
+}
+
+function splitWorkspaceRoutePath(path: string) {
+  const normalizedPath = path.replace(/\\/g, "/");
+  if (normalizedPath.startsWith("/workspace/")) {
+    return {
+      segments: normalizedPath.slice("/workspace/".length).split("/").filter(Boolean),
+      prefix: "/workspace/",
+    };
+  }
+  if (normalizedPath.startsWith("/workspaces/")) {
+    return {
+      segments: normalizedPath.slice("/workspaces/".length).split("/").filter(Boolean),
+      prefix: "/workspaces/",
+    };
+  }
+  return null;
+}
+
+function hasLikelyWorkspaceNameSegment(segment: string) {
+  return /[A-Z]/.test(segment) || /[._-]/.test(segment);
+}
+
+function isKnownLocalWorkspaceRoutePath(path: string) {
+  const mountedPath = splitWorkspaceRoutePath(path);
+  if (!mountedPath || mountedPath.segments.length === 0) {
+    return false;
+  }
+
+  const routeSegment =
+    mountedPath.prefix === "/workspace/"
+      ? mountedPath.segments[0]
+      : mountedPath.segments[1];
+  return Boolean(routeSegment) && LOCAL_WORKSPACE_ROUTE_SEGMENTS.has(routeSegment);
+}
+
+function isLikelyMountedWorkspaceFilePath(
+  path: string,
+  workspacePath?: string | null,
+) {
+  if (isKnownLocalWorkspaceRoutePath(path)) {
+    return false;
+  }
+  if (resolveMountedWorkspacePath(path, workspacePath) !== null) {
+    return true;
+  }
+
+  const mountedPath = splitWorkspaceRoutePath(path);
+  return Boolean(
+    mountedPath?.prefix === "/workspace/" &&
+      mountedPath.segments.length >= 2 &&
+      hasLikelyWorkspaceNameSegment(mountedPath.segments[0]),
+  );
+}
+
+function usesAbsolutePathDepthFallback(
+  path: string,
+  workspacePath?: string | null,
+) {
+  const normalizedPath = path.replace(/\\/g, "/");
+  if (
+    WORKSPACE_ROUTE_PREFIXES.some((prefix) => normalizedPath.startsWith(prefix)) &&
+    !isLikelyMountedWorkspaceFilePath(normalizedPath, workspacePath)
+  ) {
+    return false;
+  }
+  return hasLikelyLocalAbsolutePrefix(normalizedPath) && pathSegmentCount(normalizedPath) >= 3;
+}
+
+function pathSegmentCount(path: string) {
+  return path.split("/").filter(Boolean).length;
+}
+
+function toPathFromFileHashAnchor(
+  url: string,
+  workspacePath?: string | null,
+) {
+  const hashIndex = url.indexOf("#");
+  if (hashIndex <= 0) {
+    return null;
+  }
+  const basePath = url.slice(0, hashIndex).trim();
+  const hash = url.slice(hashIndex).trim();
+  const match = hash.match(FILE_HASH_LINE_SUFFIX_PATTERN);
+  if (!basePath || !match || !isLikelyFileHref(basePath, workspacePath)) {
+    return null;
+  }
+  const [, line, column] = match;
+  return `${basePath}:${line}${column ? `:${column}` : ""}`;
+}
+
+function isLikelyFileHref(
+  url: string,
+  workspacePath?: string | null,
+) {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (trimmed.startsWith("file://")) {
+    return true;
+  }
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("mailto:")
+  ) {
+    return false;
+  }
+  if (trimmed.startsWith("thread://") || trimmed.startsWith("/thread/")) {
+    return false;
+  }
+  if (trimmed.startsWith("#")) {
+    return false;
+  }
+  if (/[?#]/.test(trimmed)) {
+    return false;
+  }
+  if (/^[A-Za-z]:[\\/]/.test(trimmed) || trimmed.startsWith("\\\\")) {
+    return true;
+  }
+  if (trimmed.startsWith("/")) {
+    if (FILE_LINE_SUFFIX_PATTERN.test(trimmed)) {
+      return true;
+    }
+    if (hasLikelyFileName(trimmed)) {
+      return true;
+    }
+    return usesAbsolutePathDepthFallback(trimmed, workspacePath);
+  }
+  if (FILE_LINE_SUFFIX_PATTERN.test(trimmed)) {
+    return true;
+  }
+  if (trimmed.startsWith("~/")) {
+    return true;
+  }
+  if (trimmed.startsWith("./") || trimmed.startsWith("../")) {
+    return FILE_LINE_SUFFIX_PATTERN.test(trimmed) || hasLikelyFileName(trimmed);
+  }
+  if (hasLikelyFileName(trimmed)) {
+    return pathSegmentCount(trimmed) >= 3;
+  }
+  return false;
+}
+
+function toPathFromFileUrl(url: string) {
+  if (!url.toLowerCase().startsWith("file://")) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "file:") {
+      return null;
+    }
+
+    const decodedPath = safeDecodeURIComponent(parsed.pathname) ?? parsed.pathname;
+    let path = decodedPath;
+    if (parsed.host && parsed.host !== "localhost") {
+      const normalizedPath = decodedPath.startsWith("/")
+        ? decodedPath
+        : `/${decodedPath}`;
+      path = `//${parsed.host}${normalizedPath}`;
+    }
+    if (/^\/[A-Za-z]:\//.test(path)) {
+      path = path.slice(1);
+    }
+    return path;
+  } catch {
+    const manualPath = url.slice("file://".length).trim();
+    if (!manualPath) {
+      return null;
+    }
+    return safeDecodeURIComponent(manualPath) ?? manualPath;
+  }
 }
 
 function extractUrlLines(value: string) {
@@ -453,6 +690,10 @@ export function Markdown({
     event.stopPropagation();
     onOpenFileLink?.(path);
   };
+  const handleLocalLinkClick = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
   const handleFileLinkContextMenu = (
     event: React.MouseEvent,
     path: string,
@@ -474,9 +715,48 @@ export function Markdown({
     }
     return trimmed;
   };
+  const resolveHrefFilePath = (url: string) => {
+    const hashAnchorPath = toPathFromFileHashAnchor(url, workspacePath);
+    if (hashAnchorPath) {
+      const anchoredPath = getLinkablePath(hashAnchorPath);
+      if (anchoredPath) {
+        return safeDecodeURIComponent(anchoredPath) ?? anchoredPath;
+      }
+    }
+    if (isLikelyFileHref(url, workspacePath)) {
+      const directPath = getLinkablePath(url);
+      if (directPath) {
+        return safeDecodeURIComponent(directPath) ?? directPath;
+      }
+    }
+    const decodedUrl = safeDecodeURIComponent(url);
+    if (decodedUrl) {
+      const decodedHashAnchorPath = toPathFromFileHashAnchor(
+        decodedUrl,
+        workspacePath,
+      );
+      if (decodedHashAnchorPath) {
+        const anchoredPath = getLinkablePath(decodedHashAnchorPath);
+        if (anchoredPath) {
+          return anchoredPath;
+        }
+      }
+    }
+    if (decodedUrl && isLikelyFileHref(decodedUrl, workspacePath)) {
+      const decodedPath = getLinkablePath(decodedUrl);
+      if (decodedPath) {
+        return decodedPath;
+      }
+    }
+    const fileUrlPath = toPathFromFileUrl(url);
+    if (!fileUrlPath) {
+      return null;
+    }
+    return getLinkablePath(fileUrlPath);
+  };
   const components: Components = {
     a: ({ href, children }) => {
-      const url = href ?? "";
+      const url = (href ?? "").trim();
       const threadId = url.startsWith("thread://")
         ? url.slice("thread://".length).trim()
         : url.startsWith("/thread/")
@@ -497,7 +777,20 @@ export function Markdown({
         );
       }
       if (isFileLinkUrl(url)) {
-        const path = decodeFileLink(url);
+        const path = safeDecodeFileLink(url);
+        if (!path) {
+          return (
+            <a
+              href={href}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+            >
+              {children}
+            </a>
+          );
+        }
         return (
           <FileReferenceLink
             href={href ?? toFileLink(path)}
@@ -509,13 +802,37 @@ export function Markdown({
           />
         );
       }
+      const hrefFilePath = resolveHrefFilePath(url);
+      if (hrefFilePath) {
+        const clickHandler = (event: React.MouseEvent) =>
+          handleFileLinkClick(event, hrefFilePath);
+        const contextMenuHandler = onOpenFileLinkMenu
+          ? (event: React.MouseEvent) => handleFileLinkContextMenu(event, hrefFilePath)
+          : undefined;
+        return (
+          <a
+            href={href ?? toFileLink(hrefFilePath)}
+            onClick={clickHandler}
+            onContextMenu={contextMenuHandler}
+          >
+            {children}
+          </a>
+        );
+      }
       const isExternal =
         url.startsWith("http://") ||
         url.startsWith("https://") ||
         url.startsWith("mailto:");
 
       if (!isExternal) {
-        return <a href={href}>{children}</a>;
+        if (url.startsWith("#")) {
+          return <a href={href}>{children}</a>;
+        }
+        return (
+          <a href={href} onClick={handleLocalLinkClick}>
+            {children}
+          </a>
+        );
       }
 
       return (
