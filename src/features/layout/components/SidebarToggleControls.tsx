@@ -24,11 +24,13 @@ export function SidebarCollapseButton({
   return (
     <button
       type="button"
-      className="ghost main-header-action"
+      className="ghost main-header-action ds-tooltip-trigger"
       onClick={onCollapseSidebar}
       data-tauri-drag-region="false"
       aria-label="Hide threads sidebar"
       title="Hide threads sidebar"
+      data-tooltip="Hide threads sidebar"
+      data-tooltip-placement="bottom"
     >
       <PanelLeftClose size={14} aria-hidden />
     </button>
@@ -46,11 +48,13 @@ export function RightPanelCollapseButton({
   return (
     <button
       type="button"
-      className="ghost main-header-action"
+      className="ghost main-header-action ds-tooltip-trigger"
       onClick={onCollapseRightPanel}
       data-tauri-drag-region="false"
       aria-label="Hide git sidebar"
       title="Hide git sidebar"
+      data-tooltip="Hide git sidebar"
+      data-tooltip-placement="bottom"
     >
       <PanelRightClose size={14} aria-hidden />
     </button>
@@ -68,11 +72,13 @@ export function RightPanelExpandButton({
   return (
     <button
       type="button"
-      className="ghost main-header-action"
+      className="ghost main-header-action ds-tooltip-trigger"
       onClick={onExpandRightPanel}
       data-tauri-drag-region="false"
       aria-label="Show git sidebar"
       title="Show git sidebar"
+      data-tooltip="Show git sidebar"
+      data-tooltip-placement="bottom"
     >
       <PanelRightOpen size={14} aria-hidden />
     </button>
@@ -93,11 +99,13 @@ export function TitlebarExpandControls({
         <div className="titlebar-toggle titlebar-toggle-left">
           <button
             type="button"
-            className="ghost main-header-action"
+            className="ghost main-header-action ds-tooltip-trigger"
             onClick={onExpandSidebar}
             data-tauri-drag-region="false"
             aria-label="Show threads sidebar"
             title="Show threads sidebar"
+            data-tooltip="Show threads sidebar"
+            data-tooltip-placement="bottom"
           >
             <PanelLeftOpen size={14} aria-hidden />
           </button>

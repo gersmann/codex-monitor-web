@@ -85,6 +85,9 @@ type SplitActionMenuProps = {
   toggleClassName?: string;
   toggleAriaLabel: string;
   toggleTitle?: string;
+  toggleTooltip?: string;
+  toggleTooltipPlacement?: "top" | "bottom";
+  toggleTooltipAlign?: "start" | "end";
   toggleIcon: ReactNode;
   popoverClassName?: string;
   popoverRole?: "menu" | "dialog";
@@ -101,6 +104,9 @@ export function SplitActionMenu({
   toggleClassName,
   toggleAriaLabel,
   toggleTitle,
+  toggleTooltip,
+  toggleTooltipPlacement,
+  toggleTooltipAlign,
   toggleIcon,
   popoverClassName,
   popoverRole = "menu",
@@ -117,6 +123,9 @@ export function SplitActionMenu({
           onClick={onToggle}
           aria-label={toggleAriaLabel}
           title={toggleTitle}
+          data-tooltip={toggleTooltip}
+          data-tooltip-placement={toggleTooltipPlacement}
+          data-tooltip-align={toggleTooltipAlign}
         >
           {toggleIcon}
         </MenuTrigger>

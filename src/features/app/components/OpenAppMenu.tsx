@@ -190,12 +190,14 @@ export function OpenAppMenu({
       actionButton={
         <button
           type="button"
-          className="ghost main-header-action open-app-action"
+          className="ghost main-header-action open-app-action ds-tooltip-trigger"
           onClick={handleOpen}
           disabled={!selectedCanOpen}
           data-tauri-drag-region="false"
           aria-label={`Open in ${selectedOpenTarget.label}`}
           title={openLabel}
+          data-tooltip={openLabel}
+          data-tooltip-placement="bottom"
         >
           <span className="open-app-label">
             <img
@@ -210,9 +212,11 @@ export function OpenAppMenu({
       }
       isOpen={openMenuOpen}
       onToggle={openMenu.toggle}
-      toggleClassName="ghost main-header-action open-app-toggle"
+      toggleClassName="ghost main-header-action open-app-toggle ds-tooltip-trigger"
       toggleAriaLabel="Select editor"
       toggleTitle="Select editor"
+      toggleTooltip="Select editor"
+      toggleTooltipPlacement="bottom"
       toggleIcon={<ChevronDown size={14} aria-hidden />}
       popoverClassName="open-app-dropdown"
       popoverRole="menu"

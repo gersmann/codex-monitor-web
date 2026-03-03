@@ -32,10 +32,12 @@ export const MainHeaderActions = memo(function MainHeaderActions({
             type="button"
             className={`diff-view-toggle-button${
               gitDiffViewStyle === "split" ? " is-active" : ""
-            }`}
+            } ds-tooltip-trigger`}
             onClick={() => onSelectDiffViewStyle("split")}
             aria-pressed={gitDiffViewStyle === "split"}
             title="Dual-panel diff"
+            data-tooltip="Dual-panel diff"
+            data-tooltip-placement="bottom"
             data-tauri-drag-region="false"
           >
             <Columns2 size={14} aria-hidden />
@@ -44,10 +46,12 @@ export const MainHeaderActions = memo(function MainHeaderActions({
             type="button"
             className={`diff-view-toggle-button${
               gitDiffViewStyle === "unified" ? " is-active" : ""
-            }`}
+            } ds-tooltip-trigger`}
             onClick={() => onSelectDiffViewStyle("unified")}
             aria-pressed={gitDiffViewStyle === "unified"}
             title="Single-column diff"
+            data-tooltip="Single-column diff"
+            data-tooltip-placement="bottom"
             data-tauri-drag-region="false"
           >
             <AlignLeft size={14} aria-hidden />

@@ -542,23 +542,27 @@ export function MainHeader({
         {showTerminalButton && (
           <button
             type="button"
-            className={`ghost main-header-action${isTerminalOpen ? " is-active" : ""}`}
+            className={`ghost main-header-action ds-tooltip-trigger${isTerminalOpen ? " is-active" : ""}`}
             onClick={onToggleTerminal}
             data-tauri-drag-region="false"
             aria-label="Toggle terminal panel"
             title="Terminal"
+            data-tooltip="Terminal"
+            data-tooltip-placement="bottom"
           >
             <Terminal size={14} aria-hidden />
           </button>
         )}
         <button
           type="button"
-          className={`ghost main-header-action${copyFeedback ? " is-copied" : ""}`}
+          className={`ghost main-header-action ds-tooltip-trigger${copyFeedback ? " is-copied" : ""}`}
           onClick={handleCopyClick}
           disabled={!canCopyThread || !onCopyThread}
           data-tauri-drag-region="false"
           aria-label="Copy thread"
           title="Copy thread"
+          data-tooltip="Copy thread"
+          data-tooltip-placement="bottom"
         >
           <span className="main-header-icon" aria-hidden>
             <Copy className="main-header-icon-copy" size={14} />

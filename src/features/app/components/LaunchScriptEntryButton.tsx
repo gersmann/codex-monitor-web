@@ -52,7 +52,7 @@ export function LaunchScriptEntryButton({
       <div className="launch-script-buttons">
         <button
           type="button"
-          className="ghost main-header-action launch-script-run"
+          className="ghost main-header-action launch-script-run ds-tooltip-trigger"
           onClick={onRun}
           onContextMenu={(event) => {
             event.preventDefault();
@@ -61,6 +61,8 @@ export function LaunchScriptEntryButton({
           data-tauri-drag-region="false"
           aria-label={entry.label?.trim() || iconLabel}
           title={entry.label?.trim() || iconLabel}
+          data-tooltip={entry.label?.trim() || iconLabel}
+          data-tooltip-placement="bottom"
         >
           <Icon size={14} aria-hidden />
         </button>

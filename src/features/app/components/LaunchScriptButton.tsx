@@ -69,7 +69,7 @@ export function LaunchScriptButton({
       <div className="launch-script-buttons">
         <button
           type="button"
-          className="ghost main-header-action launch-script-run"
+          className="ghost main-header-action launch-script-run ds-tooltip-trigger"
           onClick={onRun}
           onContextMenu={(event) => {
             event.preventDefault();
@@ -78,6 +78,8 @@ export function LaunchScriptButton({
           data-tauri-drag-region="false"
           aria-label={hasLaunchScript ? "Run launch script" : "Set launch script"}
           title={hasLaunchScript ? "Run launch script" : "Set launch script"}
+          data-tooltip={hasLaunchScript ? "Run launch script" : "Set launch script"}
+          data-tooltip-placement="bottom"
         >
           <Play size={14} aria-hidden />
         </button>

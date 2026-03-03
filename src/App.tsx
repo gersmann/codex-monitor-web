@@ -2213,11 +2213,13 @@ function MainApp() {
         {showCompactCodexThreadActions ? (
           <button
             type="button"
-            className="ghost main-header-action"
+            className="ghost main-header-action ds-tooltip-trigger"
             onClick={handleMobileThreadRefresh}
             data-tauri-drag-region="false"
             aria-label="Refresh current thread from server"
             title="Refresh current thread from server"
+            data-tooltip="Refresh current thread from server"
+            data-tooltip-placement="bottom"
             disabled={mobileThreadRefreshLoading}
           >
             <RefreshCw
