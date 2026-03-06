@@ -277,6 +277,17 @@ export function normalizeItem(item: ConversationItem): ConversationItem {
   if (item.kind === "message") {
     return { ...item, text: truncateText(item.text) };
   }
+  if (item.kind === "userInput") {
+    return {
+      ...item,
+      questions: item.questions.map((question) => ({
+        ...question,
+        header: truncateText(question.header, 300),
+        question: truncateText(question.question, 2000),
+        answers: question.answers.map((answer) => truncateText(answer, 2000)),
+      })),
+    };
+  }
   if (item.kind === "explore") {
     return item;
   }
@@ -537,6 +548,30 @@ function mergeExploreEntries(base: ExploreEntry[], next: ExploreEntry[]) {
   return deduped;
 }
 
+function mergeUserInputQuestions(
+  existing: Extract<ConversationItem, { kind: "userInput" }>["questions"],
+  incoming: Extract<ConversationItem, { kind: "userInput" }>["questions"],
+) {
+  const existingById = new Map(existing.map((question) => [question.id, question]));
+  const merged = incoming.map((question) => {
+    const prior = existingById.get(question.id);
+    if (!prior) {
+      return question;
+    }
+    const incomingHasAnswers = question.answers.length > 0;
+    return {
+      ...prior,
+      ...question,
+      header: question.header.trim() ? question.header : prior.header,
+      question: question.question.trim() ? question.question : prior.question,
+      answers: incomingHasAnswers ? question.answers : prior.answers,
+    };
+  });
+  const incomingIds = new Set(incoming.map((question) => question.id));
+  const missingExisting = existing.filter((question) => !incomingIds.has(question.id));
+  return [...merged, ...missingExisting];
+}
+
 function summarizeCommandExecution(item: Extract<ConversationItem, { kind: "tool" }>) {
   if (isFailedStatus(item.status)) {
     return null;
@@ -682,6 +717,15 @@ export function upsertItem(list: ConversationItem[], item: ConversationItem) {
       ...item,
       text: incomingText.length >= existingText.length ? incomingText : existingText,
       images: item.images?.length ? item.images : existing.images,
+    };
+    return next;
+  }
+
+  if (existing.kind === "userInput" && item.kind === "userInput") {
+    next[index] = {
+      ...existing,
+      ...item,
+      questions: mergeUserInputQuestions(existing.questions, item.questions),
     };
     return next;
   }
@@ -1157,6 +1201,19 @@ function chooseRicherItem(remote: ConversationItem, local: ConversationItem) {
   }
   if (remote.kind === "message" && local.kind === "message") {
     return local.text.length > remote.text.length ? local : remote;
+  }
+  if (remote.kind === "userInput" && local.kind === "userInput") {
+    const remoteScore = remote.questions.reduce(
+      (total, question) =>
+        total + question.question.length + question.answers.join("\n").length,
+      0,
+    );
+    const localScore = local.questions.reduce(
+      (total, question) =>
+        total + question.question.length + question.answers.join("\n").length,
+      0,
+    );
+    return localScore > remoteScore ? local : remote;
   }
   if (remote.kind === "reasoning" && local.kind === "reasoning") {
     const remoteLength = remote.summary.length + remote.content.length;
