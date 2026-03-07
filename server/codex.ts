@@ -3,10 +3,18 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { execFile, spawn } from "node:child_process";
-import { Codex, type Thread, type ThreadEvent, type ThreadItem, type ThreadOptions, type Usage } from "@openai/codex-sdk";
 import { createTwoFilesPatch } from "diff";
 import { buildAppServerEvent } from "./appServer.js";
 import { CompanionStorage } from "./storage.js";
+import {
+  Codex,
+  CodexAppServerClient,
+  type Thread,
+  type ThreadEvent,
+  type ThreadItem,
+  type ThreadOptions,
+  type Usage,
+} from "./vendor/codexSdk.js";
 import type {
   AppServerEventPayload,
   JsonRecord,
@@ -1215,6 +1223,24 @@ export class CodexCompanionServer {
     });
   }
 
+  async getHealth() {
+    return {
+      mode: "typescript",
+      dataDir: this.dataDir,
+      workspaceCount: this.workspacesById.size,
+      threadCount: this.threadsById.size,
+      connectedWorkspaceCount: this.connectedWorkspaceIds.size,
+      activeRunCount: this.activeRuns.size,
+    };
+  }
+
+  async close() {
+    for (const activeRun of this.activeRuns.values()) {
+      activeRun.abortController.abort();
+    }
+    this.activeRuns.clear();
+  }
+
   private get dataDir() {
     return path.dirname(this.storage.settingsPath);
   }
@@ -1497,112 +1523,14 @@ export class CodexCompanionServer {
   }
 
   private async callCodexAppServer(method: string, params: JsonRecord, settings: JsonRecord) {
-    const codexCommand = this.codexCommand(settings);
-    return await new Promise<JsonRecord>((resolve, reject) => {
-      const child = spawn(codexCommand, ["app-server"], {
-        stdio: ["pipe", "pipe", "pipe"],
-        env: process.env,
-      });
-
-      let settled = false;
-      let stdoutBuffer = "";
-      let stderrBuffer = "";
-      const initializeId = 1;
-      const requestId = 2;
-
-      const finalize = (callback: () => void) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(timer);
-        child.kill();
-        callback();
-      };
-
-      const fail = (message: string) =>
-        finalize(() => {
-          reject(new Error(message));
-        });
-
-      const send = (message: JsonRecord) => {
-        child.stdin.write(`${JSON.stringify(message)}\n`);
-      };
-
-      const timer = setTimeout(() => {
-        fail(
-          `${method} timed out while talking to codex app-server${
-            stderrBuffer.trim() ? `: ${stderrBuffer.trim()}` : ""
-          }`,
-        );
-      }, method === "initialize" ? APP_SERVER_INIT_TIMEOUT_MS : APP_SERVER_REQUEST_TIMEOUT_MS);
-
-      child.once("error", (error) => {
-        fail(`Failed to start codex app-server: ${error.message}`);
-      });
-
-      child.stderr.setEncoding("utf8");
-      child.stderr.on("data", (chunk) => {
-        stderrBuffer += chunk;
-      });
-
-      child.stdout.setEncoding("utf8");
-      child.stdout.on("data", (chunk) => {
-        stdoutBuffer += chunk;
-        let newlineIndex = stdoutBuffer.indexOf("\n");
-        while (newlineIndex >= 0) {
-          const line = stdoutBuffer.slice(0, newlineIndex).trim();
-          stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1);
-          if (!line) {
-            newlineIndex = stdoutBuffer.indexOf("\n");
-            continue;
-          }
-          let message: Record<string, unknown>;
-          try {
-            message = JSON.parse(line) as Record<string, unknown>;
-          } catch (error) {
-            fail(
-              `Invalid JSON from codex app-server: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            );
-            return;
-          }
-          if (message.id === initializeId) {
-            if (message.error && typeof message.error === "object") {
-              const appServerError = message.error as { message?: unknown };
-              fail(
-                `codex app-server initialize failed: ${trimString(appServerError.message) || "unknown error"}`,
-              );
-              return;
-            }
-            send({ method: "initialized", params: {} });
-            send({ id: requestId, method, params });
-            continue;
-          }
-          if (message.id === requestId) {
-            if (message.error && typeof message.error === "object") {
-              const appServerError = message.error as { message?: unknown };
-              fail(
-                `codex app-server ${method} failed: ${trimString(appServerError.message) || "unknown error"}`,
-              );
-              return;
-            }
-            finalize(() => {
-              resolve((message.result ?? {}) as JsonRecord);
-            });
-            return;
-          }
-          newlineIndex = stdoutBuffer.indexOf("\n");
-        }
-      });
-
-      send({
-        id: initializeId,
-        method: "initialize",
-        params: buildAppServerInitializeParams(),
-      });
+    const client = new CodexAppServerClient({
+      codexPath: this.codexCommand(settings),
+      env: process.env,
+      initializeParams: buildAppServerInitializeParams(),
+      initTimeoutMs: APP_SERVER_INIT_TIMEOUT_MS,
+      requestTimeoutMs: APP_SERVER_REQUEST_TIMEOUT_MS,
     });
+    return await client.request(method, params);
   }
 
   private buildStoredThreadFromAppServer(

@@ -4,14 +4,27 @@ import { WebSocket, WebSocketServer } from "ws";
 import { CodexCompanionServer } from "./codex.js";
 import { resolveDataDir } from "./paths.js";
 import { CompanionStorage } from "./storage.js";
+import type { RpcErrorShape } from "./types.js";
 
 const DEFAULT_PORT = Number(process.env.CODEX_MONITOR_WEB_PORT ?? "4318");
 const DEFAULT_HOST = process.env.CODEX_MONITOR_WEB_HOST?.trim() || "127.0.0.1";
+const HTTP_REQUEST_WARN_AFTER_MS = 5_000;
 
 type SocketMessage = {
   event: string;
   payload: unknown;
 };
+
+let nextHttpRequestId = 1;
+
+function isRpcError(value: unknown): value is RpcErrorShape {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "error" in value &&
+      typeof (value as { error?: unknown }).error === "object",
+  );
+}
 
 function responseHeaders() {
   return {
@@ -49,6 +62,17 @@ async function readRequestBody(
   return parsed as Record<string, unknown>;
 }
 
+function summarizeParams(params: Record<string, unknown>) {
+  const keys = Object.keys(params).sort();
+  const summary: Record<string, unknown> = { keys };
+  for (const key of ["workspaceId", "threadId", "id", "path"]) {
+    if (key in params) {
+      summary[key] = params[key];
+    }
+  }
+  return summary;
+}
+
 async function main() {
   const sockets = new Set<WebSocket>();
   const storage = new CompanionStorage(resolveDataDir());
@@ -82,7 +106,10 @@ async function main() {
     }
 
     if (request.method === "GET" && url.pathname === "/api/health") {
-      writeJson(response, 200, { ok: true, dataDir: resolveDataDir() });
+      writeJson(response, 200, {
+        ok: true,
+        ...(await app.getHealth()),
+      });
       return;
     }
 
@@ -92,25 +119,51 @@ async function main() {
     }
 
     const method = url.pathname.slice("/api/rpc/".length);
+    const requestId = nextHttpRequestId++;
+    const startedAt = Date.now();
+    let warningTimer: NodeJS.Timeout | null = null;
+
     try {
       const params = await readRequestBody(request);
+      console.log(
+        `[codex-monitor-web:http] #${requestId} -> ${method}`,
+        summarizeParams(params),
+      );
+      warningTimer = setTimeout(() => {
+        console.warn(
+          `[codex-monitor-web:http] #${requestId} still running after ${Date.now() - startedAt}ms (${method})`,
+        );
+      }, HTTP_REQUEST_WARN_AFTER_MS);
+      warningTimer.unref?.();
+
       const result = await app.handleRpc(method, params);
-      if (
-        result &&
-        typeof result === "object" &&
-        "error" in result &&
-        typeof (result as { error?: unknown }).error === "object"
-      ) {
+      if (isRpcError(result)) {
+        console.warn(
+          `[codex-monitor-web:http] #${requestId} <- ${method} 400 ${Date.now() - startedAt}ms ${result.error.message}`,
+        );
         writeJson(response, 400, result);
         return;
       }
+
+      console.log(
+        `[codex-monitor-web:http] #${requestId} <- ${method} 200 ${Date.now() - startedAt}ms`,
+      );
       writeJson(response, 200, result);
     } catch (error) {
+      const elapsedMs = Date.now() - startedAt;
+      console.error(
+        `[codex-monitor-web:http] #${requestId} <- ${method} 500 ${elapsedMs}ms`,
+        error,
+      );
       writeJson(response, 500, {
         error: {
           message: error instanceof Error ? error.message : String(error),
         },
       });
+    } finally {
+      if (warningTimer) {
+        clearTimeout(warningTimer);
+      }
     }
   });
 
@@ -130,6 +183,17 @@ async function main() {
 
   server.listen(DEFAULT_PORT, DEFAULT_HOST, () => {
     console.log(`[codex-monitor-web] listening on http://${DEFAULT_HOST}:${DEFAULT_PORT}`);
+  });
+
+  const shutdown = async () => {
+    await app.close();
+    server.close();
+  };
+  process.on("SIGINT", () => {
+    void shutdown();
+  });
+  process.on("SIGTERM", () => {
+    void shutdown();
   });
 }
 

@@ -1066,6 +1066,9 @@ export async function getAppSettings(): Promise<AppSettings> {
 }
 
 export async function isMobileRuntime(): Promise<boolean> {
+  if (isWebCompanionRuntime()) {
+    return false;
+  }
   return invoke<boolean>("is_mobile_runtime");
 }
 

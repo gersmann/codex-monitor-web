@@ -117,6 +117,13 @@ Do not reintroduce duplicated modal/toast/panel/popover shell styling in feature
 - If conflicts impact correctness, call them out and choose the safest path.
 - Fix root cause, not band-aids.
 
+## Commit Policy
+
+- Use semantic commit messages for every commit.
+- Preferred format: `type(scope): summary`
+- Valid types include `feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci`, `chore`.
+- Keep the summary concise and imperative.
+
 ## Validation Matrix
 
 Run validations based on touched areas:
