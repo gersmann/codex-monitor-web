@@ -70,6 +70,11 @@ export type TrayRecentThreadEntry = {
   updatedAt: number;
 };
 
+export type TraySessionUsage = {
+  sessionLabel: string;
+  weeklyLabel: string | null;
+};
+
 export type TrayOpenThreadPayload = {
   workspaceId: string;
   threadId: string;

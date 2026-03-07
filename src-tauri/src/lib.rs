@@ -190,6 +190,7 @@ pub fn run() {
             codex::get_config_model,
             menu::menu_set_accelerators,
             tray::set_tray_recent_threads,
+            tray::set_tray_session_usage,
             codex::codex_doctor,
             codex::codex_update,
             workspaces::list_workspaces,

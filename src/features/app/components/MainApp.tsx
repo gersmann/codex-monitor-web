@@ -60,6 +60,7 @@ import { useThreadListSortKey } from "@app/hooks/useThreadListSortKey";
 import { useThreadListActions } from "@app/hooks/useThreadListActions";
 import { useRemoteThreadLiveConnection } from "@app/hooks/useRemoteThreadLiveConnection";
 import { useTrayRecentThreads } from "@app/hooks/useTrayRecentThreads";
+import { useTraySessionUsage } from "@app/hooks/useTraySessionUsage";
 import { useTauriEvent } from "@app/hooks/useTauriEvent";
 import { useAppBootstrapOrchestration } from "@app/bootstrap/useAppBootstrapOrchestration";
 import {
@@ -1155,6 +1156,10 @@ export default function MainApp() {
   const activeTokenUsage = activeThreadId
     ? tokenUsageByThread[activeThreadId] ?? null
     : null;
+  useTraySessionUsage({
+    accountRateLimits: activeRateLimits,
+    showRemaining: appSettings.usageShowRemaining,
+  });
   const activePlan = activeThreadId
     ? planByThread[activeThreadId] ?? null
     : null;

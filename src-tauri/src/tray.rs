@@ -20,6 +20,12 @@ const TRAY_ID: &str = "codex-monitor-tray";
 const TRAY_QUIT_ID: &str = "tray_quit";
 #[cfg(target_os = "macos")]
 const TRAY_EMPTY_ID: &str = "tray_recent_empty";
+#[cfg(target_os = "macos")]
+const TRAY_USAGE_HEADER_ID: &str = "tray_usage_header";
+#[cfg(target_os = "macos")]
+const TRAY_USAGE_SESSION_ID: &str = "tray_usage_session";
+#[cfg(target_os = "macos")]
+const TRAY_USAGE_WEEKLY_ID: &str = "tray_usage_weekly";
 pub(crate) const TRAY_OPEN_THREAD_EVENT: &str = "tray-open-thread";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -39,9 +45,17 @@ pub(crate) struct TrayOpenThreadPayload {
     pub(crate) thread_id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TraySessionUsage {
+    pub(crate) session_label: String,
+    pub(crate) weekly_label: Option<String>,
+}
+
 #[derive(Default)]
 pub(crate) struct TrayState {
     recent_threads: Mutex<Vec<TrayRecentThreadEntry>>,
+    session_usage: Mutex<Option<TraySessionUsage>>,
     recent_targets_by_menu_id: Mutex<HashMap<String, TrayOpenThreadPayload>>,
 }
 
@@ -61,6 +75,30 @@ pub(crate) fn set_tray_recent_threads<R: tauri::Runtime>(
             return Ok(());
         }
         *recent_threads = normalized;
+    }
+
+    #[cfg(target_os = "macos")]
+    update_tray_menu(&app, &state)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn set_tray_session_usage<R: tauri::Runtime>(
+    app: AppHandle<R>,
+    state: tauri::State<'_, TrayState>,
+    usage: Option<TraySessionUsage>,
+) -> Result<(), String> {
+    let normalized = normalize_session_usage(usage);
+    {
+        let mut session_usage = state
+            .session_usage
+            .lock()
+            .map_err(|_| "failed to lock tray session usage".to_string())?;
+        if *session_usage == normalized {
+            return Ok(());
+        }
+        *session_usage = normalized;
     }
 
     #[cfg(target_os = "macos")]
@@ -140,6 +178,25 @@ fn normalize_recent_threads(entries: Vec<TrayRecentThreadEntry>) -> Vec<TrayRece
     normalized
 }
 
+fn normalize_session_usage(usage: Option<TraySessionUsage>) -> Option<TraySessionUsage> {
+    let usage = usage?;
+    let session_label = usage.session_label.trim();
+    if session_label.is_empty() {
+        return None;
+    }
+    let weekly_label = usage
+        .weekly_label
+        .as_ref()
+        .map(|label| label.trim())
+        .filter(|label| !label.is_empty())
+        .map(ToString::to_string);
+
+    Some(TraySessionUsage {
+        session_label: session_label.to_string(),
+        weekly_label,
+    })
+}
+
 #[cfg(target_os = "macos")]
 fn update_tray_menu<R: Runtime>(
     app: &tauri::AppHandle<R>,
@@ -163,7 +220,13 @@ fn build_tray_menu<R: Runtime>(
         .lock()
         .map(|entries| entries.clone())
         .unwrap_or_default();
+    let session_usage = state
+        .session_usage
+        .lock()
+        .map(|usage| usage.clone())
+        .unwrap_or_default();
     let (recent_items, recent_targets) = build_recent_menu_items(app, &recent_threads)?;
+    let usage_items = build_usage_menu_items(app, session_usage.as_ref())?;
     if let Ok(mut targets) = state.recent_targets_by_menu_id.lock() {
         *targets = recent_targets;
     }
@@ -172,6 +235,11 @@ fn build_tray_menu<R: Runtime>(
     }
     let separator = PredefinedMenuItem::separator(app)?;
     menu.append(&separator)?;
+    for item in &usage_items {
+        menu.append(item)?;
+    }
+    let usage_separator = PredefinedMenuItem::separator(app)?;
+    menu.append(&usage_separator)?;
     let quit_item = MenuItemBuilder::with_id(TRAY_QUIT_ID, "Quit").build(app)?;
     menu.append(&quit_item)?;
     Ok(menu)
@@ -207,6 +275,40 @@ fn build_recent_menu_items<R: Runtime>(
         );
     }
     Ok((items, targets))
+}
+
+#[cfg(target_os = "macos")]
+fn build_usage_menu_items<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+    usage: Option<&TraySessionUsage>,
+) -> tauri::Result<Vec<tauri::menu::MenuItem<R>>> {
+    let labels = build_usage_menu_labels(usage);
+    let mut items = Vec::with_capacity(3);
+    let header = MenuItemBuilder::with_id(TRAY_USAGE_HEADER_ID, &labels.0)
+        .enabled(false)
+        .build(app)?;
+    items.push(header);
+    let session = MenuItemBuilder::with_id(TRAY_USAGE_SESSION_ID, &labels.1)
+        .enabled(false)
+        .build(app)?;
+    items.push(session);
+    if let Some(weekly_label) = labels.2 {
+        let weekly = MenuItemBuilder::with_id(TRAY_USAGE_WEEKLY_ID, &weekly_label)
+            .enabled(false)
+            .build(app)?;
+        items.push(weekly);
+    }
+    Ok(items)
+}
+
+fn build_usage_menu_labels(usage: Option<&TraySessionUsage>) -> (String, String, Option<String>) {
+    (
+        "Current Usage".to_string(),
+        usage
+            .map(|usage| format!("Session: {}", usage.session_label))
+            .unwrap_or_else(|| "No active session".to_string()),
+        usage.map(|usage| usage.weekly_label.clone()).unwrap_or(None).map(|label| format!("Weekly: {label}")),
+    )
 }
 
 #[cfg(target_os = "macos")]
@@ -254,7 +356,8 @@ fn load_tray_icon() -> tauri::Result<Image<'static>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_recent_threads, TrayOpenThreadPayload, TrayRecentThreadEntry, MAX_RECENT_THREADS,
+        build_usage_menu_labels, normalize_recent_threads, normalize_session_usage,
+        TrayOpenThreadPayload, TrayRecentThreadEntry, TraySessionUsage, MAX_RECENT_THREADS,
     };
 
     fn recent_entry(
@@ -313,5 +416,46 @@ mod tests {
 
         assert_eq!(payload.workspace_id, "ws-1");
         assert_eq!(payload.thread_id, "thread-1");
+    }
+
+    #[test]
+    fn normalize_session_usage_discards_blank_labels() {
+        assert_eq!(normalize_session_usage(None), None);
+        assert_eq!(
+            normalize_session_usage(Some(TraySessionUsage {
+                session_label: "   ".into(),
+                weekly_label: None,
+            })),
+            None
+        );
+        assert_eq!(
+            normalize_session_usage(Some(TraySessionUsage {
+                session_label: " 12% used ".into(),
+                weekly_label: Some(" 67% used ".into()),
+            })),
+            Some(TraySessionUsage {
+                session_label: "12% used".into(),
+                weekly_label: Some("67% used".into()),
+            })
+        );
+    }
+
+    #[test]
+    fn build_usage_menu_labels_include_current_usage_section() {
+        assert_eq!(
+            build_usage_menu_labels(Some(&TraySessionUsage {
+                session_label: "12% used · Resets 2 hours".into(),
+                weekly_label: Some("67% used · Resets in 2 days".into()),
+            })),
+            (
+                "Current Usage".into(),
+                "Session: 12% used · Resets 2 hours".into(),
+                Some("Weekly: 67% used · Resets in 2 days".into()),
+            )
+        );
+        assert_eq!(
+            build_usage_menu_labels(None),
+            ("Current Usage".into(), "No active session".into(), None)
+        );
     }
 }
