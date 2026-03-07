@@ -31,6 +31,7 @@ import {
   sendNotification,
   setCodexFeatureFlag,
   setAgentsCoreSettings,
+  setTrayRecentThreads,
   startReview,
   setThreadName,
   tailscaleDaemonStart,
@@ -280,6 +281,25 @@ describe("tauri invoke wrappers", () => {
       cursor: "cursor-1",
       limit: 25,
       sortKey: "updated_at",
+    });
+  });
+
+  it("maps entries for set_tray_recent_threads", async () => {
+    const invokeMock = vi.mocked(invoke);
+    const entries = [
+      {
+        workspaceId: "ws-1",
+        workspaceLabel: "Workspace",
+        threadId: "thread-1",
+        threadLabel: "Alpha",
+        updatedAt: 10,
+      },
+    ];
+
+    await setTrayRecentThreads(entries);
+
+    expect(invokeMock).toHaveBeenCalledWith("set_tray_recent_threads", {
+      entries,
     });
   });
 

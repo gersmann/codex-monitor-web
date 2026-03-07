@@ -59,6 +59,8 @@ import { useSystemNotificationThreadLinks } from "@app/hooks/useSystemNotificati
 import { useThreadListSortKey } from "@app/hooks/useThreadListSortKey";
 import { useThreadListActions } from "@app/hooks/useThreadListActions";
 import { useRemoteThreadLiveConnection } from "@app/hooks/useRemoteThreadLiveConnection";
+import { useTrayRecentThreads } from "@app/hooks/useTrayRecentThreads";
+import { useTauriEvent } from "@app/hooks/useTauriEvent";
 import { useAppBootstrapOrchestration } from "@app/bootstrap/useAppBootstrapOrchestration";
 import {
   useThreadCodexBootstrapOrchestration,
@@ -77,6 +79,7 @@ import {
   resolveWorkspaceRuntimeCodexArgsBadgeLabel,
   resolveWorkspaceRuntimeCodexArgsOverride,
 } from "@threads/utils/threadCodexParamsSeed";
+import { subscribeTrayOpenThread } from "@services/events";
 import { setWorkspaceRuntimeCodexArgs } from "@services/tauri";
 
 const SettingsView = lazy(() =>
@@ -800,24 +803,11 @@ export default function MainApp() {
   });
   const { getThreadRows } = useThreadRows(threadParentById);
 
-  const { recordPendingThreadLink } = useSystemNotificationThreadLinks({
-    hasLoadedWorkspaces: hasLoaded,
-    workspacesById,
-    refreshWorkspaces,
-    connectWorkspace,
-    setActiveTab,
-    setCenterMode,
-    setSelectedDiffPath,
-    setActiveWorkspaceId,
-    setActiveThreadId,
+  useTrayRecentThreads({
+    workspaces,
+    threadsByWorkspace,
+    isSubagentThread,
   });
-
-  useEffect(() => {
-    recordPendingThreadLinkRef.current = recordPendingThreadLink;
-    return () => {
-      recordPendingThreadLinkRef.current = () => {};
-    };
-  }, [recordPendingThreadLink]);
 
   useAutoExitEmptyDiff({
     centerMode,
@@ -1418,6 +1408,37 @@ export default function MainApp() {
     clearDraftForThread,
     removeImagesForThread,
   });
+
+  const handleOpenThreadLinkFromExternal = useCallback(
+    (workspaceId: string, threadId: string) => {
+      setActiveTab("codex");
+      handleOpenThreadLink(threadId, workspaceId);
+    },
+    [handleOpenThreadLink, setActiveTab],
+  );
+
+  const { recordPendingThreadLink, openThreadLinkOrQueue } =
+    useSystemNotificationThreadLinks({
+      hasLoadedWorkspaces: hasLoaded,
+      workspacesById,
+      refreshWorkspaces,
+      connectWorkspace,
+      openThreadLink: handleOpenThreadLinkFromExternal,
+    });
+
+  useTauriEvent(
+    subscribeTrayOpenThread,
+    ({ workspaceId, threadId }: { workspaceId: string; threadId: string }) => {
+      openThreadLinkOrQueue(workspaceId, threadId);
+    },
+  );
+
+  useEffect(() => {
+    recordPendingThreadLinkRef.current = recordPendingThreadLink;
+    return () => {
+      recordPendingThreadLinkRef.current = () => {};
+    };
+  }, [recordPendingThreadLink]);
 
   const { handlePlanAccept, handlePlanSubmitChanges } = usePlanReadyActions({
     activeWorkspace,
