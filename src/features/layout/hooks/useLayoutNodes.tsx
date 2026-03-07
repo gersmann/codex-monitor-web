@@ -7,9 +7,9 @@ import type { SecondaryLayoutNodesOptions } from "./layoutNodes/buildSecondaryNo
 import type { LayoutNodesOptions, LayoutNodesResult } from "./layoutNodes/types";
 
 export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
-  const primaryOptions: PrimaryLayoutNodesOptions = options;
-  const gitOptions: GitLayoutNodesOptions = options;
-  const secondaryOptions: SecondaryLayoutNodesOptions = options;
+  const primaryOptions: PrimaryLayoutNodesOptions = options.primary;
+  const gitOptions: GitLayoutNodesOptions = options.git;
+  const secondaryOptions: SecondaryLayoutNodesOptions = options.secondary;
 
   return {
     ...buildPrimaryNodes(primaryOptions),

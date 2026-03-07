@@ -2,32 +2,12 @@ import { DebugPanel } from "../../../debug/components/DebugPanel";
 import { PlanPanel } from "../../../plan/components/PlanPanel";
 import { TerminalDock } from "../../../terminal/components/TerminalDock";
 import { TerminalPanel } from "../../../terminal/components/TerminalPanel";
-import type { LayoutNodesOptions, LayoutNodesResult } from "./types";
+import type {
+  LayoutNodesResult,
+  LayoutSecondarySurface,
+} from "./types";
 
-export type SecondaryLayoutNodesOptions = Pick<
-  LayoutNodesOptions,
-  | "plan"
-  | "isProcessing"
-  | "terminalState"
-  | "terminalOpen"
-  | "terminalTabs"
-  | "activeTerminalId"
-  | "onSelectTerminal"
-  | "onNewTerminal"
-  | "onCloseTerminal"
-  | "onResizeTerminal"
-  | "debugEntries"
-  | "debugOpen"
-  | "onClearDebug"
-  | "onCopyDebug"
-  | "onResizeDebug"
-  | "onGoProjects"
-  | "centerMode"
-  | "selectedDiffPath"
-  | "onBackFromDiff"
-  | "onShowSelectedDiff"
-  | "hasActiveGitDiffs"
->;
+export type SecondaryLayoutNodesOptions = LayoutSecondarySurface;
 
 type SecondaryLayoutNodes = Pick<
   LayoutNodesResult,
@@ -41,7 +21,7 @@ type SecondaryLayoutNodes = Pick<
 >;
 
 export function buildSecondaryNodes(options: SecondaryLayoutNodesOptions): SecondaryLayoutNodes {
-  const planPanelNode = <PlanPanel plan={options.plan} isProcessing={options.isProcessing} />;
+  const planPanelNode = <PlanPanel {...options.planPanelProps} />;
 
   const terminalPanelNode = options.terminalState ? (
     <TerminalPanel
@@ -53,33 +33,17 @@ export function buildSecondaryNodes(options: SecondaryLayoutNodesOptions): Secon
 
   const terminalDockNode = (
     <TerminalDock
-      isOpen={options.terminalOpen}
-      terminals={options.terminalTabs}
-      activeTerminalId={options.activeTerminalId}
-      onSelectTerminal={options.onSelectTerminal}
-      onNewTerminal={options.onNewTerminal}
-      onCloseTerminal={options.onCloseTerminal}
-      onResizeStart={options.onResizeTerminal}
+      {...options.terminalDockProps}
       terminalNode={terminalPanelNode}
     />
   );
 
-  const debugPanelNode = (
-    <DebugPanel
-      entries={options.debugEntries}
-      isOpen={options.debugOpen}
-      onClear={options.onClearDebug}
-      onCopy={options.onCopyDebug}
-      onResizeStart={options.onResizeDebug}
-    />
-  );
+  const debugPanelNode = <DebugPanel {...options.debugPanelProps} />;
 
   const debugPanelFullNode = (
     <DebugPanel
-      entries={options.debugEntries}
+      {...options.debugPanelProps}
       isOpen
-      onClear={options.onClearDebug}
-      onCopy={options.onCopyDebug}
       variant="full"
     />
   );
@@ -88,7 +52,7 @@ export function buildSecondaryNodes(options: SecondaryLayoutNodesOptions): Secon
     <div className="compact-empty">
       <h3>No workspace selected</h3>
       <p>Choose a project to start chatting.</p>
-      <button className="ghost" onClick={options.onGoProjects}>
+      <button className="ghost" onClick={options.compactNavProps.onGoProjects}>
         Go to Projects
       </button>
     </div>
@@ -98,28 +62,29 @@ export function buildSecondaryNodes(options: SecondaryLayoutNodesOptions): Secon
     <div className="compact-empty">
       <h3>No workspace selected</h3>
       <p>Select a project to inspect diffs.</p>
-      <button className="ghost" onClick={options.onGoProjects}>
+      <button className="ghost" onClick={options.compactNavProps.onGoProjects}>
         Go to Projects
       </button>
     </div>
   );
 
   const compactGitDiffActive =
-    options.centerMode === "diff" && Boolean(options.selectedDiffPath);
+    options.compactNavProps.centerMode === "diff" &&
+    Boolean(options.compactNavProps.selectedDiffPath);
   const compactGitBackNode = (
     <div className="compact-git-back">
       <button
         type="button"
         className={`compact-git-switch-button${compactGitDiffActive ? "" : " active"}`}
-        onClick={options.onBackFromDiff}
+        onClick={options.compactNavProps.onBackFromDiff}
       >
         Files
       </button>
       <button
         type="button"
         className={`compact-git-switch-button${compactGitDiffActive ? " active" : ""}`}
-        onClick={options.onShowSelectedDiff}
-        disabled={!options.hasActiveGitDiffs}
+        onClick={options.compactNavProps.onShowSelectedDiff}
+        disabled={!options.compactNavProps.hasActiveGitDiffs}
       >
         Diff
       </button>
