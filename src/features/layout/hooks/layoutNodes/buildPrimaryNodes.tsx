@@ -11,6 +11,8 @@ import { TabBar } from "../../../app/components/TabBar";
 import { TabletNav } from "../../../app/components/TabletNav";
 import type { LayoutNodesOptions, LayoutNodesResult } from "./types";
 
+export type PrimaryLayoutNodesOptions = LayoutNodesOptions;
+
 type PrimaryLayoutNodes = Pick<
   LayoutNodesResult,
   | "sidebarNode"
@@ -26,7 +28,7 @@ type PrimaryLayoutNodes = Pick<
   | "tabBarNode"
 >;
 
-export function buildPrimaryNodes(options: LayoutNodesOptions): PrimaryLayoutNodes {
+export function buildPrimaryNodes(options: PrimaryLayoutNodesOptions): PrimaryLayoutNodes {
   const activeThreadStatus = options.activeThreadId
     ? options.threadStatusById[options.activeThreadId] ?? null
     : null;

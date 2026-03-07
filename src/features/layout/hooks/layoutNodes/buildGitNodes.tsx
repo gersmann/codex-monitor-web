@@ -4,6 +4,129 @@ import { GitDiffViewer } from "../../../git/components/GitDiffViewer";
 import { PromptPanel } from "../../../prompts/components/PromptPanel";
 import type { LayoutNodesOptions, LayoutNodesResult } from "./types";
 
+export type GitLayoutNodesOptions = Pick<
+  LayoutNodesOptions,
+  | "centerMode"
+  | "selectedDiffPath"
+  | "filePanelMode"
+  | "activeWorkspace"
+  | "files"
+  | "gitStatus"
+  | "fileTreeLoading"
+  | "onFilePanelModeChange"
+  | "onInsertComposerText"
+  | "canInsertComposerText"
+  | "openAppTargets"
+  | "openAppIconById"
+  | "selectedOpenAppId"
+  | "onSelectOpenAppId"
+  | "prompts"
+  | "onSendPrompt"
+  | "onSendPromptToNewAgent"
+  | "onCreatePrompt"
+  | "onUpdatePrompt"
+  | "onDeletePrompt"
+  | "onMovePrompt"
+  | "onRevealWorkspacePrompts"
+  | "onRevealGeneralPrompts"
+  | "canRevealGeneralPrompts"
+  | "gitPanelMode"
+  | "onGitPanelModeChange"
+  | "worktreeApplyLabel"
+  | "worktreeApplyTitle"
+  | "worktreeApplyLoading"
+  | "worktreeApplyError"
+  | "worktreeApplySuccess"
+  | "onApplyWorktreeChanges"
+  | "fileStatus"
+  | "perFileDiffGroups"
+  | "onSelectPerFileDiff"
+  | "onSelectDiff"
+  | "gitLogEntries"
+  | "gitLogTotal"
+  | "gitLogAhead"
+  | "gitLogBehind"
+  | "gitLogAheadEntries"
+  | "gitLogBehindEntries"
+  | "gitLogUpstream"
+  | "selectedCommitSha"
+  | "onSelectCommit"
+  | "gitLogError"
+  | "gitLogLoading"
+  | "gitIssues"
+  | "gitIssuesTotal"
+  | "gitIssuesLoading"
+  | "gitIssuesError"
+  | "gitPullRequests"
+  | "gitPullRequestsTotal"
+  | "gitPullRequestsLoading"
+  | "gitPullRequestsError"
+  | "selectedPullRequestNumber"
+  | "onSelectPullRequest"
+  | "gitRemoteUrl"
+  | "gitRoot"
+  | "gitRootCandidates"
+  | "gitRootScanDepth"
+  | "gitRootScanLoading"
+  | "gitRootScanError"
+  | "gitRootScanHasScanned"
+  | "onGitRootScanDepthChange"
+  | "onScanGitRoots"
+  | "onSelectGitRoot"
+  | "onClearGitRoot"
+  | "onPickGitRoot"
+  | "onInitGitRepo"
+  | "initGitRepoLoading"
+  | "onStageGitAll"
+  | "onStageGitFile"
+  | "onUnstageGitFile"
+  | "onRevertGitFile"
+  | "onRevertAllGitChanges"
+  | "onReviewUncommittedChanges"
+  | "commitMessage"
+  | "commitMessageLoading"
+  | "commitMessageError"
+  | "onCommitMessageChange"
+  | "onGenerateCommitMessage"
+  | "onCommit"
+  | "onCommitAndPush"
+  | "onCommitAndSync"
+  | "onPull"
+  | "onFetch"
+  | "onPush"
+  | "onSync"
+  | "commitLoading"
+  | "pullLoading"
+  | "fetchLoading"
+  | "pushLoading"
+  | "syncLoading"
+  | "commitError"
+  | "pullError"
+  | "fetchError"
+  | "pushError"
+  | "syncError"
+  | "commitsAhead"
+  | "gitDiffs"
+  | "diffScrollRequestId"
+  | "gitDiffLoading"
+  | "gitDiffError"
+  | "isPhone"
+  | "splitChatDiffView"
+  | "gitDiffViewStyle"
+  | "gitDiffIgnoreWhitespaceChanges"
+  | "selectedPullRequest"
+  | "selectedPullRequestComments"
+  | "selectedPullRequestCommentsLoading"
+  | "selectedPullRequestCommentsError"
+  | "pullRequestReviewActions"
+  | "onRunPullRequestReview"
+  | "pullRequestReviewLaunching"
+  | "pullRequestReviewThreadId"
+  | "onCheckoutPullRequest"
+  | "diffSource"
+  | "onDiffActivePathChange"
+>;
+
 type GitLayoutNodes = Pick<LayoutNodesResult, "gitDiffPanelNode" | "gitDiffViewerNode">;
 
 function resolveGitDiffStyle({
@@ -14,15 +137,15 @@ function resolveGitDiffStyle({
 }: {
   isPhone: boolean;
   splitChatDiffView: boolean;
-  centerMode: LayoutNodesOptions["centerMode"];
-  userPreference: LayoutNodesOptions["gitDiffViewStyle"];
-}): LayoutNodesOptions["gitDiffViewStyle"] {
+  centerMode: GitLayoutNodesOptions["centerMode"];
+  userPreference: GitLayoutNodesOptions["gitDiffViewStyle"];
+}): GitLayoutNodesOptions["gitDiffViewStyle"] {
   const shouldForceSingleColumn =
     isPhone || (splitChatDiffView && centerMode === "chat");
   return shouldForceSingleColumn ? "unified" : userPreference;
 }
 
-export function buildGitNodes(options: LayoutNodesOptions): GitLayoutNodes {
+export function buildGitNodes(options: GitLayoutNodesOptions): GitLayoutNodes {
   const sidebarSelectedDiffPath =
     options.centerMode === "diff" ? options.selectedDiffPath : null;
 

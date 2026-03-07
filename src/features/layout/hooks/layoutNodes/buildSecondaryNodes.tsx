@@ -4,6 +4,31 @@ import { TerminalDock } from "../../../terminal/components/TerminalDock";
 import { TerminalPanel } from "../../../terminal/components/TerminalPanel";
 import type { LayoutNodesOptions, LayoutNodesResult } from "./types";
 
+export type SecondaryLayoutNodesOptions = Pick<
+  LayoutNodesOptions,
+  | "plan"
+  | "isProcessing"
+  | "terminalState"
+  | "terminalOpen"
+  | "terminalTabs"
+  | "activeTerminalId"
+  | "onSelectTerminal"
+  | "onNewTerminal"
+  | "onCloseTerminal"
+  | "onResizeTerminal"
+  | "debugEntries"
+  | "debugOpen"
+  | "onClearDebug"
+  | "onCopyDebug"
+  | "onResizeDebug"
+  | "onGoProjects"
+  | "centerMode"
+  | "selectedDiffPath"
+  | "onBackFromDiff"
+  | "onShowSelectedDiff"
+  | "hasActiveGitDiffs"
+>;
+
 type SecondaryLayoutNodes = Pick<
   LayoutNodesResult,
   | "planPanelNode"
@@ -15,7 +40,7 @@ type SecondaryLayoutNodes = Pick<
   | "compactGitBackNode"
 >;
 
-export function buildSecondaryNodes(options: LayoutNodesOptions): SecondaryLayoutNodes {
+export function buildSecondaryNodes(options: SecondaryLayoutNodesOptions): SecondaryLayoutNodes {
   const planPanelNode = <PlanPanel plan={options.plan} isProcessing={options.isProcessing} />;
 
   const terminalPanelNode = options.terminalState ? (
