@@ -5,15 +5,15 @@ import process from "node:process";
 import { execFile, spawn } from "node:child_process";
 import { createTwoFilesPatch } from "diff";
 import { buildAppServerEvent } from "./appServer.js";
+import {
+  isHttpUrl,
+  unsupportedRpcMessage,
+} from "./parity.js";
 import { CompanionStorage } from "./storage.js";
 import {
   Codex,
   CodexAppServerClient,
-  type Thread,
-  type ThreadEvent,
-  type ThreadItem,
-  type ThreadOptions,
-  type Usage,
+  type AppServerNotificationMessage,
 } from "./vendor/codexSdk.js";
 import type {
   AppServerEventPayload,
@@ -25,9 +25,15 @@ import type {
   StoredWorkspace,
 } from "./types.js";
 
-type ActiveRun = {
-  abortController: AbortController;
-  turnId: string;
+type AccountFallback = {
+  email: string | null;
+  planType: string | null;
+};
+
+type LoginState = {
+  canceled: boolean;
+  loginId: string | null;
+  pending: Promise<JsonRecord> | null;
 };
 
 type BroadcastMessage = {
@@ -81,37 +87,17 @@ const APP_SERVER_SOURCE_KINDS = [
   "subAgentThreadSpawn",
   "unknown",
 ];
-const DEFAULT_MODELS = [
-  {
-    id: "gpt-5-codex",
-    model: "gpt-5-codex",
-    displayName: "GPT-5 Codex",
-    description: "Default Codex coding model.",
-    supportedReasoningEfforts: [
-      { reasoningEffort: "minimal", description: "Fastest" },
-      { reasoningEffort: "low", description: "Low" },
-      { reasoningEffort: "medium", description: "Balanced" },
-      { reasoningEffort: "high", description: "High" },
-    ],
-    defaultReasoningEffort: "medium",
-    isDefault: true,
-  },
-  {
-    id: "gpt-5.4",
-    model: "gpt-5.4",
-    displayName: "GPT-5.4",
-    description: "General-purpose latest GPT-5 family model.",
-    supportedReasoningEfforts: [
-      { reasoningEffort: "minimal", description: "Fastest" },
-      { reasoningEffort: "low", description: "Low" },
-      { reasoningEffort: "medium", description: "Balanced" },
-      { reasoningEffort: "high", description: "High" },
-    ],
-    defaultReasoningEffort: "high",
-    isDefault: false,
-  },
-];
 
+const APP_SERVER_GLOBAL_NOTIFICATION_METHODS = new Set([
+  "account/login/completed",
+  "account/rateLimits/updated",
+  "account/updated",
+  "app/list/updated",
+  "configWarning",
+  "deprecationNotice",
+  "model/rerouted",
+  "skills/changed",
+]);
 function notFound(message: string): RpcErrorShape {
   return { error: { message } };
 }
@@ -127,19 +113,6 @@ function isRpcError(value: unknown): value is RpcErrorShape {
       "error" in value &&
       typeof (value as { error?: unknown }).error === "object",
   );
-}
-
-function totalsFromUsage(usage: Usage | null | undefined) {
-  return {
-    totalTokens:
-      (usage?.input_tokens ?? 0) +
-      (usage?.cached_input_tokens ?? 0) +
-      (usage?.output_tokens ?? 0),
-    inputTokens: usage?.input_tokens ?? 0,
-    cachedInputTokens: usage?.cached_input_tokens ?? 0,
-    outputTokens: usage?.output_tokens ?? 0,
-    reasoningOutputTokens: 0,
-  };
 }
 
 function toThreadSummary(thread: StoredThread) {
@@ -177,27 +150,6 @@ function toThreadResponse(thread: StoredThread) {
     })),
     tokenUsage: thread.tokenUsage,
   };
-}
-
-function sandboxModeForAccess(accessMode: unknown): ThreadOptions["sandboxMode"] {
-  switch (accessMode) {
-    case "read-only":
-      return "read-only";
-    case "full-access":
-      return "danger-full-access";
-    default:
-      return "workspace-write";
-  }
-}
-
-function diffSuffix(next: string, previous: string) {
-  if (!previous) {
-    return next;
-  }
-  if (next.startsWith(previous)) {
-    return next.slice(previous.length);
-  }
-  return next;
 }
 
 function normalizeRootPath(value: string) {
@@ -369,6 +321,61 @@ function buildAppServerInitializeParams() {
   };
 }
 
+function buildSandboxPolicy(workspacePath: string, accessMode: string | null) {
+  switch (accessMode) {
+    case "full-access":
+      return {
+        type: "dangerFullAccess",
+      };
+    case "read-only":
+      return {
+        type: "readOnly",
+      };
+    default:
+      return {
+        type: "workspaceWrite",
+        writableRoots: [workspacePath],
+        networkAccess: true,
+      };
+  }
+}
+
+function approvalPolicyForAccessMode(accessMode: string | null) {
+  return accessMode === "full-access" ? "never" : "on-request";
+}
+
+function extractThreadIdFromParams(params: JsonRecord) {
+  const direct = trimString(params.threadId) || trimString(params.thread_id);
+  if (direct) {
+    return direct;
+  }
+  const thread =
+    params.thread && typeof params.thread === "object" && !Array.isArray(params.thread)
+      ? (params.thread as JsonRecord)
+      : null;
+  return trimString(thread?.id);
+}
+
+function extractTurnIdFromParams(params: JsonRecord) {
+  const direct = trimString(params.turnId) || trimString(params.turn_id);
+  if (direct) {
+    return direct;
+  }
+  const turn =
+    params.turn && typeof params.turn === "object" && !Array.isArray(params.turn)
+      ? (params.turn as JsonRecord)
+      : null;
+  return trimString(turn?.id);
+}
+
+function toStoredItemFromAppServer(turnId: string, item: JsonRecord): StoredThreadItem {
+  const itemId = trimString(item.id) || `item-${randomUUID()}`;
+  return {
+    ...item,
+    id: toStoredItemId(turnId, itemId),
+  };
+}
+
 function appServerTurnStatus(value: unknown): StoredTurn["status"] {
   const normalized = trimString(value).toLowerCase();
   switch (normalized) {
@@ -419,99 +426,6 @@ function toStoredItemId(turnId: string, itemId: string) {
   return `${turnId}:${itemId}`;
 }
 
-function mapSdkItem(turnId: string, item: ThreadItem): StoredThreadItem {
-  const storedId = toStoredItemId(turnId, item.id);
-  switch (item.type) {
-    case "agent_message":
-      return {
-        id: storedId,
-        type: "agentMessage",
-        text: item.text,
-      };
-    case "reasoning":
-      return {
-        id: storedId,
-        type: "reasoning",
-        summary: item.text,
-        content: item.text,
-      };
-    case "command_execution":
-      return {
-        id: storedId,
-        type: "commandExecution",
-        command: [item.command],
-        aggregatedOutput: item.aggregated_output,
-        status: item.status,
-      };
-    case "file_change":
-      return {
-        id: storedId,
-        type: "fileChange",
-        status: item.status,
-        changes: item.changes.map((change) => ({
-          path: change.path,
-          kind: change.kind,
-        })),
-      };
-    case "mcp_tool_call":
-      return {
-        id: storedId,
-        type: "mcpToolCall",
-        server: item.server,
-        tool: item.tool,
-        arguments: item.arguments,
-        status: item.status,
-        result: item.result ? JSON.stringify(item.result) : "",
-        error: item.error?.message ?? "",
-      };
-    case "web_search":
-      return {
-        id: storedId,
-        type: "webSearch",
-        query: item.query,
-        status: "completed",
-      };
-    case "todo_list":
-      return {
-        id: storedId,
-        type: "plan",
-        status: "completed",
-        text: item.items.map((entry) => `${entry.completed ? "[x]" : "[ ]"} ${entry.text}`).join("\n"),
-      };
-    case "error":
-      return {
-        id: storedId,
-        type: "commandExecution",
-        command: ["error"],
-        aggregatedOutput: item.message,
-        status: "failed",
-      };
-    default:
-      return {
-        id: storedId,
-        type: "commandExecution",
-        command: ["unknown"],
-        aggregatedOutput: JSON.stringify(item),
-        status: "completed",
-      };
-  }
-}
-
-function normalizeReasoningEffort(
-  value: string | null | undefined,
-): ThreadOptions["modelReasoningEffort"] {
-  switch (value) {
-    case "minimal":
-    case "low":
-    case "medium":
-    case "high":
-    case "xhigh":
-      return value;
-    default:
-      return undefined;
-  }
-}
-
 function trimString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -519,6 +433,78 @@ function trimString(value: unknown) {
 function toNullableString(value: unknown) {
   const trimmed = trimString(value);
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function parseCodexArgs(value: string | null) {
+  if (!value) {
+    return [];
+  }
+  const matches = value.match(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|[^\s]+/g);
+  if (!matches) {
+    return [];
+  }
+  return matches.map((part) => {
+    if (
+      (part.startsWith("\"") && part.endsWith("\"")) ||
+      (part.startsWith("'") && part.endsWith("'"))
+    ) {
+      return part.slice(1, -1);
+    }
+    return part;
+  });
+}
+
+function decodeBase64Url(value: string) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = normalized.length % 4;
+  const padded = padding === 0 ? normalized : normalized + "=".repeat(4 - padding);
+  return Buffer.from(padded, "base64").toString("utf8");
+}
+
+function readJwtPayload(token: string) {
+  const segments = token.split(".");
+  if (segments.length < 2) {
+    return null;
+  }
+  try {
+    return JSON.parse(decodeBase64Url(segments[1])) as JsonRecord;
+  } catch {
+    return null;
+  }
+}
+
+function buildAccountResponse(response: JsonRecord | null, fallback: AccountFallback | null) {
+  const responseAccount =
+    response && typeof response.account === "object" && response.account
+      ? { ...(response.account as JsonRecord) }
+      : response;
+  const account =
+    responseAccount && typeof responseAccount === "object" && !Array.isArray(responseAccount)
+      ? { ...responseAccount }
+      : {};
+  const accountType = trimString(account.type).toLowerCase();
+  const allowFallback =
+    Object.keys(account).length === 0 ||
+    !accountType ||
+    accountType === "chatgpt" ||
+    accountType === "unknown";
+  if (allowFallback && fallback) {
+    if (!trimString(account.email) && fallback.email) {
+      account.email = fallback.email;
+    }
+    if (!trimString(account.planType) && fallback.planType) {
+      account.planType = fallback.planType;
+    }
+    if (!trimString(account.type) && (fallback.email || fallback.planType)) {
+      account.type = "chatgpt";
+    }
+  }
+  return {
+    account: Object.keys(account).length > 0 ? account : null,
+    ...(typeof response?.requiresOpenaiAuth === "boolean"
+      ? { requiresOpenaiAuth: response.requiresOpenaiAuth }
+      : {}),
+  };
 }
 
 function defaultWorkspaceSettings() {
@@ -1180,6 +1166,88 @@ function buildPromptContent(
   return `${lines.join("\n")}\n`;
 }
 
+function escapeRuleString(value: string) {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t");
+}
+
+function formatPrefixRule(pattern: string[]) {
+  const items = pattern.map((item) => `"${escapeRuleString(item)}"`).join(", ");
+  return `prefix_rule(\n    pattern = [${items}],\n    decision = "allow",\n)\n`;
+}
+
+function normalizeRuleValue(value: string) {
+  return value.replace(/\s+/g, "");
+}
+
+function ruleAlreadyPresent(contents: string, pattern: string[]) {
+  const targetPattern = normalizeRuleValue(
+    `[${pattern.map((item) => `"${escapeRuleString(item)}"`).join(", ")}]`,
+  );
+  let inRule = false;
+  let patternMatches = false;
+  let decisionAllows = false;
+  for (const line of contents.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("prefix_rule(")) {
+      inRule = true;
+      patternMatches = false;
+      decisionAllows = false;
+      continue;
+    }
+    if (!inRule) {
+      continue;
+    }
+    if (trimmed.startsWith("pattern")) {
+      const [, value = ""] = trimmed.split("=", 2);
+      if (normalizeRuleValue(value.replace(/,$/, "").trim()) === targetPattern) {
+        patternMatches = true;
+      }
+      continue;
+    }
+    if (trimmed.startsWith("decision")) {
+      const [, value = ""] = trimmed.split("=", 2);
+      if (value.includes('"allow"') || value.includes("'allow'")) {
+        decisionAllows = true;
+      }
+      continue;
+    }
+    if (trimmed.startsWith(")")) {
+      if (patternMatches && decisionAllows) {
+        return true;
+      }
+      inRule = false;
+    }
+  }
+  return false;
+}
+
+async function appendPrefixRule(rulesPath: string, pattern: string[]) {
+  const existing = await fs.readFile(rulesPath, "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") {
+      return "";
+    }
+    throw error;
+  });
+  if (ruleAlreadyPresent(existing, pattern)) {
+    return;
+  }
+  let updated = existing;
+  if (updated && !updated.endsWith("\n")) {
+    updated += "\n";
+  }
+  if (updated) {
+    updated += "\n";
+  }
+  updated += formatPrefixRule(pattern);
+  await fs.mkdir(path.dirname(rulesPath), { recursive: true });
+  await fs.writeFile(rulesPath, updated, "utf8");
+}
+
 async function cloneRepository(url: string, destinationPath: string) {
   await fs.mkdir(path.dirname(destinationPath), { recursive: true });
   await new Promise<void>((resolve, reject) => {
@@ -1198,14 +1266,20 @@ async function cloneRepository(url: string, destinationPath: string) {
 }
 
 export class CodexCompanionServer {
-  private readonly activeRuns = new Map<string, ActiveRun>();
+  private readonly appServerClients = new Map<string, CodexAppServerClient>();
+  private readonly appServerClientWorkspaceIds = new Map<string, Set<string>>();
+  private readonly appServerNotificationUnsubscribers = new Map<string, () => void>();
+  private readonly appServerThreadWorkspaceIds = new Map<string, string>();
   private readonly connectedWorkspaceIds = new Set<string>();
+  private readonly loginStateByWorkspace = new Map<string, LoginState>();
   private readonly threadsById = new Map<string, StoredThread>();
+  private readonly workspaceRuntimeCodexArgs = new Map<string, string | null>();
   private readonly workspacesById = new Map<string, StoredWorkspace>();
 
   constructor(
     private readonly storage: CompanionStorage,
     private readonly broadcast: BroadcastFn,
+    private readonly requestShutdown?: () => void,
   ) {}
 
   async initialize() {
@@ -1220,6 +1294,7 @@ export class CodexCompanionServer {
     });
     threads.forEach((thread) => {
       this.threadsById.set(thread.id, thread);
+      this.appServerThreadWorkspaceIds.set(this.resolveAppServerThreadId(thread), thread.workspaceId);
     });
   }
 
@@ -1230,15 +1305,16 @@ export class CodexCompanionServer {
       workspaceCount: this.workspacesById.size,
       threadCount: this.threadsById.size,
       connectedWorkspaceCount: this.connectedWorkspaceIds.size,
-      activeRunCount: this.activeRuns.size,
+      appServerClientCount: this.appServerClients.size,
     };
   }
 
   async close() {
-    for (const activeRun of this.activeRuns.values()) {
-      activeRun.abortController.abort();
-    }
-    this.activeRuns.clear();
+    await Promise.all(Array.from(this.appServerClients.values(), (client) => client.close()));
+    this.appServerClients.clear();
+    this.appServerClientWorkspaceIds.clear();
+    this.appServerThreadWorkspaceIds.clear();
+    this.appServerNotificationUnsubscribers.clear();
   }
 
   private get dataDir() {
@@ -1522,15 +1598,57 @@ export class CodexCompanionServer {
     return configured || "codex";
   }
 
-  private async callCodexAppServer(method: string, params: JsonRecord, settings: JsonRecord) {
+  private resolveRuntimeCodexArgs(settings: JsonRecord, workspaceId?: string | null) {
+    if (workspaceId) {
+      const override = this.workspaceRuntimeCodexArgs.get(workspaceId);
+      if (override !== undefined) {
+        return override;
+      }
+    }
+    return toNullableString(settings.codexArgs);
+  }
+
+  private appServerClientKey(settings: JsonRecord, workspaceId?: string | null) {
+    return JSON.stringify({
+      codexPath: this.codexCommand(settings),
+      codexArgs: this.resolveRuntimeCodexArgs(settings, workspaceId),
+    });
+  }
+
+  private buildAppServerClient(settings: JsonRecord, workspaceId?: string | null) {
+    const key = this.appServerClientKey(settings, workspaceId);
+    const existing = this.appServerClients.get(key);
+    if (workspaceId) {
+      const workspaceIds = this.appServerClientWorkspaceIds.get(key) ?? new Set<string>();
+      workspaceIds.add(workspaceId);
+      this.appServerClientWorkspaceIds.set(key, workspaceIds);
+    }
+    if (existing) {
+      return existing;
+    }
     const client = new CodexAppServerClient({
       codexPath: this.codexCommand(settings),
+      cliArgs: parseCodexArgs(this.resolveRuntimeCodexArgs(settings, workspaceId)),
       env: process.env,
       initializeParams: buildAppServerInitializeParams(),
       initTimeoutMs: APP_SERVER_INIT_TIMEOUT_MS,
       requestTimeoutMs: APP_SERVER_REQUEST_TIMEOUT_MS,
     });
-    return await client.request(method, params);
+    this.appServerClients.set(key, client);
+    this.appServerNotificationUnsubscribers.set(
+      key,
+      client.onNotification((message) => {
+        void this.handleAppServerNotification(key, message);
+      }),
+    );
+    return client;
+  }
+
+  private async resetAppServerClients() {
+    await Promise.all(Array.from(this.appServerClients.values(), (client) => client.close()));
+    this.appServerClients.clear();
+    this.appServerClientWorkspaceIds.clear();
+    this.appServerNotificationUnsubscribers.clear();
   }
 
   private buildStoredThreadFromAppServer(
@@ -1585,27 +1703,380 @@ export class CodexCompanionServer {
     sortKey: "created_at" | "updated_at",
   ) {
     const settings = await this.storage.readSettings();
-    return await this.callCodexAppServer(
-      "thread/list",
-      {
-        cursor,
-        limit,
-        sortKey,
-        sourceKinds: APP_SERVER_SOURCE_KINDS,
-      },
-      settings,
-    );
+    const client = this.buildAppServerClient(settings);
+    return await client.listThreads({
+      cursor,
+      limit,
+      sortKey,
+      sourceKinds: APP_SERVER_SOURCE_KINDS,
+    });
   }
 
   private async resumeThreadFromCodexAppServer(threadId: string) {
     const settings = await this.storage.readSettings();
-    return await this.callCodexAppServer(
-      "thread/resume",
-      {
-        threadId,
-      },
-      settings,
+    const client = this.buildAppServerClient(settings);
+    return await client.resumeThread(threadId);
+  }
+
+  private updateThreadWorkspaceMapping(thread: StoredThread) {
+    this.appServerThreadWorkspaceIds.set(this.resolveAppServerThreadId(thread), thread.workspaceId);
+  }
+
+  private findThreadByAppServerThreadId(threadId: string) {
+    const mappedWorkspaceId = this.appServerThreadWorkspaceIds.get(threadId) ?? null;
+    if (mappedWorkspaceId) {
+      const directMatch = Array.from(this.threadsById.values()).find(
+        (thread) =>
+          thread.workspaceId === mappedWorkspaceId &&
+          this.resolveAppServerThreadId(thread) === threadId,
+      );
+      if (directMatch) {
+        return directMatch;
+      }
+    }
+    return this.findThreadBySdkThreadId(threadId);
+  }
+
+  private upsertStoredTurn(
+    thread: StoredThread,
+    rawTurn: Record<string, unknown>,
+    completedFallback = Date.now(),
+  ) {
+    const threadId = this.resolveAppServerThreadId(thread);
+    const existingIndex = thread.turns.findIndex(
+      (entry) => entry.id === (trimString(rawTurn.id) || ""),
     );
+    const nextTurn = buildStoredTurnFromAppServerThread(
+      threadId,
+      thread.createdAt,
+      completedFallback,
+      rawTurn,
+      existingIndex >= 0 ? existingIndex : thread.turns.length,
+      existingIndex >= 0 ? thread.turns[existingIndex] : undefined,
+    );
+    if (existingIndex >= 0) {
+      thread.turns[existingIndex] = nextTurn;
+    } else {
+      thread.turns.push(nextTurn);
+    }
+    return nextTurn;
+  }
+
+  private upsertStoredItem(
+    thread: StoredThread,
+    turnId: string,
+    item: JsonRecord,
+  ) {
+    const turn = thread.turns.find((entry) => entry.id === turnId);
+    if (!turn) {
+      return null;
+    }
+    const storedItem = toStoredItemFromAppServer(turnId, item);
+    const existingIndex = turn.items.findIndex((entry) => entry.id === storedItem.id);
+    if (existingIndex >= 0) {
+      turn.items[existingIndex] = storedItem;
+    } else {
+      turn.items.push(storedItem);
+    }
+    return storedItem;
+  }
+
+  private workspaceIdsForClient(key: string) {
+    const workspaceIds = this.appServerClientWorkspaceIds.get(key);
+    if (workspaceIds && workspaceIds.size > 0) {
+      return Array.from(workspaceIds);
+    }
+    return Array.from(this.connectedWorkspaceIds);
+  }
+
+  private resolveWorkspaceIdsForNotification(
+    key: string,
+    method: string,
+    params: JsonRecord,
+  ) {
+    const threadId = extractThreadIdFromParams(params);
+    if (threadId) {
+      const workspaceId = this.appServerThreadWorkspaceIds.get(threadId);
+      if (workspaceId) {
+        return [workspaceId];
+      }
+    }
+    if (method === "thread/started") {
+      const thread =
+        params.thread && typeof params.thread === "object" && !Array.isArray(params.thread)
+          ? (params.thread as JsonRecord)
+          : null;
+      const workspaceId =
+        (thread ? this.resolveWorkspaceIdForCwd(trimString(thread.cwd)) : null) ??
+        null;
+      if (workspaceId) {
+        return [workspaceId];
+      }
+    }
+    if (APP_SERVER_GLOBAL_NOTIFICATION_METHODS.has(method)) {
+      return this.workspaceIdsForClient(key);
+    }
+    const fallbackWorkspaceIds = this.workspaceIdsForClient(key);
+    return fallbackWorkspaceIds.length > 0 ? [fallbackWorkspaceIds[0]!] : [];
+  }
+
+  private async applyAppServerNotificationToState(
+    workspaceIds: string[],
+    method: string,
+    params: JsonRecord,
+  ) {
+    if (workspaceIds.length === 0) {
+      return false;
+    }
+    const threadId = extractThreadIdFromParams(params);
+    const workspaceId = workspaceIds[0]!;
+    if (method === "thread/started") {
+      const rawThread =
+        params.thread && typeof params.thread === "object" && !Array.isArray(params.thread)
+          ? (params.thread as Record<string, unknown>)
+          : null;
+      if (!rawThread) {
+        return false;
+      }
+      const existing = threadId ? this.findThreadByAppServerThreadId(threadId) : null;
+      const stored = this.buildStoredThreadFromAppServer(workspaceId, rawThread, existing);
+      this.threadsById.set(stored.id, stored);
+      this.updateThreadWorkspaceMapping(stored);
+      await this.persistThreads();
+      return true;
+    }
+    if (!threadId) {
+      return false;
+    }
+    const thread = this.findThreadByAppServerThreadId(threadId);
+    if (!thread) {
+      return false;
+    }
+    let shouldPersist = false;
+    switch (method) {
+      case "thread/name/updated":
+        thread.name = toNullableString(params.threadName) ?? toNullableString(params.thread_name);
+        thread.updatedAt = Date.now();
+        shouldPersist = true;
+        break;
+      case "thread/archived":
+        thread.archivedAt = Date.now();
+        thread.updatedAt = Date.now();
+        shouldPersist = true;
+        break;
+      case "thread/unarchived":
+        thread.archivedAt = null;
+        thread.updatedAt = Date.now();
+        shouldPersist = true;
+        break;
+      case "thread/closed":
+        thread.activeTurnId = null;
+        thread.updatedAt = Date.now();
+        shouldPersist = true;
+        break;
+      case "turn/started": {
+        const rawTurn =
+          params.turn && typeof params.turn === "object" && !Array.isArray(params.turn)
+            ? (params.turn as Record<string, unknown>)
+            : null;
+        if (!rawTurn) {
+          break;
+        }
+        const turn = this.upsertStoredTurn(thread, rawTurn);
+        thread.activeTurnId = turn.id;
+        thread.updatedAt = Date.now();
+        shouldPersist = true;
+        break;
+      }
+      case "turn/completed": {
+        const rawTurn =
+          params.turn && typeof params.turn === "object" && !Array.isArray(params.turn)
+            ? (params.turn as Record<string, unknown>)
+            : null;
+        if (rawTurn) {
+          const turn = this.upsertStoredTurn(thread, rawTurn);
+          turn.status = "completed";
+          turn.completedAt = Date.now();
+          thread.activeTurnId = null;
+          thread.updatedAt = Date.now();
+          shouldPersist = true;
+        }
+        break;
+      }
+      case "item/started":
+      case "item/completed": {
+        const turnId = extractTurnIdFromParams(params);
+        const item =
+          params.item && typeof params.item === "object" && !Array.isArray(params.item)
+            ? (params.item as JsonRecord)
+            : null;
+        if (!turnId || !item) {
+          break;
+        }
+        this.upsertStoredItem(thread, turnId, item);
+        thread.updatedAt = Date.now();
+        shouldPersist = method === "item/completed";
+        break;
+      }
+      case "thread/tokenUsage/updated":
+        if (params.tokenUsage && typeof params.tokenUsage === "object" && !Array.isArray(params.tokenUsage)) {
+          thread.tokenUsage = params.tokenUsage as StoredThread["tokenUsage"];
+          thread.updatedAt = Date.now();
+          shouldPersist = true;
+        }
+        break;
+      case "error": {
+        const turn =
+          params.turn && typeof params.turn === "object" && !Array.isArray(params.turn)
+            ? (params.turn as JsonRecord)
+            : null;
+        const turnId = trimString(turn?.id);
+        if (turnId) {
+          const existing = thread.turns.find((entry) => entry.id === turnId);
+          if (existing) {
+            existing.status = "failed";
+            existing.completedAt = Date.now();
+            existing.errorMessage = trimString(params.message) || existing.errorMessage;
+            thread.activeTurnId = null;
+            thread.updatedAt = Date.now();
+            shouldPersist = true;
+          }
+        }
+        break;
+      }
+    }
+    if (shouldPersist) {
+      await this.persistThreads();
+    }
+    return shouldPersist;
+  }
+
+  private async handleAppServerNotification(
+    key: string,
+    message: AppServerNotificationMessage,
+  ) {
+    const workspaceIds = this.resolveWorkspaceIdsForNotification(key, message.method, message.params);
+    await this.applyAppServerNotificationToState(workspaceIds, message.method, message.params);
+    for (const workspaceId of workspaceIds) {
+      this.broadcast({
+        event: "app-server-event",
+        payload: buildAppServerEvent(workspaceId, message.method, message.params, message.id),
+      });
+    }
+  }
+
+  private resolveCodexHomePath() {
+    return path.dirname(this.storage.globalConfigPath());
+  }
+
+  private async readAuthAccountFallback(): Promise<AccountFallback | null> {
+    const authPath = path.join(this.resolveCodexHomePath(), "auth.json");
+    try {
+      const raw = JSON.parse(await fs.readFile(authPath, "utf8")) as JsonRecord;
+      const tokens =
+        raw.tokens && typeof raw.tokens === "object" ? (raw.tokens as JsonRecord) : null;
+      const idToken = trimString(tokens?.idToken) || trimString(tokens?.id_token);
+      if (!idToken) {
+        return null;
+      }
+      const payload = readJwtPayload(idToken);
+      if (!payload) {
+        return null;
+      }
+      const auth =
+        payload["https://api.openai.com/auth"] &&
+        typeof payload["https://api.openai.com/auth"] === "object"
+          ? (payload["https://api.openai.com/auth"] as JsonRecord)
+          : null;
+      const profile =
+        payload["https://api.openai.com/profile"] &&
+        typeof payload["https://api.openai.com/profile"] === "object"
+          ? (payload["https://api.openai.com/profile"] as JsonRecord)
+          : null;
+      const email =
+        toNullableString(payload.email) ?? toNullableString(profile?.email) ?? null;
+      const planType =
+        toNullableString(auth?.chatgpt_plan_type) ??
+        toNullableString(payload.chatgpt_plan_type) ??
+        null;
+      if (!email && !planType) {
+        return null;
+      }
+      return { email, planType };
+    } catch {
+      return null;
+    }
+  }
+
+  private async readAccountInfo(workspaceId: string) {
+    const settings = await this.storage.readSettings();
+    const client = this.buildAppServerClient(settings, workspaceId);
+    let response: JsonRecord | null = null;
+    try {
+      response = await client.accountRead();
+    } catch {
+      response = null;
+    }
+    return buildAccountResponse(response, await this.readAuthAccountFallback());
+  }
+
+  private getLoginState(workspaceId: string) {
+    const existing = this.loginStateByWorkspace.get(workspaceId);
+    if (existing) {
+      return existing;
+    }
+    const created: LoginState = { canceled: false, loginId: null, pending: null };
+    this.loginStateByWorkspace.set(workspaceId, created);
+    return created;
+  }
+
+  private async startCodexLogin(workspaceId: string) {
+    const state = this.getLoginState(workspaceId);
+    state.canceled = false;
+    const settings = await this.storage.readSettings();
+    const client = this.buildAppServerClient(settings, workspaceId);
+    const pending = client.startLogin("chatgpt");
+    state.pending = pending;
+    try {
+      const response = await pending;
+      const loginId =
+        toNullableString(response.loginId) ?? toNullableString(response.login_id) ?? null;
+      state.loginId = loginId;
+      return {
+        loginId,
+        authUrl:
+          toNullableString(response.authUrl) ?? toNullableString(response.auth_url) ?? null,
+        raw: response,
+      };
+    } finally {
+      state.pending = null;
+    }
+  }
+
+  private async cancelCodexLogin(workspaceId: string) {
+    const state = this.getLoginState(workspaceId);
+    if (state.pending) {
+      state.canceled = true;
+      state.loginId = null;
+      return { canceled: true, status: "canceled" };
+    }
+    if (!state.loginId) {
+      return { canceled: false };
+    }
+    const settings = await this.storage.readSettings();
+    const client = this.buildAppServerClient(settings, workspaceId);
+    const response = await client.cancelLogin(state.loginId);
+    const canceled = Boolean(
+      response.canceled ??
+        response.cancelled ??
+        response.ok ??
+        true,
+    );
+    const status =
+      toNullableString(response.status) ??
+      (canceled ? "canceled" : "unknown");
+    state.loginId = null;
+    return { canceled, status, raw: response };
   }
 
   private resolveAppServerThreadId(thread: StoredThread) {
@@ -1624,6 +2095,7 @@ export class CodexCompanionServer {
         : resumed;
     const stored = this.buildStoredThreadFromAppServer(workspaceId, rawThread, existing);
     this.threadsById.set(stored.id, stored);
+    this.updateThreadWorkspaceMapping(stored);
     await this.persistThreads();
     return stored;
   }
@@ -1651,329 +2123,26 @@ export class CodexCompanionServer {
     });
   }
 
-  private buildThreadOptions(
-    workspace: StoredWorkspace,
-    options: {
-      model?: string | null;
-      effort?: string | null;
-      accessMode?: string | null;
-    },
-  ): ThreadOptions {
-    return {
-      workingDirectory: workspace.path,
-      approvalPolicy: "on-request",
-      sandboxMode: sandboxModeForAccess(options.accessMode),
-      model: options.model ?? undefined,
-      modelReasoningEffort: normalizeReasoningEffort(options.effort),
-    };
-  }
-
-  private loadThreadHandle(
-    settings: JsonRecord,
-    workspace: StoredWorkspace,
-    thread: StoredThread,
-    options: {
-      model?: string | null;
-      effort?: string | null;
-      accessMode?: string | null;
-    },
-  ): Thread {
-    const codex = this.buildCodex(settings);
-    const threadOptions = this.buildThreadOptions(workspace, options);
-    if (thread.sdkThreadId) {
-      return codex.resumeThread(thread.sdkThreadId, threadOptions);
-    }
-    return codex.startThread(threadOptions);
-  }
-
-  private appendItemToTurn(thread: StoredThread, turnId: string, item: StoredThreadItem) {
-    const turn = thread.turns.find((entry) => entry.id === turnId);
-    if (!turn) {
-      return;
-    }
-    const existingIndex = turn.items.findIndex((entry) => entry.id === item.id);
-    if (existingIndex >= 0) {
-      turn.items[existingIndex] = item;
-      return;
-    }
-    turn.items.push(item);
-  }
-
-  private async captureFileChangeSnapshots(
-    workspace: StoredWorkspace,
-    item: Extract<ThreadItem, { type: "file_change" }>,
-  ) {
-    const snapshots = await Promise.all(
-      item.changes.map(async (change) => {
-        const snapshot = await readTextSnapshot(workspace.path, change.path);
-        if (!snapshot) {
-          return null;
-        }
-        return snapshot;
-      }),
-    );
-    return snapshots.filter((entry): entry is FileSnapshot => Boolean(entry));
-  }
-
-  private async attachFileChangeDiffs(
-    workspace: StoredWorkspace,
-    item: StoredThreadItem,
-    snapshots: FileSnapshot[],
-  ) {
-    if (item.type !== "fileChange") {
-      return item;
-    }
-    const changes = Array.isArray(item.changes)
-      ? (item.changes as Array<Record<string, unknown>>)
-      : [];
-    const enrichedChanges = await Promise.all(
-      changes.map(async (change) => {
-        const relativePath = String(change.path ?? "");
-        if (!relativePath) {
-          return change;
-        }
-        const beforeSnapshot = snapshots.find((entry) => entry.path === relativePath) ?? null;
-        const afterSnapshot = await readTextSnapshot(workspace.path, relativePath);
-        const beforeContent = beforeSnapshot?.content ?? "";
-        const afterContent = afterSnapshot?.content ?? "";
-        const diff = buildUnifiedFileDiff(relativePath, beforeContent, afterContent);
-        if (!diff) {
-          return change;
-        }
-        return {
-          ...change,
-          diff,
-        };
-      }),
-    );
-    return {
-      ...item,
-      changes: enrichedChanges,
-    };
-  }
-
-  private markThreadActive(workspaceId: string, threadId: string, turnId: string) {
-    this.emit(workspaceId, "turn/started", {
-      threadId,
-      turn: {
-        id: turnId,
-        threadId,
-      },
-    });
-    this.emit(workspaceId, "thread/status/changed", {
-      threadId,
-      status: { type: "active" },
-    });
-  }
-
-  private markThreadIdle(workspaceId: string, thread: StoredThread, turnId: string) {
-    this.emit(workspaceId, "turn/completed", {
-      threadId: thread.id,
-      turn: {
-        id: turnId,
-        threadId: thread.id,
-      },
-    });
-    this.emit(workspaceId, "thread/status/changed", {
-      threadId: thread.id,
-      status: { type: "idle" },
-    });
-  }
-
-  private async processThreadEvents(
-    workspace: StoredWorkspace,
-    thread: StoredThread,
-    turnId: string,
-    events: AsyncGenerator<ThreadEvent>,
-  ) {
-    const itemSnapshot = new Map<string, StoredThreadItem>();
-    const fileChangeSnapshots = new Map<string, FileSnapshot[]>();
-    try {
-      for await (const event of events) {
-        switch (event.type) {
-          case "thread.started":
-            thread.sdkThreadId = event.thread_id;
-            await this.persistThreads();
-            break;
-          case "item.started": {
-            if (event.item.type === "file_change") {
-              const snapshots = await this.captureFileChangeSnapshots(
-                workspace,
-                event.item,
-              );
-              fileChangeSnapshots.set(event.item.id, snapshots);
-            }
-            const mapped = mapSdkItem(turnId, event.item);
-            itemSnapshot.set(event.item.id, mapped);
-            this.appendItemToTurn(thread, turnId, mapped);
-            this.emit(workspace.id, "item/started", {
-              threadId: thread.id,
-              item: mapped,
-            });
-            await this.persistThreads();
-            break;
-          }
-          case "item.updated": {
-            const previous = itemSnapshot.get(event.item.id);
-            const mapped = mapSdkItem(turnId, event.item);
-            itemSnapshot.set(event.item.id, mapped);
-            this.appendItemToTurn(thread, turnId, mapped);
-            if (mapped.type === "agentMessage") {
-              const nextText = String(mapped.text ?? "");
-              const previousText =
-                previous && previous.type === "agentMessage"
-                  ? String(previous.text ?? "")
-                  : "";
-              const delta = diffSuffix(nextText, previousText);
-              if (delta) {
-                this.emit(workspace.id, "item/agentMessage/delta", {
-                  threadId: thread.id,
-                  itemId: mapped.id,
-                  delta,
-                });
-              }
-            }
-            if (mapped.type === "commandExecution") {
-              const nextOutput = String(mapped.aggregatedOutput ?? "");
-              const previousOutput =
-                previous && previous.type === "commandExecution"
-                  ? String(previous.aggregatedOutput ?? "")
-                  : "";
-              const delta = diffSuffix(nextOutput, previousOutput);
-              if (delta) {
-                this.emit(workspace.id, "item/commandExecution/outputDelta", {
-                  threadId: thread.id,
-                  itemId: mapped.id,
-                  delta,
-                });
-              }
-            }
-            await this.persistThreads();
-            break;
-          }
-          case "item.completed": {
-            const baseMapped = mapSdkItem(turnId, event.item);
-            const mapped =
-              event.item.type === "file_change"
-                ? await this.attachFileChangeDiffs(
-                    workspace,
-                    baseMapped,
-                    fileChangeSnapshots.get(event.item.id) ?? [],
-                  )
-                : baseMapped;
-            itemSnapshot.set(event.item.id, mapped);
-            this.appendItemToTurn(thread, turnId, mapped);
-            this.emit(workspace.id, "item/completed", {
-              threadId: thread.id,
-              item: mapped,
-            });
-            if (mapped.type === "fileChange") {
-              const turnDiff = Array.isArray(mapped.changes)
-                ? mapped.changes
-                    .map((change) =>
-                      typeof change === "object" && change && "diff" in change
-                        ? String((change as { diff?: unknown }).diff ?? "")
-                        : "",
-                    )
-                    .filter(Boolean)
-                    .join("\n")
-                : "";
-              if (turnDiff) {
-                this.emit(workspace.id, "turn/diff/updated", {
-                  threadId: thread.id,
-                  diff: turnDiff,
-                });
-              }
-              fileChangeSnapshots.delete(event.item.id);
-            }
-            await this.persistThreads();
-            break;
-          }
-          case "turn.completed": {
-            const usage = totalsFromUsage(event.usage);
-            const previousTotals = thread.tokenUsage?.total ?? usage;
-            thread.tokenUsage = {
-              total: {
-                totalTokens: previousTotals.totalTokens + usage.totalTokens,
-                inputTokens: previousTotals.inputTokens + usage.inputTokens,
-                cachedInputTokens:
-                  previousTotals.cachedInputTokens + usage.cachedInputTokens,
-                outputTokens: previousTotals.outputTokens + usage.outputTokens,
-                reasoningOutputTokens:
-                  previousTotals.reasoningOutputTokens + usage.reasoningOutputTokens,
-              },
-              last: usage,
-              modelContextWindow: null,
-            };
-            this.emit(workspace.id, "thread/tokenUsage/updated", {
-              threadId: thread.id,
-              tokenUsage: thread.tokenUsage,
-            });
-            break;
-          }
-          case "turn.failed":
-            this.emit(workspace.id, "error", {
-              threadId: thread.id,
-              turn: {
-                id: turnId,
-                threadId: thread.id,
-              },
-              message: event.error.message,
-              willRetry: false,
-            });
-            break;
-          case "error":
-            this.emit(workspace.id, "error", {
-              threadId: thread.id,
-              turn: {
-                id: turnId,
-                threadId: thread.id,
-              },
-              message: event.message,
-              willRetry: false,
-            });
-            break;
-          case "turn.started":
-            break;
-        }
-      }
-      const turn = thread.turns.find((entry) => entry.id === turnId);
-      if (turn) {
-        turn.status = "completed";
-        turn.completedAt = Date.now();
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const cancelled = this.activeRuns.get(thread.id)?.abortController.signal.aborted ?? false;
-      const turn = thread.turns.find((entry) => entry.id === turnId);
-      if (turn) {
-        turn.status = cancelled ? "cancelled" : "failed";
-        turn.completedAt = Date.now();
-        turn.errorMessage = message;
-      }
-      this.emit(workspace.id, "error", {
-        threadId: thread.id,
-        turn: {
-          id: turnId,
-          threadId: thread.id,
-        },
-        message,
-        willRetry: false,
-      });
-    } finally {
-      thread.activeTurnId = null;
-      thread.updatedAt = Date.now();
-      this.activeRuns.delete(thread.id);
-      this.markThreadIdle(workspace.id, thread, turnId);
-      await this.persistThreads();
-    }
-  }
-
   async handleRpc(
     method: string,
     params: JsonRecord,
   ): Promise<unknown | RpcErrorShape> {
     switch (method) {
+      case "ping":
+        return { ok: true };
+      case "daemon_info":
+        return {
+          name: "codex-monitor-web",
+          version: process.env.npm_package_version?.trim() || "0.0.0",
+          pid: process.pid,
+          mode: "http",
+          binaryPath: process.execPath,
+        };
+      case "daemon_shutdown":
+        queueMicrotask(() => {
+          this.requestShutdown?.();
+        });
+        return { ok: true };
       case "get_app_settings":
         return this.storage.readSettings();
       case "update_app_settings": {
@@ -2307,135 +2476,162 @@ export class CodexCompanionServer {
         await fs.writeFile(markerPath, `ran_at=${Math.floor(Date.now() / 1000)}\n`, "utf8");
         return { ok: true };
       }
+      case "open_workspace_in": {
+        const targetPath = trimString(params.path);
+        if (!targetPath) {
+          return badRequest("path is required.");
+        }
+        if (isHttpUrl(targetPath)) {
+          return null;
+        }
+        return badRequest("open_workspace_in only supports http(s) URLs in the web companion.");
+      }
       case "get_open_app_icon":
         return null;
       case "set_workspace_runtime_codex_args":
+      {
+        const workspaceId = String(params.workspaceId ?? "");
+        const workspace = this.getWorkspace(workspaceId);
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        const settings = await this.storage.readSettings();
+        const nextArgs =
+          params.codexArgs === null || params.codexArgs === undefined
+            ? toNullableString(settings.codexArgs)
+            : toNullableString(params.codexArgs);
+        const previousArgs = this.resolveRuntimeCodexArgs(settings, workspaceId);
+        if (params.codexArgs === null || params.codexArgs === undefined) {
+          this.workspaceRuntimeCodexArgs.delete(workspaceId);
+        } else {
+          this.workspaceRuntimeCodexArgs.set(workspaceId, nextArgs);
+        }
+        const respawned =
+          this.connectedWorkspaceIds.has(workspaceId) && previousArgs !== nextArgs;
+        if (respawned) {
+          await this.resetAppServerClients();
+        }
         return {
-          appliedCodexArgs: toNullableString(params.codexArgs),
-          respawned: false,
+          appliedCodexArgs: nextArgs,
+          respawned,
         };
+      }
       case "start_thread": {
         const workspaceId = String(params.workspaceId ?? "");
         const workspace = this.getWorkspace(workspaceId);
         if (!workspace) {
           return notFound("Workspace not found.");
         }
-        const timestamp = Date.now();
-        const thread: StoredThread = {
-          id: `thread-${randomUUID()}`,
-          workspaceId,
-          sdkThreadId: null,
-          cwd: workspace.path,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-          archivedAt: null,
-          name: null,
-          preview: "New Agent",
-          activeTurnId: null,
-          turns: [],
-          modelId: null,
-          effort: null,
-          tokenUsage: null,
-        };
-        this.threadsById.set(thread.id, thread);
-        await this.persistThreads();
-        this.emit(workspaceId, "thread/started", {
-          thread: toThreadSummary(thread),
-        });
-        return {
-          thread: {
-            id: thread.id,
-            preview: thread.preview,
-            createdAt: thread.createdAt,
-            updatedAt: thread.updatedAt,
-            cwd: thread.cwd,
-          },
-        };
+        try {
+          const settings = await this.storage.readSettings();
+          const client = this.buildAppServerClient(settings, workspaceId);
+          const response = await client.startThread({
+            cwd: workspace.path,
+            approvalPolicy: "on-request",
+          });
+          const rawThread =
+            response.thread && typeof response.thread === "object"
+              ? (response.thread as Record<string, unknown>)
+              : null;
+          if (!rawThread) {
+            return badRequest("codex app-server did not return a thread.");
+          }
+          const stored = this.buildStoredThreadFromAppServer(workspaceId, rawThread);
+          stored.modelId = toNullableString(response.model) ?? stored.modelId;
+          this.threadsById.set(stored.id, stored);
+          this.updateThreadWorkspaceMapping(stored);
+          await this.persistThreads();
+          return {
+            thread: {
+              id: stored.id,
+              preview: stored.preview,
+              createdAt: stored.createdAt,
+              updatedAt: stored.updatedAt,
+              cwd: stored.cwd,
+            },
+          };
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
       }
       case "send_user_message": {
         const workspaceId = String(params.workspaceId ?? "");
         const threadId = String(params.threadId ?? "");
-        const text = String(params.text ?? "");
         const workspace = this.getWorkspace(workspaceId);
-        const thread = this.getThread(threadId);
+        const thread = this.getThread(threadId) ?? this.findThreadBySdkThreadId(threadId);
         if (!workspace || !thread || thread.workspaceId !== workspaceId) {
           return notFound("Thread or workspace not found.");
         }
-        if (this.activeRuns.has(threadId)) {
+        if (thread.activeTurnId) {
           return notFound("A turn is already active for this thread.");
         }
-        const settings = await this.storage.readSettings();
-        const turnId = `turn-${randomUUID()}`;
-        const now = Date.now();
-        const turn: StoredTurn = {
-          id: turnId,
-          createdAt: now,
-          completedAt: null,
-          status: "active",
-          errorMessage: null,
-          items: [],
-        };
-        const inputImages = Array.isArray(params.images)
-          ? params.images.filter((entry): entry is string => typeof entry === "string")
-          : [];
-        const userItem: StoredThreadItem = {
-          id: `item-${randomUUID()}`,
-          type: "userMessage",
-          content: [
-            { type: "input_text", text },
-            ...inputImages.map((imagePath) => ({ type: "input_image", imageUrl: imagePath })),
-          ],
-        };
-        thread.turns.push(turn);
-        thread.activeTurnId = turnId;
-        thread.updatedAt = now;
-        thread.modelId = typeof params.model === "string" ? params.model : thread.modelId;
-        thread.effort = typeof params.effort === "string" ? params.effort : thread.effort;
-        turn.items.push(userItem);
-        const abortController = new AbortController();
-        this.activeRuns.set(threadId, { abortController, turnId });
-        this.markThreadActive(workspaceId, threadId, turnId);
-        this.emit(workspaceId, "item/completed", {
-          threadId,
-          item: userItem,
-        });
-        await this.persistThreads();
-
-        const codexThread = this.loadThreadHandle(settings, workspace, thread, {
-          model: typeof params.model === "string" ? params.model : null,
-          effort: typeof params.effort === "string" ? params.effort : null,
-          accessMode: typeof params.accessMode === "string" ? params.accessMode : null,
-        });
-        void (async () => {
-          const input =
-            inputImages.length > 0
-              ? [
-                  { type: "text", text } as const,
-                  ...inputImages.map((imagePath) => ({ type: "local_image", path: imagePath }) as const),
-                ]
-              : text;
-          const streamed = await codexThread.runStreamed(input, {
-            signal: abortController.signal,
+        try {
+          const settings = await this.storage.readSettings();
+          const client = this.buildAppServerClient(settings, workspaceId);
+          const accessMode = toNullableString(params.accessMode);
+          const response = await client.startTurn({
+            threadId: this.resolveAppServerThreadId(thread),
+            input: buildAppServerUserInputItems(
+              String(params.text ?? ""),
+              Array.isArray(params.images)
+                ? params.images.filter((entry): entry is string => typeof entry === "string")
+                : [],
+              params.appMentions,
+            ),
+            cwd: workspace.path,
+            approvalPolicy: approvalPolicyForAccessMode(accessMode),
+            sandboxPolicy: buildSandboxPolicy(workspace.path, accessMode),
+            model: toNullableString(params.model),
+            effort: toNullableString(params.effort),
+            collaborationMode: params.collaborationMode ?? null,
           });
-          await this.processThreadEvents(workspace, thread, turnId, streamed.events);
-        })();
-        return {
-          turn: {
-            id: turnId,
-            threadId,
-          },
-        };
+          const rawTurn =
+            response.turn && typeof response.turn === "object"
+              ? (response.turn as Record<string, unknown>)
+              : null;
+          if (!rawTurn) {
+            return badRequest("codex app-server did not return a turn.");
+          }
+          const storedTurn = this.upsertStoredTurn(thread, rawTurn);
+          thread.activeTurnId = storedTurn.id;
+          thread.updatedAt = Date.now();
+          thread.modelId = toNullableString(params.model) ?? thread.modelId;
+          thread.effort = toNullableString(params.effort) ?? thread.effort;
+          await this.persistThreads();
+          return {
+            turn: {
+              id: storedTurn.id,
+              threadId: thread.id,
+            },
+          };
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
       }
       case "turn_interrupt": {
         const threadId = String(params.threadId ?? "");
-        const run = this.activeRuns.get(threadId);
-        if (!run) {
+        const workspaceId = String(params.workspaceId ?? "");
+        const thread = this.getThread(threadId) ?? this.findThreadBySdkThreadId(threadId);
+        if (!thread || thread.workspaceId !== workspaceId) {
           return notFound("No active turn found.");
         }
-        run.abortController.abort();
-        return {
-          turnId: run.turnId,
-        };
+        const turnId = toNullableString(params.turnId) ?? thread.activeTurnId;
+        if (!turnId) {
+          return notFound("No active turn found.");
+        }
+        try {
+          const settings = await this.storage.readSettings();
+          const client = this.buildAppServerClient(settings, workspaceId);
+          await client.interruptTurn({
+            threadId: this.resolveAppServerThreadId(thread),
+            turnId,
+          });
+          return {
+            turnId,
+          };
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
       }
       case "turn_steer": {
         const workspaceId = String(params.workspaceId ?? "");
@@ -2449,21 +2645,18 @@ export class CodexCompanionServer {
           return badRequest("Missing active turn id.");
         }
         try {
-          return await this.callCodexAppServer(
-            "turn/steer",
-            {
-              threadId: this.resolveAppServerThreadId(thread),
-              expectedTurnId: turnId,
-              input: buildAppServerUserInputItems(
-                String(params.text ?? ""),
-                Array.isArray(params.images)
-                  ? params.images.filter((entry): entry is string => typeof entry === "string")
-                  : [],
-                params.appMentions,
-              ),
-            },
-            await this.storage.readSettings(),
-          );
+          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
+          return await client.steerTurn({
+            threadId: this.resolveAppServerThreadId(thread),
+            expectedTurnId: turnId,
+            input: buildAppServerUserInputItems(
+              String(params.text ?? ""),
+              Array.isArray(params.images)
+                ? params.images.filter((entry): entry is string => typeof entry === "string")
+                : [],
+              params.appMentions,
+            ),
+          });
         } catch (error) {
           return badRequest(error instanceof Error ? error.message : String(error));
         }
@@ -2477,15 +2670,15 @@ export class CodexCompanionServer {
           return notFound("Thread or workspace not found.");
         }
         try {
-          const response = await this.callCodexAppServer(
-            "review/start",
-            {
-              threadId: this.resolveAppServerThreadId(thread),
-              target: params.target && typeof params.target === "object" ? params.target : {},
-              delivery: toNullableString(params.delivery),
-            },
-            await this.storage.readSettings(),
-          );
+          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
+          const response = await client.startReview({
+            threadId: this.resolveAppServerThreadId(thread),
+            target:
+              params.target && typeof params.target === "object"
+                ? (params.target as JsonRecord)
+                : {},
+            delivery: toNullableString(params.delivery),
+          });
           const reviewThreadId =
             trimString(response.reviewThreadId) || trimString(response.review_thread_id);
           if (reviewThreadId) {
@@ -2496,9 +2689,49 @@ export class CodexCompanionServer {
           return badRequest(error instanceof Error ? error.message : String(error));
         }
       }
-      case "respond_to_server_request":
-      case "remember_approval_rule":
-        return null;
+      case "respond_to_server_request": {
+        const workspaceId = String(params.workspaceId ?? "");
+        if (!this.getWorkspace(workspaceId)) {
+          return notFound("Workspace not found.");
+        }
+        const requestId = params.requestId ?? params.request_id;
+        if (typeof requestId !== "string" && typeof requestId !== "number") {
+          return badRequest("requestId is required.");
+        }
+        try {
+          const settings = await this.storage.readSettings();
+          const client = this.buildAppServerClient(settings, workspaceId);
+          await client.sendResponse(requestId, params.result ?? null);
+          return null;
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
+      case "remember_approval_rule": {
+        const workspaceId = String(params.workspaceId ?? "");
+        if (!this.getWorkspace(workspaceId)) {
+          return notFound("Workspace not found.");
+        }
+        const command = Array.isArray(params.command)
+          ? params.command
+              .filter((entry): entry is string => typeof entry === "string")
+              .map((entry) => entry.trim())
+              .filter(Boolean)
+          : [];
+        if (command.length === 0) {
+          return badRequest("empty command");
+        }
+        const rulesPath = path.join(this.resolveCodexHomePath(), "rules", "default.rules");
+        try {
+          await appendPrefixRule(rulesPath, command);
+          return {
+            ok: true,
+            rulesPath,
+          };
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
       case "thread_live_subscribe":
       case "thread_live_unsubscribe": {
         const workspaceId = String(params.workspaceId ?? "");
@@ -2636,11 +2869,8 @@ export class CodexCompanionServer {
           return notFound("Thread or workspace not found.");
         }
         try {
-          const response = await this.callCodexAppServer(
-            "thread/fork",
-            { threadId: this.resolveAppServerThreadId(thread) },
-            await this.storage.readSettings(),
-          );
+          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
+          const response = await client.forkThread(this.resolveAppServerThreadId(thread));
           const rawThread =
             response.thread && typeof response.thread === "object"
               ? (response.thread as Record<string, unknown>)
@@ -2664,11 +2894,8 @@ export class CodexCompanionServer {
           return notFound("Thread or workspace not found.");
         }
         try {
-          return await this.callCodexAppServer(
-            "thread/compact/start",
-            { threadId: this.resolveAppServerThreadId(thread) },
-            await this.storage.readSettings(),
-          );
+          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
+          return await client.compactThread(this.resolveAppServerThreadId(thread));
         } catch (error) {
           return badRequest(error instanceof Error ? error.message : String(error));
         }
@@ -2680,11 +2907,17 @@ export class CodexCompanionServer {
         if (!thread || thread.workspaceId !== workspaceId) {
           return notFound("Thread not found.");
         }
-        thread.archivedAt = Date.now();
-        thread.updatedAt = Date.now();
-        await this.persistThreads();
-        this.emit(workspaceId, "thread/archived", { threadId });
-        return null;
+        try {
+          const settings = await this.storage.readSettings();
+          const client = this.buildAppServerClient(settings, workspaceId);
+          await client.archiveThread(this.resolveAppServerThreadId(thread));
+          thread.archivedAt = Date.now();
+          thread.updatedAt = Date.now();
+          await this.persistThreads();
+          return null;
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
       }
       case "set_thread_name": {
         const workspaceId = String(params.workspaceId ?? "");
@@ -2694,14 +2927,17 @@ export class CodexCompanionServer {
         if (!thread || thread.workspaceId !== workspaceId) {
           return notFound("Thread not found.");
         }
-        thread.name = name || null;
-        thread.updatedAt = Date.now();
-        await this.persistThreads();
-        this.emit(workspaceId, "thread/name/updated", {
-          threadId,
-          threadName: thread.name,
-        });
-        return null;
+        try {
+          const settings = await this.storage.readSettings();
+          const client = this.buildAppServerClient(settings, workspaceId);
+          await client.setThreadName(this.resolveAppServerThreadId(thread), name);
+          thread.name = name || null;
+          thread.updatedAt = Date.now();
+          await this.persistThreads();
+          return null;
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
       }
       case "get_config_model": {
         try {
@@ -2714,12 +2950,55 @@ export class CodexCompanionServer {
           throw error;
         }
       }
-      case "model_list":
-        return { data: DEFAULT_MODELS };
-      case "skills_list":
-        return { data: [] };
-      case "apps_list":
-        return { data: [] };
+      case "model_list": {
+        try {
+          const workspaceId = toNullableString(params.workspaceId);
+          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
+          return await client.modelList();
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
+      case "skills_list": {
+        try {
+          const workspaceId = String(params.workspaceId ?? "");
+          const workspace = workspaceId ? this.getWorkspace(workspaceId) : null;
+          const skillsPath = workspace ? path.join(workspace.path, ".agents", "skills") : null;
+          const skillsPaths =
+            skillsPath &&
+            (await fs.stat(skillsPath).then(() => true).catch(() => false))
+              ? [skillsPath]
+              : [];
+          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
+          const response = await client.skillsList({
+            ...(workspace ? { cwd: workspace.path } : {}),
+            ...(skillsPaths.length > 0 ? { skillsPaths } : {}),
+          });
+          return {
+            ...response,
+            sourcePaths: skillsPaths,
+            sourceErrors: [],
+          };
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
+      case "apps_list": {
+        try {
+          const workspaceId = toNullableString(params.workspaceId);
+          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
+          return await client.appsList({
+            cursor: toNullableString(params.cursor),
+            limit:
+              typeof params.limit === "number" && Number.isFinite(params.limit)
+                ? params.limit
+                : null,
+            threadId: toNullableString(params.threadId),
+          });
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
       case "prompts_list": {
         const workspaceId = String(params.workspaceId ?? "");
         return await this.readPromptEntries(workspaceId);
@@ -2837,8 +3116,21 @@ export class CodexCompanionServer {
           scope,
         };
       }
-      case "list_mcp_server_status":
-        return { data: [] };
+      case "list_mcp_server_status": {
+        try {
+          const workspaceId = toNullableString(params.workspaceId);
+          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
+          return await client.listMcpServerStatus({
+            cursor: toNullableString(params.cursor),
+            limit:
+              typeof params.limit === "number" && Number.isFinite(params.limit)
+                ? params.limit
+                : null,
+          });
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
       case "get_agents_settings":
         return this.formatAgentsSettings();
       case "set_agents_core_settings": {
@@ -2993,38 +3285,65 @@ export class CodexCompanionServer {
         await this.writeAgentsState(state);
         return null;
       }
-      case "collaboration_mode_list":
-        return {
-          data: [
-            {
-              mode: "default",
-              name: "Default",
-              label: "Default",
-              settings: {
-                model: null,
-                reasoning_effort: null,
-                developer_instructions: null,
-              },
-            },
-          ],
-        };
-      case "experimental_feature_list":
-        return { data: [] };
+      case "collaboration_mode_list": {
+        try {
+          const workspaceId = toNullableString(params.workspaceId);
+          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
+          return await client.collaborationModeList();
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
+      case "experimental_feature_list": {
+        try {
+          const workspaceId = toNullableString(params.workspaceId);
+          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
+          return await client.experimentalFeatureList({
+            cursor: toNullableString(params.cursor),
+            limit:
+              typeof params.limit === "number" && Number.isFinite(params.limit)
+                ? params.limit
+                : null,
+          });
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
       case "set_codex_feature_flag":
         return null;
-      case "account_rate_limits":
-        return { primary: null, secondary: null, credits: null, planType: null };
+      case "account_rate_limits": {
+        try {
+          const workspaceId = toNullableString(params.workspaceId);
+          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
+          return await client.accountRateLimitsRead();
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
       case "account_read":
-        return {
-          type: "unknown",
-          email: null,
-          planType: null,
-          requiresOpenaiAuth: null,
-        };
-      case "codex_login":
-        return badRequest("Codex login is not implemented in the web companion yet.");
-      case "codex_login_cancel":
-        return { canceled: false, status: "unavailable" };
+        return await this.readAccountInfo(String(params.workspaceId ?? ""));
+      case "codex_login": {
+        const workspaceId = String(params.workspaceId ?? "");
+        if (!this.getWorkspace(workspaceId)) {
+          return notFound("Workspace not found.");
+        }
+        try {
+          return await this.startCodexLogin(workspaceId);
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
+      case "codex_login_cancel": {
+        const workspaceId = String(params.workspaceId ?? "");
+        if (!this.getWorkspace(workspaceId)) {
+          return notFound("Workspace not found.");
+        }
+        try {
+          return await this.cancelCodexLogin(workspaceId);
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
       case "file_read": {
         const scope = String(params.scope ?? "");
         const kind = String(params.kind ?? "");
@@ -3379,6 +3698,32 @@ export class CodexCompanionServer {
         return false;
       case "send_notification_fallback":
         return null;
+      case "menu_set_accelerators":
+      case "set_tray_recent_threads":
+      case "set_tray_session_usage":
+      case "get_github_issues":
+      case "get_github_pull_requests":
+      case "get_github_pull_request_diff":
+      case "get_github_pull_request_comments":
+      case "tailscale_status":
+      case "tailscale_daemon_command_preview":
+      case "tailscale_daemon_start":
+      case "tailscale_daemon_stop":
+      case "tailscale_daemon_status":
+      case "dictation_model_status":
+      case "dictation_download_model":
+      case "dictation_cancel_download":
+      case "dictation_remove_model":
+      case "dictation_start":
+      case "dictation_request_permission":
+      case "dictation_stop":
+      case "dictation_cancel":
+      case "terminal_open":
+      case "terminal_write":
+      case "terminal_resize":
+      case "terminal_close":
+      case "write_text_file":
+        return badRequest(unsupportedRpcMessage(method));
       case "generate_commit_message":
         return "Update project files";
       case "generate_agent_description": {

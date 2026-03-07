@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ThreadSummary } from "../../../types";
 import { ThreadList } from "./ThreadList";
@@ -131,6 +131,7 @@ describe("ThreadList", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Show sub-agents" }));
     const nestedRow = screen.getByText("Nested Agent").closest(".thread-row");
     expect(nestedRow).toBeTruthy();
     if (!nestedRow) {
@@ -177,14 +178,14 @@ describe("ThreadList", () => {
       />,
     );
 
-    expect(getByText("Nested Agent")).toBeTruthy();
-    const hideButton = getByRole("button", { name: "Hide sub-agents" });
-    fireEvent.click(hideButton);
     expect(queryByText("Nested Agent")).toBeNull();
-
     const showButton = getByRole("button", { name: "Show sub-agents" });
     fireEvent.click(showButton);
     expect(getByText("Nested Agent")).toBeTruthy();
+
+    const hideButton = getByRole("button", { name: "Hide sub-agents" });
+    fireEvent.click(hideButton);
+    expect(queryByText("Nested Agent")).toBeNull();
   });
 
   it("does not show sub-agent toggle for rows without descendants", () => {
@@ -192,5 +193,54 @@ describe("ThreadList", () => {
 
     expect(queryByRole("button", { name: "Hide sub-agents" })).toBeNull();
     expect(queryByRole("button", { name: "Show sub-agents" })).toBeNull();
+  });
+
+  it("expands sub-agent descendants when an active subagent is selected", () => {
+    render(
+      <ThreadList
+        {...baseProps}
+        activeThreadId="thread-2"
+        unpinnedRows={[
+          { thread, depth: 0 },
+          { thread: nestedThread, depth: 1 },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Nested Agent")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Hide sub-agents" })).toBeTruthy();
+  });
+
+  it("auto-expands a collapsed tree when a new subagent is added", async () => {
+    const { queryByText, rerender } = render(
+      <ThreadList
+        {...baseProps}
+        unpinnedRows={[
+          { thread, depth: 0 },
+          { thread: nestedThread, depth: 1 },
+        ]}
+      />,
+    );
+
+    expect(queryByText("Nested Agent")).toBeNull();
+
+    rerender(
+      <ThreadList
+        {...baseProps}
+        unpinnedRows={[
+          { thread, depth: 0 },
+          { thread: nestedThread, depth: 1 },
+          {
+            thread: { id: "thread-3", name: "Fresh Agent", updatedAt: 901 },
+            depth: 1,
+          },
+        ]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Nested Agent")).toBeTruthy();
+      expect(screen.getByText("Fresh Agent")).toBeTruthy();
+    });
   });
 });

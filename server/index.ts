@@ -76,6 +76,17 @@ function summarizeParams(params: Record<string, unknown>) {
 async function main() {
   const sockets = new Set<WebSocket>();
   const storage = new CompanionStorage(resolveDataDir());
+  let shutdownRequested = false;
+  let server: import("node:http").Server | null = null;
+  const requestShutdown = () => {
+    if (!server || shutdownRequested) {
+      return;
+    }
+    shutdownRequested = true;
+    server.close(() => {
+      process.exit(0);
+    });
+  };
   const app = new CodexCompanionServer(storage, (message: SocketMessage) => {
     const encoded = JSON.stringify(message);
     for (const socket of sockets) {
@@ -83,7 +94,7 @@ async function main() {
         socket.send(encoded);
       }
     }
-  });
+  }, requestShutdown);
   await app.initialize();
 
   const websocketServer = new WebSocketServer({ noServer: true });
@@ -94,7 +105,7 @@ async function main() {
     });
   });
 
-  const server = createServer(async (request, response) => {
+  server = createServer(async (request, response) => {
     const url = new URL(
       request.url ?? "/",
       `http://${request.headers.host ?? "127.0.0.1"}`,

@@ -139,6 +139,22 @@ export function useThreadEventHandlers({
     [dispatch],
   );
 
+  const onServerRequestResolved = useCallback(
+    (workspaceId: string, payload: { threadId: string; requestId: string | number }) => {
+      dispatch({
+        type: "removeApproval",
+        workspaceId,
+        requestId: payload.requestId,
+      });
+      dispatch({
+        type: "removeUserInputRequest",
+        workspaceId,
+        requestId: payload.requestId,
+      });
+    },
+    [dispatch],
+  );
+
   const onAppServerEvent = useCallback(
     (event: AppServerEvent) => {
       const method = getAppServerRawMethod(event) ?? "";
@@ -185,6 +201,7 @@ export function useThreadEventHandlers({
       onThreadTokenUsageUpdated,
       onAccountRateLimitsUpdated,
       onTurnError,
+      onServerRequestResolved,
     }),
     [
       onWorkspaceConnected,
@@ -216,6 +233,7 @@ export function useThreadEventHandlers({
       onThreadTokenUsageUpdated,
       onAccountRateLimitsUpdated,
       onTurnError,
+      onServerRequestResolved,
     ],
   );
 

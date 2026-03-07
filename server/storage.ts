@@ -85,7 +85,7 @@ function normalizeThread(raw: StoredThread): StoredThread {
     archivedAt: raw.archivedAt ?? null,
     name: raw.name ?? null,
     preview: raw.preview ?? "New Agent",
-    activeTurnId: null,
+    activeTurnId: raw.activeTurnId ?? null,
     modelId: raw.modelId ?? null,
     effort: raw.effort ?? null,
     tokenUsage: raw.tokenUsage ?? null,

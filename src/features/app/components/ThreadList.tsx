@@ -1,9 +1,9 @@
-import { useMemo, useState, type MouseEvent } from "react";
+import { useMemo, type MouseEvent } from "react";
 
 import type { ThreadSummary } from "../../../types";
 import type { ThreadStatusById } from "../../../utils/threadStatus";
+import { useSubagentTreeVisibility } from "../hooks/useSubagentTreeVisibility";
 import { ThreadRow } from "./ThreadRow";
-import { buildThreadRowVisibility } from "./threadRowVisibility";
 
 type ThreadListRow = {
   thread: ThreadSummary;
@@ -61,41 +61,30 @@ export function ThreadList({
   onShowThreadMenu,
 }: ThreadListProps) {
   const indentUnit = nested ? 10 : 14;
-  const [collapsedThreadKeys, setCollapsedThreadKeys] = useState<Set<string>>(new Set());
-
-  const toggleThreadSubagents = (threadId: string) => {
-    const threadKey = `${workspaceId}:${threadId}`;
-    setCollapsedThreadKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(threadKey)) {
-        next.delete(threadKey);
-      } else {
-        next.add(threadKey);
-      }
-      return next;
-    });
-  };
-
-  const pinnedVisibility = useMemo(
-    () =>
-      buildThreadRowVisibility(
-        pinnedRows,
-        (row) => collapsedThreadKeys.has(`${workspaceId}:${row.thread.id}`),
-      ),
-    [collapsedThreadKeys, pinnedRows, workspaceId],
+  const allRows = useMemo(() => [...pinnedRows, ...unpinnedRows], [pinnedRows, unpinnedRows]);
+  const {
+    visibleRows,
+    rowsWithChildren,
+    isRowExpanded,
+    toggleRow,
+  } = useSubagentTreeVisibility({
+    rows: allRows,
+    getThreadKey: (row) => `${workspaceId}:${row.thread.id}`,
+    activeWorkspaceId,
+    activeThreadId,
+    threadStatusById,
+    getWorkspaceId: () => workspaceId,
+  });
+  const visibleRowIds = useMemo(
+    () => new Set(visibleRows.map((row) => row.thread.id)),
+    [visibleRows],
   );
-  const unpinnedVisibility = useMemo(
-    () =>
-      buildThreadRowVisibility(
-        unpinnedRows,
-        (row) => collapsedThreadKeys.has(`${workspaceId}:${row.thread.id}`),
-      ),
-    [collapsedThreadKeys, unpinnedRows, workspaceId],
-  );
+  const visiblePinned = pinnedRows.filter((row) => visibleRowIds.has(row.thread.id));
+  const visibleUnpinned = unpinnedRows.filter((row) => visibleRowIds.has(row.thread.id));
 
   return (
     <div className={`thread-list${nested ? " thread-list-nested" : ""}`}>
-      {pinnedVisibility.visibleRows.map((row) => (
+      {visiblePinned.map((row) => (
         <ThreadRow
           key={row.thread.id}
           thread={row.thread}
@@ -111,15 +100,15 @@ export function ThreadList({
           isThreadPinned={isThreadPinned}
           onSelectThread={onSelectThread}
           onShowThreadMenu={onShowThreadMenu}
-          hasSubagentChildren={pinnedVisibility.rowsWithChildren.has(row)}
-          subagentsExpanded={!collapsedThreadKeys.has(`${workspaceId}:${row.thread.id}`)}
-          onToggleSubagents={(_, threadId) => toggleThreadSubagents(threadId)}
+          hasSubagentChildren={rowsWithChildren.has(row)}
+          subagentsExpanded={isRowExpanded(row)}
+          onToggleSubagents={() => toggleRow(row)}
         />
       ))}
-      {pinnedVisibility.visibleRows.length > 0 && unpinnedVisibility.visibleRows.length > 0 && (
+      {visiblePinned.length > 0 && visibleUnpinned.length > 0 && (
         <div className="thread-list-separator" aria-hidden="true" />
       )}
-      {unpinnedVisibility.visibleRows.map((row) => (
+      {visibleUnpinned.map((row) => (
         <ThreadRow
           key={row.thread.id}
           thread={row.thread}
@@ -135,9 +124,9 @@ export function ThreadList({
           isThreadPinned={isThreadPinned}
           onSelectThread={onSelectThread}
           onShowThreadMenu={onShowThreadMenu}
-          hasSubagentChildren={unpinnedVisibility.rowsWithChildren.has(row)}
-          subagentsExpanded={!collapsedThreadKeys.has(`${workspaceId}:${row.thread.id}`)}
-          onToggleSubagents={(_, threadId) => toggleThreadSubagents(threadId)}
+          hasSubagentChildren={rowsWithChildren.has(row)}
+          subagentsExpanded={isRowExpanded(row)}
+          onToggleSubagents={() => toggleRow(row)}
         />
       ))}
       {totalThreadRoots > 3 && (

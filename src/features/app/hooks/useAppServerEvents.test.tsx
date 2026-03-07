@@ -64,6 +64,7 @@ describe("useAppServerEvents", () => {
       onAccountRateLimitsUpdated: vi.fn(),
       onAccountUpdated: vi.fn(),
       onAccountLoginCompleted: vi.fn(),
+      onServerRequestResolved: vi.fn(),
     };
     const { root } = await mount(handlers);
 
@@ -354,6 +355,20 @@ describe("useAppServerEvents", () => {
       loginId: "login-1",
       success: true,
       error: null,
+    });
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "serverRequest/resolved",
+          params: { threadId: "thread-1", requestId: 99 },
+        },
+      });
+    });
+    expect(handlers.onServerRequestResolved).toHaveBeenCalledWith("ws-1", {
+      threadId: "thread-1",
+      requestId: 99,
     });
 
     await act(async () => {

@@ -20,6 +20,8 @@ export const SUPPORTED_APP_SERVER_METHODS = [
   "item/reasoning/textDelta",
   "item/started",
   "item/tool/requestUserInput",
+  "serverRequest/resolved",
+  "skills/changed",
   "thread/archived",
   "thread/closed",
   "thread/name/updated",
@@ -103,7 +105,8 @@ export function isApprovalRequestMethod(method: string): boolean {
 }
 
 export function isSkillsUpdateAvailableEvent(event: AppServerEvent): boolean {
-  return getAppServerRawMethod(event) === "codex/event/skills_update_available";
+  const method = getAppServerRawMethod(event);
+  return method === "codex/event/skills_update_available" || method === "skills/changed";
 }
 
 export function isAppListUpdatedEvent(event: AppServerEvent): boolean {

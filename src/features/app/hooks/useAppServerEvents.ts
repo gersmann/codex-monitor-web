@@ -96,6 +96,10 @@ type AppServerEventHandlers = {
     workspaceId: string,
     payload: { loginId: string | null; success: boolean; error: string | null },
   ) => void;
+  onServerRequestResolved?: (
+    workspaceId: string,
+    payload: { threadId: string; requestId: string | number },
+  ) => void;
 };
 
 export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
@@ -116,6 +120,8 @@ export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
   "item/reasoning/textDelta",
   "item/started",
   "item/tool/requestUserInput",
+  "serverRequest/resolved",
+  "skills/changed",
   "thread/archived",
   "thread/closed",
   "thread/name/updated",
@@ -409,6 +415,22 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
           success,
           error,
         });
+        return;
+      }
+
+      if (method === "serverRequest/resolved") {
+        const threadId = String(params.threadId ?? params.thread_id ?? "");
+        const requestId = params.requestId ?? params.request_id ?? null;
+        if (threadId && (typeof requestId === "string" || typeof requestId === "number")) {
+          currentHandlers.onServerRequestResolved?.(workspace_id, {
+            threadId,
+            requestId,
+          });
+        }
+        return;
+      }
+
+      if (method === "skills/changed") {
         return;
       }
 

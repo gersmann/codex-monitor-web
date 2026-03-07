@@ -293,6 +293,53 @@ describe("useThreads UX integration", () => {
     expect(ensureWorkspaceRuntimeCodexArgs).not.toHaveBeenCalled();
   });
 
+  it("removes approvals and user input requests when serverRequest/resolved arrives", async () => {
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    expect(handlers).not.toBeNull();
+
+    act(() => {
+      handlers?.onApprovalRequest?.({
+        workspace_id: "ws-1",
+        request_id: 42,
+        method: "item/commandExecution/requestApproval",
+        params: { argv: ["git", "status"] },
+      });
+      handlers?.onRequestUserInput?.({
+        workspace_id: "ws-1",
+        request_id: 43,
+        params: {
+          thread_id: "thread-1",
+          turn_id: "turn-1",
+          item_id: "item-1",
+          questions: [],
+        },
+      });
+    });
+
+    expect(result.current.approvals).toHaveLength(1);
+    expect(result.current.userInputRequests).toHaveLength(1);
+
+    act(() => {
+      handlers?.onServerRequestResolved?.("ws-1", {
+        threadId: "thread-1",
+        requestId: 42,
+      });
+      handlers?.onServerRequestResolved?.("ws-1", {
+        threadId: "thread-1",
+        requestId: 43,
+      });
+    });
+
+    expect(result.current.approvals).toHaveLength(0);
+    expect(result.current.userInputRequests).toHaveLength(0);
+  });
+
   it("does not preflight runtime codex args on selection when a hidden thread is processing", async () => {
     const ensureWorkspaceRuntimeCodexArgs = vi.fn(async () => undefined);
     vi.mocked(resumeThread).mockImplementation(async (_workspaceId, threadId) => ({

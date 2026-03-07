@@ -72,6 +72,8 @@ subscriptions.
 - `item/reasoning/summaryTextDelta`
 - `item/reasoning/textDelta`
 - `item/started`
+- `serverRequest/resolved`
+- `skills/changed`
 - `thread/archived`
 - `thread/closed`
 - `thread/name/updated`
@@ -123,8 +125,6 @@ events are currently not routed:
 - `mcpServer/oauthLogin/completed`
 - `model/rerouted`
 - `rawResponseItem/completed`
-- `serverRequest/resolved`
-- `skills/changed`
 - `thread/compacted` (deprecated; intentionally not routed)
 - `thread/realtime/closed`
 - `thread/realtime/error`

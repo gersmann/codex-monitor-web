@@ -40,9 +40,13 @@ describe("appServerEvents", () => {
     expect(isApprovalRequestMethod("workspace/request")).toBe(false);
   });
 
-  it("matches canonical skills update event method only", () => {
+  it("matches both canonical skills invalidation event methods", () => {
     const canonicalEvent = makeEvent({
       method: "codex/event/skills_update_available",
+      params: {},
+    });
+    const appServerMethod = makeEvent({
+      method: "skills/changed",
       params: {},
     });
     const nonCanonicalMethod = makeEvent({
@@ -51,6 +55,7 @@ describe("appServerEvents", () => {
     });
 
     expect(isSkillsUpdateAvailableEvent(canonicalEvent)).toBe(true);
+    expect(isSkillsUpdateAvailableEvent(appServerMethod)).toBe(true);
     expect(isSkillsUpdateAvailableEvent(nonCanonicalMethod)).toBe(false);
   });
 

@@ -9,7 +9,9 @@ import type { StoredThread, StoredWorkspace } from "./types.js";
 
 const tempDirs: string[] = [];
 
-async function createServerFixture() {
+async function createServerFixture(
+  broadcast: (message: { event: string; payload: Record<string, unknown> }) => void = () => {},
+) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-monitor-server-"));
   tempDirs.push(dir);
   const storage = new CompanionStorage(dir);
@@ -40,7 +42,7 @@ async function createServerFixture() {
   };
   await storage.writeWorkspaces([workspace]);
   await storage.writeThreads([thread]);
-  const server = new CodexCompanionServer(storage, () => {});
+  const server = new CodexCompanionServer(storage, broadcast);
   await server.initialize();
   return { dir, storage, server, workspace, thread };
 }
@@ -55,6 +57,42 @@ async function runGit(cwd: string, args: string[]) {
       resolve();
     });
   });
+}
+
+function mockAppServerClient(
+  server: CodexCompanionServer,
+  client: Partial<{
+    accountRateLimitsRead: (...args: unknown[]) => Promise<unknown>;
+    accountRead: (...args: unknown[]) => Promise<unknown>;
+    appsList: (...args: unknown[]) => Promise<unknown>;
+    archiveThread: (...args: unknown[]) => Promise<unknown>;
+    collaborationModeList: (...args: unknown[]) => Promise<unknown>;
+    compactThread: (...args: unknown[]) => Promise<unknown>;
+    cancelLogin: (...args: unknown[]) => Promise<unknown>;
+    experimentalFeatureList: (...args: unknown[]) => Promise<unknown>;
+    forkThread: (...args: unknown[]) => Promise<unknown>;
+    interruptTurn: (...args: unknown[]) => Promise<unknown>;
+    listThreads: (...args: unknown[]) => Promise<unknown>;
+    listMcpServerStatus: (...args: unknown[]) => Promise<unknown>;
+    modelList: (...args: unknown[]) => Promise<unknown>;
+    onNotification: (...args: unknown[]) => () => void;
+    resumeThread: (...args: unknown[]) => Promise<unknown>;
+    sendResponse: (...args: unknown[]) => Promise<unknown>;
+    skillsList: (...args: unknown[]) => Promise<unknown>;
+    startLogin: (...args: unknown[]) => Promise<unknown>;
+    startReview: (...args: unknown[]) => Promise<unknown>;
+    startThread: (...args: unknown[]) => Promise<unknown>;
+    startTurn: (...args: unknown[]) => Promise<unknown>;
+    steerTurn: (...args: unknown[]) => Promise<unknown>;
+    setThreadName: (...args: unknown[]) => Promise<unknown>;
+    request: (...args: unknown[]) => Promise<unknown>;
+  }>,
+) {
+  (
+    server as unknown as {
+      buildAppServerClient: () => typeof client;
+    }
+  ).buildAppServerClient = () => client;
 }
 
 afterEach(async () => {
@@ -78,11 +116,193 @@ describe("buildAppServerUserInputItems", () => {
 });
 
 describe("CodexCompanionServer phase 1 rpc support", () => {
+  it("routes start_thread through codex app-server and persists the remote thread id", async () => {
+    const { server, storage, workspace } = await createServerFixture();
+    const startThread = vi.fn().mockResolvedValue({
+      thread: {
+        id: "sdk-thread-2",
+        cwd: workspace.path,
+        preview: "Fresh thread",
+        createdAt: 10,
+        updatedAt: 11,
+        turns: [],
+        status: "idle",
+      },
+      model: "gpt-5-codex",
+    });
+    mockAppServerClient(server, { startThread });
+
+    const result = await server.handleRpc("start_thread", { workspaceId: "ws-1" });
+
+    expect(startThread).toHaveBeenCalledWith({
+      cwd: workspace.path,
+      approvalPolicy: "on-request",
+    });
+    expect(result).toEqual({
+      thread: {
+        id: "sdk-thread-2",
+        preview: "Fresh thread",
+        createdAt: 10,
+        updatedAt: 11,
+        cwd: workspace.path,
+      },
+    });
+    const persisted = await storage.readThreads();
+    expect(persisted.find((thread) => thread.id === "sdk-thread-2")).toMatchObject({
+      sdkThreadId: "sdk-thread-2",
+      workspaceId: "ws-1",
+      modelId: "gpt-5-codex",
+    });
+  });
+
+  it("routes send_user_message through turn/start and persists the active turn", async () => {
+    const { server, storage, workspace, thread } = await createServerFixture();
+    const startTurn = vi.fn().mockResolvedValue({
+      turn: {
+        id: "turn-2",
+        status: "active",
+        items: [],
+      },
+    });
+    mockAppServerClient(server, { startTurn });
+
+    const result = await server.handleRpc("send_user_message", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      text: "Ship it",
+      model: "gpt-5-codex",
+      effort: "high",
+      accessMode: "workspace-write",
+      images: ["/tmp/mock.png"],
+      appMentions: [{ name: "Calendar", path: "app://calendar" }],
+      collaborationMode: { mode: "delegate" },
+    });
+
+    expect(startTurn).toHaveBeenCalledWith({
+      threadId: "sdk-thread-1",
+      input: [
+        { type: "text", text: "Ship it", text_elements: [] },
+        { type: "localImage", path: "/tmp/mock.png" },
+        { type: "mention", name: "Calendar", path: "app://calendar" },
+      ],
+      cwd: workspace.path,
+      approvalPolicy: "on-request",
+      sandboxPolicy: {
+        type: "workspaceWrite",
+        writableRoots: [workspace.path],
+        networkAccess: true,
+      },
+      model: "gpt-5-codex",
+      effort: "high",
+      collaborationMode: { mode: "delegate" },
+    });
+    expect(result).toEqual({
+      turn: {
+        id: "turn-2",
+        threadId: "thread-1",
+      },
+    });
+    const persisted = (await storage.readThreads()).find((entry) => entry.id === thread.id);
+    expect(persisted?.activeTurnId).toBe("turn-2");
+    expect(persisted?.modelId).toBe("gpt-5-codex");
+    expect(persisted?.effort).toBe("high");
+    expect(persisted?.turns.at(-1)).toMatchObject({
+      id: "turn-2",
+      status: "active",
+    });
+  });
+
+  it("routes turn_interrupt through turn/interrupt using the active turn id", async () => {
+    const { server, storage, thread } = await createServerFixture();
+    await storage.writeThreads([{ ...thread, activeTurnId: "turn-live" }]);
+    await server.initialize();
+    const interruptTurn = vi.fn().mockResolvedValue({});
+    mockAppServerClient(server, { interruptTurn });
+
+    const result = await server.handleRpc("turn_interrupt", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+    });
+
+    expect(interruptTurn).toHaveBeenCalledWith({
+      threadId: "sdk-thread-1",
+      turnId: "turn-live",
+    });
+    expect(result).toEqual({ turnId: "turn-live" });
+  });
+
+  it("routes respond_to_server_request through app-server sendResponse", async () => {
+    const { server } = await createServerFixture();
+    const sendResponse = vi.fn().mockResolvedValue(undefined);
+    mockAppServerClient(server, { sendResponse });
+
+    const result = await server.handleRpc("respond_to_server_request", {
+      workspaceId: "ws-1",
+      requestId: 42,
+      result: { decision: "approved" },
+    });
+
+    expect(sendResponse).toHaveBeenCalledWith(42, { decision: "approved" });
+    expect(result).toBeNull();
+  });
+
+  it("persists approval prefix rules without duplicating entries", async () => {
+    const { server } = await createServerFixture();
+
+    const first = await server.handleRpc("remember_approval_rule", {
+      workspaceId: "ws-1",
+      command: ["git", "status"],
+    });
+    const second = await server.handleRpc("remember_approval_rule", {
+      workspaceId: "ws-1",
+      command: ["git", "status"],
+    });
+
+    expect(first).toMatchObject({ ok: true, rulesPath: expect.any(String) });
+    expect(second).toMatchObject({ ok: true, rulesPath: expect.any(String) });
+    const rulesPath = (first as { rulesPath: string }).rulesPath;
+    const contents = await fs.readFile(rulesPath, "utf8");
+    expect(contents.match(/prefix_rule\(/g)).toHaveLength(1);
+    expect(contents).toContain('pattern = ["git", "status"]');
+  });
+
+  it("forwards app-server server requests with their request id", async () => {
+    const messages: Array<{ event: string; payload: { workspace_id: string; message: Record<string, unknown> } }> = [];
+    const { server } = await createServerFixture((message) => {
+      messages.push(message as { event: string; payload: { workspace_id: string; message: Record<string, unknown> } });
+    });
+    await (
+      server as unknown as {
+        handleAppServerNotification: (
+          key: string,
+          message: {
+            id?: string | number;
+            method: string;
+            params: Record<string, unknown>;
+          },
+        ) => Promise<void>;
+      }
+    ).handleAppServerNotification("client-key", {
+      id: 7,
+      method: "item/tool/requestUserInput",
+      params: {
+        threadId: "sdk-thread-1",
+        turnId: "turn-live",
+        itemId: "item-1",
+        questions: [],
+      },
+    });
+
+    expect(messages[0]?.payload.message).toMatchObject({
+      id: 7,
+      method: "item/tool/requestUserInput",
+    });
+  });
+
   it("routes turn_steer through codex app-server", async () => {
     const { server } = await createServerFixture();
-    const callCodexAppServer = vi.fn().mockResolvedValue({ turnId: "turn-2" });
-    (server as unknown as { callCodexAppServer: typeof callCodexAppServer }).callCodexAppServer =
-      callCodexAppServer;
+    const steerTurn = vi.fn().mockResolvedValue({ turnId: "turn-2" });
+    mockAppServerClient(server, { steerTurn });
 
     const result = await server.handleRpc("turn_steer", {
       workspaceId: "ws-1",
@@ -93,50 +313,36 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
       appMentions: [{ name: "Calendar", path: "app://calendar" }],
     });
 
-    expect(callCodexAppServer).toHaveBeenCalledWith(
-      "turn/steer",
-      {
-        threadId: "sdk-thread-1",
-        expectedTurnId: "turn-active",
-        input: [
-          { type: "text", text: "Refine the patch", text_elements: [] },
-          { type: "localImage", path: "/tmp/image.png" },
-          { type: "mention", name: "Calendar", path: "app://calendar" },
-        ],
-      },
-      {},
-    );
+    expect(steerTurn).toHaveBeenCalledWith({
+      threadId: "sdk-thread-1",
+      expectedTurnId: "turn-active",
+      input: [
+        { type: "text", text: "Refine the patch", text_elements: [] },
+        { type: "localImage", path: "/tmp/image.png" },
+        { type: "mention", name: "Calendar", path: "app://calendar" },
+      ],
+    });
     expect(result).toEqual({ turnId: "turn-2" });
   });
 
   it("imports a detached review thread after review/start", async () => {
     const { server, storage, workspace } = await createServerFixture();
-    const callCodexAppServer = vi
-      .fn()
-      .mockImplementation(async (method: string) => {
-        if (method === "review/start") {
-          return {
-            turn: { id: "turn-review", status: "active", items: [] },
-            reviewThreadId: "sdk-review-1",
-          };
-        }
-        if (method === "thread/resume") {
-          return {
-            thread: {
-              id: "sdk-review-1",
-              cwd: workspace.path,
-              preview: "Review thread",
-              createdAt: 10,
-              updatedAt: 20,
-              turns: [],
-              status: "idle",
-            },
-          };
-        }
-        throw new Error(`unexpected method: ${method}`);
-      });
-    (server as unknown as { callCodexAppServer: typeof callCodexAppServer }).callCodexAppServer =
-      callCodexAppServer;
+    const startReview = vi.fn().mockResolvedValue({
+      turn: { id: "turn-review", status: "active", items: [] },
+      reviewThreadId: "sdk-review-1",
+    });
+    const resumeThread = vi.fn().mockResolvedValue({
+      thread: {
+        id: "sdk-review-1",
+        cwd: workspace.path,
+        preview: "Review thread",
+        createdAt: 10,
+        updatedAt: 20,
+        turns: [],
+        status: "idle",
+      },
+    });
+    mockAppServerClient(server, { startReview, resumeThread });
 
     const result = await server.handleRpc("start_review", {
       workspaceId: "ws-1",
@@ -155,7 +361,7 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
 
   it("persists forked threads returned by thread/fork", async () => {
     const { server, storage, workspace } = await createServerFixture();
-    const callCodexAppServer = vi.fn().mockResolvedValue({
+    const forkThread = vi.fn().mockResolvedValue({
       thread: {
         id: "sdk-fork-1",
         cwd: workspace.path,
@@ -166,8 +372,7 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
         status: "idle",
       },
     });
-    (server as unknown as { callCodexAppServer: typeof callCodexAppServer }).callCodexAppServer =
-      callCodexAppServer;
+    mockAppServerClient(server, { forkThread });
 
     const result = await server.handleRpc("fork_thread", {
       workspaceId: "ws-1",
@@ -194,7 +399,7 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
     await storage.writeThreads([{ ...thread, name: "Pinned local title" }]);
     await server.initialize();
 
-    const callCodexAppServer = vi.fn().mockResolvedValue({
+    const resumeThread = vi.fn().mockResolvedValue({
       thread: {
         id: "sdk-thread-1",
         cwd: workspace.path,
@@ -205,8 +410,7 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
         status: "idle",
       },
     });
-    (server as unknown as { callCodexAppServer: typeof callCodexAppServer }).callCodexAppServer =
-      callCodexAppServer;
+    mockAppServerClient(server, { resumeThread });
 
     const syncStoredThreadFromAppServer = (
       server as unknown as {
@@ -246,6 +450,140 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
     expect(result).toEqual({
       title: "Fix Login Redirect Loop",
       worktreeName: "fix/login-redirect-loop",
+    });
+  });
+
+  it("routes model_list through codex app-server", async () => {
+    const { server } = await createServerFixture();
+    const modelList = vi.fn().mockResolvedValue({ data: [{ id: "gpt-5-codex" }] });
+    mockAppServerClient(server, { modelList });
+
+    const result = await server.handleRpc("model_list", { workspaceId: "ws-1" });
+
+    expect(modelList).toHaveBeenCalledWith();
+    expect(result).toEqual({ data: [{ id: "gpt-5-codex" }] });
+  });
+
+  it("augments skills_list with source path metadata", async () => {
+    const { server, workspace } = await createServerFixture();
+    const skillsDir = path.join(workspace.path, ".agents", "skills");
+    await fs.mkdir(skillsDir, { recursive: true });
+    const skillsList = vi.fn().mockResolvedValue({ data: [{ name: "review" }] });
+    mockAppServerClient(server, { skillsList });
+
+    const result = await server.handleRpc("skills_list", { workspaceId: "ws-1" });
+
+    expect(skillsList).toHaveBeenCalledWith({
+      cwd: workspace.path,
+      skillsPaths: [skillsDir],
+    });
+    expect(result).toEqual({
+      data: [{ name: "review" }],
+      sourcePaths: [skillsDir],
+      sourceErrors: [],
+    });
+  });
+
+  it("merges account_read fallback auth details", async () => {
+    const { server } = await createServerFixture();
+    const accountRead = vi.fn().mockResolvedValue({
+      account: { type: "chatgpt" },
+      requiresOpenaiAuth: true,
+    });
+    mockAppServerClient(server, { accountRead });
+    (
+      server as unknown as {
+        readAuthAccountFallback: () => Promise<{ email: string; planType: string }>;
+      }
+    ).readAuthAccountFallback = async () => ({
+      email: "dev@example.com",
+      planType: "plus",
+    });
+
+    const result = await server.handleRpc("account_read", { workspaceId: "ws-1" });
+
+    expect(result).toEqual({
+      account: {
+        type: "chatgpt",
+        email: "dev@example.com",
+        planType: "plus",
+      },
+      requiresOpenaiAuth: true,
+    });
+  });
+
+  it("wraps codex_login and codex_login_cancel around app-server auth flows", async () => {
+    const { server } = await createServerFixture();
+    const startLogin = vi.fn().mockResolvedValue({
+      login_id: "login-1",
+      auth_url: "https://example.com/auth",
+    });
+    const cancelLogin = vi.fn().mockResolvedValue({
+      canceled: true,
+      status: "canceled",
+    });
+    mockAppServerClient(server, { startLogin, cancelLogin });
+
+    const started = await server.handleRpc("codex_login", { workspaceId: "ws-1" });
+    const canceled = await server.handleRpc("codex_login_cancel", { workspaceId: "ws-1" });
+
+    expect(started).toEqual({
+      loginId: "login-1",
+      authUrl: "https://example.com/auth",
+      raw: {
+        login_id: "login-1",
+        auth_url: "https://example.com/auth",
+      },
+    });
+    expect(cancelLogin).toHaveBeenCalledWith("login-1");
+    expect(canceled).toEqual({
+      canceled: true,
+      status: "canceled",
+      raw: {
+        canceled: true,
+        status: "canceled",
+      },
+    });
+  });
+
+  it("respawns app-server clients when connected workspace runtime args change", async () => {
+    const { server } = await createServerFixture();
+    const resetAppServerClients = vi.fn().mockResolvedValue(undefined);
+    (
+      server as unknown as {
+        resetAppServerClients: typeof resetAppServerClients;
+      }
+    ).resetAppServerClients = resetAppServerClients;
+
+    await server.handleRpc("connect_workspace", { id: "ws-1" });
+    const result = await server.handleRpc("set_workspace_runtime_codex_args", {
+      workspaceId: "ws-1",
+      codexArgs: "--profile web",
+    });
+
+    expect(resetAppServerClients).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      appliedCodexArgs: "--profile web",
+      respawned: true,
+    });
+  });
+
+  it("supports admin parity methods and url-only opener behavior", async () => {
+    const { server } = await createServerFixture();
+
+    expect(await server.handleRpc("ping", {})).toEqual({ ok: true });
+    expect(await server.handleRpc("daemon_shutdown", {})).toEqual({ ok: true });
+    expect(await server.handleRpc("open_workspace_in", { path: "https://example.com" })).toBeNull();
+    expect(await server.handleRpc("open_workspace_in", { path: "/tmp/project" })).toEqual({
+      error: {
+        message: "open_workspace_in only supports http(s) URLs in the web companion.",
+      },
+    });
+
+    const info = await server.handleRpc("daemon_info", {});
+    expect(info).toMatchObject({
+      name: "codex-monitor-web",
+      mode: "http",
     });
   });
 });
