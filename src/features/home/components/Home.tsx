@@ -1,5 +1,10 @@
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
-import type { LocalUsageSnapshot } from "../../../types";
+import type {
+  LocalUsageDay,
+  LocalUsageModel,
+  LocalUsageSnapshot,
+  LocalUsageTotals,
+} from "../../../types";
 import { formatRelativeTime } from "../../../utils/time";
 
 type LatestAgentRun = {
@@ -52,6 +57,11 @@ export function Home({
   onUsageWorkspaceChange,
   onSelectThread,
 }: HomeProps) {
+  const asFiniteNumber = (value: unknown, fallback = 0) =>
+    typeof value === "number" && Number.isFinite(value) ? value : fallback;
+
+  const asString = (value: unknown) => (typeof value === "string" ? value : "");
+
   const formatCompactNumber = (value: number | null | undefined) => {
     if (value === null || value === undefined) {
       return "--";
@@ -129,8 +139,56 @@ export function Home({
     }).format(date);
   };
 
-  const usageTotals = localUsageSnapshot?.totals ?? null;
-  const usageDays = localUsageSnapshot?.days ?? [];
+  const rawUsageTotals = localUsageSnapshot?.totals as
+    | Partial<LocalUsageTotals>
+    | null
+    | undefined;
+  const usageTotals: LocalUsageTotals | null = rawUsageTotals
+    ? {
+        last7DaysTokens: asFiniteNumber(rawUsageTotals.last7DaysTokens),
+        last30DaysTokens: asFiniteNumber(rawUsageTotals.last30DaysTokens),
+        averageDailyTokens: asFiniteNumber(rawUsageTotals.averageDailyTokens),
+        cacheHitRatePercent: asFiniteNumber(rawUsageTotals.cacheHitRatePercent),
+        peakDay: rawUsageTotals.peakDay ? asString(rawUsageTotals.peakDay) : null,
+        peakDayTokens: asFiniteNumber(rawUsageTotals.peakDayTokens),
+      }
+    : null;
+  const usageDays: LocalUsageDay[] = Array.isArray(localUsageSnapshot?.days)
+    ? localUsageSnapshot.days
+        .map((day) => {
+          const rawDay = day as Partial<LocalUsageDay>;
+          const normalizedDay = asString(rawDay.day);
+          if (!normalizedDay) {
+            return null;
+          }
+          return {
+            day: normalizedDay,
+            inputTokens: asFiniteNumber(rawDay.inputTokens),
+            cachedInputTokens: asFiniteNumber(rawDay.cachedInputTokens),
+            outputTokens: asFiniteNumber(rawDay.outputTokens),
+            totalTokens: asFiniteNumber(rawDay.totalTokens),
+            agentTimeMs: asFiniteNumber(rawDay.agentTimeMs),
+            agentRuns: asFiniteNumber(rawDay.agentRuns),
+          };
+        })
+        .filter((day): day is LocalUsageDay => day !== null)
+    : [];
+  const topModels: LocalUsageModel[] = Array.isArray(localUsageSnapshot?.topModels)
+    ? localUsageSnapshot.topModels
+        .map((model) => {
+          const rawModel = model as Partial<LocalUsageModel>;
+          const normalizedModel = asString(rawModel.model);
+          if (!normalizedModel) {
+            return null;
+          }
+          return {
+            model: normalizedModel,
+            tokens: asFiniteNumber(rawModel.tokens),
+            sharePercent: asFiniteNumber(rawModel.sharePercent),
+          };
+        })
+        .filter((model): model is LocalUsageModel => model !== null)
+    : [];
   const last7Days = usageDays.slice(-7);
   const last7AgentMs = last7Days.reduce(
     (total, day) => total + (day.agentTimeMs ?? 0),
@@ -167,8 +225,9 @@ export function Home({
       usageMetric === "tokens" ? day.totalTokens : day.agentTimeMs ?? 0,
     ),
   );
-  const updatedLabel = localUsageSnapshot
-    ? `Updated ${formatRelativeTime(localUsageSnapshot.updatedAt)}`
+  const updatedAt = asFiniteNumber(localUsageSnapshot?.updatedAt, 0);
+  const updatedLabel = updatedAt > 0
+    ? `Updated ${formatRelativeTime(updatedAt)}`
     : null;
   const showUsageSkeleton = isLoadingLocalUsage && !localUsageSnapshot;
   const showUsageEmpty = !isLoadingLocalUsage && !localUsageSnapshot;
@@ -502,8 +561,8 @@ export function Home({
                 )}
               </div>
               <div className="home-usage-models-list">
-                {localUsageSnapshot?.topModels?.length ? (
-                  localUsageSnapshot.topModels.map((model) => (
+                {topModels.length ? (
+                  topModels.map((model) => (
                     <span
                       className="home-usage-model-chip"
                       key={model.model}

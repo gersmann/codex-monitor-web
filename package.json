@@ -8,6 +8,8 @@
     "postinstall": "npm run sync:material-icons",
     "predev": "npm run sync:material-icons",
     "dev": "vite",
+    "server:dev": "tsx server/index.ts",
+    "server:start": "node --import tsx server/index.ts",
     "prebuild": "npm run sync:material-icons",
     "build": "tsc && vite build",
     "build:appimage": "NO_STRIP=1 tauri build --bundles appimage",
@@ -23,7 +25,7 @@
     "codemod:ds": "npm run codemod:modal-shell && npm run codemod:panel-shell && npm run codemod:toast-shell",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "preview": "vite preview",
     "tauri": "tauri",
     "pretauri:dev": "npm run sync:material-icons",
@@ -36,6 +38,7 @@
     "tauri:build:win": "npm run doctor:win && tauri build --config src-tauri/tauri.windows.conf.json"
   },
   "dependencies": {
+    "@openai/codex-sdk": "^0.111.0",
     "@pierre/diffs": "^1.0.6",
     "@sentry/react": "^10.36.0",
     "@tanstack/react-virtual": "^3.13.18",
@@ -54,11 +57,13 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "tauri-plugin-liquid-glass-api": "^0.1.6",
-    "vscode-material-icons": "^0.1.1"
+    "vscode-material-icons": "^0.1.1",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.1",
     "@testing-library/react": "^16.3.2",
+    "@types/node": "^25.3.5",
     "@types/prismjs": "^1.26.5",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
@@ -69,6 +74,7 @@
     "eslint-plugin-react": "^7.36.1",
     "eslint-plugin-react-hooks": "^4.6.2",
     "jsdom": "^27.0.1",
+    "tsx": "^4.21.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
     "vitest": "^3.2.4"

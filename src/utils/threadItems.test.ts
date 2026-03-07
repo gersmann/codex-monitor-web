@@ -90,6 +90,29 @@ describe("threadItems", () => {
     expect(prepared).toHaveLength(5);
   });
 
+  it("ensures duplicate item ids become unique in prepareThreadItems", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "item_0",
+        kind: "message",
+        role: "assistant",
+        text: "First",
+      },
+      {
+        id: "item_0",
+        kind: "message",
+        role: "assistant",
+        text: "Second",
+      },
+    ];
+
+    const prepared = prepareThreadItems(items);
+
+    expect(prepared).toHaveLength(2);
+    expect(prepared[0]?.id).toBe("item_0");
+    expect(prepared[1]?.id).toBe("item_0:1");
+  });
+
   it("drops assistant review summaries that duplicate completed review items", () => {
     const items: ConversationItem[] = [
       {
@@ -795,6 +818,23 @@ describe("threadItems", () => {
       expect(item.role).toBe("user");
       expect(item.text).toBe("");
       expect(item.images).toEqual(["https://example.com/only.png"]);
+    }
+  });
+
+  it("builds user messages from web companion input payloads", () => {
+    const item = buildConversationItemFromThreadItem({
+      type: "userMessage",
+      id: "msg-web-1",
+      content: [
+        { type: "input_text", text: "Please review this" },
+        { type: "input_image", imageUrl: "https://example.com/from-web.png" },
+      ],
+    });
+    expect(item).not.toBeNull();
+    if (item && item.kind === "message") {
+      expect(item.role).toBe("user");
+      expect(item.text).toBe("Please review this");
+      expect(item.images).toEqual(["https://example.com/from-web.png"]);
     }
   });
 

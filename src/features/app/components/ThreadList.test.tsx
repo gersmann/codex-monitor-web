@@ -76,6 +76,15 @@ describe("ThreadList", () => {
       "thread-1",
       true,
     );
+
+    const menuButton = screen.getByRole("button", { name: "Thread actions" });
+    fireEvent.click(menuButton);
+    expect(onShowThreadMenu).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "ws-1",
+      "thread-1",
+      true,
+    );
   });
 
   it("shows the more button and toggles expanded", () => {

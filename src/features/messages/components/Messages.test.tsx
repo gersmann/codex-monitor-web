@@ -303,6 +303,35 @@ describe("Messages", () => {
     expect(openFileLinkMock).toHaveBeenCalledWith(linkedPath);
   });
 
+  it("does not render nested anchors for code-styled file href links", () => {
+    const linkedPath =
+      "/Users/dimillian/Documents/Dev/CodexMonitor/src/features/messages/components/Markdown.tsx:244";
+    const items: ConversationItem[] = [
+      {
+        id: "msg-file-href-code-link",
+        kind: "message",
+        role: "assistant",
+        text: `Open [\`${linkedPath}\`](${linkedPath})`,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const anchors = container.querySelectorAll(".message-file-link");
+    expect(anchors).toHaveLength(1);
+    fireEvent.click(anchors[0] as Element);
+    expect(openFileLinkMock).toHaveBeenCalledWith(linkedPath);
+  });
+
   it("routes absolute non-whitelisted file href paths through the file opener", () => {
     const linkedPath = "/custom/project/src/App.tsx:12";
     const items: ConversationItem[] = [

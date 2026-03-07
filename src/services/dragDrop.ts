@@ -1,4 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isWebCompanionRuntime } from "./runtime";
 
 export type DragDropPayload = {
   type: "enter" | "over" | "leave" | "drop";
@@ -24,16 +25,24 @@ function start(options?: SubscriptionOptions) {
   if (unlisten || listenPromise) {
     return;
   }
-  listenPromise = getCurrentWindow()
-    .onDragDropEvent((event) => {
-      for (const listener of listeners) {
-        try {
-          listener(event as DragDropEvent);
-        } catch (error) {
-          console.error("[drag-drop] listener failed", error);
+  if (isWebCompanionRuntime()) {
+    return;
+  }
+  try {
+    listenPromise = getCurrentWindow()
+      .onDragDropEvent((event) => {
+        for (const listener of listeners) {
+          try {
+            listener(event as DragDropEvent);
+          } catch (error) {
+            console.error("[drag-drop] listener failed", error);
+          }
         }
-      }
-    }) as Promise<() => void>;
+      }) as Promise<() => void>;
+  } catch (error) {
+    options?.onError?.(error);
+    return;
+  }
   listenPromise
     .then((handler) => {
       listenPromise = null;

@@ -800,13 +800,40 @@
   transition: opacity 0.15s ease;
 }
 
+.workspace-menu-trigger,
+.worktree-menu-trigger {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.workspace-menu-trigger:hover,
+.worktree-menu-trigger:hover {
+  color: var(--text-strong);
+  background: var(--surface-card-strong);
+}
+
 .workspace-add:hover {
   color: var(--text-strong);
   background: var(--surface-card-strong);
 }
 
 .workspace-row:hover .workspace-add,
-.worktree-row:hover .workspace-add {
+.worktree-row:hover .workspace-add,
+.workspace-row:hover .workspace-menu-trigger,
+.worktree-row:hover .worktree-menu-trigger,
+.workspace-menu-trigger:focus-visible,
+.worktree-menu-trigger:focus-visible {
   opacity: 1;
   pointer-events: auto;
 }
@@ -871,6 +898,22 @@
   gap: 4px;
   min-width: 160px;
   z-index: 9999;
+}
+
+.sidebar-context-menu {
+  position: fixed;
+  isolation: isolate;
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+  z-index: 10000;
+}
+
+.sidebar-context-menu-item.is-destructive {
+  color: #ff8f8f;
 }
 
 .all-threads-add-menu {

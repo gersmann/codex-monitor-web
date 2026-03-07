@@ -30,7 +30,7 @@ import { WorkspaceCard } from "./WorkspaceCard";
 import { WorkspaceGroup } from "./WorkspaceGroup";
 import { useCollapsedGroups } from "../hooks/useCollapsedGroups";
 import { useMenuController } from "../hooks/useMenuController";
-import { useSidebarMenus } from "../hooks/useSidebarMenus";
+import { useSidebarMenus, type SidebarMenuItem } from "../hooks/useSidebarMenus";
 import { useSidebarScrollFade } from "../hooks/useSidebarScrollFade";
 import { useThreadRows } from "../hooks/useThreadRows";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
@@ -42,6 +42,7 @@ const COLLAPSED_GROUPS_STORAGE_KEY = "codexmonitor.collapsedGroups";
 const UNGROUPED_COLLAPSE_ID = "__ungrouped__";
 const ADD_MENU_WIDTH = 200;
 const ALL_THREADS_ADD_MENU_WIDTH = 220;
+const SIDEBAR_CONTEXT_MENU_WIDTH = 220;
 
 type WorkspaceGroupSection = {
   id: string | null;
@@ -97,6 +98,7 @@ type SidebarProps = {
   onToggleWorkspaceCollapse: (workspaceId: string, collapsed: boolean) => void;
   onSelectThread: (workspaceId: string, threadId: string) => void;
   onDeleteThread: (workspaceId: string, threadId: string) => void;
+  onForkThread: (workspaceId: string, threadId: string) => void;
   onSyncThread: (workspaceId: string, threadId: string) => void;
   pinThread: (workspaceId: string, threadId: string) => boolean;
   unpinThread: (workspaceId: string, threadId: string) => void;
@@ -158,6 +160,7 @@ export const Sidebar = memo(function Sidebar({
   onToggleWorkspaceCollapse,
   onSelectThread,
   onDeleteThread,
+  onForkThread,
   onSyncThread,
   pinThread,
   unpinThread,
@@ -193,6 +196,12 @@ export const Sidebar = memo(function Sidebar({
     left: number;
     width: number;
   } | null>(null);
+  const [contextMenuState, setContextMenuState] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    items: SidebarMenuItem[];
+  } | null>(null);
   const allThreadsAddMenuOpen = Boolean(allThreadsAddMenuAnchor);
   const addMenuController = useMenuController({
     open: Boolean(addMenuAnchor),
@@ -204,13 +213,24 @@ export const Sidebar = memo(function Sidebar({
     onDismiss: () => setAllThreadsAddMenuAnchor(null),
   });
   const { containerRef: allThreadsAddMenuRef } = allThreadsAddMenuController;
+  const contextMenuController = useMenuController({
+    open: Boolean(contextMenuState),
+    onDismiss: () => setContextMenuState(null),
+  });
+  const { containerRef: contextMenuRef } = contextMenuController;
   const { collapsedGroups, toggleGroupCollapse } = useCollapsedGroups(
     COLLAPSED_GROUPS_STORAGE_KEY,
   );
   const { getThreadRows } = useThreadRows(threadParentById);
-  const { showThreadMenu, showWorkspaceMenu, showWorktreeMenu, showCloneMenu } =
+  const {
+    getThreadMenuItems,
+    getWorkspaceMenuItems,
+    getWorktreeMenuItems,
+    getCloneMenuItems,
+  } =
     useSidebarMenus({
       onDeleteThread,
+      onForkThread,
       onSyncThread,
       onPinThread: pinThread,
       onUnpinThread: unpinThread,
@@ -242,6 +262,75 @@ export const Sidebar = memo(function Sidebar({
           .filter(Boolean),
       ),
     [userInputRequests],
+  );
+
+  const resolveMenuAnchor = useCallback(
+    (event: MouseEvent, width: number) => {
+      const margin = 12;
+      const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+      if (event.type === "contextmenu") {
+        return {
+          top: Math.min(event.clientY, window.innerHeight - margin),
+          left: Math.min(Math.max(event.clientX, margin), maxLeft),
+          width,
+        };
+      }
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      return {
+        top: Math.min(rect.bottom + 6, window.innerHeight - margin),
+        left: Math.min(Math.max(rect.right - width, margin), maxLeft),
+        width,
+      };
+    },
+    [],
+  );
+
+  const openContextMenu = useCallback(
+    (event: MouseEvent, items: SidebarMenuItem[]) => {
+      if (!items.length) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      setContextMenuState({
+        ...resolveMenuAnchor(event, SIDEBAR_CONTEXT_MENU_WIDTH),
+        items,
+      });
+    },
+    [resolveMenuAnchor],
+  );
+
+  const showThreadMenu = useCallback(
+    (
+      event: MouseEvent,
+      workspaceId: string,
+      threadId: string,
+      canPin: boolean,
+    ) => {
+      openContextMenu(event, getThreadMenuItems(workspaceId, threadId, canPin));
+    },
+    [getThreadMenuItems, openContextMenu],
+  );
+
+  const showWorkspaceMenu = useCallback(
+    (event: MouseEvent, workspaceId: string) => {
+      openContextMenu(event, getWorkspaceMenuItems(workspaceId));
+    },
+    [getWorkspaceMenuItems, openContextMenu],
+  );
+
+  const showWorktreeMenu = useCallback(
+    (event: MouseEvent, worktree: WorkspaceInfo) => {
+      openContextMenu(event, getWorktreeMenuItems(worktree));
+    },
+    [getWorktreeMenuItems, openContextMenu],
+  );
+
+  const showCloneMenu = useCallback(
+    (event: MouseEvent, clone: WorkspaceInfo) => {
+      openContextMenu(event, getCloneMenuItems(clone));
+    },
+    [getCloneMenuItems, openContextMenu],
   );
 
   const isWorkspaceMatch = useCallback(
@@ -1185,6 +1274,40 @@ export const Sidebar = memo(function Sidebar({
             )}
         </div>
       </div>
+      {contextMenuState &&
+        createPortal(
+          <PopoverSurface
+            className="sidebar-context-menu"
+            ref={contextMenuRef}
+            style={{
+              top: contextMenuState.top,
+              left: contextMenuState.left,
+              width: contextMenuState.width,
+            }}
+            role="menu"
+          >
+            {contextMenuState.items.map((item) => (
+              <PopoverMenuItem
+                key={item.key}
+                className={`sidebar-context-menu-item${
+                  item.destructive ? " is-destructive" : ""
+                }`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setContextMenuState(null);
+                  void item.onSelect();
+                }}
+                role="menuitem"
+                data-tauri-drag-region="false"
+                active={item.active}
+                icon={item.destructive ? <X size={14} aria-hidden /> : undefined}
+              >
+                {item.label}
+              </PopoverMenuItem>
+            ))}
+          </PopoverSurface>,
+          document.body,
+        )}
       <SidebarFooter
         sessionPercent={sessionPercent}
         weeklyPercent={weeklyPercent}

@@ -1,5 +1,38 @@
 # CodexMonitor
 
+## Run This Fork
+
+This fork currently runs as a browser UI plus a local TypeScript companion server.
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Start the local companion server in one terminal:
+
+```bash
+npm run server:dev
+```
+
+Start Vite in a second terminal:
+
+```bash
+npm run dev
+```
+
+Open the Vite URL shown in the terminal, usually `http://127.0.0.1:1420`.
+
+If you want to access the app from another machine on your network or tailnet, bind both processes to all interfaces:
+
+```bash
+CODEX_MONITOR_WEB_HOST=0.0.0.0 npm run server:dev
+CODEX_MONITOR_WEB_HOST=0.0.0.0 npm run dev -- --host 0.0.0.0
+```
+
+The browser-based migration scope and current parity state are tracked in `docs/web-migration.md`.
+
 ![CodexMonitor](screenshot.png)
 
 CodexMonitor is a Tauri app for orchestrating multiple Codex agents across local workspaces. It provides a sidebar to manage projects, a home screen for quick actions, and a conversation view backed by the Codex app-server protocol.

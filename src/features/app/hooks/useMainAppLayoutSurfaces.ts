@@ -424,6 +424,7 @@ export function useMainAppLayoutSurfaces({
         onToggleWorkspaceCollapse: sidebarHandlers.onToggleWorkspaceCollapse,
         onSelectThread: sidebarHandlers.onSelectThread,
         onDeleteThread: sidebarHandlers.onDeleteThread,
+        onForkThread: sidebarHandlers.onForkThread,
         onSyncThread: sidebarHandlers.onSyncThread,
         pinThread: threadPinning.pinThread,
         unpinThread: threadPinning.unpinThread,

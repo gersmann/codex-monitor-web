@@ -1,14 +1,18 @@
-import { useCallback, type MouseEvent } from "react";
-import { Menu, MenuItem } from "@tauri-apps/api/menu";
-import { LogicalPosition } from "@tauri-apps/api/dpi";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useCallback } from "react";
 
 import type { WorkspaceInfo } from "../../../types";
-import { pushErrorToast } from "../../../services/toasts";
-import { fileManagerName } from "../../../utils/platformPaths";
+
+export type SidebarMenuItem = {
+  key: string;
+  label: string;
+  onSelect: () => void | Promise<void>;
+  active?: boolean;
+  destructive?: boolean;
+};
 
 type SidebarMenuHandlers = {
   onDeleteThread: (workspaceId: string, threadId: string) => void;
+  onForkThread: (workspaceId: string, threadId: string) => void;
   onSyncThread: (workspaceId: string, threadId: string) => void;
   onPinThread: (workspaceId: string, threadId: string) => void;
   onUnpinThread: (workspaceId: string, threadId: string) => void;
@@ -21,6 +25,7 @@ type SidebarMenuHandlers = {
 
 export function useSidebarMenus({
   onDeleteThread,
+  onForkThread,
   onSyncThread,
   onPinThread,
   onUnpinThread,
@@ -30,62 +35,65 @@ export function useSidebarMenus({
   onDeleteWorkspace,
   onDeleteWorktree,
 }: SidebarMenuHandlers) {
-  const showThreadMenu = useCallback(
-    async (
-      event: MouseEvent,
-      workspaceId: string,
-      threadId: string,
-      canPin: boolean,
-    ) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const renameItem = await MenuItem.new({
-        text: "Rename",
-        action: () => onRenameThread(workspaceId, threadId),
-      });
-      const syncItem = await MenuItem.new({
-        text: "Sync from server",
-        action: () => onSyncThread(workspaceId, threadId),
-      });
-      const archiveItem = await MenuItem.new({
-        text: "Archive",
-        action: () => onDeleteThread(workspaceId, threadId),
-      });
-      const copyItem = await MenuItem.new({
-        text: "Copy ID",
-        action: async () => {
-          try {
-            await navigator.clipboard.writeText(threadId);
-          } catch {
-            // Clipboard failures are non-fatal here.
-          }
+  const getThreadMenuItems = useCallback(
+    (workspaceId: string, threadId: string, canPin: boolean): SidebarMenuItem[] => {
+      const items: SidebarMenuItem[] = [
+        {
+          key: "rename",
+          label: "Rename",
+          onSelect: () => onRenameThread(workspaceId, threadId),
         },
-      });
-      const items = [renameItem, syncItem];
+        {
+          key: "fork",
+          label: "Fork",
+          onSelect: () => onForkThread(workspaceId, threadId),
+        },
+        {
+          key: "sync",
+          label: "Sync from server",
+          onSelect: () => onSyncThread(workspaceId, threadId),
+        },
+      ];
       if (canPin) {
-        const isPinned = isThreadPinned(workspaceId, threadId);
-        items.push(
-          await MenuItem.new({
-            text: isPinned ? "Unpin" : "Pin",
-            action: () => {
-              if (isPinned) {
-                onUnpinThread(workspaceId, threadId);
-              } else {
-                onPinThread(workspaceId, threadId);
-              }
-            },
-          }),
-        );
+        const pinned = isThreadPinned(workspaceId, threadId);
+        items.push({
+          key: "pin",
+          label: pinned ? "Unpin" : "Pin",
+          active: pinned,
+          onSelect: () => {
+            if (pinned) {
+              onUnpinThread(workspaceId, threadId);
+              return;
+            }
+            onPinThread(workspaceId, threadId);
+          },
+        });
       }
-      items.push(copyItem, archiveItem);
-      const menu = await Menu.new({ items });
-      const window = getCurrentWindow();
-      const position = new LogicalPosition(event.clientX, event.clientY);
-      await menu.popup(position, window);
+      items.push(
+        {
+          key: "copy-id",
+          label: "Copy ID",
+          onSelect: async () => {
+            try {
+              await navigator.clipboard.writeText(threadId);
+            } catch {
+              // Clipboard failures are non-fatal here.
+            }
+          },
+        },
+        {
+          key: "archive",
+          label: "Archive",
+          destructive: true,
+          onSelect: () => onDeleteThread(workspaceId, threadId),
+        },
+      );
+      return items;
     },
     [
       isThreadPinned,
       onDeleteThread,
+      onForkThread,
       onPinThread,
       onRenameThread,
       onSyncThread,
@@ -93,117 +101,61 @@ export function useSidebarMenus({
     ],
   );
 
-  const showWorkspaceMenu = useCallback(
-    async (event: MouseEvent, workspaceId: string) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const reloadItem = await MenuItem.new({
-        text: "Reload threads",
-        action: () => onReloadWorkspaceThreads(workspaceId),
-      });
-      const deleteItem = await MenuItem.new({
-        text: "Delete",
-        action: () => onDeleteWorkspace(workspaceId),
-      });
-      const menu = await Menu.new({ items: [reloadItem, deleteItem] });
-      const window = getCurrentWindow();
-      const position = new LogicalPosition(event.clientX, event.clientY);
-      await menu.popup(position, window);
-    },
-    [onReloadWorkspaceThreads, onDeleteWorkspace],
+  const getWorkspaceMenuItems = useCallback(
+    (workspaceId: string): SidebarMenuItem[] => [
+      {
+        key: "reload",
+        label: "Reload threads",
+        onSelect: () => onReloadWorkspaceThreads(workspaceId),
+      },
+      {
+        key: "delete",
+        label: "Delete",
+        destructive: true,
+        onSelect: () => onDeleteWorkspace(workspaceId),
+      },
+    ],
+    [onDeleteWorkspace, onReloadWorkspaceThreads],
   );
 
-  const showWorktreeMenu = useCallback(
-    async (event: MouseEvent, worktree: WorkspaceInfo) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const fileManagerLabel = fileManagerName();
-      const reloadItem = await MenuItem.new({
-        text: "Reload threads",
-        action: () => onReloadWorkspaceThreads(worktree.id),
-      });
-      const revealItem = await MenuItem.new({
-        text: `Show in ${fileManagerLabel}`,
-        action: async () => {
-          if (!worktree.path) {
-            return;
-          }
-          try {
-            const { revealItemInDir } = await import(
-              "@tauri-apps/plugin-opener"
-            );
-            await revealItemInDir(worktree.path);
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            pushErrorToast({
-              title: `Couldn't show worktree in ${fileManagerLabel}`,
-              message,
-            });
-            console.warn("Failed to reveal worktree", {
-              message,
-              workspaceId: worktree.id,
-              path: worktree.path,
-            });
-          }
-        },
-      });
-      const deleteItem = await MenuItem.new({
-        text: "Delete worktree",
-        action: () => onDeleteWorktree(worktree.id),
-      });
-      const menu = await Menu.new({ items: [reloadItem, revealItem, deleteItem] });
-      const window = getCurrentWindow();
-      const position = new LogicalPosition(event.clientX, event.clientY);
-      await menu.popup(position, window);
-    },
-    [onReloadWorkspaceThreads, onDeleteWorktree],
+  const getWorktreeMenuItems = useCallback(
+    (worktree: WorkspaceInfo): SidebarMenuItem[] => [
+      {
+        key: "reload",
+        label: "Reload threads",
+        onSelect: () => onReloadWorkspaceThreads(worktree.id),
+      },
+      {
+        key: "delete-worktree",
+        label: "Delete worktree",
+        destructive: true,
+        onSelect: () => onDeleteWorktree(worktree.id),
+      },
+    ],
+    [onDeleteWorktree, onReloadWorkspaceThreads],
   );
 
-  const showCloneMenu = useCallback(
-    async (event: MouseEvent, clone: WorkspaceInfo) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const fileManagerLabel = fileManagerName();
-      const reloadItem = await MenuItem.new({
-        text: "Reload threads",
-        action: () => onReloadWorkspaceThreads(clone.id),
-      });
-      const revealItem = await MenuItem.new({
-        text: `Show in ${fileManagerLabel}`,
-        action: async () => {
-          if (!clone.path) {
-            return;
-          }
-          try {
-            const { revealItemInDir } = await import(
-              "@tauri-apps/plugin-opener"
-            );
-            await revealItemInDir(clone.path);
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            pushErrorToast({
-              title: `Couldn't show clone in ${fileManagerLabel}`,
-              message,
-            });
-            console.warn("Failed to reveal clone", {
-              message,
-              workspaceId: clone.id,
-              path: clone.path,
-            });
-          }
-        },
-      });
-      const deleteItem = await MenuItem.new({
-        text: "Delete clone",
-        action: () => onDeleteWorkspace(clone.id),
-      });
-      const menu = await Menu.new({ items: [reloadItem, revealItem, deleteItem] });
-      const window = getCurrentWindow();
-      const position = new LogicalPosition(event.clientX, event.clientY);
-      await menu.popup(position, window);
-    },
-    [onReloadWorkspaceThreads, onDeleteWorkspace],
+  const getCloneMenuItems = useCallback(
+    (clone: WorkspaceInfo): SidebarMenuItem[] => [
+      {
+        key: "reload",
+        label: "Reload threads",
+        onSelect: () => onReloadWorkspaceThreads(clone.id),
+      },
+      {
+        key: "delete-clone",
+        label: "Delete clone",
+        destructive: true,
+        onSelect: () => onDeleteWorkspace(clone.id),
+      },
+    ],
+    [onDeleteWorkspace, onReloadWorkspaceThreads],
   );
 
-  return { showThreadMenu, showWorkspaceMenu, showWorktreeMenu, showCloneMenu };
+  return {
+    getThreadMenuItems,
+    getWorkspaceMenuItems,
+    getWorktreeMenuItems,
+    getCloneMenuItems,
+  };
 }

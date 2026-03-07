@@ -676,7 +676,7 @@ export function prepareThreadItems(items: ConversationItem[], options?: PrepareT
       : normalized.length > maxItemsPerThread
         ? normalized.slice(-maxItemsPerThread)
         : normalized;
-  const summarized = summarizeExploration(limited);
+  const summarized = ensureUniqueItemIds(summarizeExploration(limited));
   const cutoff = Math.max(0, summarized.length - TOOL_OUTPUT_RECENT_ITEMS);
   return summarized.map((item, index) => {
     if (index >= cutoff || item.kind !== "tool") {
@@ -1081,6 +1081,7 @@ export function buildConversationItem(
 
 function extractImageInputValue(input: Record<string, unknown>) {
   const value =
+    asString(input.imageUrl ?? input.image_url ?? "") ||
     asString(input.url ?? "") ||
     asString(input.path ?? "") ||
     asString(input.value ?? "") ||
@@ -1094,7 +1095,7 @@ function parseUserInputs(inputs: Array<Record<string, unknown>>) {
   const images: string[] = [];
   inputs.forEach((input) => {
     const type = asString(input.type);
-    if (type === "text") {
+    if (type === "text" || type === "input_text") {
       const text = asString(input.text);
       if (text) {
         textParts.push(text);
@@ -1108,7 +1109,7 @@ function parseUserInputs(inputs: Array<Record<string, unknown>>) {
       }
       return;
     }
-    if (type === "image" || type === "localImage") {
+    if (type === "image" || type === "localImage" || type === "input_image") {
       const value = extractImageInputValue(input);
       if (value) {
         images.push(value);
@@ -1116,6 +1117,19 @@ function parseUserInputs(inputs: Array<Record<string, unknown>>) {
     }
   });
   return { text: textParts.join(" ").trim(), images };
+}
+
+function ensureUniqueItemIds(items: ConversationItem[]) {
+  const seenIds = new Set<string>();
+  return items.map((item, index) => {
+    if (!seenIds.has(item.id)) {
+      seenIds.add(item.id);
+      return item;
+    }
+    const nextId = `${item.id}:${index}`;
+    seenIds.add(nextId);
+    return { ...item, id: nextId };
+  });
 }
 
 export function buildConversationItemFromThreadItem(

@@ -1,4 +1,5 @@
 import type { CSSProperties, MouseEvent } from "react";
+import MoreHorizontal from "lucide-react/dist/esm/icons/more-horizontal";
 
 import type { ThreadSummary } from "../../../types";
 import { getThreadStatusClass, type ThreadStatusById } from "../../../utils/threadStatus";
@@ -121,7 +122,18 @@ export function ThreadRow({
           relativeTime && <span className="thread-time">{relativeTime}</span>
         )}
         <div className="thread-menu">
-          <div className="thread-menu-trigger" aria-hidden="true" />
+          <button
+            type="button"
+            className="thread-menu-trigger"
+            aria-label="Thread actions"
+            onClick={(event) => {
+              event.stopPropagation();
+              onShowThreadMenu(event, workspaceId, thread.id, canPin);
+            }}
+            data-tauri-drag-region="false"
+          >
+            <MoreHorizontal size={14} aria-hidden />
+          </button>
         </div>
       </div>
     </div>

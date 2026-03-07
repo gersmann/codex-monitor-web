@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -25,6 +24,7 @@ import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { languageFromPath } from "../../../utils/syntax";
 import { joinWorkspacePath, revealInFileManagerLabel } from "../../../utils/platformPaths";
 import { getFileTypeIconUrl } from "../../../utils/fileTypeIcons";
+import { convertLocalFileSrc } from "../../../services/fileSrc";
 import { FilePreviewPopover } from "./FilePreviewPopover";
 
 type FileTreeNode = {
@@ -341,11 +341,8 @@ export function FileTreePanel({
     if (!previewPath || previewKind !== "image") {
       return null;
     }
-    try {
-      return convertFileSrc(resolvePath(previewPath));
-    } catch {
-      return null;
-    }
+    const previewSrc = convertLocalFileSrc(resolvePath(previewPath));
+    return previewSrc || null;
   }, [previewPath, previewKind, resolvePath]);
 
   const openPreview = useCallback((path: string, target: HTMLElement) => {

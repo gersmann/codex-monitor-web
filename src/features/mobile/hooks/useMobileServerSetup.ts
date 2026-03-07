@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listWorkspaces } from "../../../services/tauri";
+import { isWebCompanionRuntime } from "../../../services/runtime";
 import type { AppSettings } from "../../../types";
 import { isMobilePlatform } from "../../../utils/platformPaths";
 import type { MobileServerSetupWizardProps } from "../components/MobileServerSetupWizard";
@@ -66,7 +67,10 @@ export function useMobileServerSetup({
   queueSaveSettings,
   refreshWorkspaces,
 }: UseMobileServerSetupParams): UseMobileServerSetupResult {
-  const isMobileRuntime = useMemo(() => isMobilePlatform(), []);
+  const isMobileRuntime = useMemo(
+    () => !isWebCompanionRuntime() && isMobilePlatform(),
+    [],
+  );
 
   const [remoteHostDraft, setRemoteHostDraft] = useState(appSettings.remoteBackendHost);
   const [remoteTokenDraft, setRemoteTokenDraft] = useState(appSettings.remoteBackendToken ?? "");

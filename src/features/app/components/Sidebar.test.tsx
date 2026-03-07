@@ -51,6 +51,7 @@ const baseProps = {
   onToggleWorkspaceCollapse: vi.fn(),
   onSelectThread: vi.fn(),
   onDeleteThread: vi.fn(),
+  onForkThread: vi.fn(),
   onSyncThread: vi.fn(),
   pinThread: vi.fn(() => false),
   unpinThread: vi.fn(),
