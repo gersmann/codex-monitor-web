@@ -1632,6 +1632,7 @@ export class CodexCompanionServer {
         : trimString(rawThread.status);
     const activeTurnId =
       statusValue === "active" ? turns[turns.length - 1]?.id ?? null : null;
+    const appServerName = toNullableString(rawThread.name);
     return {
       id: threadId,
       workspaceId,
@@ -1640,7 +1641,7 @@ export class CodexCompanionServer {
       createdAt,
       updatedAt,
       archivedAt: null,
-      name: toNullableString(rawThread.name),
+      name: existing?.name ?? appServerName,
       preview: trimString(rawThread.preview) || existing?.preview || "New Agent",
       activeTurnId,
       turns,

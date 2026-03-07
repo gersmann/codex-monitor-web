@@ -189,6 +189,43 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
     expect(threads.some((thread) => thread.id === "sdk-fork-1")).toBe(true);
   });
 
+  it("preserves a local thread rename when app-server sync omits the name", async () => {
+    const { server, storage, workspace, thread } = await createServerFixture();
+    await storage.writeThreads([{ ...thread, name: "Pinned local title" }]);
+    await server.initialize();
+
+    const callCodexAppServer = vi.fn().mockResolvedValue({
+      thread: {
+        id: "sdk-thread-1",
+        cwd: workspace.path,
+        preview: "External preview",
+        createdAt: 10,
+        updatedAt: 20,
+        turns: [],
+        status: "idle",
+      },
+    });
+    (server as unknown as { callCodexAppServer: typeof callCodexAppServer }).callCodexAppServer =
+      callCodexAppServer;
+
+    const syncStoredThreadFromAppServer = (
+      server as unknown as {
+        syncStoredThreadFromAppServer: (
+          workspaceId: string,
+          threadId: string,
+          existing?: StoredThread | null,
+        ) => Promise<StoredThread>;
+      }
+    ).syncStoredThreadFromAppServer.bind(server);
+
+    const existingThread = (await storage.readThreads())[0] ?? null;
+    const synced = await syncStoredThreadFromAppServer("ws-1", "sdk-thread-1", existingThread);
+
+    expect(synced.name).toBe("Pinned local title");
+    const threads = await storage.readThreads();
+    expect(threads.find((entry) => entry.id === "sdk-thread-1")?.name).toBe("Pinned local title");
+  });
+
   it("generates run metadata from a background codex prompt", async () => {
     const { server } = await createServerFixture();
     const buildCodex = vi.fn().mockReturnValue({
