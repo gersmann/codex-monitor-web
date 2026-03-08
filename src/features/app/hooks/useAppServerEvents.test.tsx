@@ -61,6 +61,8 @@ describe("useAppServerEvents", () => {
       onRequestUserInput: vi.fn(),
       onItemCompleted: vi.fn(),
       onAgentMessageCompleted: vi.fn(),
+      onTurnStarted: vi.fn(),
+      onTurnCompleted: vi.fn(),
       onAccountRateLimitsUpdated: vi.fn(),
       onAccountUpdated: vi.fn(),
       onAccountLoginCompleted: vi.fn(),
@@ -74,6 +76,58 @@ describe("useAppServerEvents", () => {
       listener?.({ workspace_id: "ws-1", message: { method: "codex/connected" } });
     });
     expect(handlers.onWorkspaceConnected).toHaveBeenCalledWith("ws-1");
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "turn/started",
+          params: {
+            turn: {
+              id: "turn-1",
+              threadId: "thread-1",
+              items: [{ id: "item-user-1", type: "userMessage", content: [] }],
+            },
+          },
+        },
+      });
+    });
+    expect(handlers.onTurnStarted).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "turn-1",
+      {
+        id: "turn-1",
+        threadId: "thread-1",
+        items: [{ id: "item-user-1", type: "userMessage", content: [] }],
+      },
+    );
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "turn/completed",
+          params: {
+            turn: {
+              id: "turn-1",
+              threadId: "thread-1",
+              items: [{ id: "item-agent-1", type: "agentMessage", text: "Done" }],
+            },
+          },
+        },
+      });
+    });
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "turn-1",
+      {
+        id: "turn-1",
+        threadId: "thread-1",
+        items: [{ id: "item-agent-1", type: "agentMessage", text: "Done" }],
+      },
+    );
 
     act(() => {
       listener?.({

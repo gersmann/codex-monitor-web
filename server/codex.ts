@@ -525,6 +525,51 @@ function extractTurnIdFromParams(params: JsonRecord) {
   return trimString(turn?.id);
 }
 
+function normalizeThreadStatusType(status: unknown) {
+  if (!status || typeof status !== "object" || Array.isArray(status)) {
+    return trimString(status).toLowerCase().replace(/[\s_-]/g, "");
+  }
+  const record = status as JsonRecord;
+  return trimString(record.type ?? record.statusType ?? record.status_type)
+    .toLowerCase()
+    .replace(/[\s_-]/g, "");
+}
+
+function extractActiveTurnIdFromThread(rawThread: Record<string, unknown>) {
+  const direct =
+    trimString(rawThread.activeTurnId) ||
+    trimString(rawThread.active_turn_id);
+  if (direct) {
+    return direct;
+  }
+  const activeTurn =
+    rawThread.activeTurn && typeof rawThread.activeTurn === "object" && !Array.isArray(rawThread.activeTurn)
+      ? (rawThread.activeTurn as JsonRecord)
+      : rawThread.active_turn &&
+          typeof rawThread.active_turn === "object" &&
+          !Array.isArray(rawThread.active_turn)
+        ? (rawThread.active_turn as JsonRecord)
+        : null;
+  const objectId =
+    trimString(activeTurn?.id) ||
+    trimString(activeTurn?.turnId) ||
+    trimString(activeTurn?.turn_id);
+  if (objectId) {
+    return objectId;
+  }
+  const statusType = normalizeThreadStatusType(rawThread.status);
+  if (statusType === "active") {
+    const turns = Array.isArray(rawThread.turns) ? (rawThread.turns as Record<string, unknown>[]) : [];
+    for (let index = turns.length - 1; index >= 0; index -= 1) {
+      const turnId = trimString(turns[index]?.id);
+      if (turnId) {
+        return turnId;
+      }
+    }
+  }
+  return null;
+}
+
 function toStoredItemFromAppServer(turnId: string, item: JsonRecord): StoredThreadItem {
   const itemId = trimString(item.id) || `item-${randomUUID()}`;
   return {
@@ -2652,17 +2697,12 @@ export class CodexCompanionServer {
         existing?.turns.find((entry) => entry.id === trimString(turn.id)),
       ),
     );
-    const statusValue =
-      typeof rawThread.status === "object" && rawThread.status
-        ? trimString((rawThread.status as Record<string, unknown>).type)
-        : trimString(rawThread.status);
-    const activeTurnId =
-      statusValue === "active" ? turns[turns.length - 1]?.id ?? null : null;
+    const activeTurnId = extractActiveTurnIdFromThread(rawThread);
     const appServerName = toNullableString(rawThread.name);
     return {
-      id: threadId,
+      id: existing?.id ?? threadId,
       workspaceId,
-      sdkThreadId: threadId,
+      sdkThreadId: existing?.sdkThreadId ?? threadId,
       cwd: trimString(rawThread.cwd) || this.getWorkspace(workspaceId)?.path || "",
       createdAt,
       updatedAt,
@@ -2715,6 +2755,42 @@ export class CodexCompanionServer {
       }
     }
     return this.findThreadBySdkThreadId(threadId);
+  }
+
+  private clearStoredActiveTurn(thread: StoredThread, turnId?: string | null) {
+    const targetTurnId = turnId ?? thread.activeTurnId;
+    if (targetTurnId) {
+      const existing = thread.turns.find((entry) => entry.id === targetTurnId);
+      if (existing && existing.completedAt === null) {
+        existing.completedAt = Date.now();
+        if (existing.status === "active") {
+          existing.status = "completed";
+        }
+      }
+    }
+    thread.activeTurnId = null;
+    thread.updatedAt = Date.now();
+  }
+
+  private async refreshThreadStateFromAppServer(
+    settings: JsonRecord,
+    workspaceId: string,
+    thread: StoredThread,
+  ) {
+    const client = this.buildAppServerClient(settings, workspaceId);
+    const response = await client.readThreadWithTurns(this.resolveAppServerThreadId(thread));
+    const rawThread =
+      response.thread && typeof response.thread === "object"
+        ? (response.thread as Record<string, unknown>)
+        : null;
+    if (!rawThread) {
+      return thread;
+    }
+    const stored = this.buildStoredThreadFromAppServer(workspaceId, rawThread, thread);
+    this.threadsById.set(stored.id, stored);
+    this.updateThreadWorkspaceMapping(stored);
+    await this.persistThreads();
+    return stored;
   }
 
   private upsertStoredTurn(
@@ -2877,8 +2953,25 @@ export class CodexCompanionServer {
           const turn = this.upsertStoredTurn(thread, rawTurn);
           turn.status = "completed";
           turn.completedAt = Date.now();
-          thread.activeTurnId = null;
-          thread.updatedAt = Date.now();
+          this.clearStoredActiveTurn(thread, turn.id);
+          shouldPersist = true;
+          break;
+        }
+        const turnId = extractTurnIdFromParams(params);
+        if (turnId) {
+          this.clearStoredActiveTurn(thread, turnId);
+          shouldPersist = true;
+        }
+        break;
+      }
+      case "thread/status/changed": {
+        const statusType = normalizeThreadStatusType(params.status);
+        if (
+          statusType === "idle" ||
+          statusType === "notloaded" ||
+          statusType === "systemerror"
+        ) {
+          this.clearStoredActiveTurn(thread);
           shouldPersist = true;
         }
         break;
@@ -2917,8 +3010,7 @@ export class CodexCompanionServer {
             existing.status = "failed";
             existing.completedAt = Date.now();
             existing.errorMessage = trimString(params.message) || existing.errorMessage;
-            thread.activeTurnId = null;
-            thread.updatedAt = Date.now();
+            this.clearStoredActiveTurn(thread, turnId);
             shouldPersist = true;
           }
         }
@@ -3729,16 +3821,19 @@ export class CodexCompanionServer {
         const workspaceId = String(params.workspaceId ?? "");
         const threadId = String(params.threadId ?? "");
         const workspace = this.getWorkspace(workspaceId);
-        const thread = this.getThread(threadId) ?? this.findThreadBySdkThreadId(threadId);
+        let thread = this.getThread(threadId) ?? this.findThreadBySdkThreadId(threadId);
         if (!workspace || !thread || thread.workspaceId !== workspaceId) {
           return notFound("Thread or workspace not found.");
-        }
-        if (thread.activeTurnId) {
-          return notFound("A turn is already active for this thread.");
         }
         try {
           const settings = await this.storage.readSettings();
           const client = this.buildAppServerClient(settings, workspaceId);
+          if (thread.activeTurnId) {
+            thread = await this.refreshThreadStateFromAppServer(settings, workspaceId, thread);
+            if (thread.activeTurnId) {
+              return notFound("A turn is already active for this thread.");
+            }
+          }
           const accessMode = toNullableString(params.accessMode);
           const response = await client.startTurn({
             threadId: this.resolveAppServerThreadId(thread),
@@ -3949,16 +4044,29 @@ export class CodexCompanionServer {
             const localThread = this.findThreadBySdkThreadId(externalId);
             if (localThread) {
               matchedLocalIds.add(localThread.id);
+              const externalActiveTurnId = extractActiveTurnIdFromThread(thread);
+              const externalUpdatedAt = Number(thread.updatedAt ?? thread.updated_at ?? 0);
+              const externalCreatedAt = Number(thread.createdAt ?? thread.created_at ?? 0);
+              const externalModel = trimString(thread.model);
+              const externalEffort = trimString(
+                thread.modelReasoningEffort ?? thread.model_reasoning_effort,
+              );
               merged.set(localThread.id, {
                 ...thread,
                 id: localThread.id,
                 cwd: localThread.cwd || trimString(thread.cwd),
                 preview: localThread.name ?? trimString(thread.preview) ?? localThread.preview,
-                createdAt: localThread.createdAt || thread.createdAt,
-                updatedAt: localThread.updatedAt || thread.updatedAt,
-                ...(localThread.activeTurnId ? { activeTurnId: localThread.activeTurnId } : {}),
-                ...(localThread.modelId ? { model: localThread.modelId } : {}),
-                ...(localThread.effort ? { modelReasoningEffort: localThread.effort } : {}),
+                createdAt: externalCreatedAt || localThread.createdAt,
+                updatedAt: externalUpdatedAt || localThread.updatedAt,
+                ...(externalActiveTurnId ? { activeTurnId: externalActiveTurnId } : {}),
+                ...(externalModel || localThread.modelId
+                  ? { model: externalModel || localThread.modelId }
+                  : {}),
+                ...(externalEffort || localThread.effort
+                  ? {
+                      modelReasoningEffort: externalEffort || localThread.effort,
+                    }
+                  : {}),
               });
               return;
             }

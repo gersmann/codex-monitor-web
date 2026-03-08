@@ -1171,20 +1171,25 @@ export function buildConversationItemFromThreadItem(
   return buildConversationItem(item);
 }
 
+export function buildItemsFromTurn(turn: Record<string, unknown>) {
+  const turnItems = Array.isArray(turn.items)
+    ? (turn.items as Record<string, unknown>[])
+    : [];
+  const items: ConversationItem[] = [];
+  turnItems.forEach((item) => {
+    const converted = buildConversationItemFromThreadItem(item);
+    if (converted) {
+      items.push(converted);
+    }
+  });
+  return items;
+}
+
 export function buildItemsFromThread(thread: Record<string, unknown>) {
   const turns = Array.isArray(thread.turns) ? thread.turns : [];
   const items: ConversationItem[] = [];
   turns.forEach((turn) => {
-    const turnRecord = turn as Record<string, unknown>;
-    const turnItems = Array.isArray(turnRecord.items)
-      ? (turnRecord.items as Record<string, unknown>[])
-      : [];
-    turnItems.forEach((item) => {
-      const converted = buildConversationItemFromThreadItem(item);
-      if (converted) {
-        items.push(converted);
-      }
-    });
+    items.push(...buildItemsFromTurn(turn as Record<string, unknown>));
   });
   return items;
 }

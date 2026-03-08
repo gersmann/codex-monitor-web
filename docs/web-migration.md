@@ -66,6 +66,7 @@ These areas are currently excluded from the web migration plan:
 - Vendored local app-server shellout client
 - Persistent app-server client reuse for metadata, account, and control-plane requests
 - Direct app-server-backed thread start, turn start, turn interrupt, approval responses, and live server-request forwarding
+- Live-thread parity for the TS web backend: turn completion clears processing immediately, turn snapshots hydrate final items without manual sync, and active-thread refresh/recovery is enabled in the web companion runtime
 - Shell-out based external session discovery via `codex app-server`
 - Thread controls for steer, review start, fork, compact, and app-server-backed run metadata
 - Backend admin parity methods: `ping`, `daemon_info`, `daemon_shutdown`
@@ -83,11 +84,11 @@ These areas are currently excluded from the web migration plan:
 
 ### Partially Implemented
 
-- App-server notification persistence is in place for core thread and turn lifecycle, and the frontend now handles `skills/changed` and `serverRequest/resolved`, but some secondary notification families still need parity work
+- App-server notification persistence is in place for core thread and turn lifecycle, and the frontend now handles `skills/changed`, `serverRequest/resolved`, `model/rerouted`, `configWarning`, `deprecationNotice`, and `item/mcpToolCall/progress`
 
 ### Not Implemented
 
-- Frontend handling for some web-relevant app-server notifications such as `model/rerouted`, config warnings, deprecation notices, and MCP progress updates
+- Frontend handling for some lower-priority app-server notifications such as fuzzy file search updates, OAuth completion, raw response items, and platform-specific warnings
 
 ### Explicit Support Policy
 

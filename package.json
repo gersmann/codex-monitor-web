@@ -8,7 +8,7 @@
     "postinstall": "npm run sync:material-icons",
     "predev": "npm run sync:material-icons",
     "dev": "vite",
-    "server:dev": "tsx server/index.ts",
+    "server:dev": "tsx watch server/index.ts",
     "server:start": "node --import tsx server/index.ts",
     "prebuild": "npm run sync:material-icons",
     "build": "tsc && vite build",

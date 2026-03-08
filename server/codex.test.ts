@@ -91,6 +91,7 @@ function mockAppServerClient(
     listMcpServerStatus: (...args: unknown[]) => Promise<unknown>;
     modelList: (...args: unknown[]) => Promise<unknown>;
     onNotification: (...args: unknown[]) => () => void;
+    readThreadWithTurns: (...args: unknown[]) => Promise<unknown>;
     resumeThread: (...args: unknown[]) => Promise<unknown>;
     sendResponse: (...args: unknown[]) => Promise<unknown>;
     skillsList: (...args: unknown[]) => Promise<unknown>;
@@ -264,6 +265,130 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
       turnId: "turn-live",
     });
     expect(result).toEqual({ turnId: "turn-live" });
+  });
+
+  it("clears stored active turn state when turn/completed omits the turn payload", async () => {
+    const { server, storage, thread } = await createServerFixture();
+    await storage.writeThreads([
+      {
+        ...thread,
+        activeTurnId: "turn-live",
+        turns: [
+          {
+            id: "turn-live",
+            status: "active",
+            createdAt: 1,
+            completedAt: null,
+            items: [],
+            errorMessage: null,
+          },
+        ],
+      },
+    ]);
+    await server.initialize();
+    await (
+      server as unknown as {
+        handleAppServerNotification: (
+          key: string,
+          message: {
+            method: string;
+            params: Record<string, unknown>;
+          },
+        ) => Promise<void>;
+      }
+    ).handleAppServerNotification("client-key", {
+      method: "turn/completed",
+      params: {
+        threadId: "sdk-thread-1",
+        turnId: "turn-live",
+      },
+    });
+
+    const persisted = (await storage.readThreads()).find((entry) => entry.id === "thread-1");
+    expect(persisted?.activeTurnId).toBeNull();
+    expect(persisted?.turns[0]).toMatchObject({
+      id: "turn-live",
+      status: "completed",
+    });
+    expect(persisted?.turns[0]?.completedAt).not.toBeNull();
+  });
+
+  it("refreshes stale active turn state from app-server before starting a new turn", async () => {
+    const { server, storage, workspace, thread } = await createServerFixture();
+    await storage.writeThreads([{ ...thread, activeTurnId: "turn-stale" }]);
+    await server.initialize();
+    const readThreadWithTurns = vi.fn().mockResolvedValue({
+      thread: {
+        id: "sdk-thread-1",
+        cwd: workspace.path,
+        preview: "Thread One",
+        createdAt: 1,
+        updatedAt: 3,
+        status: { type: "idle" },
+        turns: [],
+      },
+    });
+    const startTurn = vi.fn().mockResolvedValue({
+      turn: {
+        id: "turn-2",
+        status: "active",
+        items: [],
+      },
+    });
+    mockAppServerClient(server, { readThreadWithTurns, startTurn });
+
+    const result = await server.handleRpc("send_user_message", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      text: "Ship it",
+      accessMode: "workspace-write",
+    });
+
+    expect(readThreadWithTurns).toHaveBeenCalledWith("sdk-thread-1");
+    expect(startTurn).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      turn: {
+        id: "turn-2",
+        threadId: "thread-1",
+      },
+    });
+  });
+
+  it("does not surface stale local active turn ids in list_threads when app-server reports idle", async () => {
+    const { server, storage, thread } = await createServerFixture();
+    await storage.writeThreads([{ ...thread, activeTurnId: "turn-stale" }]);
+    const listThreads = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "sdk-thread-1",
+          cwd: thread.cwd,
+          preview: "Thread One",
+          createdAt: 1,
+          updatedAt: 5,
+          status: { type: "idle" },
+        },
+      ],
+      nextCursor: null,
+    });
+    mockAppServerClient(server, { listThreads });
+
+    const result = await server.handleRpc("list_threads", {
+      workspaceId: "ws-1",
+      cursor: null,
+      limit: 20,
+      sortKey: "updated_at",
+    });
+
+    expect(result).toMatchObject({
+      data: [
+        {
+          id: "thread-1",
+          updatedAt: 5,
+        },
+      ],
+    });
+    const returnedThread = (result as { data: Array<Record<string, unknown>> }).data[0];
+    expect(returnedThread?.activeTurnId).toBeUndefined();
   });
 
   it("routes respond_to_server_request through app-server sendResponse", async () => {
@@ -462,7 +587,7 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
 
     expect(synced.name).toBe("Pinned local title");
     const threads = await storage.readThreads();
-    expect(threads.find((entry) => entry.id === "sdk-thread-1")?.name).toBe("Pinned local title");
+    expect(threads.find((entry) => entry.id === "thread-1")?.name).toBe("Pinned local title");
   });
 
   it("generates run metadata from a detached app-server turn", async () => {

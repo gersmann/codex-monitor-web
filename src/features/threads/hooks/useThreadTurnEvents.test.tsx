@@ -356,6 +356,78 @@ describe("useThreadTurnEvents", () => {
     expect(interruptTurn).not.toHaveBeenCalled();
   });
 
+  it("hydrates thread items from turn snapshots on start and completion", () => {
+    const { result, dispatch, recordThreadActivity, safeMessageActivity } =
+      makeOptions();
+
+    act(() => {
+      result.current.onTurnStarted("ws-1", "thread-1", "turn-1", {
+        id: "turn-1",
+        startedAt: "2026-03-08T18:00:00.000Z",
+        items: [
+          {
+            id: "item-user-1",
+            type: "userMessage",
+            content: [{ type: "input_text", text: "Hello there" }],
+          },
+        ],
+      });
+      result.current.onTurnCompleted("ws-1", "thread-1", "turn-1", {
+        id: "turn-1",
+        completedAt: "2026-03-08T18:01:00.000Z",
+        items: [
+          {
+            id: "item-user-1",
+            type: "userMessage",
+            content: [{ type: "input_text", text: "Hello there" }],
+          },
+          {
+            id: "item-agent-1",
+            type: "agentMessage",
+            text: "Done",
+          },
+        ],
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      item: {
+        id: "item-user-1",
+        kind: "message",
+        role: "user",
+        text: "Hello there",
+      },
+      hasCustomName: false,
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "upsertItem",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      item: {
+        id: "item-agent-1",
+        kind: "message",
+        role: "assistant",
+        text: "Done",
+      },
+      hasCustomName: false,
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setLastAgentMessage",
+      threadId: "thread-1",
+      text: "Done",
+      timestamp: Date.parse("2026-03-08T18:01:00.000Z"),
+    });
+    expect(recordThreadActivity).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      Date.parse("2026-03-08T18:01:00.000Z"),
+    );
+    expect(safeMessageActivity).toHaveBeenCalled();
+  });
+
   it("interrupts immediately when a pending interrupt is queued", () => {
     const { result, markProcessing, setActiveTurnId, pendingInterruptsRef } =
       makeOptions({ pendingInterrupts: ["thread-1"] });

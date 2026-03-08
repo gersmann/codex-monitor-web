@@ -53,8 +53,18 @@ type AppServerEventHandlers = {
   onAgentMessageDelta?: (event: AgentDelta) => void;
   onAgentMessageCompleted?: (event: AgentCompleted) => void;
   onAppServerEvent?: (event: AppServerEvent) => void;
-  onTurnStarted?: (workspaceId: string, threadId: string, turnId: string) => void;
-  onTurnCompleted?: (workspaceId: string, threadId: string, turnId: string) => void;
+  onTurnStarted?: (
+    workspaceId: string,
+    threadId: string,
+    turnId: string,
+    turn?: Record<string, unknown>,
+  ) => void;
+  onTurnCompleted?: (
+    workspaceId: string,
+    threadId: string,
+    turnId: string,
+    turn?: Record<string, unknown>,
+  ) => void;
   onTurnError?: (
     workspaceId: string,
     threadId: string,
@@ -106,20 +116,24 @@ export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
   "account/login/completed",
   "account/rateLimits/updated",
   "account/updated",
+  "configWarning",
   "codex/backgroundThread",
   "codex/connected",
+  "deprecationNotice",
   "error",
   "item/agentMessage/delta",
   "item/commandExecution/outputDelta",
   "item/commandExecution/terminalInteraction",
   "item/completed",
   "item/fileChange/outputDelta",
+  "item/mcpToolCall/progress",
   "item/plan/delta",
   "item/reasoning/summaryPartAdded",
   "item/reasoning/summaryTextDelta",
   "item/reasoning/textDelta",
   "item/started",
   "item/tool/requestUserInput",
+  "model/rerouted",
   "serverRequest/resolved",
   "skills/changed",
   "thread/archived",
@@ -239,7 +253,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         );
         const turnId = String(turn?.id ?? params.turnId ?? params.turn_id ?? "");
         if (threadId) {
-          currentHandlers.onTurnStarted?.(workspace_id, threadId, turnId);
+          currentHandlers.onTurnStarted?.(workspace_id, threadId, turnId, turn);
         }
         return;
       }
@@ -343,7 +357,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
         );
         const turnId = String(turn?.id ?? params.turnId ?? params.turn_id ?? "");
         if (threadId) {
-          currentHandlers.onTurnCompleted?.(workspace_id, threadId, turnId);
+          currentHandlers.onTurnCompleted?.(workspace_id, threadId, turnId, turn);
         }
         return;
       }
@@ -415,6 +429,15 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
           success,
           error,
         });
+        return;
+      }
+
+      if (
+        method === "configWarning" ||
+        method === "deprecationNotice" ||
+        method === "item/mcpToolCall/progress" ||
+        method === "model/rerouted"
+      ) {
         return;
       }
 

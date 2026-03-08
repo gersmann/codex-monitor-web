@@ -19,6 +19,7 @@ type ReconnectOptions = {
 
 type UseRemoteThreadLiveConnectionOptions = {
   backendMode: string;
+  liveThreadSyncEnabled?: boolean;
   activeWorkspace: WorkspaceInfo | null;
   activeThreadId: string | null;
   activeThreadHasLocalSnapshot?: boolean;
@@ -76,10 +77,10 @@ function isWindowFocused() {
 
 export function useRemoteThreadLiveConnection({
   backendMode,
+  liveThreadSyncEnabled = backendMode === "remote",
   activeWorkspace,
   activeThreadId,
   activeThreadHasLocalSnapshot = true,
-  activeThreadIsProcessing = false,
   refreshThread,
   reconnectWorkspace,
 }: UseRemoteThreadLiveConnectionOptions) {
@@ -87,7 +88,7 @@ export function useRemoteThreadLiveConnection({
   const activeWorkspaceConnected = activeWorkspace?.connected ?? false;
   const [connectionState, setConnectionState] =
     useState<RemoteThreadConnectionState>(() => {
-      if (backendMode !== "remote") {
+      if (!liveThreadSyncEnabled) {
         return activeWorkspace?.connected ? "live" : "disconnected";
       }
       if (!activeWorkspace?.connected) {
@@ -96,11 +97,9 @@ export function useRemoteThreadLiveConnection({
       return "polling";
     });
 
-  const backendModeRef = useRef(backendMode);
   const activeWorkspaceRef = useRef(activeWorkspace);
   const activeThreadIdRef = useRef(activeThreadId);
   const activeThreadHasLocalSnapshotRef = useRef(activeThreadHasLocalSnapshot);
-  const activeThreadIsProcessingRef = useRef(activeThreadIsProcessing);
   const refreshThreadRef = useRef(refreshThread);
   const reconnectWorkspaceRef = useRef(reconnectWorkspace);
   const connectionStateRef = useRef(connectionState);
@@ -115,19 +114,15 @@ export function useRemoteThreadLiveConnection({
   const reconnectSequenceRef = useRef(0);
 
   useEffect(() => {
-    backendModeRef.current = backendMode;
     activeWorkspaceRef.current = activeWorkspace;
     activeThreadIdRef.current = activeThreadId;
     activeThreadHasLocalSnapshotRef.current = activeThreadHasLocalSnapshot;
-    activeThreadIsProcessingRef.current = activeThreadIsProcessing;
     refreshThreadRef.current = refreshThread;
     reconnectWorkspaceRef.current = reconnectWorkspace;
   }, [
-    backendMode,
     activeWorkspace,
     activeThreadId,
     activeThreadHasLocalSnapshot,
-    activeThreadIsProcessing,
     refreshThread,
     reconnectWorkspace,
   ]);
@@ -159,7 +154,7 @@ export function useRemoteThreadLiveConnection({
 
   const reconcileDisconnectedState = useCallback(() => {
     const workspace = activeWorkspaceRef.current;
-    if (backendModeRef.current !== "remote") {
+    if (!liveThreadSyncEnabled) {
       setState(workspace?.connected ? "live" : "disconnected");
       return;
     }
@@ -168,7 +163,7 @@ export function useRemoteThreadLiveConnection({
       return;
     }
     setState("polling");
-  }, [setState]);
+  }, [liveThreadSyncEnabled, setState]);
 
   const reconnectLive = useCallback(
     async (
@@ -177,7 +172,7 @@ export function useRemoteThreadLiveConnection({
       options?: ReconnectOptions,
     ): Promise<boolean> => {
       if (
-        backendModeRef.current !== "remote" ||
+        !liveThreadSyncEnabled ||
         !workspaceId ||
         !threadId ||
         !activeWorkspaceRef.current
@@ -281,12 +276,12 @@ export function useRemoteThreadLiveConnection({
       });
       return reconnectPromise;
     },
-    [reconcileDisconnectedState, setState],
+    [liveThreadSyncEnabled, reconcileDisconnectedState, setState],
   );
 
   useEffect(() => {
     const nextKey =
-      backendMode === "remote" && activeWorkspaceId && activeThreadId
+      liveThreadSyncEnabled && activeWorkspaceId && activeThreadId
         ? keyForThread(activeWorkspaceId, activeThreadId)
         : null;
     desiredSubscriptionKeyRef.current = nextKey;
@@ -325,7 +320,7 @@ export function useRemoteThreadLiveConnection({
     activeThreadId,
     activeWorkspaceConnected,
     activeWorkspaceId,
-    backendMode,
+    liveThreadSyncEnabled,
     reconcileDisconnectedState,
     reconnectLive,
     unsubscribeByKey,
@@ -491,6 +486,8 @@ export function useRemoteThreadLiveConnection({
       // Ignore non-Tauri environments.
     }
 
+    const ignoreDetachedEventsUntil = ignoreDetachedEventsUntilRef.current;
+
     return () => {
       didCleanup = true;
       if (unlistenWindowFocus) {
@@ -503,7 +500,7 @@ export function useRemoteThreadLiveConnection({
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       desiredSubscriptionKeyRef.current = null;
-      ignoreDetachedEventsUntilRef.current.clear();
+      ignoreDetachedEventsUntil.clear();
       const currentKey = activeSubscriptionKeyRef.current;
       if (currentKey) {
         activeSubscriptionKeyRef.current = null;

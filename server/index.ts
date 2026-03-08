@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import process from "node:process";
-import { WebSocket, WebSocketServer } from "ws";
+import { WebSocketServer } from "ws";
+import type { WebSocket as WsWebSocket } from "ws";
 import { CodexCompanionServer } from "./codex.js";
 import { resolveDataDir } from "./paths.js";
 import { CompanionStorage } from "./storage.js";
@@ -15,7 +16,23 @@ type SocketMessage = {
   payload: unknown;
 };
 
+type ClosableSocket = {
+  close: () => void;
+};
+
+type ClosableWebSocketServer = {
+  close: (callback: () => void) => void;
+};
+
 let nextHttpRequestId = 1;
+const APP_SERVER_LIFECYCLE_LOG_METHODS = new Set([
+  "turn/started",
+  "turn/completed",
+  "thread/status/changed",
+  "thread/tokenUsage/updated",
+  "error",
+  "serverRequest/resolved",
+]);
 
 function isRpcError(value: unknown): value is RpcErrorShape {
   return Boolean(
@@ -73,21 +90,58 @@ function summarizeParams(params: Record<string, unknown>) {
   return summary;
 }
 
+function summarizeAppServerPayload(payload: unknown) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+  const event = payload as {
+    workspace_id?: unknown;
+    message?: { method?: unknown; params?: unknown };
+  };
+  const message =
+    event.message && typeof event.message === "object" && !Array.isArray(event.message)
+      ? event.message
+      : null;
+  const method = typeof message?.method === "string" ? message.method : null;
+  if (!method || !APP_SERVER_LIFECYCLE_LOG_METHODS.has(method)) {
+    return null;
+  }
+  const params =
+    message?.params && typeof message.params === "object" && !Array.isArray(message.params)
+      ? (message.params as Record<string, unknown>)
+      : {};
+  return {
+    workspaceId:
+      typeof event.workspace_id === "string" ? event.workspace_id : String(event.workspace_id ?? ""),
+    method,
+    summary: summarizeParams(params),
+  };
+}
+
 async function main() {
-  const sockets = new Set<WebSocket>();
+  const sockets = new Set<WsWebSocket>();
   const storage = new CompanionStorage(resolveDataDir());
-  let shutdownRequested = false;
+  let shutdownPromise: Promise<void> | null = null;
   let server: import("node:http").Server | null = null;
   const requestShutdown = () => {
-    if (!server || shutdownRequested) {
+    if (!server) {
       return;
     }
-    shutdownRequested = true;
-    server.close(() => {
-      process.exit(0);
-    });
+    void shutdown("app-request");
   };
   const app = new CodexCompanionServer(storage, (message: SocketMessage) => {
+    if (message.event === "app-server-event") {
+      const lifecycle = summarizeAppServerPayload(message.payload);
+      if (lifecycle) {
+        console.log(
+          `[codex-monitor-web:event] ${lifecycle.method}`,
+          {
+            workspaceId: lifecycle.workspaceId,
+            ...lifecycle.summary,
+          },
+        );
+      }
+    }
     const encoded = JSON.stringify(message);
     for (const socket of sockets) {
       if (socket.readyState === WebSocket.OPEN) {
@@ -97,7 +151,7 @@ async function main() {
   }, requestShutdown);
   await app.initialize();
 
-  const websocketServer = new WebSocketServer({ noServer: true });
+  const websocketServer: WebSocketServer = new WebSocketServer({ noServer: true });
   websocketServer.on("connection", (socket) => {
     sockets.add(socket);
     socket.once("close", () => {
@@ -196,15 +250,44 @@ async function main() {
     console.log(`[codex-monitor-web] listening on http://${DEFAULT_HOST}:${DEFAULT_PORT}`);
   });
 
-  const shutdown = async () => {
-    await app.close();
-    server.close();
+  const shutdown = async (reason: "sigint" | "sigterm" | "app-request") => {
+    if (shutdownPromise) {
+      return await shutdownPromise;
+    }
+    shutdownPromise = (async () => {
+      console.log(`[codex-monitor-web] shutting down (${reason})`);
+      for (const socket of sockets) {
+        try {
+          (socket as unknown as ClosableSocket).close();
+        } catch {
+          // Ignore websocket shutdown errors during process teardown.
+        }
+      }
+      await app.close();
+      await new Promise<void>((resolve) => {
+        (websocketServer as unknown as ClosableWebSocketServer).close(() => {
+          resolve();
+        });
+      });
+      if (server) {
+        await new Promise<void>((resolve) => {
+          server?.close(() => {
+            resolve();
+          });
+        });
+      }
+    })();
+    return await shutdownPromise;
   };
-  process.on("SIGINT", () => {
-    void shutdown();
+  process.once("SIGINT", () => {
+    void shutdown("sigint").finally(() => {
+      process.exit(0);
+    });
   });
-  process.on("SIGTERM", () => {
-    void shutdown();
+  process.once("SIGTERM", () => {
+    void shutdown("sigterm").finally(() => {
+      process.exit(0);
+    });
   });
 }
 

@@ -6,6 +6,7 @@ export const REMOTE_THREAD_POLL_INTERVAL_MS = 12000;
 
 type UseRemoteThreadRefreshOnFocusOptions = {
   backendMode: string;
+  liveThreadSyncEnabled?: boolean;
   activeWorkspace: WorkspaceInfo | null;
   activeThreadId: string | null;
   activeThreadIsProcessing?: boolean;
@@ -16,6 +17,7 @@ type UseRemoteThreadRefreshOnFocusOptions = {
 
 export function useRemoteThreadRefreshOnFocus({
   backendMode,
+  liveThreadSyncEnabled = backendMode === "remote",
   activeWorkspace,
   activeThreadId,
   activeThreadIsProcessing = false,
@@ -54,7 +56,7 @@ export function useRemoteThreadRefreshOnFocus({
     let unlistenWindowBlur: (() => void) | null = null;
 
     const canRefresh = () =>
-      backendMode === "remote" &&
+      liveThreadSyncEnabled &&
       Boolean(workspaceId) &&
       Boolean(activeThreadId);
 
@@ -208,6 +210,7 @@ export function useRemoteThreadRefreshOnFocus({
     activeThreadId,
     activeThreadIsProcessing,
     backendMode,
+    liveThreadSyncEnabled,
     suspendPolling,
     workspaceId,
   ]);

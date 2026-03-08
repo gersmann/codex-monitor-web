@@ -951,6 +951,60 @@ describe("useThreads UX integration", () => {
     expect(queuedCall?.[2]).toBe("Queued during turn");
   });
 
+  it("hydrates final turn snapshot items and clears processing on completion", async () => {
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      result.current.setActiveThreadId("thread-1");
+      handlers?.onTurnStarted?.("ws-1", "thread-1", "turn-1");
+    });
+
+    expect(result.current.threadStatusById["thread-1"]?.isProcessing).toBe(true);
+
+    act(() => {
+      handlers?.onTurnCompleted?.("ws-1", "thread-1", "turn-1", {
+        id: "turn-1",
+        completedAt: "2026-03-08T18:05:00.000Z",
+        items: [
+          {
+            id: "item-user-1",
+            type: "userMessage",
+            content: [{ type: "input_text", text: "Do the thing" }],
+          },
+          {
+            id: "item-agent-1",
+            type: "agentMessage",
+            text: "Done with the thing",
+          },
+        ],
+      });
+    });
+
+    expect(result.current.threadStatusById["thread-1"]?.isProcessing).toBe(false);
+    expect(result.current.activeTurnIdByThread["thread-1"]).toBeNull();
+    expect(result.current.activeItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "item-user-1",
+          kind: "message",
+          role: "user",
+          text: "Do the thing",
+        }),
+        expect.objectContaining({
+          id: "item-agent-1",
+          kind: "message",
+          role: "assistant",
+          text: "Done with the thing",
+        }),
+      ]),
+    );
+  });
+
   it("keeps active turn id after request user input so interrupt targets the running turn", async () => {
     const interruptMock = vi.mocked(interruptTurn);
     interruptMock.mockResolvedValue({ result: {} });

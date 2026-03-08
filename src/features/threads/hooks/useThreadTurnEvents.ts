@@ -1,8 +1,8 @@
 import { useCallback, useRef } from "react";
 import type { Dispatch, MutableRefObject } from "react";
-import type { RateLimitSnapshot, TurnPlan } from "@/types";
+import type { ConversationItem, RateLimitSnapshot, TurnPlan } from "@/types";
 import { interruptTurn as interruptTurnService } from "@services/tauri";
-import { getThreadTimestamp } from "@utils/threadItems";
+import { buildItemsFromTurn, getThreadTimestamp } from "@utils/threadItems";
 import {
   asString,
   normalizePlanUpdate,
@@ -43,6 +43,33 @@ function normalizeThreadStatusType(status: Record<string, unknown>): string {
     .trim()
     .toLowerCase()
     .replace(/[\s_-]/g, "");
+}
+
+function getTurnTimestamp(turn: Record<string, unknown>) {
+  const raw =
+    (turn.completedAt ??
+      turn.completed_at ??
+      turn.updatedAt ??
+      turn.updated_at ??
+      turn.startedAt ??
+      turn.started_at ??
+      turn.createdAt ??
+      turn.created_at) ??
+    null;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return raw;
+  }
+  if (typeof raw === "string") {
+    const parsed = Date.parse(raw);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+    const numeric = Number(raw);
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
+  }
+  return Date.now();
 }
 
 export function useThreadTurnEvents({
@@ -114,6 +141,57 @@ export function useThreadTurnEvents({
     }
     return plan.steps.every((step) => step.status === "completed");
   }, [planByThreadRef]);
+
+  const hydrateTurnSnapshot = useCallback(
+    (
+      workspaceId: string,
+      threadId: string,
+      turn: Record<string, unknown> | undefined,
+    ) => {
+      if (!turn) {
+        return;
+      }
+      const items = buildItemsFromTurn(turn);
+      if (items.length === 0) {
+        return;
+      }
+      const hasCustomName = Boolean(getCustomName(workspaceId, threadId));
+      items.forEach((item) => {
+        dispatch({
+          type: "upsertItem",
+          workspaceId,
+          threadId,
+          item,
+          hasCustomName,
+        });
+      });
+
+      const latestAssistantMessage = [...items]
+        .reverse()
+        .find(
+          (item): item is ConversationItem & { kind: "message"; role: "assistant" } =>
+            item.kind === "message" && item.role === "assistant",
+        );
+      const timestamp = getTurnTimestamp(turn);
+      dispatch({
+        type: "setThreadTimestamp",
+        workspaceId,
+        threadId,
+        timestamp,
+      });
+      recordThreadActivity(workspaceId, threadId, timestamp);
+      if (latestAssistantMessage?.text) {
+        dispatch({
+          type: "setLastAgentMessage",
+          threadId,
+          text: latestAssistantMessage.text,
+          timestamp,
+        });
+      }
+      safeMessageActivity();
+    },
+    [dispatch, getCustomName, recordThreadActivity, safeMessageActivity],
+  );
 
   const onThreadStarted = useCallback(
     (workspaceId: string, thread: Record<string, unknown>) => {
@@ -227,12 +305,18 @@ export function useThreadTurnEvents({
   );
 
   const onTurnStarted = useCallback(
-    (workspaceId: string, threadId: string, turnId: string) => {
+    (
+      workspaceId: string,
+      threadId: string,
+      turnId: string,
+      turn?: Record<string, unknown>,
+    ) => {
       dispatch({
         type: "ensureThread",
         workspaceId,
         threadId,
       });
+      hydrateTurnSnapshot(workspaceId, threadId, turn);
       if (pendingInterruptsRef.current.has(threadId)) {
         pendingInterruptsRef.current.delete(threadId);
         if (turnId) {
@@ -252,6 +336,7 @@ export function useThreadTurnEvents({
     [
       dispatch,
       getActiveTurnId,
+      hydrateTurnSnapshot,
       markProcessing,
       pendingInterruptsRef,
       setActiveTurnId,
@@ -259,11 +344,22 @@ export function useThreadTurnEvents({
   );
 
   const onTurnCompleted = useCallback(
-    (_workspaceId: string, threadId: string, turnId: string) => {
+    (
+      workspaceId: string,
+      threadId: string,
+      turnId: string,
+      turn?: Record<string, unknown>,
+    ) => {
       const activeTurnId = getLatestKnownActiveTurnId(threadId);
       if (turnId && activeTurnId && turnId !== activeTurnId) {
         return;
       }
+      dispatch({
+        type: "ensureThread",
+        workspaceId,
+        threadId,
+      });
+      hydrateTurnSnapshot(workspaceId, threadId, turn);
       markProcessing(threadId, false);
       hasOptimisticActiveTurnByThreadRef.current[threadId] = false;
       immediateActiveTurnIdByThreadRef.current[threadId] = null;
@@ -276,6 +372,7 @@ export function useThreadTurnEvents({
     [
       dispatch,
       getLatestKnownActiveTurnId,
+      hydrateTurnSnapshot,
       markProcessing,
       pendingInterruptsRef,
       setActiveTurnId,

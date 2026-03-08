@@ -74,6 +74,33 @@ describe("useRemoteThreadRefreshOnFocus", () => {
     expect(refreshThread).toHaveBeenCalledWith("ws-1", "thread-1");
   });
 
+  it("refreshes the active thread on focus in web companion mode", () => {
+    const refreshThread = vi.fn().mockResolvedValue(undefined);
+
+    renderHook(() =>
+      useRemoteThreadRefreshOnFocus({
+        backendMode: "local",
+        liveThreadSyncEnabled: true,
+        activeWorkspace: {
+          id: "ws-1",
+          name: "Workspace",
+          path: "/tmp/ws-1",
+          connected: true,
+          settings: { sidebarCollapsed: false },
+        },
+        activeThreadId: "thread-1",
+        refreshThread,
+      }),
+    );
+
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(refreshThread).toHaveBeenCalledWith("ws-1", "thread-1");
+  });
+
   it("refreshes even when workspace is marked disconnected", () => {
     const refreshThread = vi.fn().mockResolvedValue(undefined);
 

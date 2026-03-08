@@ -81,6 +81,7 @@ import {
   resolveWorkspaceRuntimeCodexArgsOverride,
 } from "@threads/utils/threadCodexParamsSeed";
 import { subscribeTrayOpenThread } from "@services/events";
+import { isWebCompanionRuntime } from "@services/runtime";
 import { setWorkspaceRuntimeCodexArgs } from "@services/tauri";
 
 const SettingsView = lazy(() =>
@@ -565,6 +566,8 @@ export default function MainApp() {
   const { connectionState: remoteThreadConnectionState, reconnectLive } =
     useRemoteThreadLiveConnection({
       backendMode: appSettings.backendMode,
+      liveThreadSyncEnabled:
+        appSettings.backendMode === "remote" || isWebCompanionRuntime(),
       activeWorkspace,
       activeThreadId,
       activeThreadHasLocalSnapshot: hasLocalThreadSnapshot(activeThreadId),
@@ -1303,6 +1306,8 @@ export default function MainApp() {
     listThreadsForWorkspaces,
     refreshWorkspaces,
     backendMode: appSettings.backendMode,
+    liveThreadSyncEnabled:
+      appSettings.backendMode === "remote" || isWebCompanionRuntime(),
     activeWorkspace,
     activeThreadId,
     threadStatusById,

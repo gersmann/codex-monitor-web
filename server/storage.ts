@@ -20,6 +20,68 @@ async function ensureParent(filePath: string) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
 }
 
+function parseFirstJsonDocument(raw: string) {
+  let inString = false;
+  let escaped = false;
+  let depth = 0;
+  let started = false;
+  let startIndex = -1;
+
+  for (let index = 0; index < raw.length; index += 1) {
+    const character = raw[index];
+
+    if (!started) {
+      if (character === "{" || character === "[") {
+        started = true;
+        startIndex = index;
+        depth = 1;
+      } else if (!/\s/.test(character)) {
+        return null;
+      }
+      continue;
+    }
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (character === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (character === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (character === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (character === "{" || character === "[") {
+      depth += 1;
+      continue;
+    }
+
+    if (character === "}" || character === "]") {
+      depth -= 1;
+      if (depth === 0 && startIndex >= 0) {
+        const candidate = raw.slice(startIndex, index + 1);
+        try {
+          return JSON.parse(candidate) as unknown;
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 async function readJsonFile<T>(filePath: string, fallback: T): Promise<T> {
   try {
     const raw = await fs.readFile(filePath, "utf8");
@@ -27,6 +89,14 @@ async function readJsonFile<T>(filePath: string, fallback: T): Promise<T> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return fallback;
+    }
+    if (error instanceof SyntaxError) {
+      const raw = await fs.readFile(filePath, "utf8");
+      const recovered = parseFirstJsonDocument(raw);
+      if (recovered !== null) {
+        await writeJsonFile(filePath, recovered);
+        return recovered as T;
+      }
     }
     throw error;
   }
