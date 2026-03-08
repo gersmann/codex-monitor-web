@@ -652,10 +652,11 @@ function normalizeStaleInProgressThread(rawThread: Record<string, unknown>) {
   if (items.some((item) => !isTerminalAppServerItem(item))) {
     return rawThread;
   }
+  const allItemsHaveExplicitStatus = items.every((item) => hasExplicitAppServerItemStatus(item));
   const hasExplicitTerminalItem = items.some(
     (item) => hasExplicitAppServerItemStatus(item) && isTerminalAppServerItem(item),
   );
-  if (!hasExplicitTerminalItem) {
+  if (!hasExplicitTerminalItem || !allItemsHaveExplicitStatus) {
     return rawThread;
   }
   const activityTimestamp = readThreadActivityTimestampMs(rawThread, lastTurn);
@@ -2539,6 +2540,7 @@ async function cloneRepository(url: string, destinationPath: string) {
 }
 
 export class CodexCompanionServer {
+  private static readonly LOCAL_USAGE_CACHE_TTL_MS = 30_000;
   private readonly appServerClients = new Map<string, CodexAppServerClient>();
   private readonly appServerClientWorkspaceIds = new Map<string, Set<string>>();
   private readonly appServerNotificationUnsubscribers = new Map<string, () => void>();
@@ -2548,6 +2550,14 @@ export class CodexCompanionServer {
   private readonly threadsById = new Map<string, StoredThread>();
   private readonly workspaceRuntimeCodexArgs = new Map<string, string | null>();
   private readonly workspacesById = new Map<string, StoredWorkspace>();
+  private readonly localUsageSnapshotCache = new Map<
+    string,
+    { expiresAt: number; snapshot: Awaited<ReturnType<typeof buildLocalUsageSnapshot>> }
+  >();
+  private readonly localUsageSnapshotInFlight = new Map<
+    string,
+    Promise<Awaited<ReturnType<typeof buildLocalUsageSnapshot>>>
+  >();
 
   constructor(
     private readonly storage: CompanionStorage,
@@ -3608,8 +3618,36 @@ export class CodexCompanionServer {
     const normalizedWorkspacePath = toNullableString(workspacePath)
       ? normalizeRootPath(String(workspacePath))
       : null;
+    const cacheKey = JSON.stringify({
+      days: clampedDays,
+      workspacePath: normalizedWorkspacePath,
+    });
+    const now = Date.now();
+    const cached = this.localUsageSnapshotCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      return cached.snapshot;
+    }
+    const inFlight = this.localUsageSnapshotInFlight.get(cacheKey);
+    if (inFlight) {
+      return await inFlight;
+    }
     const sessionsRoots = [path.join(this.storage.codexHome, "sessions")];
-    return await buildLocalUsageSnapshot(sessionsRoots, clampedDays, normalizedWorkspacePath);
+    const loadPromise = buildLocalUsageSnapshot(
+      sessionsRoots,
+      clampedDays,
+      normalizedWorkspacePath,
+    );
+    this.localUsageSnapshotInFlight.set(cacheKey, loadPromise);
+    try {
+      const snapshot = await loadPromise;
+      this.localUsageSnapshotCache.set(cacheKey, {
+        expiresAt: now + CodexCompanionServer.LOCAL_USAGE_CACHE_TTL_MS,
+        snapshot,
+      });
+      return snapshot;
+    } finally {
+      this.localUsageSnapshotInFlight.delete(cacheKey);
+    }
   }
 
   async handleRpc(

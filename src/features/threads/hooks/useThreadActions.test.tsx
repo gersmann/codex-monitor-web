@@ -502,6 +502,55 @@ describe("useThreadActions", () => {
     });
   });
 
+  it("clears stale processing on resume when full history includes older unknown turns", async () => {
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          id: "thread-1",
+          preview: "Done thread",
+          updated_at: 1000,
+          turns: [
+            { id: "turn-old", status: "unknown_state", items: [] },
+            { id: "turn-latest", status: "completed", items: [] },
+          ],
+        },
+      },
+    });
+    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    vi.mocked(isReviewingFromThread).mockReturnValue(false);
+
+    const { result, dispatch } = renderActions({
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          processingStartedAt: 10,
+          lastDurationMs: null,
+        },
+      },
+      activeTurnIdByThread: {
+        "thread-1": "turn-stale",
+      },
+    });
+
+    await act(async () => {
+      await result.current.resumeThreadForWorkspace("ws-1", "thread-1", true);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "markProcessing",
+      threadId: "thread-1",
+      isProcessing: false,
+      timestamp: expect.any(Number),
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setActiveTurnId",
+      threadId: "thread-1",
+      turnId: null,
+    });
+  });
+
   it("keeps local processing state when resume turn status is ambiguous", async () => {
     vi.mocked(resumeThread).mockResolvedValue({
       result: {

@@ -133,7 +133,11 @@ export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
   "item/reasoning/textDelta",
   "item/started",
   "item/tool/requestUserInput",
+  "fuzzyFileSearch/sessionCompleted",
+  "fuzzyFileSearch/sessionUpdated",
+  "mcpServer/oauthLogin/completed",
   "model/rerouted",
+  "rawResponseItem/completed",
   "serverRequest/resolved",
   "skills/changed",
   "thread/archived",
@@ -147,6 +151,8 @@ export const METHODS_ROUTED_IN_USE_APP_SERVER_EVENTS = [
   "turn/diff/updated",
   "turn/plan/updated",
   "turn/started",
+  "windows/worldWritableWarning",
+  "windowsSandbox/setupCompleted",
 ] as const satisfies readonly SupportedAppServerMethod[];
 
 function extractThreadIdFromParams(params: Record<string, unknown>) {
@@ -451,8 +457,14 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       if (
         method === "configWarning" ||
         method === "deprecationNotice" ||
+        method === "fuzzyFileSearch/sessionCompleted" ||
+        method === "fuzzyFileSearch/sessionUpdated" ||
         method === "item/mcpToolCall/progress" ||
-        method === "model/rerouted"
+        method === "mcpServer/oauthLogin/completed" ||
+        method === "model/rerouted" ||
+        method === "rawResponseItem/completed" ||
+        method === "windows/worldWritableWarning" ||
+        method === "windowsSandbox/setupCompleted"
       ) {
         return;
       }

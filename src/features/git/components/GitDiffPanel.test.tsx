@@ -1,35 +1,11 @@
 /** @vitest-environment jsdom */
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { GitLogEntry } from "../../../types";
 import { GitDiffPanel } from "./GitDiffPanel";
 import { fileManagerName } from "../../../utils/platformPaths";
 
-const menuNew = vi.hoisted(() =>
-  vi.fn(async ({ items }) => ({ popup: vi.fn(), items })),
-);
-const menuItemNew = vi.hoisted(() => vi.fn(async (options) => options));
 const clipboardWriteText = vi.hoisted(() => vi.fn());
-
-vi.mock("@tauri-apps/api/menu", () => ({
-  Menu: { new: menuNew },
-  MenuItem: { new: menuItemNew },
-}));
-
-vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ scaleFactor: () => 1 }),
-}));
-
-vi.mock("@tauri-apps/api/dpi", () => ({
-  LogicalPosition: class LogicalPosition {
-    x: number;
-    y: number;
-    constructor(x: number, y: number) {
-      this.x = x;
-      this.y = y;
-    }
-  },
-}));
 
 const revealItemInDir = vi.hoisted(() => vi.fn());
 
@@ -151,16 +127,14 @@ describe("GitDiffPanel", () => {
 
     const row = container.querySelector(".diff-row");
     expect(row).not.toBeNull();
-    fireEvent.contextMenu(row as Element);
-
-    await waitFor(() => expect(menuNew).toHaveBeenCalled());
-    const menuArgs = menuNew.mock.calls[0]?.[0];
-    const revealItem = menuArgs.items.find(
-      (item: { text: string }) => item.text === `Show in ${fileManagerName()}`,
-    );
-
-    expect(revealItem).toBeDefined();
-    await revealItem.action();
+    await act(async () => {
+      fireEvent.contextMenu(row as Element, { clientX: 40, clientY: 48 });
+    });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: `Show in ${fileManagerName()}` }),
+      );
+    });
     expect(revealItemInDir).toHaveBeenCalledWith("/tmp/repo/src/sample.ts");
   });
 
@@ -179,22 +153,18 @@ describe("GitDiffPanel", () => {
 
     const row = container.querySelector(".diff-row");
     expect(row).not.toBeNull();
-    fireEvent.contextMenu(row as Element);
-
-    await waitFor(() => expect(menuNew).toHaveBeenCalled());
-    const menuArgs = menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
-    const copyNameItem = menuArgs.items.find(
-      (item: { text: string }) => item.text === "Copy file name",
-    );
-    const copyPathItem = menuArgs.items.find(
-      (item: { text: string }) => item.text === "Copy file path",
-    );
-
-    expect(copyNameItem).toBeDefined();
-    expect(copyPathItem).toBeDefined();
-
-    await copyNameItem.action();
-    await copyPathItem.action();
+    await act(async () => {
+      fireEvent.contextMenu(row as Element, { clientX: 40, clientY: 48 });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy file name" }));
+    });
+    await act(async () => {
+      fireEvent.contextMenu(row as Element, { clientX: 40, clientY: 48 });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy file path" }));
+    });
 
     expect(clipboardWriteText).toHaveBeenCalledWith("sample.ts");
     expect(clipboardWriteText).toHaveBeenCalledWith("src/sample.ts");
@@ -202,7 +172,6 @@ describe("GitDiffPanel", () => {
 
   it("resolves relative git roots against the workspace path", async () => {
     revealItemInDir.mockClear();
-    menuNew.mockClear();
     const { container } = render(
       <GitDiffPanel
         {...baseProps}
@@ -216,16 +185,14 @@ describe("GitDiffPanel", () => {
 
     const row = container.querySelector(".diff-row");
     expect(row).not.toBeNull();
-    fireEvent.contextMenu(row as Element);
-
-    await waitFor(() => expect(menuNew).toHaveBeenCalled());
-    const menuArgs = menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
-    const revealItem = menuArgs.items.find(
-      (item: { text: string }) => item.text === `Show in ${fileManagerName()}`,
-    );
-
-    expect(revealItem).toBeDefined();
-    await revealItem.action();
+    await act(async () => {
+      fireEvent.contextMenu(row as Element, { clientX: 40, clientY: 48 });
+    });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: `Show in ${fileManagerName()}` }),
+      );
+    });
     expect(revealItemInDir).toHaveBeenCalledWith("/tmp/repo/apps/src/sample.ts");
   });
 
@@ -244,16 +211,12 @@ describe("GitDiffPanel", () => {
 
     const row = container.querySelector(".diff-row");
     expect(row).not.toBeNull();
-    fireEvent.contextMenu(row as Element);
-
-    await waitFor(() => expect(menuNew).toHaveBeenCalled());
-    const menuArgs = menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
-    const copyPathItem = menuArgs.items.find(
-      (item: { text: string }) => item.text === "Copy file path",
-    );
-
-    expect(copyPathItem).toBeDefined();
-    await copyPathItem.action();
+    await act(async () => {
+      fireEvent.contextMenu(row as Element, { clientX: 40, clientY: 48 });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy file path" }));
+    });
 
     expect(clipboardWriteText).toHaveBeenCalledWith("apps/src/sample.ts");
   });
@@ -273,16 +236,12 @@ describe("GitDiffPanel", () => {
 
     const row = container.querySelector(".diff-row");
     expect(row).not.toBeNull();
-    fireEvent.contextMenu(row as Element);
-
-    await waitFor(() => expect(menuNew).toHaveBeenCalled());
-    const menuArgs = menuNew.mock.calls[menuNew.mock.calls.length - 1]?.[0];
-    const copyPathItem = menuArgs.items.find(
-      (item: { text: string }) => item.text === "Copy file path",
-    );
-
-    expect(copyPathItem).toBeDefined();
-    await copyPathItem.action();
+    await act(async () => {
+      fireEvent.contextMenu(row as Element, { clientX: 40, clientY: 48 });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy file path" }));
+    });
 
     expect(clipboardWriteText).toHaveBeenCalledWith("src/sample.ts");
   });

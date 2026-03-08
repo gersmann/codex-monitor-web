@@ -1,16 +1,26 @@
 import { useEffect, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export function useWindowLabel(defaultLabel = "main") {
   const [label, setLabel] = useState(defaultLabel);
 
   useEffect(() => {
-    try {
-      const window = getCurrentWindow();
-      setLabel(window.label ?? defaultLabel);
-    } catch {
-      setLabel(defaultLabel);
-    }
+    let cancelled = false;
+    void import("@tauri-apps/api/window")
+      .then(({ getCurrentWindow }) => {
+        if (cancelled) {
+          return;
+        }
+        const window = getCurrentWindow();
+        setLabel(window.label ?? defaultLabel);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLabel(defaultLabel);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [defaultLabel]);
 
   return label;

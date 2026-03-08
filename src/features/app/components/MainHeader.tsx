@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Check from "lucide-react/dist/esm/icons/check";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { BranchInfo, OpenAppTarget, WorkspaceInfo } from "../../../types";
 import type { ReactNode } from "react";
 import { revealInFileManagerLabel } from "../../../utils/platformPaths";
@@ -326,6 +325,7 @@ export function MainHeader({
                       type="button"
                       className="worktree-info-reveal"
                       onClick={async () => {
+                        const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
                         await revealItemInDir(resolvedWorktreePath);
                       }}
                       data-tauri-drag-region="false"

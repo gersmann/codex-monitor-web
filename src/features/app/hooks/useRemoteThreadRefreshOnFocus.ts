@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { WorkspaceInfo } from "../../../types";
 
 export const REMOTE_THREAD_POLL_INTERVAL_MS = 12000;
@@ -160,35 +159,35 @@ export function useRemoteThreadRefreshOnFocus({
     window.addEventListener("focus", handleFocus);
     window.addEventListener("blur", handleBlur);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    try {
-      const windowHandle = getCurrentWindow();
-      windowHandle
-        .listen("tauri://focus", handleFocus)
-        .then((unlisten) => {
+    void import("@tauri-apps/api/window")
+      .then(({ getCurrentWindow }) => {
+        const windowHandle = getCurrentWindow();
+        return Promise.allSettled([
+          windowHandle.listen("tauri://focus", handleFocus),
+          windowHandle.listen("tauri://blur", handleBlur),
+        ]);
+      })
+      .then((results) => {
+        const focusResult = results?.[0];
+        if (focusResult?.status === "fulfilled") {
           if (didCleanup) {
-            unlisten();
-            return;
+            focusResult.value();
+          } else {
+            unlistenWindowFocus = focusResult.value;
           }
-          unlistenWindowFocus = unlisten;
-        })
-        .catch(() => {
-          // Ignore: DOM listeners still handle focus changes when available.
-        });
-      windowHandle
-        .listen("tauri://blur", handleBlur)
-        .then((unlisten) => {
+        }
+        const blurResult = results?.[1];
+        if (blurResult?.status === "fulfilled") {
           if (didCleanup) {
-            unlisten();
-            return;
+            blurResult.value();
+          } else {
+            unlistenWindowBlur = blurResult.value;
           }
-          unlistenWindowBlur = unlisten;
-        })
-        .catch(() => {
-          // Ignore: DOM listeners still handle visibility changes when available.
-        });
-    } catch {
-      // In non-Tauri environments, getCurrentWindow can throw.
-    }
+        }
+      })
+      .catch(() => {
+        // Ignore: DOM listeners still handle visibility changes when available.
+      });
     updatePolling();
     return () => {
       didCleanup = true;

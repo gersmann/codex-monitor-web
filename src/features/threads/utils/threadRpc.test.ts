@@ -68,6 +68,38 @@ describe("threadRpc", () => {
     });
   });
 
+  it("keeps confidence when the latest turn is terminal even if older turns are unknown", () => {
+    const state = getResumedTurnState({
+      id: "thread-1",
+      turns: [
+        { id: "turn-old", status: "mystery" },
+        { id: "turn-latest", status: "completed" },
+      ],
+    });
+
+    expect(state).toEqual({
+      activeTurnId: null,
+      activeTurnStartedAtMs: null,
+      confidentNoActiveTurn: true,
+    });
+  });
+
+  it("keeps confidence low when the latest turn status is unknown even if older turns are terminal", () => {
+    const state = getResumedTurnState({
+      id: "thread-1",
+      turns: [
+        { id: "turn-old", status: "completed" },
+        { id: "turn-latest", status: "mystery" },
+      ],
+    });
+
+    expect(state).toEqual({
+      activeTurnId: null,
+      activeTurnStartedAtMs: null,
+      confidentNoActiveTurn: false,
+    });
+  });
+
   it("keeps confidence low when turn statuses are unknown", () => {
     const state = getResumedTurnState({
       id: "thread-1",

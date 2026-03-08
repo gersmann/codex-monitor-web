@@ -10,6 +10,18 @@ import type { RpcErrorShape } from "./types.js";
 const DEFAULT_PORT = Number(process.env.CODEX_MONITOR_WEB_PORT ?? "4318");
 const DEFAULT_HOST = process.env.CODEX_MONITOR_WEB_HOST?.trim() || "127.0.0.1";
 const HTTP_REQUEST_WARN_AFTER_MS = 5_000;
+const DEBUG_SERVER_LOGS =
+  process.env.CODEX_MONITOR_WEB_DEBUG?.trim() === "1";
+const CLIENT_LOGS_ENABLED =
+  process.env.CODEX_MONITOR_WEB_CLIENT_LOGS?.trim() !== "0";
+const APP_SERVER_DEBUG_METHODS = new Set([
+  "turn/started",
+  "turn/completed",
+  "thread/status/changed",
+  "thread/tokenUsage/updated",
+  "error",
+  "serverRequest/resolved",
+]);
 
 type SocketMessage = {
   event: string;
@@ -25,14 +37,6 @@ type ClosableWebSocketServer = {
 };
 
 let nextHttpRequestId = 1;
-const APP_SERVER_LIFECYCLE_LOG_METHODS = new Set([
-  "turn/started",
-  "turn/completed",
-  "thread/status/changed",
-  "thread/tokenUsage/updated",
-  "error",
-  "serverRequest/resolved",
-]);
 
 function isRpcError(value: unknown): value is RpcErrorShape {
   return Boolean(
@@ -103,7 +107,7 @@ function summarizeAppServerPayload(payload: unknown) {
       ? event.message
       : null;
   const method = typeof message?.method === "string" ? message.method : null;
-  if (!method || !APP_SERVER_LIFECYCLE_LOG_METHODS.has(method)) {
+  if (!method || !APP_SERVER_DEBUG_METHODS.has(method)) {
     return null;
   }
   const params =
@@ -115,6 +119,26 @@ function summarizeAppServerPayload(payload: unknown) {
       typeof event.workspace_id === "string" ? event.workspace_id : String(event.workspace_id ?? ""),
     method,
     summary: summarizeParams(params),
+  };
+}
+
+function summarizeClientLogPayload(payload: unknown) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return { message: String(payload) };
+  }
+  const record = payload as Record<string, unknown>;
+  return {
+    level: typeof record.level === "string" ? record.level : "error",
+    source: typeof record.source === "string" ? record.source : "unknown",
+    message:
+      typeof record.message === "string"
+        ? record.message
+        : JSON.stringify(record.message ?? null),
+    href: typeof record.href === "string" ? record.href : undefined,
+    userAgent:
+      typeof record.userAgent === "string" ? record.userAgent : undefined,
+    stack: typeof record.stack === "string" ? record.stack : undefined,
+    details: record.details,
   };
 }
 
@@ -130,7 +154,7 @@ async function main() {
     void shutdown("app-request");
   };
   const app = new CodexCompanionServer(storage, (message: SocketMessage) => {
-    if (message.event === "app-server-event") {
+    if (DEBUG_SERVER_LOGS && message.event === "app-server-event") {
       const lifecycle = summarizeAppServerPayload(message.payload);
       if (lifecycle) {
         console.log(
@@ -178,6 +202,30 @@ async function main() {
       return;
     }
 
+    if (request.method === "POST" && url.pathname === "/api/client-log") {
+      try {
+        const payload = await readRequestBody(request);
+        if (CLIENT_LOGS_ENABLED) {
+          console.error(
+            "[codex-monitor-web:client]",
+            summarizeClientLogPayload(payload),
+          );
+        }
+        writeJson(response, 204, {});
+      } catch (error) {
+        console.error(
+          "[codex-monitor-web:client] failed to parse client log payload",
+          error,
+        );
+        writeJson(response, 400, {
+          error: {
+            message: error instanceof Error ? error.message : String(error),
+          },
+        });
+      }
+      return;
+    }
+
     if (request.method !== "POST" || !url.pathname.startsWith("/api/rpc/")) {
       writeJson(response, 404, { error: { message: "Not found" } });
       return;
@@ -190,10 +238,12 @@ async function main() {
 
     try {
       const params = await readRequestBody(request);
-      console.log(
-        `[codex-monitor-web:http] #${requestId} -> ${method}`,
-        summarizeParams(params),
-      );
+      if (DEBUG_SERVER_LOGS) {
+        console.log(
+          `[codex-monitor-web:http] #${requestId} -> ${method}`,
+          summarizeParams(params),
+        );
+      }
       warningTimer = setTimeout(() => {
         console.warn(
           `[codex-monitor-web:http] #${requestId} still running after ${Date.now() - startedAt}ms (${method})`,
@@ -210,9 +260,11 @@ async function main() {
         return;
       }
 
-      console.log(
-        `[codex-monitor-web:http] #${requestId} <- ${method} 200 ${Date.now() - startedAt}ms`,
-      );
+      if (DEBUG_SERVER_LOGS) {
+        console.log(
+          `[codex-monitor-web:http] #${requestId} <- ${method} 200 ${Date.now() - startedAt}ms`,
+        );
+      }
       writeJson(response, 200, result);
     } catch (error) {
       const elapsedMs = Date.now() - startedAt;

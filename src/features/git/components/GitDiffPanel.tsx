@@ -1,16 +1,25 @@
 import type { GitHubIssue, GitHubPullRequest, GitLogEntry } from "../../../types";
-import type { MouseEvent as ReactMouseEvent } from "react";
-import { Menu, MenuItem } from "@tauri-apps/api/menu";
-import { LogicalPosition } from "@tauri-apps/api/dpi";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { openExternalUrl } from "@services/opener";
+import Copy from "lucide-react/dist/esm/icons/copy";
+import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import FileText from "lucide-react/dist/esm/icons/file-text";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
+import Minus from "lucide-react/dist/esm/icons/minus";
 import ScrollText from "lucide-react/dist/esm/icons/scroll-text";
+import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import Search from "lucide-react/dist/esm/icons/search";
+import Plus from "lucide-react/dist/esm/icons/plus";
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PanelTabId } from "../../layout/components/PanelTabs";
+import { useMenuController } from "../../app/hooks/useMenuController";
+import {
+  PopoverMenuItem,
+  PopoverSurface,
+} from "../../design-system/components/popover/PopoverPrimitives";
 import { PanelShell } from "../../layout/components/PanelShell";
 import { pushErrorToast } from "../../../services/toasts";
 import {
@@ -44,6 +53,22 @@ import {
 import { useDiffFileSelection } from "../hooks/useDiffFileSelection";
 import type { GitPanelMode } from "../types";
 import type { PerFileDiffGroup } from "../utils/perFileThreadDiffs";
+
+type GitContextMenuAction = {
+  id: string;
+  label: string;
+  icon?: ReactNode;
+  disabled?: boolean;
+  onSelect: () => void | Promise<void>;
+};
+
+type GitContextMenuState = {
+  top: number;
+  left: number;
+  actions: GitContextMenuAction[];
+};
+
+const GIT_CONTEXT_MENU_WIDTH = 240;
 
 type GitDiffPanelProps = {
   workspaceId?: string | null;
@@ -236,6 +261,15 @@ export function GitDiffPanel({
   const [dismissedErrorSignatures, setDismissedErrorSignatures] = useState<Set<string>>(
     new Set(),
   );
+  const [contextMenu, setContextMenu] = useState<GitContextMenuState | null>(null);
+  const contextMenuController = useMenuController({
+    open: contextMenu !== null,
+    onOpenChange: (open) => {
+      if (!open) {
+        setContextMenu(null);
+      }
+    },
+  });
   const {
     selectedFiles,
     handleFileClick,
@@ -289,55 +323,67 @@ export function GitDiffPanel({
 
   const githubBaseUrl = useMemo(() => getGitHubBaseUrl(gitRemoteUrl), [gitRemoteUrl]);
 
-  const showLogMenu = useCallback(
-    async (event: ReactMouseEvent<HTMLDivElement>, entry: GitLogEntry) => {
+  const openContextMenu = useCallback(
+    (event: ReactMouseEvent<HTMLElement>, actions: GitContextMenuAction[]) => {
       event.preventDefault();
       event.stopPropagation();
-
-      const copyItem = await MenuItem.new({
-        text: "Copy SHA",
-        action: async () => {
-          await navigator.clipboard.writeText(entry.sha);
-        },
+      if (!actions.length) {
+        return;
+      }
+      const margin = 12;
+      setContextMenu({
+        top: Math.min(event.clientY, window.innerHeight - margin),
+        left: Math.min(
+          Math.max(event.clientX, margin),
+          Math.max(margin, window.innerWidth - GIT_CONTEXT_MENU_WIDTH - margin),
+        ),
+        actions,
       });
+    },
+    [],
+  );
 
-      const items = [copyItem];
+  const showLogMenu = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>, entry: GitLogEntry) => {
+      const actions: GitContextMenuAction[] = [
+        {
+          id: "copy-sha",
+          label: "Copy SHA",
+          icon: <Copy size={14} aria-hidden />,
+          onSelect: async () => {
+            await navigator.clipboard.writeText(entry.sha);
+          },
+        },
+      ];
       if (githubBaseUrl) {
-        const openItem = await MenuItem.new({
-          text: "Open on GitHub",
-          action: async () => {
+        actions.push({
+          id: "open-github",
+          label: "Open on GitHub",
+          icon: <ExternalLink size={14} aria-hidden />,
+          onSelect: async () => {
             await openExternalUrl(`${githubBaseUrl}/commit/${entry.sha}`);
           },
         });
-        items.push(openItem);
       }
-
-      const menu = await Menu.new({ items });
-      const window = getCurrentWindow();
-      const position = new LogicalPosition(event.clientX, event.clientY);
-      await menu.popup(position, window);
+      openContextMenu(event, actions);
     },
-    [githubBaseUrl],
+    [githubBaseUrl, openContextMenu],
   );
 
   const showPullRequestMenu = useCallback(
-    async (event: ReactMouseEvent<HTMLDivElement>, pullRequest: GitHubPullRequest) => {
-      event.preventDefault();
-      event.stopPropagation();
-
-      const openItem = await MenuItem.new({
-        text: "Open on GitHub",
-        action: async () => {
+    (event: ReactMouseEvent<HTMLDivElement>, pullRequest: GitHubPullRequest) => {
+      openContextMenu(event, [
+        {
+          id: "open-pr",
+          label: "Open on GitHub",
+          icon: <ExternalLink size={14} aria-hidden />,
+          onSelect: async () => {
           await openExternalUrl(pullRequest.url);
         },
-      });
-
-      const menu = await Menu.new({ items: [openItem] });
-      const window = getCurrentWindow();
-      const position = new LogicalPosition(event.clientX, event.clientY);
-      await menu.popup(position, window);
+        },
+      ]);
     },
-    [],
+    [openContextMenu],
   );
 
   const discardFiles = useCallback(
@@ -376,14 +422,11 @@ export function GitDiffPanel({
   );
 
   const showFileMenu = useCallback(
-    async (
+    (
       event: ReactMouseEvent<HTMLDivElement>,
       path: string,
       _section: "staged" | "unstaged",
     ) => {
-      event.preventDefault();
-      event.stopPropagation();
-
       const isInSelection = selectedFiles.has(path);
       const targetPaths = isInSelection && selectedFiles.size > 1 ? Array.from(selectedFiles) : [path];
 
@@ -409,32 +452,32 @@ export function GitDiffPanel({
         unstagedFiles.some((file) => file.path === targetPath),
       );
 
-      const items: MenuItem[] = [];
+      const actions: GitContextMenuAction[] = [];
 
       if (stagedPaths.length > 0 && onUnstageFile) {
-        items.push(
-          await MenuItem.new({
-            text: `Unstage file${stagedPaths.length > 1 ? `s (${stagedPaths.length})` : ""}`,
-            action: async () => {
+        actions.push({
+          id: "unstage",
+          label: `Unstage file${stagedPaths.length > 1 ? `s (${stagedPaths.length})` : ""}`,
+          icon: <Minus size={14} aria-hidden />,
+          onSelect: async () => {
               for (const stagedPath of stagedPaths) {
                 await onUnstageFile(stagedPath);
               }
             },
-          }),
-        );
+        });
       }
 
       if (unstagedPaths.length > 0 && onStageFile) {
-        items.push(
-          await MenuItem.new({
-            text: `Stage file${unstagedPaths.length > 1 ? `s (${unstagedPaths.length})` : ""}`,
-            action: async () => {
+        actions.push({
+          id: "stage",
+          label: `Stage file${unstagedPaths.length > 1 ? `s (${unstagedPaths.length})` : ""}`,
+          icon: <Plus size={14} aria-hidden />,
+          onSelect: async () => {
               for (const unstagedPath of unstagedPaths) {
                 await onStageFile(unstagedPath);
               }
             },
-          }),
-        );
+        });
       }
 
       if (targetPaths.length === 1) {
@@ -447,10 +490,11 @@ export function GitDiffPanel({
           relativeRoot !== null ? joinRootAndPath(relativeRoot, rawPath) : rawPath;
         const fileName = getFileName(rawPath);
 
-        items.push(
-          await MenuItem.new({
-            text: `Show in ${fileManagerLabel}`,
-            action: async () => {
+        actions.push({
+          id: "reveal",
+          label: `Show in ${fileManagerLabel}`,
+          icon: <FolderOpen size={14} aria-hidden />,
+          onSelect: async () => {
               try {
                 if (!resolvedRoot && !isAbsolutePathForPlatform(absolutePath)) {
                   pushErrorToast({
@@ -473,44 +517,43 @@ export function GitDiffPanel({
                 });
               }
             },
-          }),
-        );
+        });
 
-        items.push(
-          await MenuItem.new({
-            text: "Copy file name",
-            action: async () => {
+        actions.push(
+          {
+            id: "copy-name",
+            label: "Copy file name",
+            icon: <Copy size={14} aria-hidden />,
+            onSelect: async () => {
               await navigator.clipboard.writeText(fileName);
             },
-          }),
-          await MenuItem.new({
-            text: "Copy file path",
-            action: async () => {
+          },
+          {
+            id: "copy-path",
+            label: "Copy file path",
+            icon: <Copy size={14} aria-hidden />,
+            onSelect: async () => {
               await navigator.clipboard.writeText(projectRelativePath);
             },
-          }),
+          },
         );
       }
 
       if (onRevertFile) {
-        items.push(
-          await MenuItem.new({
-            text: `Discard change${plural}${countSuffix}`,
-            action: async () => {
+        actions.push({
+          id: "discard",
+          label: `Discard change${plural}${countSuffix}`,
+          icon: <RotateCcw size={14} aria-hidden />,
+          onSelect: async () => {
               await discardFiles(targetPaths);
             },
-          }),
-        );
+        });
       }
 
-      if (!items.length) {
+      if (!actions.length) {
         return;
       }
-
-      const menu = await Menu.new({ items });
-      const window = getCurrentWindow();
-      const position = new LogicalPosition(event.clientX, event.clientY);
-      await menu.popup(position, window);
+      openContextMenu(event, actions);
     },
     [
       selectedFiles,
@@ -521,6 +564,7 @@ export function GitDiffPanel({
       onStageFile,
       onRevertFile,
       discardFiles,
+      openContextMenu,
       gitRoot,
       gitRootCandidates,
       workspacePath,
@@ -803,6 +847,37 @@ export function GitDiffPanel({
           }
         />
       )}
+      {contextMenu
+        ? createPortal(
+            <div
+              ref={contextMenuController.containerRef}
+              className="git-context-menu-shell"
+              style={{
+                position: "fixed",
+                top: contextMenu.top,
+                left: contextMenu.left,
+                zIndex: 40,
+              }}
+            >
+              <PopoverSurface className="git-context-menu" role="menu">
+                {contextMenu.actions.map((action) => (
+                  <PopoverMenuItem
+                    key={action.id}
+                    onClick={() => {
+                      contextMenuController.close();
+                      void action.onSelect();
+                    }}
+                    disabled={action.disabled}
+                    icon={action.icon}
+                  >
+                    {action.label}
+                  </PopoverMenuItem>
+                ))}
+              </PopoverSurface>
+            </div>,
+            document.body,
+          )
+        : null}
     </PanelShell>
   );
 }

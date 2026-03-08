@@ -3,12 +3,12 @@ import Minus from "lucide-react/dist/esm/icons/minus";
 import Square from "lucide-react/dist/esm/icons/square";
 import X from "lucide-react/dist/esm/icons/x";
 import { isTauri } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 import { isWindowsPlatform } from "@utils/platformPaths";
 
-function currentWindowSafe() {
+async function getCurrentWindowSafe() {
   try {
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
     return getCurrentWindow();
   } catch {
     return null;
@@ -26,12 +26,11 @@ export function WindowCaptionControls() {
 
     let mounted = true;
     let unlistenResized: (() => void) | null = null;
-    const windowHandle = currentWindowSafe();
-    if (!windowHandle) {
-      return;
-    }
 
-    const syncMaximized = async () => {
+    const syncMaximized = async (windowHandle: Awaited<ReturnType<typeof getCurrentWindowSafe>>) => {
+      if (!windowHandle) {
+        return;
+      }
       try {
         const next = await windowHandle.isMaximized();
         if (mounted) {
@@ -42,12 +41,20 @@ export function WindowCaptionControls() {
       }
     };
 
-    void syncMaximized();
-    void windowHandle
-      .onResized(() => {
-        void syncMaximized();
+    void getCurrentWindowSafe()
+      .then((windowHandle) => {
+        if (!windowHandle) {
+          return;
+        }
+        void syncMaximized(windowHandle);
+        return windowHandle.onResized(() => {
+          void syncMaximized(windowHandle);
+        });
       })
       .then((unlisten) => {
+        if (!unlisten) {
+          return;
+        }
         if (!mounted) {
           unlisten();
           return;
@@ -71,27 +78,30 @@ export function WindowCaptionControls() {
   }
 
   const handleMinimize = () => {
-    const windowHandle = currentWindowSafe();
-    if (!windowHandle) {
-      return;
-    }
-    void windowHandle.minimize();
+    void getCurrentWindowSafe().then((windowHandle) => {
+      if (!windowHandle) {
+        return;
+      }
+      void windowHandle.minimize();
+    });
   };
 
   const handleToggleMaximize = () => {
-    const windowHandle = currentWindowSafe();
-    if (!windowHandle) {
-      return;
-    }
-    void windowHandle.toggleMaximize();
+    void getCurrentWindowSafe().then((windowHandle) => {
+      if (!windowHandle) {
+        return;
+      }
+      void windowHandle.toggleMaximize();
+    });
   };
 
   const handleClose = () => {
-    const windowHandle = currentWindowSafe();
-    if (!windowHandle) {
-      return;
-    }
-    void windowHandle.close();
+    void getCurrentWindowSafe().then((windowHandle) => {
+      if (!windowHandle) {
+        return;
+      }
+      void windowHandle.close();
+    });
   };
 
   return (

@@ -23,7 +23,11 @@ export const SUPPORTED_APP_SERVER_METHODS = [
   "item/reasoning/textDelta",
   "item/started",
   "item/tool/requestUserInput",
+  "fuzzyFileSearch/sessionCompleted",
+  "fuzzyFileSearch/sessionUpdated",
+  "mcpServer/oauthLogin/completed",
   "model/rerouted",
+  "rawResponseItem/completed",
   "serverRequest/resolved",
   "skills/changed",
   "thread/archived",
@@ -37,6 +41,8 @@ export const SUPPORTED_APP_SERVER_METHODS = [
   "turn/diff/updated",
   "turn/plan/updated",
   "turn/started",
+  "windows/worldWritableWarning",
+  "windowsSandbox/setupCompleted",
 ] as const;
 
 export type SupportedAppServerMethod = (typeof SUPPORTED_APP_SERVER_METHODS)[number];

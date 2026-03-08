@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { SendMessageResult, WorkspaceInfo } from "@/types";
 
 type PromptPayload = {
@@ -100,6 +99,7 @@ export function useMainAppPromptActions({
   const handleRevealWorkspacePrompts = useCallback(async () => {
     try {
       const path = await getWorkspacePromptsDir();
+      const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
       await revealItemInDir(path);
     } catch (error) {
       alertError(error);
@@ -112,6 +112,7 @@ export function useMainAppPromptActions({
       if (!path) {
         return;
       }
+      const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
       await revealItemInDir(path);
     } catch (error) {
       alertError(error);

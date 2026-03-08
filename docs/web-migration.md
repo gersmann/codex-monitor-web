@@ -24,9 +24,7 @@ The migration is no longer in architecture-buildout mode. The TS-only web backen
 
 Current focus:
 
-- Finish live-thread parity edge cases where the backend is idle but the UI can remain stuck in `Working...`
-- Wire the remaining lower-priority app-server notifications that have real frontend value
-- Remove the last native menu surfaces that still leak into the web experience
+- Verify the remaining web path in daily use and close any newly discovered parity gaps
 - Close the migration epic once the web path is stable enough to be treated as the default browser runtime
 
 ## Target Runtime Model
@@ -88,7 +86,7 @@ These areas are currently excluded from the web migration plan:
 - Runtime Codex arg handoff parity for `set_workspace_runtime_codex_args`
 - Agent settings parity backed directly by `CODEX_HOME/config.toml`, including managed agent CRUD and managed agent config TOML reads and writes
 - Core git reads and actions through the local companion: status, diffs, log, commit diffs, remote detection, staging, commit/fetch/pull/push/sync, and branch list/create/checkout
-- Worktree setup markers plus basic worktree add and rename flows
+- Worktree management through the local companion: add, remove, rename, upstream rename, apply changes back to parent, and setup marker/status flows
 - Browser-safe event subscription and runtime guards for Tauri-only features
 - Web-safe rendering fixes for messages, file previews, drag/drop hooks, liquid glass hooks, and usage widgets
 - Sentry disabled in the web runtime
@@ -98,11 +96,10 @@ These areas are currently excluded from the web migration plan:
 ### Partially Implemented
 
 - App-server notification persistence is in place for core thread and turn lifecycle, and the frontend now handles `skills/changed`, `serverRequest/resolved`, `model/rerouted`, `configWarning`, `deprecationNotice`, and `item/mcpToolCall/progress`
-- Live-thread parity is close, but still under hardening for rare stale-processing cases during resume/read reconciliation
 
 ### Not Implemented
 
-- Frontend handling for some lower-priority app-server notifications such as fuzzy file search updates, OAuth completion, raw response items, and platform-specific warnings
+- Frontend handling for realtime audio/session notifications and other app-server events that still have no current CodexMonitor UI consumer
 
 ### Explicit Support Policy
 
@@ -145,7 +142,6 @@ Status: mostly complete.
 
 ### Phase 4: Parity Hardening
 
-- Fix remaining live-thread correctness bugs in resume/read/event reconciliation
 - Tighten app-server notification handling for less common but user-visible event families
 - Keep the backend and frontend parity tests aligned with real failure cases found during daily use
 
@@ -160,8 +156,6 @@ Status: mostly complete.
 The long-running migration work is tracked in `bd`:
 
 - `CodexMonitor-ac41` Complete TS-only web backend migration
-- `CodexMonitor-131d` Normalize stale in-progress app-server turns during resume/read
-- `CodexMonitor-cea0` Replace remaining native menus outside sidebar with web menus
 
 ## Implementation Notes
 

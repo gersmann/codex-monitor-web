@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ask, message } from "@tauri-apps/plugin-dialog";
 import type { WorkspaceInfo } from "../../../types";
 import { isMobilePlatform } from "../../../utils/platformPaths";
 import { pickWorkspacePaths } from "../../../services/tauri";
@@ -7,6 +6,16 @@ import type { AddWorkspacesFromPathsResult } from "../../workspaces/hooks/useWor
 
 const RECENT_REMOTE_WORKSPACE_PATHS_STORAGE_KEY = "mobile-remote-workspace-recent-paths";
 const RECENT_REMOTE_WORKSPACE_PATHS_LIMIT = 5;
+
+async function askDialog(message: string, options?: Record<string, unknown>) {
+  const { ask } = await import("@tauri-apps/plugin-dialog");
+  return ask(message, options);
+}
+
+async function showMessageDialog(message: string, options?: Record<string, unknown>) {
+  const { message: showMessage } = await import("@tauri-apps/plugin-dialog");
+  return showMessage(message, options);
+}
 
 function parseWorkspacePathInput(value: string) {
   const stripWrappingQuotes = (entry: string) => {
@@ -256,7 +265,7 @@ export function useWorkspaceDialogs() {
         result.failures.length > 0
           ? "Some workspaces failed to add"
           : "Some workspaces were skipped";
-      await message(lines.join("\n"), {
+      await showMessageDialog(lines.join("\n"), {
         title,
         kind: result.failures.length > 0 ? "error" : "warning",
       });
@@ -278,7 +287,7 @@ export function useWorkspaceDialogs() {
             } on disk.`
           : "";
 
-      return ask(
+      return askDialog(
         `Are you sure you want to delete "${workspaceName}"?\n\nThis will remove the workspace from CodexMonitor.${detail}`,
         {
           title: "Delete Workspace",
@@ -295,7 +304,7 @@ export function useWorkspaceDialogs() {
     async (workspaces: WorkspaceInfo[], workspaceId: string) => {
       const workspace = workspaces.find((entry) => entry.id === workspaceId);
       const workspaceName = workspace?.name || "this worktree";
-      return ask(
+      return askDialog(
         `Are you sure you want to delete "${workspaceName}"?\n\nThis will close the agent, remove its worktree, and delete it from CodexMonitor.`,
         {
           title: "Delete Worktree",
@@ -310,7 +319,7 @@ export function useWorkspaceDialogs() {
 
   const showWorkspaceRemovalError = useCallback(async (error: unknown) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    await message(errorMessage, {
+    await showMessageDialog(errorMessage, {
       title: "Delete workspace failed",
       kind: "error",
     });
@@ -318,7 +327,7 @@ export function useWorkspaceDialogs() {
 
   const showWorktreeRemovalError = useCallback(async (error: unknown) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    await message(errorMessage, {
+    await showMessageDialog(errorMessage, {
       title: "Delete worktree failed",
       kind: "error",
     });

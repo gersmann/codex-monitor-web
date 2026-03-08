@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { subscribeAppServerEvents } from "@services/events";
 import { threadLiveSubscribe, threadLiveUnsubscribe } from "@services/tauri";
 import {
@@ -456,35 +455,35 @@ export function useRemoteThreadLiveConnection({
     window.addEventListener("blur", handleBlur);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    try {
-      const windowHandle = getCurrentWindow();
-      windowHandle
-        .listen("tauri://focus", handleFocus)
-        .then((unlisten) => {
+    void import("@tauri-apps/api/window")
+      .then(({ getCurrentWindow }) => {
+        const windowHandle = getCurrentWindow();
+        return Promise.allSettled([
+          windowHandle.listen("tauri://focus", handleFocus),
+          windowHandle.listen("tauri://blur", handleBlur),
+        ]);
+      })
+      .then((results) => {
+        const focusResult = results?.[0];
+        if (focusResult?.status === "fulfilled") {
           if (didCleanup) {
-            unlisten();
-            return;
+            focusResult.value();
+          } else {
+            unlistenWindowFocus = focusResult.value;
           }
-          unlistenWindowFocus = unlisten;
-        })
-        .catch(() => {
-          // Ignore non-Tauri environments.
-        });
-      windowHandle
-        .listen("tauri://blur", handleBlur)
-        .then((unlisten) => {
+        }
+        const blurResult = results?.[1];
+        if (blurResult?.status === "fulfilled") {
           if (didCleanup) {
-            unlisten();
-            return;
+            blurResult.value();
+          } else {
+            unlistenWindowBlur = blurResult.value;
           }
-          unlistenWindowBlur = unlisten;
-        })
-        .catch(() => {
-          // Ignore non-Tauri environments.
-        });
-    } catch {
-      // Ignore non-Tauri environments.
-    }
+        }
+      })
+      .catch(() => {
+        // Ignore non-Tauri environments.
+      });
 
     const ignoreDetachedEventsUntil = ignoreDetachedEventsUntilRef.current;
 

@@ -1,5 +1,4 @@
 import * as tauriCore from "@tauri-apps/api/core";
-import { openUrl as tauriOpenUrl } from "@tauri-apps/plugin-opener";
 
 function isVitestRuntime() {
   const processValue = (globalThis as { process?: { env?: Record<string, string | undefined> } })
@@ -21,7 +20,8 @@ export async function openExternalUrl(url: string): Promise<void> {
     tauriRuntime = true;
   }
   if (tauriRuntime) {
-    await tauriOpenUrl(url);
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(url);
     return;
   }
   if (typeof window !== "undefined") {

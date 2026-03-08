@@ -9,6 +9,8 @@ import {
 } from "react";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
+import Copy from "lucide-react/dist/esm/icons/copy";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
 import type {
   ConversationItem,
   OpenAppTarget,
@@ -18,6 +20,10 @@ import type {
 import { isPlanReadyTaggedMessage } from "../../../utils/internalPlanReadyMessages";
 import { PlanReadyFollowupMessage } from "../../app/components/PlanReadyFollowupMessage";
 import { RequestUserInputMessage } from "../../app/components/RequestUserInputMessage";
+import {
+  PopoverMenuItem,
+  PopoverSurface,
+} from "../../design-system/components/popover/PopoverPrimitives";
 import { useFileLinkOpener } from "../hooks/useFileLinkOpener";
 import {
   SCROLL_THRESHOLD_PX,
@@ -117,7 +123,18 @@ export const Messages = memo(function Messages({
         )?.request_id ?? null)
       : null;
   const scrollKey = `${scrollKeyForItems(items)}-${activeUserInputRequestId ?? "no-input"}`;
-  const { openFileLink, showFileLinkMenu } = useFileLinkOpener(
+  const {
+    openFileLink,
+    showFileLinkMenu,
+    fileLinkMenu,
+    fileLinkMenuRef,
+    openFileLinkFromMenu,
+    revealLinkedFile,
+    copyLinkedFileLink,
+    fileLinkMenuOpenLabel,
+    canOpenFileLinkFromMenu,
+    canRevealLinkedFile,
+  } = useFileLinkOpener(
     workspacePath,
     openTargets,
     selectedOpenAppId,
@@ -538,6 +555,48 @@ export const Messages = memo(function Messages({
             <span className="working-spinner" aria-hidden />
             <span className="messages-loading-label">Loading…</span>
           </div>
+        </div>
+      )}
+      {fileLinkMenu && (
+        <div
+          ref={fileLinkMenuRef}
+          className="messages-file-link-menu-shell"
+          style={{
+            position: "fixed",
+            top: fileLinkMenu.top,
+            left: fileLinkMenu.left,
+            zIndex: 40,
+          }}
+        >
+          <PopoverSurface className="messages-file-link-menu" role="menu">
+            <PopoverMenuItem
+              onClick={() => {
+                void openFileLinkFromMenu();
+              }}
+              disabled={!canOpenFileLinkFromMenu}
+              icon={<FolderOpen size={14} aria-hidden />}
+            >
+              {fileLinkMenuOpenLabel}
+            </PopoverMenuItem>
+            {canRevealLinkedFile && (
+              <PopoverMenuItem
+                onClick={() => {
+                  void revealLinkedFile();
+                }}
+                icon={<FolderOpen size={14} aria-hidden />}
+              >
+                Reveal in File Manager
+              </PopoverMenuItem>
+            )}
+            <PopoverMenuItem
+              onClick={() => {
+                void copyLinkedFileLink();
+              }}
+              icon={<Copy size={14} aria-hidden />}
+            >
+              Copy Link
+            </PopoverMenuItem>
+          </PopoverSurface>
         </div>
       )}
       <div ref={bottomRef} />

@@ -1046,6 +1046,15 @@
   max-width: 32ch;
 }
 
+.messages-file-link-menu-shell {
+  pointer-events: none;
+}
+
+.messages-file-link-menu {
+  min-width: 220px;
+  pointer-events: auto;
+}
+
 
 .message .markdown-codeblock {
   border: 1px solid var(--border-stronger);

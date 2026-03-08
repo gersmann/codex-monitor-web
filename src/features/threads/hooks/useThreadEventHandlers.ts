@@ -57,6 +57,24 @@ export function getAppServerDebugLabel(method: string) {
   if (method === "item/mcpToolCall/progress") {
     return "mcp tool progress";
   }
+  if (method === "fuzzyFileSearch/sessionUpdated") {
+    return "fuzzy file search updated";
+  }
+  if (method === "fuzzyFileSearch/sessionCompleted") {
+    return "fuzzy file search completed";
+  }
+  if (method === "mcpServer/oauthLogin/completed") {
+    return "mcp oauth completed";
+  }
+  if (method === "rawResponseItem/completed") {
+    return "raw response completed";
+  }
+  if (method === "windows/worldWritableWarning") {
+    return "windows writable warning";
+  }
+  if (method === "windowsSandbox/setupCompleted") {
+    return "windows sandbox setup completed";
+  }
   return method || "event";
 }
 

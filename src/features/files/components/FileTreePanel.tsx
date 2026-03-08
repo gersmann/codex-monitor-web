@@ -2,23 +2,28 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Menu, MenuItem } from "@tauri-apps/api/menu";
-import { LogicalPosition } from "@tauri-apps/api/dpi";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import Copy from "lucide-react/dist/esm/icons/copy";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import ChevronsUpDown from "lucide-react/dist/esm/icons/chevrons-up-down";
 import File from "lucide-react/dist/esm/icons/file";
 import Folder from "lucide-react/dist/esm/icons/folder";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
 import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import Search from "lucide-react/dist/esm/icons/search";
 import type { PanelTabId } from "../../layout/components/PanelTabs";
 import { PanelShell } from "../../layout/components/PanelShell";
+import { useMenuController } from "../../app/hooks/useMenuController";
+import {
+  PopoverMenuItem,
+  PopoverSurface,
+} from "../../design-system/components/popover/PopoverPrimitives";
 import {
   PanelMeta,
   PanelSearchField,
 } from "../../design-system/components/panel/PanelPrimitives";
 import { readWorkspaceFile } from "../../../services/tauri";
+import { isWebCompanionRuntime } from "../../../services/runtime";
+import { pushErrorToast } from "../../../services/toasts";
 import type { OpenAppTarget } from "../../../types";
 import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { languageFromPath } from "../../../utils/syntax";
@@ -70,7 +75,14 @@ type FileTreeRowEntry = {
   isExpanded: boolean;
 };
 
+type FileTreeMenuState = {
+  path: string;
+  top: number;
+  left: number;
+};
+
 const FILE_TREE_ROW_HEIGHT = 28;
+const FILE_TREE_MENU_WIDTH = 220;
 
 function buildTree(entries: FileEntry[]): { nodes: FileTreeNode[]; folderPaths: Set<string> } {
   const root = new Map<string, FileTreeBuildNode>();
@@ -193,12 +205,21 @@ export function FileTreePanel({
     start: number;
     end: number;
   } | null>(null);
+  const [fileMenu, setFileMenu] = useState<FileTreeMenuState | null>(null);
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const dragAnchorLineRef = useRef<number | null>(null);
   const dragMovedRef = useRef(false);
   const hasManualToggle = useRef(false);
   const showLoading = isLoading && files.length === 0;
   const listRef = useRef<HTMLDivElement | null>(null);
+  const fileMenuController = useMenuController({
+    open: fileMenu !== null,
+    onOpenChange: (open) => {
+      if (!open) {
+        setFileMenu(null);
+      }
+    },
+  });
   const debouncedQuery = useDebouncedValue(query, 150);
   const normalizedQuery = debouncedQuery.trim().toLowerCase();
   const modifiedPathSet = useMemo(() => new Set(modifiedFiles), [modifiedFiles]);
@@ -288,6 +309,10 @@ export function FileTreePanel({
     dragMovedRef.current = false;
   }, []);
 
+  const closeFileMenu = useCallback(() => {
+    setFileMenu(null);
+  }, []);
+
   useEffect(() => {
     if (!previewPath) {
       return;
@@ -335,6 +360,22 @@ export function FileTreePanel({
       return joinWorkspacePath(workspacePath, relativePath);
     },
     [workspacePath],
+  );
+
+  const showInFileManager = useCallback(
+    async (relativePath: string) => {
+      try {
+        const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
+        await revealItemInDir(resolvePath(relativePath));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        pushErrorToast({
+          title: `Couldn't show file in ${revealInFileManagerLabel()}`,
+          message,
+        });
+      }
+    },
+    [resolvePath],
   );
 
   const previewImageSrc = useMemo(() => {
@@ -546,36 +587,19 @@ export function FileTreePanel({
     closePreview,
   ]);
 
-  const showMenu = useCallback(
-    async (event: MouseEvent<HTMLButtonElement>, relativePath: string) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const menu = await Menu.new({
-        items: [
-          await MenuItem.new({
-            text: "Add to chat",
-            enabled: canInsertText,
-            action: async () => {
-              if (!canInsertText) {
-                return;
-              }
-              onInsertText?.(relativePath);
-            },
-          }),
-          await MenuItem.new({
-            text: revealInFileManagerLabel(),
-            action: async () => {
-              await revealItemInDir(resolvePath(relativePath));
-            },
-          }),
-        ],
-      });
-      const window = getCurrentWindow();
-      const position = new LogicalPosition(event.clientX, event.clientY);
-      await menu.popup(position, window);
-    },
-    [canInsertText, onInsertText, resolvePath],
-  );
+  const showMenu = useCallback((event: MouseEvent<HTMLButtonElement>, relativePath: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const margin = 12;
+    setFileMenu({
+      path: relativePath,
+      top: Math.min(event.clientY, window.innerHeight - margin),
+      left: Math.min(
+        Math.max(event.clientX, margin),
+        Math.max(margin, window.innerWidth - FILE_TREE_MENU_WIDTH - margin),
+      ),
+    });
+  }, []);
 
   const renderRow = (entry: FileTreeRowEntry) => {
     const { node, depth, isFolder, isExpanded } = entry;
@@ -642,6 +666,8 @@ export function FileTreePanel({
       </div>
     );
   };
+
+  const canShowInFileManager = !isWebCompanionRuntime();
 
   return (
     <PanelShell
@@ -797,6 +823,56 @@ export function FileTreePanel({
             document.body,
           )
         : null}
+      {fileMenu &&
+        createPortal(
+          <div
+            ref={fileMenuController.containerRef}
+            className="file-tree-menu-shell"
+            style={{
+              position: "fixed",
+              top: fileMenu.top,
+              left: fileMenu.left,
+              zIndex: 40,
+            }}
+          >
+            <PopoverSurface className="file-tree-menu" role="menu">
+              <PopoverMenuItem
+                onClick={() => {
+                  closeFileMenu();
+                  if (!canInsertText) {
+                    return;
+                  }
+                  onInsertText?.(fileMenu.path);
+                }}
+                disabled={!canInsertText}
+                icon={<Plus size={14} aria-hidden />}
+              >
+                Add to chat
+              </PopoverMenuItem>
+              {canShowInFileManager ? (
+                <PopoverMenuItem
+                  onClick={() => {
+                    closeFileMenu();
+                    void showInFileManager(fileMenu.path);
+                  }}
+                  icon={<FolderOpen size={14} aria-hidden />}
+                >
+                  {revealInFileManagerLabel()}
+                </PopoverMenuItem>
+              ) : null}
+              <PopoverMenuItem
+                onClick={() => {
+                  closeFileMenu();
+                  void navigator.clipboard.writeText(fileMenu.path);
+                }}
+                icon={<Copy size={14} aria-hidden />}
+              >
+                Copy file path
+              </PopoverMenuItem>
+            </PopoverSurface>
+          </div>,
+          document.body,
+        )}
     </PanelShell>
   );
 }

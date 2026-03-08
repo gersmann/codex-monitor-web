@@ -1,5 +1,4 @@
 import * as tauriCore from "@tauri-apps/api/core";
-import { open as tauriOpen, save as tauriSave } from "@tauri-apps/plugin-dialog";
 import type { Options as NotificationOptions } from "@tauri-apps/plugin-notification";
 import type {
   AppSettings,
@@ -188,13 +187,23 @@ async function pickBrowserFilesAsDataUrls(options?: {
   );
 }
 
+async function openTauriDialog(options: Parameters<typeof import("@tauri-apps/plugin-dialog").open>[0]) {
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  return open(options);
+}
+
+async function saveTauriDialog(options: Parameters<typeof import("@tauri-apps/plugin-dialog").save>[0]) {
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  return save(options);
+}
+
 async function open(options: {
   directory?: boolean;
   multiple?: boolean;
   filters?: { name: string; extensions: string[] }[];
 }): Promise<DialogSelection> {
   if (isTauriRuntime()) {
-    return tauriOpen(options);
+    return openTauriDialog(options);
   }
   if (options.directory) {
     return promptForWorkspacePaths(options.multiple ?? false);
@@ -214,7 +223,7 @@ async function save(_options: {
   filters?: { name: string; extensions: string[] }[];
 }): Promise<string | null> {
   if (isTauriRuntime()) {
-    return tauriSave(_options);
+    return saveTauriDialog(_options);
   }
   return null;
 }

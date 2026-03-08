@@ -64,6 +64,8 @@ subscriptions.
 - `configWarning`
 - `deprecationNotice`
 - `error`
+- `fuzzyFileSearch/sessionCompleted`
+- `fuzzyFileSearch/sessionUpdated`
 - `item/agentMessage/delta`
 - `item/commandExecution/outputDelta`
 - `item/commandExecution/terminalInteraction`
@@ -75,7 +77,9 @@ subscriptions.
 - `item/reasoning/summaryTextDelta`
 - `item/reasoning/textDelta`
 - `item/started`
+- `mcpServer/oauthLogin/completed`
 - `model/rerouted`
+- `rawResponseItem/completed`
 - `serverRequest/resolved`
 - `skills/changed`
 - `thread/archived`
@@ -89,12 +93,25 @@ subscriptions.
 - `turn/diff/updated`
 - `turn/plan/updated`
 - `turn/started`
+- `windows/worldWritableWarning`
+- `windowsSandbox/setupCompleted`
 
 Turn snapshot handling status:
 
 - `turn/started` and `turn/completed` are not treated as flag-only lifecycle events.
 - CodexMonitor consumes the embedded `turn` payload when present and hydrates thread items from the authoritative turn snapshot.
 - That snapshot path is part of the normal live-thread UI update flow and is used to clear stale processing state without requiring manual sync.
+
+Generic routing status:
+
+- `fuzzyFileSearch/sessionCompleted`
+- `fuzzyFileSearch/sessionUpdated`
+- `mcpServer/oauthLogin/completed`
+- `rawResponseItem/completed`
+- `windows/worldWritableWarning`
+- `windowsSandbox/setupCompleted`
+
+These notifications are now recognized, routed through the frontend app-server event path, and visible to generic debug/event consumers even though CodexMonitor does not yet render dedicated UI for them.
 
 ## Additional Stream Methods Handled In CodexMonitor
 
@@ -127,18 +144,12 @@ CodexMonitor status:
 Compared against Codex app-server protocol v2 notifications, the following
 events are currently not routed:
 
-- `fuzzyFileSearch/sessionCompleted`
-- `fuzzyFileSearch/sessionUpdated`
-- `mcpServer/oauthLogin/completed`
-- `rawResponseItem/completed`
 - `thread/compacted` (deprecated; intentionally not routed)
 - `thread/realtime/closed`
 - `thread/realtime/error`
 - `thread/realtime/itemAdded`
 - `thread/realtime/outputAudio/delta`
 - `thread/realtime/started`
-- `windows/worldWritableWarning`
-- `windowsSandbox/setupCompleted`
 
 ## Supported Requests (CodexMonitor -> App-Server, v2)
 

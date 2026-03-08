@@ -302,7 +302,6 @@ export function getResumedTurnState(
   const turns = Array.isArray(thread.turns)
     ? (thread.turns as Array<Record<string, unknown>>)
     : [];
-  let sawTerminalStatus = false;
   let sawUnknownStatus = false;
   for (let index = turns.length - 1; index >= 0; index -= 1) {
     const turn = turns[index];
@@ -328,15 +327,18 @@ export function getResumedTurnState(
       continue;
     }
     if (status === "terminal") {
-      sawTerminalStatus = true;
-      continue;
+      return {
+        activeTurnId: null,
+        activeTurnStartedAtMs: null,
+        confidentNoActiveTurn: !sawUnknownStatus,
+      };
     }
     sawUnknownStatus = true;
   }
   return {
     activeTurnId: null,
     activeTurnStartedAtMs: null,
-    confidentNoActiveTurn: sawTerminalStatus && !sawUnknownStatus,
+    confidentNoActiveTurn: false,
   };
 }
 

@@ -398,6 +398,56 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
     });
   });
 
+  it("does not rewrite a live in-progress turn when some streamed items still lack statuses", async () => {
+    const { server, workspace } = await createServerFixture();
+    await server.initialize();
+    const resumeThread = vi.fn().mockResolvedValue({
+      thread: {
+        id: "sdk-thread-1",
+        cwd: workspace.path,
+        preview: "Thread One",
+        createdAt: 1,
+        updatedAt: 3,
+        status: { type: "idle" },
+        activeTurnId: null,
+        turns: [
+          {
+            id: "turn-live",
+            status: "inProgress",
+            items: [
+              { id: "item-1", type: "reasoning", status: "completed" },
+              { id: "item-2", type: "agentMessage" },
+            ],
+          },
+        ],
+      },
+    });
+    mockAppServerClient(server, { resumeThread });
+
+    const result = await server.handleRpc("resume_thread", {
+      workspaceId: "ws-1",
+      threadId: "sdk-thread-1",
+    });
+
+    expect(result).toEqual({
+      thread: expect.objectContaining({
+        id: "sdk-thread-1",
+        activeTurnId: null,
+        status: { type: "idle" },
+        turns: [
+          expect.objectContaining({
+            id: "turn-live",
+            status: "inProgress",
+            items: [
+              expect.objectContaining({ id: "item-1", status: "completed" }),
+              expect.objectContaining({ id: "item-2" }),
+            ],
+          }),
+        ],
+      }),
+    });
+  });
+
   it("updates stored thread items when item notifications carry threadId on the item payload", async () => {
     const { server, storage, thread } = await createServerFixture();
     await storage.writeThreads([
@@ -1209,6 +1259,110 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
       },
       topModels: [],
     });
+  });
+
+  it("reuses a cached local usage snapshot for identical requests", async () => {
+    const { server, workspace } = await createServerFixture();
+    const codexHome = await fs.mkdtemp(path.join(os.tmpdir(), "codex-monitor-codex-home-"));
+    tempDirs.push(codexHome);
+    vi.stubEnv("CODEX_HOME", codexHome);
+
+    const now = new Date();
+    const year = `${now.getFullYear()}`;
+    const month = `${now.getMonth() + 1}`.padStart(2, "0");
+    const day = `${now.getDate()}`.padStart(2, "0");
+    const sessionDir = path.join(codexHome, "sessions", year, month, day);
+    await fs.mkdir(sessionDir, { recursive: true });
+    await fs.writeFile(
+      path.join(sessionDir, "session.jsonl"),
+      [
+        JSON.stringify({
+          type: "session_meta",
+          payload: { cwd: workspace.path },
+        }),
+        JSON.stringify({
+          timestamp: now.toISOString(),
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: {
+                input_tokens: 10,
+                cached_input_tokens: 0,
+                output_tokens: 5,
+              },
+            },
+          },
+        }),
+      ].join("\n"),
+      "utf8",
+    );
+
+    const readdirSpy = vi.spyOn(fs, "readdir");
+
+    const first = await server.handleRpc("local_usage_snapshot", {
+      days: 7,
+      workspacePath: workspace.path,
+    });
+    const second = await server.handleRpc("local_usage_snapshot", {
+      days: 7,
+      workspacePath: workspace.path,
+    });
+
+    expect(first).toEqual(second);
+    expect(readdirSpy).toHaveBeenCalledTimes(7);
+  });
+
+  it("deduplicates concurrent local usage snapshot requests", async () => {
+    const { server, workspace } = await createServerFixture();
+    const codexHome = await fs.mkdtemp(path.join(os.tmpdir(), "codex-monitor-codex-home-"));
+    tempDirs.push(codexHome);
+    vi.stubEnv("CODEX_HOME", codexHome);
+
+    const now = new Date();
+    const year = `${now.getFullYear()}`;
+    const month = `${now.getMonth() + 1}`.padStart(2, "0");
+    const day = `${now.getDate()}`.padStart(2, "0");
+    const sessionDir = path.join(codexHome, "sessions", year, month, day);
+    await fs.mkdir(sessionDir, { recursive: true });
+    await fs.writeFile(
+      path.join(sessionDir, "session.jsonl"),
+      [
+        JSON.stringify({
+          type: "session_meta",
+          payload: { cwd: workspace.path },
+        }),
+        JSON.stringify({
+          timestamp: now.toISOString(),
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: {
+                input_tokens: 10,
+                cached_input_tokens: 0,
+                output_tokens: 5,
+              },
+            },
+          },
+        }),
+      ].join("\n"),
+      "utf8",
+    );
+
+    const readdirSpy = vi.spyOn(fs, "readdir");
+
+    const [first, second] = await Promise.all([
+      server.handleRpc("local_usage_snapshot", {
+        days: 7,
+        workspacePath: workspace.path,
+      }),
+      server.handleRpc("local_usage_snapshot", {
+        days: 7,
+        workspacePath: workspace.path,
+      }),
+    ]);
+
+    expect(first).toEqual(second);
+    expect(readdirSpy).toHaveBeenCalledTimes(7);
   });
 
   it("routes model_list through codex app-server", async () => {
