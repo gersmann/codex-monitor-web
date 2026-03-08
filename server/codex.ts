@@ -1,9 +1,20 @@
 import { randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { execFile, spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 import { createTwoFilesPatch } from "diff";
+import {
+  createAgent as createManagedAgent,
+  deleteAgent as deleteManagedAgent,
+  getAgentsSettings,
+  readAgentConfigToml,
+  setAgentsCoreSettings,
+  updateAgent as updateManagedAgent,
+  writeAgentConfigToml,
+} from "./agentsConfig.js";
 import { buildAppServerEvent } from "./appServer.js";
 import {
   isHttpUrl,
@@ -11,7 +22,6 @@ import {
 } from "./parity.js";
 import { CompanionStorage } from "./storage.js";
 import {
-  Codex,
   CodexAppServerClient,
   type AppServerNotificationMessage,
 } from "./vendor/codexSdk.js";
@@ -43,23 +53,6 @@ type BroadcastMessage = {
 
 type BroadcastFn = (message: BroadcastMessage) => void;
 
-type AgentSummary = {
-  name: string;
-  description: string | null;
-  developerInstructions: string | null;
-  configFile: string;
-  resolvedPath: string;
-  managedByApp: boolean;
-  fileExists: boolean;
-};
-
-type AgentsState = {
-  multiAgentEnabled: boolean;
-  maxThreads: number;
-  maxDepth: number;
-  agents: AgentSummary[];
-};
-
 type PromptEntry = {
   name: string;
   path: string;
@@ -74,10 +67,23 @@ type FileSnapshot = {
   content: string;
 };
 
-const DEFAULT_AGENT_MAX_THREADS = 6;
-const DEFAULT_AGENT_MAX_DEPTH = 1;
+type DailyUsageTotals = {
+  input: number;
+  cached: number;
+  output: number;
+  agentMs: number;
+  agentRuns: number;
+};
+
+type UsageTotals = {
+  input: number;
+  cached: number;
+  output: number;
+};
+
 const APP_SERVER_INIT_TIMEOUT_MS = 15_000;
 const APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
+const MAX_ACTIVITY_GAP_MS = 2 * 60 * 1000;
 const APP_SERVER_SOURCE_KINDS = [
   "cli",
   "vscode",
@@ -98,6 +104,16 @@ const APP_SERVER_GLOBAL_NOTIFICATION_METHODS = new Set([
   "model/rerouted",
   "skills/changed",
 ]);
+
+const RUN_METADATA_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    title: { type: "string" },
+    worktreeName: { type: "string" },
+  },
+  required: ["title", "worktreeName"],
+  additionalProperties: false,
+} as const;
 function notFound(message: string): RpcErrorShape {
   return { error: { message } };
 }
@@ -239,6 +255,147 @@ export function parseRunMetadataValue(raw: string) {
     title,
     worktreeName,
   };
+}
+
+function buildCommitMessagePrompt(diff: string, template: string) {
+  const defaultTemplate =
+    "Generate a concise git commit message for the following changes. " +
+    "Follow conventional commit format (e.g., feat:, fix:, refactor:, docs:, etc.). " +
+    "Keep the summary line under 72 characters. " +
+    "Only output the commit message, nothing else.\n\nChanges:\n{diff}";
+  const base = template.trim() ? template : defaultTemplate;
+  return base.includes("{diff}") ? base.replace("{diff}", diff) : `${base}\n\nChanges:\n${diff}`;
+}
+
+function buildCommitMessagePromptForDiff(diff: string, template: string) {
+  if (!diff.trim()) {
+    throw new Error("No changes to generate commit message for");
+  }
+  return buildCommitMessagePrompt(diff, template);
+}
+
+function buildAgentDescriptionPrompt(description: string) {
+  return (
+    "You generate custom coding-agent configuration text.\n" +
+    "Return ONLY a JSON object with exactly these keys:\n" +
+    "- description: short role summary, one sentence, 4-12 words.\n" +
+    "- developerInstructions: multiline instructions for the agent.\n\n" +
+    "Requirements:\n" +
+    "- Preserve the user's intent, even when the input is short.\n" +
+    "- Keep description concise and practical.\n" +
+    "- developerInstructions should be actionable and specific.\n" +
+    "- developerInstructions must be 3-8 lines.\n" +
+    "- Do not include markdown fences.\n\n" +
+    "Example:\n" +
+    '{"description":"Investigates flaky tests and stabilizes suites","developerInstructions":"Investigate flaky test failures and identify root causes.\\nReproduce failures deterministically before proposing changes.\\nPrefer minimal, safe fixes and add targeted regression coverage."}\n\n' +
+    "User prompt:\n" +
+    description
+  );
+}
+
+function parseAgentDescriptionValue(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error("No agent configuration was generated");
+  }
+  const cleaned = trimmed
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("```"))
+    .join("\n");
+  if (!cleaned.trim()) {
+    throw new Error("No agent configuration was generated");
+  }
+  const parsed = extractJsonValue(cleaned);
+  if (parsed) {
+    const description = trimString(parsed.description);
+    const developerInstructions =
+      trimString(parsed.developerInstructions) || trimString(parsed.developer_instructions);
+    if (description || developerInstructions) {
+      return {
+        description,
+        developerInstructions,
+      };
+    }
+  }
+
+  const cleanedLines = cleaned
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  let description: string | null = null;
+  let developerInstructions: string | null = null;
+  for (let index = 0; index < cleanedLines.length; index += 1) {
+    const line = cleanedLines[index]!;
+    const separator = line.indexOf(":");
+    if (separator < 0) {
+      continue;
+    }
+    const key = line.slice(0, separator).trim().toLowerCase();
+    const value = line.slice(separator + 1).trim();
+    if (key === "description" && !description && value) {
+      description = value;
+      continue;
+    }
+    if (
+      (key === "developer instructions" || key === "developer_instructions" || key === "instructions") &&
+      !developerInstructions
+    ) {
+      const trailing = cleanedLines.slice(index + 1).join("\n").trim();
+      const combined = value && trailing ? `${value}\n${trailing}` : value || trailing;
+      if (combined.trim()) {
+        developerInstructions = combined;
+      }
+    }
+  }
+  if (description || developerInstructions) {
+    return {
+      description: description ?? "",
+      developerInstructions: developerInstructions ?? "",
+    };
+  }
+
+  const newlineIndex = cleaned.indexOf("\n");
+  if (newlineIndex >= 0) {
+    const first = cleaned.slice(0, newlineIndex).trim();
+    const rest = cleaned.slice(newlineIndex + 1).trim();
+    if (first || rest) {
+      return {
+        description: first,
+        developerInstructions: rest,
+      };
+    }
+  }
+
+  return {
+    description: cleaned,
+    developerInstructions: "",
+  };
+}
+
+function findLastAgentMessageText(rawThread: JsonRecord, expectedTurnId: string | null) {
+  const rawTurns = Array.isArray(rawThread.turns) ? (rawThread.turns as JsonRecord[]) : [];
+  const targetTurn =
+    (expectedTurnId
+      ? rawTurns.find((turn) => trimString(turn.id) === expectedTurnId) ?? null
+      : null) ??
+    rawTurns[rawTurns.length - 1] ??
+    null;
+  if (!targetTurn) {
+    throw new Error("Detached Codex turn completed without a turn payload.");
+  }
+  const items = Array.isArray(targetTurn.items) ? (targetTurn.items as JsonRecord[]) : [];
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]!;
+    if (trimString(item.type) !== "agentMessage") {
+      continue;
+    }
+    const text = trimString(item.text);
+    if (text) {
+      return text;
+    }
+  }
+  throw new Error("Detached Codex turn completed without an agent message.");
 }
 
 function isInlineImageUrl(image: string) {
@@ -454,6 +611,446 @@ function parseCodexArgs(value: string | null) {
   });
 }
 
+function buildCodexPathEnv(codexBin: string | null) {
+  const resolved = trimString(codexBin);
+  if (!resolved || (!resolved.includes("/") && !resolved.includes("\\"))) {
+    return null;
+  }
+  const codexDir = path.dirname(path.resolve(resolved));
+  const currentPath = process.env.PATH ?? "";
+  return currentPath ? `${codexDir}${path.delimiter}${currentPath}` : codexDir;
+}
+
+function formatLocalDayKey(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function makeDayKeys(days: number) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const keys: string[] = [];
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - offset);
+    keys.push(formatLocalDayKey(date));
+  }
+  return keys;
+}
+
+function dayDirForKey(root: string, dayKey: string) {
+  const [year = "1970", month = "01", day = "01"] = dayKey.split("-");
+  return path.join(root, year, month, day);
+}
+
+function dayKeyForTimestampMs(timestampMs: number) {
+  if (!Number.isFinite(timestampMs) || timestampMs <= 0) {
+    return null;
+  }
+  return formatLocalDayKey(new Date(timestampMs));
+}
+
+function readTimestampMs(value: JsonRecord) {
+  const raw = value.timestamp;
+  if (typeof raw === "string") {
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) {
+    return null;
+  }
+  return raw < 1_000_000_000_000 ? raw * 1000 : raw;
+}
+
+function pathMatchesWorkspace(cwd: string, workspacePath: string) {
+  const normalizedCwd = normalizeRootPath(cwd);
+  const normalizedWorkspace = normalizeRootPath(workspacePath);
+  return normalizedCwd === normalizedWorkspace || normalizedCwd.startsWith(`${normalizedWorkspace}/`);
+}
+
+function extractCwd(value: JsonRecord) {
+  const payload =
+    value.payload && typeof value.payload === "object" && !Array.isArray(value.payload)
+      ? (value.payload as JsonRecord)
+      : null;
+  return payload ? toNullableString(payload.cwd) : null;
+}
+
+function extractModelFromTurnContext(value: JsonRecord) {
+  const payload =
+    value.payload && typeof value.payload === "object" && !Array.isArray(value.payload)
+      ? (value.payload as JsonRecord)
+      : null;
+  if (!payload) {
+    return null;
+  }
+  return (
+    toNullableString(payload.model) ||
+    (payload.info && typeof payload.info === "object" && !Array.isArray(payload.info)
+      ? toNullableString((payload.info as JsonRecord).model)
+      : null)
+  );
+}
+
+function extractModelFromTokenCount(value: JsonRecord) {
+  const payload =
+    value.payload && typeof value.payload === "object" && !Array.isArray(value.payload)
+      ? (value.payload as JsonRecord)
+      : null;
+  const info =
+    payload?.info && typeof payload.info === "object" && !Array.isArray(payload.info)
+      ? (payload.info as JsonRecord)
+      : null;
+  return (
+    toNullableString(info?.model) ||
+    toNullableString(info?.model_name) ||
+    toNullableString(payload?.model) ||
+    toNullableString(value.model)
+  );
+}
+
+function readUsageValue(map: JsonRecord | null, keys: string[]) {
+  for (const key of keys) {
+    const value = map?.[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return Math.trunc(value);
+    }
+  }
+  return 0;
+}
+
+function extractTokenUsageInfo(value: JsonRecord) {
+  const payload =
+    value.payload && typeof value.payload === "object" && !Array.isArray(value.payload)
+      ? (value.payload as JsonRecord)
+      : null;
+  const info =
+    payload?.info && typeof payload.info === "object" && !Array.isArray(payload.info)
+      ? (payload.info as JsonRecord)
+      : null;
+  if (!info) {
+    return null;
+  }
+  const totalUsage =
+    info.total_token_usage &&
+    typeof info.total_token_usage === "object" &&
+    !Array.isArray(info.total_token_usage)
+      ? (info.total_token_usage as JsonRecord)
+      : info.totalTokenUsage &&
+          typeof info.totalTokenUsage === "object" &&
+          !Array.isArray(info.totalTokenUsage)
+        ? (info.totalTokenUsage as JsonRecord)
+        : null;
+  if (totalUsage) {
+    return {
+      input: readUsageValue(totalUsage, ["input_tokens", "inputTokens"]),
+      cached: readUsageValue(totalUsage, [
+        "cached_input_tokens",
+        "cache_read_input_tokens",
+        "cachedInputTokens",
+        "cacheReadInputTokens",
+      ]),
+      output: readUsageValue(totalUsage, ["output_tokens", "outputTokens"]),
+      usedTotal: true,
+    };
+  }
+  const lastUsage =
+    info.last_token_usage &&
+    typeof info.last_token_usage === "object" &&
+    !Array.isArray(info.last_token_usage)
+      ? (info.last_token_usage as JsonRecord)
+      : info.lastTokenUsage &&
+          typeof info.lastTokenUsage === "object" &&
+          !Array.isArray(info.lastTokenUsage)
+        ? (info.lastTokenUsage as JsonRecord)
+        : null;
+  if (!lastUsage) {
+    return null;
+  }
+  return {
+    input: readUsageValue(lastUsage, ["input_tokens", "inputTokens"]),
+    cached: readUsageValue(lastUsage, [
+      "cached_input_tokens",
+      "cache_read_input_tokens",
+      "cachedInputTokens",
+      "cacheReadInputTokens",
+    ]),
+    output: readUsageValue(lastUsage, ["output_tokens", "outputTokens"]),
+    usedTotal: false,
+  };
+}
+
+function trackActivity(
+  daily: Map<string, DailyUsageTotals>,
+  lastActivityMs: number | null,
+  timestampMs: number,
+) {
+  if (lastActivityMs !== null) {
+    const delta = timestampMs - lastActivityMs;
+    if (delta > 0 && delta <= MAX_ACTIVITY_GAP_MS) {
+      const dayKey = dayKeyForTimestampMs(timestampMs);
+      if (dayKey) {
+        daily.get(dayKey)!.agentMs += delta;
+      }
+    }
+  }
+  return timestampMs;
+}
+
+async function scanLocalUsageFile(
+  filePath: string,
+  daily: Map<string, DailyUsageTotals>,
+  modelTotals: Map<string, number>,
+  workspacePath: string | null,
+) {
+  const lines = createInterface({
+    input: createReadStream(filePath, { encoding: "utf8" }),
+    crlfDelay: Number.POSITIVE_INFINITY,
+  });
+  let previousTotals: UsageTotals | null = null;
+  let currentModel: string | null = null;
+  let lastActivityMs: number | null = null;
+  const seenRuns = new Set<number>();
+  let matchKnown = workspacePath === null;
+  let matchesWorkspace = workspacePath === null;
+
+  try {
+    for await (const line of lines) {
+      if (line.length > 512_000) {
+        continue;
+      }
+      let value: JsonRecord;
+      try {
+        const parsed = JSON.parse(line) as unknown;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          continue;
+        }
+        value = parsed as JsonRecord;
+      } catch {
+        continue;
+      }
+
+      const entryType = trimString(value.type);
+      if (entryType === "session_meta" || entryType === "turn_context") {
+        const cwd = extractCwd(value);
+        if (cwd && workspacePath) {
+          matchesWorkspace = pathMatchesWorkspace(cwd, workspacePath);
+          matchKnown = true;
+          if (!matchesWorkspace) {
+            break;
+          }
+        }
+      }
+
+      if (entryType === "turn_context") {
+        currentModel = extractModelFromTurnContext(value) ?? currentModel;
+        continue;
+      }
+      if (entryType === "session_meta") {
+        continue;
+      }
+      if (!matchesWorkspace) {
+        if (matchKnown) {
+          break;
+        }
+        continue;
+      }
+      if (!matchKnown) {
+        continue;
+      }
+
+      if (entryType === "event_msg" || entryType === "") {
+        const payload =
+          value.payload && typeof value.payload === "object" && !Array.isArray(value.payload)
+            ? (value.payload as JsonRecord)
+            : null;
+        const payloadType = trimString(payload?.type);
+
+        if (payloadType === "agent_message") {
+          const timestampMs = readTimestampMs(value);
+          if (timestampMs !== null) {
+            if (!seenRuns.has(timestampMs)) {
+              seenRuns.add(timestampMs);
+              const dayKey = dayKeyForTimestampMs(timestampMs);
+              if (dayKey) {
+                daily.get(dayKey)!.agentRuns += 1;
+              }
+            }
+            lastActivityMs = trackActivity(daily, lastActivityMs, timestampMs);
+          }
+          continue;
+        }
+
+        if (payloadType === "agent_reasoning") {
+          const timestampMs = readTimestampMs(value);
+          if (timestampMs !== null) {
+            lastActivityMs = trackActivity(daily, lastActivityMs, timestampMs);
+          }
+          continue;
+        }
+
+        if (payloadType !== "token_count") {
+          continue;
+        }
+
+        const tokenUsage = extractTokenUsageInfo(value);
+        if (!tokenUsage) {
+          continue;
+        }
+        let delta: UsageTotals = {
+          input: tokenUsage.input,
+          cached: tokenUsage.cached,
+          output: tokenUsage.output,
+        };
+        if (tokenUsage.usedTotal) {
+          const previous: UsageTotals = previousTotals ?? { input: 0, cached: 0, output: 0 };
+          delta = {
+            input: Math.max(0, tokenUsage.input - previous.input),
+            cached: Math.max(0, tokenUsage.cached - previous.cached),
+            output: Math.max(0, tokenUsage.output - previous.output),
+          };
+          previousTotals = {
+            input: tokenUsage.input,
+            cached: tokenUsage.cached,
+            output: tokenUsage.output,
+          };
+        } else {
+          const previous: UsageTotals = previousTotals ?? { input: 0, cached: 0, output: 0 };
+          previousTotals = {
+            input: previous.input + delta.input,
+            cached: previous.cached + delta.cached,
+            output: previous.output + delta.output,
+          };
+        }
+        if (delta.input === 0 && delta.cached === 0 && delta.output === 0) {
+          continue;
+        }
+        const timestampMs = readTimestampMs(value);
+        if (timestampMs !== null) {
+          const dayKey = dayKeyForTimestampMs(timestampMs);
+          if (dayKey) {
+            const totals = daily.get(dayKey)!;
+            const cached = Math.min(delta.cached, delta.input);
+            totals.input += delta.input;
+            totals.cached += cached;
+            totals.output += delta.output;
+            const model = currentModel ?? extractModelFromTokenCount(value) ?? "unknown";
+            modelTotals.set(model, (modelTotals.get(model) ?? 0) + delta.input + delta.output);
+          }
+          lastActivityMs = trackActivity(daily, lastActivityMs, timestampMs);
+        }
+        continue;
+      }
+
+      if (entryType === "response_item") {
+        const payload =
+          value.payload && typeof value.payload === "object" && !Array.isArray(value.payload)
+            ? (value.payload as JsonRecord)
+            : null;
+        const role = trimString(payload?.role);
+        const payloadType = trimString(payload?.type);
+        const timestampMs = readTimestampMs(value);
+        if (timestampMs === null) {
+          continue;
+        }
+        if (role === "assistant") {
+          if (!seenRuns.has(timestampMs)) {
+            seenRuns.add(timestampMs);
+            const dayKey = dayKeyForTimestampMs(timestampMs);
+            if (dayKey) {
+              daily.get(dayKey)!.agentRuns += 1;
+            }
+          }
+          lastActivityMs = trackActivity(daily, lastActivityMs, timestampMs);
+        } else if (payloadType !== "message") {
+          lastActivityMs = trackActivity(daily, lastActivityMs, timestampMs);
+        }
+      }
+    }
+  } finally {
+    lines.close();
+  }
+}
+
+async function buildLocalUsageSnapshot(
+  sessionsRoots: string[],
+  days: number,
+  workspacePath: string | null,
+) {
+  const dayKeys = makeDayKeys(days);
+  const daily = new Map<string, DailyUsageTotals>(
+    dayKeys.map((dayKey) => [
+      dayKey,
+      { input: 0, cached: 0, output: 0, agentMs: 0, agentRuns: 0 },
+    ]),
+  );
+  const modelTotals = new Map<string, number>();
+
+  for (const root of sessionsRoots) {
+    for (const dayKey of dayKeys) {
+      const dayRoot = dayDirForKey(root, dayKey);
+      const entries = await fs.readdir(dayRoot, { withFileTypes: true }).catch(() => []);
+      for (const entry of entries) {
+        if (!entry.isFile() || path.extname(entry.name) !== ".jsonl") {
+          continue;
+        }
+        await scanLocalUsageFile(path.join(dayRoot, entry.name), daily, modelTotals, workspacePath);
+      }
+    }
+  }
+
+  const daysList = dayKeys.map((dayKey) => {
+    const totals = daily.get(dayKey)!;
+    return {
+      day: dayKey,
+      inputTokens: totals.input,
+      cachedInputTokens: totals.cached,
+      outputTokens: totals.output,
+      totalTokens: totals.input + totals.output,
+      agentTimeMs: totals.agentMs,
+      agentRuns: totals.agentRuns,
+    };
+  });
+  const totalTokens = daysList.reduce((sum, day) => sum + day.totalTokens, 0);
+  const last7 = daysList.slice(-7);
+  const last7DaysTokens = last7.reduce((sum, day) => sum + day.totalTokens, 0);
+  const last7InputTokens = last7.reduce((sum, day) => sum + day.inputTokens, 0);
+  const last7CachedInputTokens = last7.reduce((sum, day) => sum + day.cachedInputTokens, 0);
+  const peakDay = daysList.reduce<typeof daysList[number] | null>((best, day) => {
+    if (!best || day.totalTokens > best.totalTokens) {
+      return day;
+    }
+    return best;
+  }, null);
+
+  return {
+    updatedAt: Date.now(),
+    days: daysList,
+    totals: {
+      last7DaysTokens,
+      last30DaysTokens: totalTokens,
+      averageDailyTokens: last7.length > 0 ? Math.round(last7DaysTokens / last7.length) : 0,
+      cacheHitRatePercent:
+        last7InputTokens > 0
+          ? Math.round((last7CachedInputTokens / last7InputTokens) * 1000) / 10
+          : 0,
+      peakDay: peakDay && peakDay.totalTokens > 0 ? peakDay.day : null,
+      peakDayTokens: peakDay && peakDay.totalTokens > 0 ? peakDay.totalTokens : 0,
+    },
+    topModels: Array.from(modelTotals.entries())
+      .filter(([model, tokens]) => model !== "unknown" && tokens > 0)
+      .map(([model, tokens]) => ({
+        model,
+        tokens,
+        sharePercent: totalTokens > 0 ? Math.round((tokens / totalTokens) * 1000) / 10 : 0,
+      }))
+      .sort((left, right) => right.tokens - left.tokens)
+      .slice(0, 4),
+  };
+}
+
 function decodeBase64Url(value: string) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padding = normalized.length % 4;
@@ -588,23 +1185,6 @@ function slugifyAgentName(name: string) {
   return slug || "agent";
 }
 
-function buildAgentTemplateContent(
-  model: string | null,
-  reasoningEffort: string | null,
-  developerInstructions: string | null,
-) {
-  const lines = ["# Agent-specific overrides"];
-  lines.push(`model = ${JSON.stringify(model ?? "gpt-5-codex")}`);
-  if (reasoningEffort) {
-    lines.push(`model_reasoning_effort = ${JSON.stringify(reasoningEffort)}`);
-  }
-  if (developerInstructions) {
-    lines.push(`developer_instructions = ${JSON.stringify(developerInstructions)}`);
-  }
-  lines.push("");
-  return `${lines.join("\n")}\n`;
-}
-
 function parseTopLevelTomlString(content: string, key: string) {
   const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = content.match(
@@ -626,8 +1206,56 @@ async function runCommand(command: string, args: string[], cwd: string) {
   });
 }
 
+async function runCommandCapture(
+  command: string,
+  args: string[],
+  options: {
+    env?: NodeJS.ProcessEnv;
+    timeoutMs?: number;
+  } = {},
+) {
+  return await new Promise<{
+    ok: boolean;
+    stdout: string;
+    stderr: string;
+    error: string | null;
+  }>((resolve) => {
+    execFile(
+      command,
+      args,
+      {
+        encoding: "utf8",
+        env: options.env,
+        timeout: options.timeoutMs ?? 5_000,
+        maxBuffer: 10 * 1024 * 1024,
+      },
+      (error, stdout, stderr) => {
+        if (!error) {
+          resolve({
+            ok: true,
+            stdout,
+            stderr,
+            error: null,
+          });
+          return;
+        }
+        resolve({
+          ok: false,
+          stdout,
+          stderr,
+          error: `${stderr || stdout || error.message}`.trim() || error.message,
+        });
+      },
+    );
+  });
+}
+
 async function runGit(repoRoot: string, args: string[]) {
   return await runCommand("git", args, repoRoot);
+}
+
+async function runGh(repoRoot: string, args: string[]) {
+  return await runCommand("gh", args, repoRoot);
 }
 
 async function tryRunGit(repoRoot: string, args: string[]) {
@@ -930,6 +1558,440 @@ async function getPreferredRemote(repoRoot: string) {
   }
   const remote = await tryRunGit(repoRoot, ["remote", "get-url", firstRemote]);
   return remote?.stdout.trim() || null;
+}
+
+function parseGitHubRepo(remoteUrl: string) {
+  const trimmed = remoteUrl.trim();
+  if (!trimmed) {
+    return null;
+  }
+  let repoPath = "";
+  if (trimmed.startsWith("git@github.com:")) {
+    repoPath = trimmed.slice("git@github.com:".length);
+  } else if (trimmed.startsWith("ssh://git@github.com/")) {
+    repoPath = trimmed.slice("ssh://git@github.com/".length);
+  } else {
+    const githubIndex = trimmed.indexOf("github.com/");
+    if (githubIndex === -1) {
+      return null;
+    }
+    repoPath = trimmed.slice(githubIndex + "github.com/".length);
+  }
+  repoPath = repoPath.replace(/\.git$/i, "").replace(/\/+$/g, "");
+  return repoPath || null;
+}
+
+function validateGitHubRepoName(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error("Repository name is required.");
+  }
+  if (/\s/.test(trimmed)) {
+    throw new Error("Repository name cannot contain spaces.");
+  }
+  if (trimmed.startsWith("/") || trimmed.endsWith("/")) {
+    throw new Error("Repository name cannot start or end with '/'.");
+  }
+  if (trimmed.includes("//")) {
+    throw new Error("Repository name cannot contain '//'.");
+  }
+  return trimmed;
+}
+
+function normalizeRepoFullName(value: string) {
+  return value
+    .trim()
+    .replace(/^https?:\/\/github\.com\//i, "")
+    .replace(/^git@github\.com:/i, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/+$/g, "");
+}
+
+function validateNormalizedRepoName(value: string) {
+  const normalized = normalizeRepoFullName(value);
+  if (!normalized) {
+    throw new Error("Repository name is empty after normalization. Use 'repo' or 'owner/repo'.");
+  }
+  return normalized;
+}
+
+function gitHubRepoNamesMatch(existing: string, requested: string) {
+  return normalizeRepoFullName(existing).toLowerCase() === normalizeRepoFullName(requested).toLowerCase();
+}
+
+function githubRepoExistsMessage(message: string) {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("already exists") ||
+    lower.includes("name already exists") ||
+    lower.includes("has already been taken") ||
+    lower.includes("repository with this name already exists")
+  );
+}
+
+async function githubRepoFromPath(repoRoot: string) {
+  const remotesResult = await runGit(repoRoot, ["remote"]);
+  const remoteNames = remotesResult.stdout
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const remoteName = remoteNames.includes("origin") ? "origin" : remoteNames[0] ?? null;
+  if (!remoteName) {
+    throw new Error("No git remote configured.");
+  }
+  let remoteUrl = "";
+  try {
+    remoteUrl = (await runGit(repoRoot, ["remote", "get-url", remoteName])).stdout.trim();
+  } catch {
+    throw new Error("Remote has no URL configured.");
+  }
+  const repo = parseGitHubRepo(remoteUrl);
+  if (!repo) {
+    throw new Error("Remote is not a GitHub repository.");
+  }
+  return repo;
+}
+
+async function ghStdoutTrim(repoRoot: string, args: string[]) {
+  return (await runGh(repoRoot, args)).stdout.trim();
+}
+
+async function ghGitProtocol(repoRoot: string) {
+  try {
+    return await ghStdoutTrim(repoRoot, ["config", "get", "git_protocol"]);
+  } catch {
+    return "https";
+  }
+}
+
+function ghRepoCreateArgs(fullName: string, visibilityFlag: string, originExists: boolean) {
+  if (originExists) {
+    return ["repo", "create", fullName, visibilityFlag];
+  }
+  return ["repo", "create", fullName, visibilityFlag, "--source=.", "--remote=origin"];
+}
+
+async function ensureGitHubRepoExists(
+  repoRoot: string,
+  fullName: string,
+  visibilityFlag: string,
+  originExists: boolean,
+) {
+  if (originExists) {
+    try {
+      await runGh(repoRoot, ["repo", "view", fullName, "--json", "name", "--jq", ".name"]);
+      return;
+    } catch {
+      // fall through to create
+    }
+  }
+  try {
+    await runGh(repoRoot, ghRepoCreateArgs(fullName, visibilityFlag, originExists));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!githubRepoExistsMessage(message)) {
+      throw error;
+    }
+  }
+}
+
+function parseGitHubPullRequestDiff(diff: string) {
+  const results: Array<{ path: string; status: string; diff: string }> = [];
+  let currentLines: string[] = [];
+  let currentOldPath: string | null = null;
+  let currentNewPath: string | null = null;
+  let currentStatus: string | null = null;
+
+  const finalize = () => {
+    if (currentLines.length === 0) {
+      return;
+    }
+    const diffText = currentLines.join("\n");
+    if (!diffText.trim()) {
+      return;
+    }
+    const status = currentStatus ?? "M";
+    const filePath = status === "D"
+      ? currentOldPath
+      : currentNewPath ?? currentOldPath;
+    if (!filePath) {
+      return;
+    }
+    results.push({
+      path: normalizeGitPathForUi(filePath),
+      status,
+      diff: diffText,
+    });
+  };
+
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith("diff --git ")) {
+      finalize();
+      currentLines = [line];
+      currentOldPath = null;
+      currentNewPath = null;
+      currentStatus = null;
+      const parts = line.slice("diff --git ".length).trim().split(/\s+/);
+      const oldPart = parts[0]?.replace(/^a\//, "") ?? "";
+      const newPart = parts[1]?.replace(/^b\//, "") ?? "";
+      currentOldPath = oldPart || null;
+      currentNewPath = newPart || null;
+      continue;
+    }
+    if (line.startsWith("new file mode ")) {
+      currentStatus = "A";
+    } else if (line.startsWith("deleted file mode ")) {
+      currentStatus = "D";
+    } else if (line.startsWith("rename from ")) {
+      currentStatus = "R";
+      currentOldPath = line.slice("rename from ".length).trim() || currentOldPath;
+    } else if (line.startsWith("rename to ")) {
+      currentStatus = "R";
+      currentNewPath = line.slice("rename to ".length).trim() || currentNewPath;
+    }
+    currentLines.push(line);
+  }
+
+  finalize();
+  return results;
+}
+
+async function getGitHubIssues(workspacePath: string) {
+  const repoRoot = await resolveGitRootFromPath(workspacePath);
+  const repoName = await githubRepoFromPath(repoRoot);
+  const issues = JSON.parse(
+    (
+      await runGh(repoRoot, [
+        "issue",
+        "list",
+        "--repo",
+        repoName,
+        "--limit",
+        "50",
+        "--json",
+        "number,title,url,updatedAt",
+      ])
+    ).stdout,
+  ) as Array<{
+    number: number;
+    title: string;
+    url: string;
+    updatedAt: string;
+  }>;
+  let total = issues.length;
+  try {
+    const searchQuery = `repo:${repoName} is:issue is:open`.replaceAll(" ", "+");
+    total = Number.parseInt(
+      (
+        await runGh(repoRoot, [
+          "api",
+          `/search/issues?q=${searchQuery}`,
+          "--jq",
+          ".total_count",
+        ])
+      ).stdout.trim(),
+      10,
+    ) || issues.length;
+  } catch {
+    total = issues.length;
+  }
+  return { total, issues };
+}
+
+async function getGitHubPullRequests(workspacePath: string) {
+  const repoRoot = await resolveGitRootFromPath(workspacePath);
+  const repoName = await githubRepoFromPath(repoRoot);
+  const pullRequests = JSON.parse(
+    (
+      await runGh(repoRoot, [
+        "pr",
+        "list",
+        "--repo",
+        repoName,
+        "--state",
+        "open",
+        "--limit",
+        "50",
+        "--json",
+        "number,title,url,updatedAt,createdAt,body,headRefName,baseRefName,isDraft,author",
+      ])
+    ).stdout,
+  ) as Array<{
+    author: { login: string } | null;
+    baseRefName: string;
+    body: string;
+    createdAt: string;
+    headRefName: string;
+    isDraft: boolean;
+    number: number;
+    title: string;
+    updatedAt: string;
+    url: string;
+  }>;
+  let total = pullRequests.length;
+  try {
+    const searchQuery = `repo:${repoName} is:pr is:open`.replaceAll(" ", "+");
+    total = Number.parseInt(
+      (
+        await runGh(repoRoot, [
+          "api",
+          `/search/issues?q=${searchQuery}`,
+          "--jq",
+          ".total_count",
+        ])
+      ).stdout.trim(),
+      10,
+    ) || pullRequests.length;
+  } catch {
+    total = pullRequests.length;
+  }
+  return { total, pullRequests };
+}
+
+async function getGitHubPullRequestDiff(workspacePath: string, prNumber: number) {
+  const repoRoot = await resolveGitRootFromPath(workspacePath);
+  const repoName = await githubRepoFromPath(repoRoot);
+  const diff = await runGh(repoRoot, [
+    "pr",
+    "diff",
+    String(prNumber),
+    "--repo",
+    repoName,
+    "--color",
+    "never",
+  ]);
+  return parseGitHubPullRequestDiff(diff.stdout);
+}
+
+async function getGitHubPullRequestComments(workspacePath: string, prNumber: number) {
+  const repoRoot = await resolveGitRootFromPath(workspacePath);
+  const repoName = await githubRepoFromPath(repoRoot);
+  const commentsEndpoint = `/repos/${repoName}/issues/${prNumber}/comments?per_page=30`;
+  const jqFilter = "[.[] | {id, body, createdAt: .created_at, url: .html_url, author: (if .user then {login: .user.login} else null end)}]";
+  return JSON.parse((await runGh(repoRoot, ["api", commentsEndpoint, "--jq", jqFilter])).stdout) as Array<{
+    author: { login: string } | null;
+    body: string;
+    createdAt: string;
+    id: number;
+    url: string;
+  }>;
+}
+
+async function checkoutGitHubPullRequest(workspacePath: string, prNumber: number) {
+  const repoRoot = await resolveGitRootFromPath(workspacePath);
+  await runGh(repoRoot, ["pr", "checkout", String(prNumber)]);
+}
+
+async function createGitHubRepo(
+  workspacePath: string,
+  repo: string,
+  visibility: string,
+  branch: string | null,
+) {
+  const repoRoot = await resolveGitRootFromPath(workspacePath);
+  const repoName = validateNormalizedRepoName(validateGitHubRepoName(repo));
+  const visibilityFlag = visibility.trim() === "private"
+    ? "--private"
+    : visibility.trim() === "public"
+      ? "--public"
+      : null;
+  if (!visibilityFlag) {
+    throw new Error(`Invalid repo visibility: ${visibility}`);
+  }
+
+  try {
+    await runGit(repoRoot, ["rev-parse", "--git-dir"]);
+  } catch {
+    throw new Error("Git is not initialized in this folder yet.");
+  }
+
+  const originUrlBefore = await tryRunGit(repoRoot, ["remote", "get-url", "origin"]);
+  const originRepoBefore = originUrlBefore?.stdout.trim() ? parseGitHubRepo(originUrlBefore.stdout.trim()) : null;
+
+  const fullName = repoName.includes("/")
+    ? repoName
+    : `${await ghStdoutTrim(repoRoot, ["api", "user", "--jq", ".login"])}/${repoName}`;
+  if (fullName.startsWith("/")) {
+    throw new Error("Failed to determine GitHub username.");
+  }
+
+  if (originUrlBefore?.stdout.trim()) {
+    if (!originRepoBefore) {
+      throw new Error(
+        "Origin remote is not a GitHub repository. Remove or reconfigure origin before creating a GitHub remote.",
+      );
+    }
+    if (!gitHubRepoNamesMatch(originRepoBefore, fullName)) {
+      throw new Error(
+        `Origin remote already points to '${originRepoBefore}', but '${fullName}' was requested. Remove or reconfigure origin to continue.`,
+      );
+    }
+  }
+
+  await ensureGitHubRepoExists(repoRoot, fullName, visibilityFlag, Boolean(originUrlBefore?.stdout.trim()));
+
+  let remoteUrl = (await tryRunGit(repoRoot, ["remote", "get-url", "origin"]))?.stdout.trim() || null;
+  if (!remoteUrl) {
+    const protocol = await ghGitProtocol(repoRoot);
+    const jqField = protocol.trim() === "ssh" ? ".sshUrl" : ".httpsUrl";
+    remoteUrl = await ghStdoutTrim(repoRoot, [
+      "repo",
+      "view",
+      fullName,
+      "--json",
+      "sshUrl,httpsUrl",
+      "--jq",
+      jqField,
+    ]);
+    if (!remoteUrl.trim()) {
+      throw new Error("Failed to resolve GitHub remote URL.");
+    }
+    await runGit(repoRoot, ["remote", "add", "origin", remoteUrl.trim()]);
+  }
+
+  const pushError = await runGit(repoRoot, ["push", "-u", "origin", "HEAD"]).then(
+    () => null,
+    (error: unknown) => (error instanceof Error ? error.message : String(error)),
+  );
+
+  let defaultBranch = branch ? validateBranchName(branch) : null;
+  if (!defaultBranch) {
+    const currentBranch = await tryRunGit(repoRoot, ["branch", "--show-current"]);
+    defaultBranch = currentBranch?.stdout.trim() || null;
+    if (defaultBranch) {
+      defaultBranch = validateBranchName(defaultBranch);
+    }
+  }
+
+  const defaultBranchError = defaultBranch
+    ? await runGh(repoRoot, [
+        "api",
+        "-X",
+        "PATCH",
+        `/repos/${fullName}`,
+        "-f",
+        `default_branch=${defaultBranch}`,
+      ]).then(
+        () => null,
+        (error: unknown) => (error instanceof Error ? error.message : String(error)),
+      )
+    : null;
+
+  if (pushError || defaultBranchError) {
+    return {
+      status: "partial" as const,
+      repo: fullName,
+      remoteUrl,
+      pushError,
+      defaultBranchError,
+    };
+  }
+
+  return {
+    status: "ok" as const,
+    repo: fullName,
+    remoteUrl,
+  };
 }
 
 async function getGitLogSummary(workspacePath: string, limit: number) {
@@ -1321,100 +2383,6 @@ export class CodexCompanionServer {
     return path.dirname(this.storage.settingsPath);
   }
 
-  private agentsStatePath() {
-    return path.join(this.dataDir, "agents.json");
-  }
-
-  private async readAgentsState(): Promise<AgentsState> {
-    try {
-      const raw = await fs.readFile(this.agentsStatePath(), "utf8");
-      const parsed = JSON.parse(raw) as Partial<AgentsState>;
-      return {
-        multiAgentEnabled: Boolean(parsed.multiAgentEnabled),
-        maxThreads:
-          typeof parsed.maxThreads === "number"
-            ? parsed.maxThreads
-            : DEFAULT_AGENT_MAX_THREADS,
-        maxDepth:
-          typeof parsed.maxDepth === "number"
-            ? parsed.maxDepth
-            : DEFAULT_AGENT_MAX_DEPTH,
-        agents: Array.isArray(parsed.agents)
-          ? parsed.agents.map((agent) => ({
-              name: trimString(agent.name),
-              description: toNullableString(agent.description),
-              developerInstructions: toNullableString(agent.developerInstructions),
-              configFile: trimString(agent.configFile),
-              resolvedPath: trimString(agent.resolvedPath),
-              managedByApp: agent.managedByApp !== false,
-              fileExists: Boolean(agent.fileExists),
-            }))
-          : [],
-      };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-        throw error;
-      }
-    }
-
-    const configPath = this.storage.globalConfigPath();
-    let multiAgentEnabled = false;
-    try {
-      const config = await fs.readFile(configPath, "utf8");
-      multiAgentEnabled = /^\s*multi_agent\s*=\s*true\s*$/m.test(config);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-        throw error;
-      }
-    }
-
-    return {
-      multiAgentEnabled,
-      maxThreads: DEFAULT_AGENT_MAX_THREADS,
-      maxDepth: DEFAULT_AGENT_MAX_DEPTH,
-      agents: [],
-    };
-  }
-
-  private async writeAgentsState(state: AgentsState) {
-    await fs.mkdir(this.dataDir, { recursive: true });
-    await fs.writeFile(this.agentsStatePath(), JSON.stringify(state, null, 2));
-    return state;
-  }
-
-  private agentConfigRelativePath(agentName: string) {
-    return path.join("agents", `${slugifyAgentName(agentName)}.toml`);
-  }
-
-  private agentConfigAbsolutePath(relativePath: string) {
-    return path.join(this.storage.codexHome, relativePath);
-  }
-
-  private async formatAgentsSettings(state?: AgentsState) {
-    const current = state ?? (await this.readAgentsState());
-    const agents = await Promise.all(
-      current.agents.map(async (agent) => {
-        const resolvedPath = this.agentConfigAbsolutePath(agent.configFile);
-        const fileExists = await fs
-          .stat(resolvedPath)
-          .then((stat) => stat.isFile())
-          .catch(() => false);
-        return {
-          ...agent,
-          resolvedPath,
-          fileExists,
-        };
-      }),
-    );
-    return {
-      configPath: this.storage.globalConfigPath(),
-      multiAgentEnabled: current.multiAgentEnabled,
-      maxThreads: current.maxThreads,
-      maxDepth: current.maxDepth,
-      agents: agents.sort((left, right) => left.name.localeCompare(right.name)),
-    };
-  }
-
   private async readPromptEntries(workspaceId: string): Promise<PromptEntry[]> {
     const workspace = this.getWorkspace(workspaceId);
     if (!workspace) {
@@ -1615,6 +2583,21 @@ export class CodexCompanionServer {
     });
   }
 
+  private appServerClientOptions(settings: JsonRecord, workspaceId?: string | null) {
+    return {
+      codexPath: this.codexCommand(settings),
+      cliArgs: parseCodexArgs(this.resolveRuntimeCodexArgs(settings, workspaceId)),
+      env: process.env,
+      initializeParams: buildAppServerInitializeParams(),
+      initTimeoutMs: APP_SERVER_INIT_TIMEOUT_MS,
+      requestTimeoutMs: APP_SERVER_REQUEST_TIMEOUT_MS,
+    };
+  }
+
+  private createDetachedAppServerClient(settings: JsonRecord, workspaceId?: string | null) {
+    return new CodexAppServerClient(this.appServerClientOptions(settings, workspaceId));
+  }
+
   private buildAppServerClient(settings: JsonRecord, workspaceId?: string | null) {
     const key = this.appServerClientKey(settings, workspaceId);
     const existing = this.appServerClients.get(key);
@@ -1626,14 +2609,7 @@ export class CodexCompanionServer {
     if (existing) {
       return existing;
     }
-    const client = new CodexAppServerClient({
-      codexPath: this.codexCommand(settings),
-      cliArgs: parseCodexArgs(this.resolveRuntimeCodexArgs(settings, workspaceId)),
-      env: process.env,
-      initializeParams: buildAppServerInitializeParams(),
-      initTimeoutMs: APP_SERVER_INIT_TIMEOUT_MS,
-      requestTimeoutMs: APP_SERVER_REQUEST_TIMEOUT_MS,
-    });
+    const client = this.createDetachedAppServerClient(settings, workspaceId);
     this.appServerClients.set(key, client);
     this.appServerNotificationUnsubscribers.set(
       key,
@@ -1649,6 +2625,10 @@ export class CodexCompanionServer {
     this.appServerClients.clear();
     this.appServerClientWorkspaceIds.clear();
     this.appServerNotificationUnsubscribers.clear();
+  }
+
+  private hasActiveAppServerRuntime() {
+    return this.appServerClients.size > 0;
   }
 
   private buildStoredThreadFromAppServer(
@@ -2100,27 +3080,215 @@ export class CodexCompanionServer {
     return stored;
   }
 
+  private async runDetachedBackgroundPrompt(
+    workspace: StoredWorkspace,
+    prompt: string,
+    options: {
+      model?: string | null;
+      outputSchema?: unknown;
+      timeoutMessage: string;
+      turnErrorFallback: string;
+    },
+  ) {
+    const settings = await this.storage.readSettings();
+    const client = this.createDetachedAppServerClient(settings, workspace.id);
+    let threadId: string | null = null;
+    try {
+      const threadResponse = await client.startThread({
+        cwd: workspace.path,
+        approvalPolicy: "never",
+      });
+      threadId = extractThreadIdFromParams(threadResponse);
+      if (!threadId) {
+        throw new Error("Detached background thread did not return an id.");
+      }
+      this.emit(workspace.id, "codex/backgroundThread", {
+        threadId,
+        action: "hide",
+      });
+
+      let responseText = "";
+      const unsubscribe = client.onNotification((message) => {
+        if (message.method !== "item/agentMessage/delta") {
+          return;
+        }
+        const messageThreadId = extractThreadIdFromParams(message.params);
+        if (messageThreadId && messageThreadId !== threadId) {
+          return;
+        }
+        const delta = typeof message.params.delta === "string" ? message.params.delta : "";
+        if (delta) {
+          responseText += delta;
+        }
+      });
+
+      let expectedTurnId: string | null = null;
+      const completion = client.waitForNotification((message) => {
+        if (message.method !== "turn/completed") {
+          return null;
+        }
+        const completedThreadId = extractThreadIdFromParams(message.params);
+        if (completedThreadId !== threadId) {
+          return null;
+        }
+        const completedTurnId = extractTurnIdFromParams(message.params);
+        if (expectedTurnId && completedTurnId && completedTurnId !== expectedTurnId) {
+          return null;
+        }
+        return message.params;
+      });
+
+      const turnResponse = await client.startTurn({
+        threadId,
+        input: buildAppServerUserInputItems(prompt),
+        cwd: workspace.path,
+        approvalPolicy: "never",
+        sandboxPolicy: { type: "readOnly" },
+        model: options.model ?? undefined,
+        outputSchema: options.outputSchema,
+      });
+      expectedTurnId = extractTurnIdFromParams(turnResponse);
+
+      const completed = await completion;
+      unsubscribe();
+      const completedTurn =
+        completed.turn && typeof completed.turn === "object" && !Array.isArray(completed.turn)
+          ? (completed.turn as JsonRecord)
+          : null;
+      const status = trimString(completedTurn?.status).toLowerCase();
+      if (status && status !== "completed") {
+        const turnError =
+          (completedTurn?.error && typeof completedTurn.error === "object"
+            ? trimString((completedTurn.error as JsonRecord).message)
+            : "") || trimString(completed.message);
+        throw new Error(turnError || options.turnErrorFallback);
+      }
+      if (responseText.trim()) {
+        return responseText.trim();
+      }
+
+      const threadRead = await client.readThreadWithTurns(threadId);
+      const rawThread =
+        threadRead.thread && typeof threadRead.thread === "object" && !Array.isArray(threadRead.thread)
+          ? (threadRead.thread as JsonRecord)
+          : threadRead;
+      return findLastAgentMessageText(rawThread, expectedTurnId).trim();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("Timed out while waiting for app-server notification.")) {
+        throw new Error(options.timeoutMessage);
+      }
+      throw error;
+    } finally {
+      if (threadId) {
+        await client.archiveThread(threadId).catch(() => undefined);
+      }
+      await client.close();
+    }
+  }
+
   private async generateRunMetadataForWorkspace(workspace: StoredWorkspace, prompt: string) {
     const cleanedPrompt = prompt.trim();
     if (!cleanedPrompt) {
       throw new Error("Prompt is required.");
     }
-    const settings = await this.storage.readSettings();
-    const codex = this.buildCodex(settings);
-    const thread = codex.startThread({
-      workingDirectory: workspace.path,
-      approvalPolicy: "on-request",
-      sandboxMode: "workspace-write",
-    });
-    const result = await thread.run(buildRunMetadataPrompt(cleanedPrompt));
-    return parseRunMetadataValue(result.finalResponse);
+    const response = await this.runDetachedBackgroundPrompt(
+      workspace,
+      buildRunMetadataPrompt(cleanedPrompt),
+      {
+        outputSchema: RUN_METADATA_OUTPUT_SCHEMA,
+        timeoutMessage: "Timeout waiting for metadata generation",
+        turnErrorFallback: "Unknown error during metadata generation",
+      },
+    );
+    return parseRunMetadataValue(response);
   }
 
-  private buildCodex(settings: JsonRecord) {
-    const codexBin = typeof settings.codexBin === "string" ? settings.codexBin : null;
-    return new Codex({
-      codexPathOverride: codexBin ?? undefined,
+  private async generateCommitMessageForWorkspace(
+    workspace: StoredWorkspace,
+    commitMessageModelId: string | null,
+  ) {
+    const settings = await this.storage.readSettings();
+    const diffs = await buildWorkingTreeDiffs(workspace.path);
+    const diff = diffs
+      .map((entry) => entry.diff)
+      .filter((entry) => entry.trim().length > 0)
+      .join("\n");
+    const prompt = buildCommitMessagePromptForDiff(diff, String(settings.commitMessagePrompt ?? ""));
+    return await this.runDetachedBackgroundPrompt(workspace, prompt, {
+      model: commitMessageModelId,
+      timeoutMessage: "Timeout waiting for commit message generation",
+      turnErrorFallback: "Unknown error during commit message generation",
     });
+  }
+
+  private async generateAgentDescriptionForWorkspace(
+    workspace: StoredWorkspace,
+    description: string,
+  ) {
+    const cleanedDescription = description.trim();
+    if (!cleanedDescription) {
+      throw new Error("Description is required.");
+    }
+    const response = await this.runDetachedBackgroundPrompt(
+      workspace,
+      buildAgentDescriptionPrompt(cleanedDescription),
+      {
+        timeoutMessage: "Timeout waiting for agent configuration generation",
+        turnErrorFallback: "Unknown error during agent configuration generation",
+      },
+    );
+    return parseAgentDescriptionValue(response);
+  }
+
+  private async runCodexDoctor(codexBin: string | null, codexArgs: string | null) {
+    const settings = await this.storage.readSettings();
+    const resolvedBin = codexBin?.trim() ? codexBin.trim() : this.codexCommand(settings);
+    const resolvedArgs = codexArgs?.trim()
+      ? codexArgs.trim()
+      : this.resolveRuntimeCodexArgs(settings, null);
+    const pathEnv = buildCodexPathEnv(resolvedBin);
+    const env = pathEnv ? { ...process.env, PATH: pathEnv } : process.env;
+    const versionResult = await runCommandCapture(resolvedBin, ["--version"], { env });
+    const version = versionResult.ok
+      ? toNullableString(versionResult.stdout) ?? toNullableString(versionResult.stderr)
+      : null;
+    const appServerResult = await runCommandCapture(
+      resolvedBin,
+      [...parseCodexArgs(resolvedArgs), "app-server", "--help"],
+      { env },
+    );
+    const nodeResult = await runCommandCapture("node", ["--version"], { env });
+    const nodeVersion = nodeResult.ok
+      ? toNullableString(nodeResult.stdout) ?? toNullableString(nodeResult.stderr)
+      : null;
+    const nodeDetails = nodeResult.ok
+      ? null
+      : nodeResult.error || "Node failed to start.";
+    const details = appServerResult.ok
+      ? null
+      : appServerResult.error || "Failed to run `codex app-server --help`.";
+    return {
+      ok: Boolean(version) && appServerResult.ok,
+      codexBin: resolvedBin,
+      version,
+      appServerOk: appServerResult.ok,
+      details,
+      path: pathEnv,
+      nodeOk: Boolean(nodeVersion),
+      nodeVersion,
+      nodeDetails,
+    };
+  }
+
+  private async getLocalUsageSnapshot(days: number | null, workspacePath: string | null) {
+    const requestedDays = Number.isFinite(days) ? Math.trunc(days ?? 30) : 30;
+    const clampedDays = Math.min(Math.max(requestedDays || 30, 1), 90);
+    const normalizedWorkspacePath = toNullableString(workspacePath)
+      ? normalizeRootPath(String(workspacePath))
+      : null;
+    const sessionsRoots = [path.join(this.storage.codexHome, "sessions")];
+    return await buildLocalUsageSnapshot(sessionsRoots, clampedDays, normalizedWorkspacePath);
   }
 
   async handleRpc(
@@ -2135,7 +3303,8 @@ export class CodexCompanionServer {
           name: "codex-monitor-web",
           version: process.env.npm_package_version?.trim() || "0.0.0",
           pid: process.pid,
-          mode: "http",
+          mode: "typescript",
+          transport: "http",
           binaryPath: process.execPath,
         };
       case "daemon_shutdown":
@@ -2507,7 +3676,9 @@ export class CodexCompanionServer {
           this.workspaceRuntimeCodexArgs.set(workspaceId, nextArgs);
         }
         const respawned =
-          this.connectedWorkspaceIds.has(workspaceId) && previousArgs !== nextArgs;
+          this.connectedWorkspaceIds.has(workspaceId) &&
+          this.hasActiveAppServerRuntime() &&
+          previousArgs !== nextArgs;
         if (respawned) {
           await this.resetAppServerClients();
         }
@@ -3132,158 +4303,102 @@ export class CodexCompanionServer {
         }
       }
       case "get_agents_settings":
-        return this.formatAgentsSettings();
+        try {
+          return await getAgentsSettings(this.storage.codexHome);
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
       case "set_agents_core_settings": {
         const input =
           params.input && typeof params.input === "object"
             ? (params.input as JsonRecord)
             : {};
-        const state = await this.readAgentsState();
-        const nextState: AgentsState = {
-          ...state,
-          multiAgentEnabled: Boolean(input.multiAgentEnabled),
-          maxThreads:
-            typeof input.maxThreads === "number"
-              ? input.maxThreads
-              : state.maxThreads,
-          maxDepth:
-            typeof input.maxDepth === "number" ? input.maxDepth : state.maxDepth,
-        };
-        await this.writeAgentsState(nextState);
-        return this.formatAgentsSettings(nextState);
+        try {
+          return await setAgentsCoreSettings(this.storage.codexHome, {
+            multiAgentEnabled: Boolean(input.multiAgentEnabled),
+            maxThreads:
+              typeof input.maxThreads === "number" ? input.maxThreads : 6,
+            maxDepth: typeof input.maxDepth === "number" ? input.maxDepth : 1,
+          });
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
       }
       case "create_agent": {
         const input =
           params.input && typeof params.input === "object"
             ? (params.input as JsonRecord)
             : {};
-        const name = trimString(input.name);
-        if (!name) {
-          return badRequest("Agent name is required.");
+        try {
+          return await createManagedAgent(this.storage.codexHome, {
+            name: trimString(input.name),
+            description: toNullableString(input.description),
+            developerInstructions: toNullableString(input.developerInstructions),
+            template: toNullableString(input.template),
+            model: toNullableString(input.model),
+            reasoningEffort: toNullableString(input.reasoningEffort),
+          });
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
         }
-        const state = await this.readAgentsState();
-        if (state.agents.some((agent) => agent.name === name)) {
-          return badRequest(`Agent '${name}' already exists.`);
-        }
-        const configFile = this.agentConfigRelativePath(name);
-        const resolvedPath = this.agentConfigAbsolutePath(configFile);
-        await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
-        await fs.writeFile(
-          resolvedPath,
-          buildAgentTemplateContent(
-            toNullableString(input.model),
-            toNullableString(input.reasoningEffort),
-            toNullableString(input.developerInstructions),
-          ),
-          "utf8",
-        );
-        state.agents.push({
-          name,
-          description: toNullableString(input.description),
-          developerInstructions: toNullableString(input.developerInstructions),
-          configFile,
-          resolvedPath,
-          managedByApp: true,
-          fileExists: true,
-        });
-        await this.writeAgentsState(state);
-        return this.formatAgentsSettings(state);
       }
       case "update_agent": {
         const input =
           params.input && typeof params.input === "object"
             ? (params.input as JsonRecord)
             : {};
-        const originalName = trimString(input.originalName);
-        const name = trimString(input.name);
-        const state = await this.readAgentsState();
-        const agent = state.agents.find((entry) => entry.name === originalName);
-        if (!agent) {
-          return badRequest(`Agent '${originalName}' not found.`);
+        try {
+          return await updateManagedAgent(this.storage.codexHome, {
+            originalName: trimString(input.originalName),
+            name: trimString(input.name),
+            description: toNullableString(input.description),
+            developerInstructions:
+              input.developerInstructions === undefined
+                ? undefined
+                : toNullableString(input.developerInstructions),
+            renameManagedFile:
+              typeof input.renameManagedFile === "boolean"
+                ? input.renameManagedFile
+                : true,
+          });
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
         }
-        if (
-          name &&
-          name !== originalName &&
-          state.agents.some((entry) => entry.name === name)
-        ) {
-          return badRequest(`Agent '${name}' already exists.`);
-        }
-        const nextName = name || originalName;
-        const nextConfigFile =
-          nextName === originalName ? agent.configFile : this.agentConfigRelativePath(nextName);
-        const nextPath = this.agentConfigAbsolutePath(nextConfigFile);
-        if (nextPath !== this.agentConfigAbsolutePath(agent.configFile)) {
-          await fs.mkdir(path.dirname(nextPath), { recursive: true });
-          await fs.rename(this.agentConfigAbsolutePath(agent.configFile), nextPath);
-        }
-        await fs.writeFile(
-          nextPath,
-          buildAgentTemplateContent(
-            parseTopLevelTomlString(await fs.readFile(nextPath, "utf8").catch(() => ""), "model"),
-            parseTopLevelTomlString(
-              await fs.readFile(nextPath, "utf8").catch(() => ""),
-              "model_reasoning_effort",
-            ),
-            toNullableString(input.developerInstructions),
-          ),
-          "utf8",
-        );
-        agent.name = nextName;
-        agent.description = toNullableString(input.description);
-        agent.developerInstructions = toNullableString(input.developerInstructions);
-        agent.configFile = nextConfigFile;
-        agent.resolvedPath = nextPath;
-        agent.fileExists = true;
-        await this.writeAgentsState(state);
-        return this.formatAgentsSettings(state);
       }
       case "delete_agent": {
         const input =
           params.input && typeof params.input === "object"
             ? (params.input as JsonRecord)
             : {};
-        const name = trimString(input.name);
-        const deleteManagedFile = Boolean(input.deleteManagedFile);
-        const state = await this.readAgentsState();
-        const index = state.agents.findIndex((agent) => agent.name === name);
-        if (index < 0) {
-          return badRequest(`Agent '${name}' not found.`);
+        try {
+          return await deleteManagedAgent(this.storage.codexHome, {
+            name: trimString(input.name),
+            deleteManagedFile: Boolean(input.deleteManagedFile),
+          });
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
         }
-        const [agent] = state.agents.splice(index, 1);
-        if (deleteManagedFile && agent?.configFile) {
-          await fs.rm(this.agentConfigAbsolutePath(agent.configFile), { force: true });
-        }
-        await this.writeAgentsState(state);
-        return this.formatAgentsSettings(state);
       }
       case "read_agent_config_toml": {
         const agentName = trimString(params.agentName);
         if (!agentName) {
           return "";
         }
-        const state = await this.readAgentsState();
-        const agent = state.agents.find((entry) => entry.name === agentName);
-        if (!agent) {
-          return "";
+        try {
+          return await readAgentConfigToml(this.storage.codexHome, agentName);
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
         }
-        return fs.readFile(this.agentConfigAbsolutePath(agent.configFile), "utf8").catch(
-          () => "",
-        );
       }
       case "write_agent_config_toml": {
         const agentName = trimString(params.agentName);
         const content = String(params.content ?? "");
-        const state = await this.readAgentsState();
-        const agent = state.agents.find((entry) => entry.name === agentName);
-        if (!agent) {
-          return badRequest(`Agent '${agentName}' not found.`);
+        try {
+          await writeAgentConfigToml(this.storage.codexHome, agentName, content);
+          return null;
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
         }
-        const resolvedPath = this.agentConfigAbsolutePath(agent.configFile);
-        await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
-        await fs.writeFile(resolvedPath, content, "utf8");
-        agent.fileExists = true;
-        await this.writeAgentsState(state);
-        return null;
       }
       case "collaboration_mode_list": {
         try {
@@ -3445,8 +4560,22 @@ export class CodexCompanionServer {
           return badRequest(error instanceof Error ? error.message : String(error));
         }
       }
-      case "create_github_repo":
-        return badRequest("GitHub repo creation is not implemented in the web companion yet.");
+      case "create_github_repo": {
+        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        try {
+          return await createGitHubRepo(
+            workspace.path,
+            String(params.repo ?? ""),
+            String(params.visibility ?? ""),
+            toNullableString(params.branch),
+          );
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
       case "get_git_status": {
         const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
         if (!workspace) {
@@ -3652,34 +4781,35 @@ export class CodexCompanionServer {
         await runGit(await resolveGitRootFromPath(workspace.path), ["checkout", "-b", name]);
         return null;
       }
-      case "checkout_github_pull_request":
-        return null;
+      case "checkout_github_pull_request": {
+        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
+        const prNumber =
+          typeof params.prNumber === "number" && Number.isFinite(params.prNumber)
+            ? params.prNumber
+            : Number.parseInt(String(params.prNumber ?? ""), 10);
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        if (!Number.isFinite(prNumber)) {
+          return badRequest("prNumber is required.");
+        }
+        try {
+          await checkoutGitHubPullRequest(workspace.path, prNumber);
+          return null;
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
       case "local_usage_snapshot":
-        return {
-          updatedAt: Date.now(),
-          days: [],
-          totals: {
-            last7DaysTokens: 0,
-            last30DaysTokens: 0,
-            averageDailyTokens: 0,
-            cacheHitRatePercent: 0,
-            peakDay: null,
-            peakDayTokens: 0,
-          },
-          topModels: [],
-        };
+        return await this.getLocalUsageSnapshot(
+          typeof params.days === "number" ? params.days : null,
+          toNullableString(params.workspacePath),
+        );
       case "codex_doctor":
-        return {
-          ok: true,
-          codexBin: null,
-          version: null,
-          appServerOk: true,
-          details: "Web companion server is running.",
-          path: null,
-          nodeOk: true,
-          nodeVersion: process.version,
-          nodeDetails: null,
-        };
+        return await this.runCodexDoctor(
+          toNullableString(params.codexBin),
+          toNullableString(params.codexArgs),
+        );
       case "codex_update":
         return {
           ok: false,
@@ -3701,10 +4831,6 @@ export class CodexCompanionServer {
       case "menu_set_accelerators":
       case "set_tray_recent_threads":
       case "set_tray_session_usage":
-      case "get_github_issues":
-      case "get_github_pull_requests":
-      case "get_github_pull_request_diff":
-      case "get_github_pull_request_comments":
       case "tailscale_status":
       case "tailscale_daemon_command_preview":
       case "tailscale_daemon_start":
@@ -3724,16 +4850,92 @@ export class CodexCompanionServer {
       case "terminal_close":
       case "write_text_file":
         return badRequest(unsupportedRpcMessage(method));
+      case "get_github_issues": {
+        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        try {
+          return await getGitHubIssues(workspace.path);
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
+      case "get_github_pull_requests": {
+        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        try {
+          return await getGitHubPullRequests(workspace.path);
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
+      case "get_github_pull_request_diff": {
+        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
+        const prNumber =
+          typeof params.prNumber === "number" && Number.isFinite(params.prNumber)
+            ? params.prNumber
+            : Number.parseInt(String(params.prNumber ?? ""), 10);
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        if (!Number.isFinite(prNumber)) {
+          return badRequest("prNumber is required.");
+        }
+        try {
+          return await getGitHubPullRequestDiff(workspace.path, prNumber);
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
+      case "get_github_pull_request_comments": {
+        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
+        const prNumber =
+          typeof params.prNumber === "number" && Number.isFinite(params.prNumber)
+            ? params.prNumber
+            : Number.parseInt(String(params.prNumber ?? ""), 10);
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        if (!Number.isFinite(prNumber)) {
+          return badRequest("prNumber is required.");
+        }
+        try {
+          return await getGitHubPullRequestComments(workspace.path, prNumber);
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
       case "generate_commit_message":
-        return "Update project files";
+      {
+        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        try {
+          return await this.generateCommitMessageForWorkspace(
+            workspace,
+            toNullableString(params.commitMessageModelId),
+          );
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
       case "generate_agent_description": {
-        const description = trimString(params.description);
-        return {
-          description: description || "Custom agent",
-          developerInstructions: description
-            ? `Focus on: ${description}`
-            : "Provide clear, pragmatic help for the assigned task.",
-        };
+        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        try {
+          return await this.generateAgentDescriptionForWorkspace(
+            workspace,
+            String(params.description ?? ""),
+          );
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
       }
       default:
         return notFound(`Unsupported method: ${method}`);

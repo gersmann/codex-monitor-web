@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   INTENTIONALLY_UNSUPPORTED_RPC_METHODS,
+  PARTIAL_PARITY_RPC_METHODS,
   SUPPORTED_WITHOUT_EXPLICIT_CASE,
   WEB_ADAPTED_RPC_METHODS,
 } from "./parity.js";
@@ -45,6 +46,21 @@ function daemonRpcMethods() {
 }
 
 describe("web parity matrix", () => {
+  it("keeps policy buckets disjoint", () => {
+    const methodToBucket = new Map<string, string>();
+    for (const [bucket, methods] of [
+      ["web-adapted", WEB_ADAPTED_RPC_METHODS],
+      ["unsupported", INTENTIONALLY_UNSUPPORTED_RPC_METHODS],
+      ["partial", PARTIAL_PARITY_RPC_METHODS],
+    ] as const) {
+      for (const method of methods) {
+        const existing = methodToBucket.get(method);
+        expect(existing, `${method} must not appear in both ${existing} and ${bucket}`).toBeUndefined();
+        methodToBucket.set(method, bucket);
+      }
+    }
+  });
+
   it("classifies every frontend invoke target", () => {
     const handled = serverHandledMethods();
     const uncovered = [...frontendInvokeMethods()].filter(
@@ -58,10 +74,17 @@ describe("web parity matrix", () => {
     const allowed = new Set<string>([
       ...WEB_ADAPTED_RPC_METHODS,
       ...INTENTIONALLY_UNSUPPORTED_RPC_METHODS,
+      ...PARTIAL_PARITY_RPC_METHODS,
     ]);
     const missing = [...daemonRpcMethods()].filter(
       (method) => !handled.has(method) && !allowed.has(method),
     );
+    expect(missing).toEqual([]);
+  });
+
+  it("keeps partial parity methods explicit in the backend", () => {
+    const handled = serverHandledMethods();
+    const missing = PARTIAL_PARITY_RPC_METHODS.filter((method) => !handled.has(method));
     expect(missing).toEqual([]);
   });
 });

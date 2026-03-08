@@ -1,16 +1,5 @@
 import process from "node:process";
 import { spawn } from "node:child_process";
-import { Codex } from "./codex-sdk/dist/index.js";
-import type {
-  Thread,
-  ThreadEvent,
-  ThreadItem,
-  ThreadOptions,
-  Usage,
-} from "./codex-sdk/dist/index.js";
-
-export { Codex };
-export type { Thread, ThreadEvent, ThreadItem, ThreadOptions, Usage };
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -363,6 +352,10 @@ export class CodexAppServerClient {
     return await this.request("thread/read", { threadId });
   }
 
+  async readThreadWithTurns(threadId: string) {
+    return await this.request("thread/read", { threadId, includeTurns: true });
+  }
+
   async resumeThread(threadId: string) {
     return await this.request("thread/resume", { threadId });
   }
@@ -392,8 +385,42 @@ export class CodexAppServerClient {
     model?: string | null;
     effort?: string | null;
     collaborationMode?: unknown;
+    outputSchema?: unknown;
   }) {
     return await this.request("turn/start", params);
+  }
+
+  async waitForNotification<T>(
+    matcher: (message: AppServerNotificationMessage) => T | null | undefined,
+    timeoutMs = this.requestTimeoutMs,
+  ) {
+    await this.ensureStarted();
+    return await new Promise<T>((resolve, reject) => {
+      let settled = false;
+      const finish = (fn: () => void) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        unsubscribe();
+        fn();
+      };
+      const unsubscribe = this.onNotification((message) => {
+        try {
+          const matched = matcher(message);
+          if (matched !== null && matched !== undefined) {
+            finish(() => resolve(matched));
+          }
+        } catch (error) {
+          finish(() => reject(error instanceof Error ? error : new Error(String(error))));
+        }
+      });
+      const timer = setTimeout(() => {
+        finish(() => reject(new Error("Timed out while waiting for app-server notification.")));
+      }, timeoutMs);
+      timer.unref?.();
+    });
   }
 
   async interruptTurn(params: { threadId: string; turnId: string }) {

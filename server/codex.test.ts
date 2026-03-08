@@ -59,6 +59,21 @@ async function runGit(cwd: string, args: string[]) {
   });
 }
 
+async function installFakeGh(dir: string, scriptBody: string) {
+  const binDir = path.join(dir, "bin");
+  await fs.mkdir(binDir, { recursive: true });
+  const scriptPath = path.join(binDir, "gh");
+  await fs.writeFile(
+    scriptPath,
+    `#!/usr/bin/env node
+${scriptBody}
+`,
+    "utf8",
+  );
+  await fs.chmod(scriptPath, 0o755);
+  vi.stubEnv("PATH", `${binDir}:${process.env.PATH ?? ""}`);
+}
+
 function mockAppServerClient(
   server: CodexCompanionServer,
   client: Partial<{
@@ -95,8 +110,28 @@ function mockAppServerClient(
   ).buildAppServerClient = () => client;
 }
 
+function mockDetachedAppServerClient(
+  server: CodexCompanionServer,
+  client: Partial<{
+    archiveThread: (...args: unknown[]) => Promise<unknown>;
+    close: () => Promise<void>;
+    onNotification: (...args: unknown[]) => () => void;
+    readThreadWithTurns: (...args: unknown[]) => Promise<unknown>;
+    startThread: (...args: unknown[]) => Promise<unknown>;
+    startTurn: (...args: unknown[]) => Promise<unknown>;
+    waitForNotification: (...args: unknown[]) => Promise<unknown>;
+  }>,
+) {
+  (
+    server as unknown as {
+      createDetachedAppServerClient: () => typeof client;
+    }
+  ).createDetachedAppServerClient = () => client;
+}
+
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
 });
 
@@ -430,26 +465,468 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
     expect(threads.find((entry) => entry.id === "sdk-thread-1")?.name).toBe("Pinned local title");
   });
 
-  it("generates run metadata from a background codex prompt", async () => {
+  it("generates run metadata from a detached app-server turn", async () => {
     const { server } = await createServerFixture();
-    const buildCodex = vi.fn().mockReturnValue({
-      startThread: vi.fn().mockReturnValue({
-        run: vi.fn().mockResolvedValue({
-          finalResponse:
-            '{"title":"Fix Login Redirect Loop","worktreeName":"fix/login-redirect-loop"}',
-        }),
-      }),
+    const startThread = vi.fn().mockResolvedValue({
+      thread: { id: "meta-thread-1" },
     });
-    (server as unknown as { buildCodex: typeof buildCodex }).buildCodex = buildCodex;
+    const waitForNotification = vi.fn().mockResolvedValue({
+      threadId: "meta-thread-1",
+      turn: { id: "turn-1", status: "completed" },
+    });
+    const startTurn = vi.fn().mockResolvedValue({
+      threadId: "meta-thread-1",
+      turn: { id: "turn-1", status: "inProgress" },
+    });
+    const readThreadWithTurns = vi.fn().mockResolvedValue({
+      thread: {
+        id: "meta-thread-1",
+        turns: [
+          {
+            id: "turn-1",
+            items: [
+              {
+                type: "agentMessage",
+                text: '{"title":"Fix Login Redirect Loop","worktreeName":"fix/login-redirect-loop"}',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const archiveThread = vi.fn().mockResolvedValue(undefined);
+    const close = vi.fn().mockResolvedValue(undefined);
+    const onNotification = vi.fn().mockReturnValue(() => undefined);
+    mockDetachedAppServerClient(server, {
+      archiveThread,
+      close,
+      onNotification,
+      readThreadWithTurns,
+      startThread,
+      startTurn,
+      waitForNotification,
+    });
 
     const result = await server.handleRpc("generate_run_metadata", {
       workspaceId: "ws-1",
       prompt: "Fix the login redirect loop",
     });
 
+    expect(startThread).toHaveBeenCalledWith({
+      cwd: expect.any(String),
+      approvalPolicy: "never",
+    });
+    expect(startTurn).toHaveBeenCalledWith({
+      threadId: "meta-thread-1",
+      input: expect.any(Array),
+      cwd: expect.any(String),
+      approvalPolicy: "never",
+      sandboxPolicy: { type: "readOnly" },
+      outputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          worktreeName: { type: "string" },
+        },
+        required: ["title", "worktreeName"],
+        additionalProperties: false,
+      },
+    });
+    expect(readThreadWithTurns).toHaveBeenCalledWith("meta-thread-1");
+    expect(archiveThread).toHaveBeenCalledWith("meta-thread-1");
+    expect(close).toHaveBeenCalled();
     expect(result).toEqual({
       title: "Fix Login Redirect Loop",
       worktreeName: "fix/login-redirect-loop",
+    });
+  });
+
+  it("generates commit messages from a detached app-server turn", async () => {
+    const { server, storage, workspace } = await createServerFixture();
+    await storage.writeSettings({
+      commitMessagePrompt:
+        "Summarize these changes as a single conventional commit message. Changes:\n{diff}",
+    });
+    await fs.mkdir(workspace.path, { recursive: true });
+    await runGit(workspace.path, ["init", "-b", "main"]);
+    await runGit(workspace.path, ["config", "user.email", "dev@example.com"]);
+    await runGit(workspace.path, ["config", "user.name", "Dev"]);
+    await fs.writeFile(path.join(workspace.path, "tracked.txt"), "hello\n", "utf8");
+    await runGit(workspace.path, ["add", "tracked.txt"]);
+    await runGit(workspace.path, ["commit", "-m", "Initial commit"]);
+    await fs.writeFile(path.join(workspace.path, "tracked.txt"), "hello\nworld\n", "utf8");
+
+    let notificationHandler:
+      | ((message: { method: string; params: Record<string, unknown> }) => void)
+      | null = null;
+    const startThread = vi.fn().mockResolvedValue({
+      thread: { id: "meta-thread-2" },
+    });
+    const startTurn = vi.fn().mockImplementation(async () => {
+      notificationHandler?.({
+        method: "item/agentMessage/delta",
+        params: {
+          threadId: "meta-thread-2",
+          delta: "fix: refine git metadata parity",
+        },
+      });
+      return {
+        threadId: "meta-thread-2",
+        turn: { id: "turn-2", status: "inProgress" },
+      };
+    });
+    const waitForNotification = vi.fn().mockResolvedValue({
+      threadId: "meta-thread-2",
+      turn: { id: "turn-2", status: "completed" },
+    });
+    const archiveThread = vi.fn().mockResolvedValue(undefined);
+    const close = vi.fn().mockResolvedValue(undefined);
+    const onNotification = vi.fn().mockImplementation((callback) => {
+      notificationHandler = callback as typeof notificationHandler;
+      return () => {
+        notificationHandler = null;
+      };
+    });
+    mockDetachedAppServerClient(server, {
+      archiveThread,
+      close,
+      onNotification,
+      startThread,
+      startTurn,
+      waitForNotification,
+    });
+
+    const result = await server.handleRpc("generate_commit_message", {
+      workspaceId: "ws-1",
+      commitMessageModelId: "gpt-5-codex-mini",
+    });
+
+    expect(startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "meta-thread-2",
+        model: "gpt-5-codex-mini",
+      }),
+    );
+    expect(result).toBe("fix: refine git metadata parity");
+    expect(archiveThread).toHaveBeenCalledWith("meta-thread-2");
+    expect(close).toHaveBeenCalled();
+  });
+
+  it("generates agent descriptions from a detached app-server turn", async () => {
+    const { server } = await createServerFixture();
+    const startThread = vi.fn().mockResolvedValue({
+      thread: { id: "meta-thread-3" },
+    });
+    const startTurn = vi.fn().mockResolvedValue({
+      threadId: "meta-thread-3",
+      turn: { id: "turn-3", status: "inProgress" },
+    });
+    const waitForNotification = vi.fn().mockResolvedValue({
+      threadId: "meta-thread-3",
+      turn: { id: "turn-3", status: "completed" },
+    });
+    const readThreadWithTurns = vi.fn().mockResolvedValue({
+      thread: {
+        id: "meta-thread-3",
+        turns: [
+          {
+            id: "turn-3",
+            items: [
+              {
+                type: "agentMessage",
+                text:
+                  '{"description":"Triages flaky integration failures","developerInstructions":"Reproduce failing scenarios first.\\nIdentify nondeterministic dependencies.\\nPrefer minimal fixes and add regression coverage."}',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const archiveThread = vi.fn().mockResolvedValue(undefined);
+    const close = vi.fn().mockResolvedValue(undefined);
+    const onNotification = vi.fn().mockReturnValue(() => undefined);
+    mockDetachedAppServerClient(server, {
+      archiveThread,
+      close,
+      onNotification,
+      readThreadWithTurns,
+      startThread,
+      startTurn,
+      waitForNotification,
+    });
+
+    const result = await server.handleRpc("generate_agent_description", {
+      workspaceId: "ws-1",
+      description: "Make an agent that stabilizes flaky integration tests",
+    });
+
+    expect(result).toEqual({
+      description: "Triages flaky integration failures",
+      developerInstructions:
+        "Reproduce failing scenarios first.\nIdentify nondeterministic dependencies.\nPrefer minimal fixes and add regression coverage.",
+    });
+    expect(archiveThread).toHaveBeenCalledWith("meta-thread-3");
+    expect(close).toHaveBeenCalled();
+  });
+
+  it("reads local usage snapshots from CODEX_HOME sessions", async () => {
+    const { server, workspace } = await createServerFixture();
+    const codexHome = await fs.mkdtemp(path.join(os.tmpdir(), "codex-monitor-codex-home-"));
+    tempDirs.push(codexHome);
+    vi.stubEnv("CODEX_HOME", codexHome);
+
+    const now = new Date();
+    const year = `${now.getFullYear()}`;
+    const month = `${now.getMonth() + 1}`.padStart(2, "0");
+    const day = `${now.getDate()}`.padStart(2, "0");
+    const sessionDir = path.join(codexHome, "sessions", year, month, day);
+    await fs.mkdir(sessionDir, { recursive: true });
+    const sessionPath = path.join(sessionDir, "session.jsonl");
+    const lines = [
+      JSON.stringify({
+        type: "session_meta",
+        payload: { cwd: workspace.path },
+      }),
+      JSON.stringify({
+        type: "turn_context",
+        payload: { cwd: workspace.path, model: "gpt-5-codex" },
+      }),
+      JSON.stringify({
+        type: "event_msg",
+        timestamp: now.toISOString(),
+        payload: {
+          type: "token_count",
+          info: {
+            total_token_usage: {
+              input_tokens: 10,
+              cached_input_tokens: 4,
+              output_tokens: 6,
+            },
+          },
+        },
+      }),
+      JSON.stringify({
+        type: "event_msg",
+        timestamp: new Date(now.getTime() + 1_000).toISOString(),
+        payload: { type: "agent_message" },
+      }),
+    ];
+    await fs.writeFile(sessionPath, `${lines.join("\n")}\n`, "utf8");
+
+    const result = await server.handleRpc("local_usage_snapshot", {
+      days: 7,
+      workspacePath: workspace.path,
+    });
+
+    expect(result).toMatchObject({
+      totals: {
+        last7DaysTokens: 16,
+        last30DaysTokens: 16,
+        cacheHitRatePercent: 40,
+        peakDay: `${year}-${month}-${day}`,
+        peakDayTokens: 16,
+      },
+      topModels: [{ model: "gpt-5-codex", tokens: 16, sharePercent: 100 }],
+    });
+    expect((result as { days: Array<{ day: string; totalTokens: number; agentRuns: number }> }).days).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          day: `${year}-${month}-${day}`,
+          totalTokens: 16,
+          agentRuns: 1,
+        }),
+      ]),
+    );
+  });
+
+  it("does not double count last usage before total usage snapshots", async () => {
+    const { server, workspace } = await createServerFixture();
+    const codexHome = await fs.mkdtemp(path.join(os.tmpdir(), "codex-monitor-codex-home-"));
+    tempDirs.push(codexHome);
+    vi.stubEnv("CODEX_HOME", codexHome);
+
+    const now = new Date();
+    const year = `${now.getFullYear()}`;
+    const month = `${now.getMonth() + 1}`.padStart(2, "0");
+    const day = `${now.getDate()}`.padStart(2, "0");
+    const sessionDir = path.join(codexHome, "sessions", year, month, day);
+    await fs.mkdir(sessionDir, { recursive: true });
+    await fs.writeFile(
+      path.join(sessionDir, "session.jsonl"),
+      [
+        JSON.stringify({
+          type: "session_meta",
+          payload: { cwd: workspace.path },
+        }),
+        JSON.stringify({
+          timestamp: now.toISOString(),
+          payload: {
+            type: "token_count",
+            info: {
+              last_token_usage: {
+                input_tokens: 10,
+                cached_input_tokens: 0,
+                output_tokens: 5,
+              },
+            },
+          },
+        }),
+        JSON.stringify({
+          timestamp: new Date(now.getTime() + 1_000).toISOString(),
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: {
+                input_tokens: 20,
+                cached_input_tokens: 0,
+                output_tokens: 10,
+              },
+            },
+          },
+        }),
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await server.handleRpc("local_usage_snapshot", {
+      days: 7,
+      workspacePath: workspace.path,
+    });
+
+    expect(result).toMatchObject({
+      totals: {
+        last7DaysTokens: 30,
+        last30DaysTokens: 30,
+        peakDayTokens: 30,
+      },
+    });
+  });
+
+  it("does not double count last usage between total usage snapshots", async () => {
+    const { server, workspace } = await createServerFixture();
+    const codexHome = await fs.mkdtemp(path.join(os.tmpdir(), "codex-monitor-codex-home-"));
+    tempDirs.push(codexHome);
+    vi.stubEnv("CODEX_HOME", codexHome);
+
+    const now = new Date();
+    const year = `${now.getFullYear()}`;
+    const month = `${now.getMonth() + 1}`.padStart(2, "0");
+    const day = `${now.getDate()}`.padStart(2, "0");
+    const sessionDir = path.join(codexHome, "sessions", year, month, day);
+    await fs.mkdir(sessionDir, { recursive: true });
+    await fs.writeFile(
+      path.join(sessionDir, "session.jsonl"),
+      [
+        JSON.stringify({
+          type: "session_meta",
+          payload: { cwd: workspace.path },
+        }),
+        JSON.stringify({
+          timestamp: now.toISOString(),
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: {
+                input_tokens: 10,
+                cached_input_tokens: 0,
+                output_tokens: 5,
+              },
+            },
+          },
+        }),
+        JSON.stringify({
+          timestamp: new Date(now.getTime() + 1_000).toISOString(),
+          payload: {
+            type: "token_count",
+            info: {
+              last_token_usage: {
+                input_tokens: 2,
+                cached_input_tokens: 0,
+                output_tokens: 1,
+              },
+            },
+          },
+        }),
+        JSON.stringify({
+          timestamp: new Date(now.getTime() + 2_000).toISOString(),
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: {
+                input_tokens: 12,
+                cached_input_tokens: 0,
+                output_tokens: 6,
+              },
+            },
+          },
+        }),
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await server.handleRpc("local_usage_snapshot", {
+      days: 7,
+      workspacePath: workspace.path,
+    });
+
+    expect(result).toMatchObject({
+      totals: {
+        last7DaysTokens: 18,
+        last30DaysTokens: 18,
+        peakDayTokens: 18,
+      },
+    });
+  });
+
+  it("skips local usage files whose session workspace does not match the filter", async () => {
+    const { server } = await createServerFixture();
+    const codexHome = await fs.mkdtemp(path.join(os.tmpdir(), "codex-monitor-codex-home-"));
+    tempDirs.push(codexHome);
+    vi.stubEnv("CODEX_HOME", codexHome);
+
+    const now = new Date();
+    const year = `${now.getFullYear()}`;
+    const month = `${now.getMonth() + 1}`.padStart(2, "0");
+    const day = `${now.getDate()}`.padStart(2, "0");
+    const sessionDir = path.join(codexHome, "sessions", year, month, day);
+    await fs.mkdir(sessionDir, { recursive: true });
+    await fs.writeFile(
+      path.join(sessionDir, "session.jsonl"),
+      [
+        JSON.stringify({
+          type: "session_meta",
+          payload: { cwd: "/tmp/project-alpha" },
+        }),
+        JSON.stringify({
+          timestamp: now.toISOString(),
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: {
+                input_tokens: 10,
+                cached_input_tokens: 0,
+                output_tokens: 5,
+              },
+            },
+          },
+        }),
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await server.handleRpc("local_usage_snapshot", {
+      days: 7,
+      workspacePath: "/tmp/other-project",
+    });
+
+    expect(result).toMatchObject({
+      totals: {
+        last7DaysTokens: 0,
+        last30DaysTokens: 0,
+        peakDay: null,
+        peakDayTokens: 0,
+      },
+      topModels: [],
     });
   });
 
@@ -546,7 +1023,7 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
     });
   });
 
-  it("respawns app-server clients when connected workspace runtime args change", async () => {
+  it("does not respawn runtime args when the workspace is connected but no app-server runtime exists", async () => {
     const { server } = await createServerFixture();
     const resetAppServerClients = vi.fn().mockResolvedValue(undefined);
     (
@@ -561,10 +1038,70 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
       codexArgs: "--profile web",
     });
 
+    expect(resetAppServerClients).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      appliedCodexArgs: "--profile web",
+      respawned: false,
+    });
+  });
+
+  it("respawns app-server clients when connected workspace runtime args change and a runtime exists", async () => {
+    const { server } = await createServerFixture();
+    const resetAppServerClients = vi.fn().mockResolvedValue(undefined);
+    (
+      server as unknown as {
+        resetAppServerClients: typeof resetAppServerClients;
+      }
+    ).resetAppServerClients = resetAppServerClients;
+    (
+      server as unknown as {
+        hasActiveAppServerRuntime: () => boolean;
+      }
+    ).hasActiveAppServerRuntime = () => true;
+
+    await server.handleRpc("connect_workspace", { id: "ws-1" });
+    const result = await server.handleRpc("set_workspace_runtime_codex_args", {
+      workspaceId: "ws-1",
+      codexArgs: "--profile web",
+    });
+
     expect(resetAppServerClients).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       appliedCodexArgs: "--profile web",
       respawned: true,
+    });
+  });
+
+  it("does not respawn app-server clients when runtime args are unchanged", async () => {
+    const { server } = await createServerFixture();
+    const resetAppServerClients = vi.fn().mockResolvedValue(undefined);
+    (
+      server as unknown as {
+        resetAppServerClients: typeof resetAppServerClients;
+      }
+    ).resetAppServerClients = resetAppServerClients;
+    (
+      server as unknown as {
+        hasActiveAppServerRuntime: () => boolean;
+      }
+    ).hasActiveAppServerRuntime = () => true;
+
+    await server.handleRpc("connect_workspace", { id: "ws-1" });
+    await server.handleRpc("set_workspace_runtime_codex_args", {
+      workspaceId: "ws-1",
+      codexArgs: "--profile web",
+    });
+    resetAppServerClients.mockClear();
+
+    const result = await server.handleRpc("set_workspace_runtime_codex_args", {
+      workspaceId: "ws-1",
+      codexArgs: "--profile web",
+    });
+
+    expect(resetAppServerClients).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      appliedCodexArgs: "--profile web",
+      respawned: false,
     });
   });
 
@@ -583,7 +1120,8 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
     const info = await server.handleRpc("daemon_info", {});
     expect(info).toMatchObject({
       name: "codex-monitor-web",
-      mode: "http",
+      mode: "typescript",
+      transport: "http",
     });
   });
 });
@@ -704,5 +1242,291 @@ describe("CodexCompanionServer git/worktree support", () => {
     await expect(fs.readFile(path.join(workspace.path, "tracked.txt"), "utf8")).resolves.toBe(
       "hello\nfrom worktree\n",
     );
+  });
+
+  it("returns GitHub issues and pull requests through gh", async () => {
+    const { dir, server, workspace } = await createServerFixture();
+    await fs.mkdir(workspace.path, { recursive: true });
+    await runGit(workspace.path, ["init", "-b", "main"]);
+    await runGit(workspace.path, ["remote", "add", "origin", "git@github.com:openai/codex.git"]);
+    await installFakeGh(
+      dir,
+      `
+const args = process.argv.slice(2);
+if (args[0] === "issue" && args[1] === "list") {
+  process.stdout.write(JSON.stringify([{ number: 12, title: "Bug", url: "https://github.com/openai/codex/issues/12", updatedAt: "2026-03-08T12:00:00Z" }]));
+  process.exit(0);
+}
+if (args[0] === "pr" && args[1] === "list") {
+  process.stdout.write(JSON.stringify([{ number: 34, title: "Fix", url: "https://github.com/openai/codex/pull/34", updatedAt: "2026-03-08T12:00:00Z", createdAt: "2026-03-07T12:00:00Z", body: "Body", headRefName: "feature", baseRefName: "main", isDraft: false, author: { login: "octocat" } }]));
+  process.exit(0);
+}
+if (args[0] === "api" && args[1].includes("is:issue")) {
+  process.stdout.write("23\\n");
+  process.exit(0);
+}
+if (args[0] === "api" && args[1].includes("is:pr")) {
+  process.stdout.write("45\\n");
+  process.exit(0);
+}
+process.stderr.write("unexpected gh invocation: " + JSON.stringify(args));
+process.exit(1);
+`,
+    );
+
+    const issues = await server.handleRpc("get_github_issues", { workspaceId: "ws-1" });
+    const pullRequests = await server.handleRpc("get_github_pull_requests", { workspaceId: "ws-1" });
+
+    expect(issues).toEqual({
+      total: 23,
+      issues: [
+        {
+          number: 12,
+          title: "Bug",
+          url: "https://github.com/openai/codex/issues/12",
+          updatedAt: "2026-03-08T12:00:00Z",
+        },
+      ],
+    });
+    expect(pullRequests).toEqual({
+      total: 45,
+      pullRequests: [
+        {
+          number: 34,
+          title: "Fix",
+          url: "https://github.com/openai/codex/pull/34",
+          updatedAt: "2026-03-08T12:00:00Z",
+          createdAt: "2026-03-07T12:00:00Z",
+          body: "Body",
+          headRefName: "feature",
+          baseRefName: "main",
+          isDraft: false,
+          author: { login: "octocat" },
+        },
+      ],
+    });
+  });
+
+  it("returns GitHub pull request diffs, comments, and supports checkout", async () => {
+    const { dir, server, workspace } = await createServerFixture();
+    await fs.mkdir(workspace.path, { recursive: true });
+    await runGit(workspace.path, ["init", "-b", "main"]);
+    await runGit(workspace.path, ["remote", "add", "origin", "https://github.com/openai/codex.git"]);
+    await installFakeGh(
+      dir,
+      `
+const fs = require("node:fs");
+const path = require("node:path");
+const args = process.argv.slice(2);
+if (args[0] === "pr" && args[1] === "diff") {
+  process.stdout.write([
+    "diff --git a/old.txt b/new.txt",
+    "similarity index 100%",
+    "rename from old.txt",
+    "rename to new.txt",
+    "--- a/old.txt",
+    "+++ b/new.txt",
+    "@@ -1 +1 @@",
+    "-before",
+    "+after",
+  ].join("\\n"));
+  process.exit(0);
+}
+if (args[0] === "api" && args[1].includes("/issues/7/comments")) {
+  process.stdout.write(JSON.stringify([{ id: 99, body: "Looks good", createdAt: "2026-03-08T12:00:00Z", url: "https://github.com/openai/codex/pull/7#issuecomment-99", author: { login: "reviewer" } }]));
+  process.exit(0);
+}
+if (args[0] === "pr" && args[1] === "checkout") {
+  fs.writeFileSync(path.join(process.cwd(), "checked-out-pr.txt"), args[2], "utf8");
+  process.exit(0);
+}
+process.stderr.write("unexpected gh invocation: " + JSON.stringify(args));
+process.exit(1);
+`,
+    );
+
+    const diff = await server.handleRpc("get_github_pull_request_diff", {
+      workspaceId: "ws-1",
+      prNumber: 7,
+    });
+    const comments = await server.handleRpc("get_github_pull_request_comments", {
+      workspaceId: "ws-1",
+      prNumber: 7,
+    });
+    const checkoutResult = await server.handleRpc("checkout_github_pull_request", {
+      workspaceId: "ws-1",
+      prNumber: 7,
+    });
+
+    expect(diff).toEqual([
+      {
+        path: "new.txt",
+        status: "R",
+        diff: [
+          "diff --git a/old.txt b/new.txt",
+          "similarity index 100%",
+          "rename from old.txt",
+          "rename to new.txt",
+          "--- a/old.txt",
+          "+++ b/new.txt",
+          "@@ -1 +1 @@",
+          "-before",
+          "+after",
+        ].join("\n"),
+      },
+    ]);
+    expect(comments).toEqual([
+      {
+        id: 99,
+        body: "Looks good",
+        createdAt: "2026-03-08T12:00:00Z",
+        url: "https://github.com/openai/codex/pull/7#issuecomment-99",
+        author: { login: "reviewer" },
+      },
+    ]);
+    expect(checkoutResult).toBeNull();
+    await expect(fs.readFile(path.join(workspace.path, "checked-out-pr.txt"), "utf8")).resolves.toBe("7");
+  });
+
+  it("returns a typed error when the workspace remote is not GitHub", async () => {
+    const { server, workspace } = await createServerFixture();
+    await fs.mkdir(workspace.path, { recursive: true });
+    await runGit(workspace.path, ["init", "-b", "main"]);
+    await runGit(workspace.path, ["remote", "add", "origin", "git@gitlab.com:openai/codex.git"]);
+
+    const result = await server.handleRpc("get_github_issues", { workspaceId: "ws-1" });
+
+    expect(result).toEqual({
+      error: {
+        message: "Remote is not a GitHub repository.",
+      },
+    });
+  });
+
+  it("creates a GitHub repo, adds origin, pushes HEAD, and returns the remote URL", async () => {
+    const { dir, server, workspace } = await createServerFixture();
+    const remoteRepo = path.join(dir, "remote.git");
+    await fs.mkdir(workspace.path, { recursive: true });
+    await runGit(workspace.path, ["init", "-b", "main"]);
+    await runGit(dir, ["init", "--bare", remoteRepo]);
+    await runGit(workspace.path, ["config", "user.email", "dev@example.com"]);
+    await runGit(workspace.path, ["config", "user.name", "Dev"]);
+    await fs.writeFile(path.join(workspace.path, "tracked.txt"), "hello\n", "utf8");
+    await runGit(workspace.path, ["add", "tracked.txt"]);
+    await runGit(workspace.path, ["commit", "-m", "Initial commit"]);
+    await installFakeGh(
+      dir,
+      `
+const args = process.argv.slice(2);
+if (args[0] === "api" && args[1] === "user") {
+  process.stdout.write("octocat\\n");
+  process.exit(0);
+}
+if (args[0] === "repo" && args[1] === "create") {
+  process.exit(0);
+}
+if (args[0] === "config" && args[1] === "get" && args[2] === "git_protocol") {
+  process.stdout.write("https\\n");
+  process.exit(0);
+}
+if (args[0] === "repo" && args[1] === "view" && args[3] === "--json") {
+  process.stdout.write(${JSON.stringify(remoteRepo + "\n")});
+  process.exit(0);
+}
+if (args[0] === "api" && args[1] === "-X" && args[2] === "PATCH") {
+  process.exit(0);
+}
+process.stderr.write("unexpected gh invocation: " + JSON.stringify(args));
+process.exit(1);
+`,
+    );
+
+    const result = await server.handleRpc("create_github_repo", {
+      workspaceId: "ws-1",
+      repo: "demo",
+      visibility: "private",
+      branch: "main",
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      repo: "octocat/demo",
+      remoteUrl: remoteRepo,
+    });
+    await expect(fs.readFile(path.join(remoteRepo, "HEAD"), "utf8")).resolves.toContain("main");
+  });
+
+  it("returns partial when push or default branch update fails after repo creation", async () => {
+    const { dir, server, workspace } = await createServerFixture();
+    await fs.mkdir(workspace.path, { recursive: true });
+    await runGit(workspace.path, ["init", "-b", "main"]);
+    await runGit(workspace.path, ["config", "user.email", "dev@example.com"]);
+    await runGit(workspace.path, ["config", "user.name", "Dev"]);
+    await fs.writeFile(path.join(workspace.path, "tracked.txt"), "hello\n", "utf8");
+    await runGit(workspace.path, ["add", "tracked.txt"]);
+    await runGit(workspace.path, ["commit", "-m", "Initial commit"]);
+    await installFakeGh(
+      dir,
+      `
+const args = process.argv.slice(2);
+if (args[0] === "repo" && args[1] === "create") {
+  process.exit(0);
+}
+if (args[0] === "config" && args[1] === "get" && args[2] === "git_protocol") {
+  process.stdout.write("ssh\\n");
+  process.exit(0);
+}
+if (args[0] === "repo" && args[1] === "view" && args[3] === "--json") {
+  process.stdout.write("git@github.com:openai/codex.git\\n");
+  process.exit(0);
+}
+if (args[0] === "api" && args[1] === "-X" && args[2] === "PATCH") {
+  process.stderr.write("patch failed");
+  process.exit(1);
+}
+if (args[0] === "api" && args[1] === "user") {
+  process.stdout.write("ignored\\n");
+  process.exit(0);
+}
+process.stderr.write("unexpected gh invocation: " + JSON.stringify(args));
+process.exit(1);
+`,
+    );
+    await runGit(workspace.path, ["remote", "add", "origin", "git@github.com:openai/codex.git"]);
+
+    const result = await server.handleRpc("create_github_repo", {
+      workspaceId: "ws-1",
+      repo: "openai/codex",
+      visibility: "public",
+      branch: "main",
+    });
+
+    expect(result).toEqual({
+      status: "partial",
+      repo: "openai/codex",
+      remoteUrl: "git@github.com:openai/codex.git",
+      pushError: expect.any(String),
+      defaultBranchError: "patch failed",
+    });
+  });
+
+  it("rejects create_github_repo when origin points at another repository", async () => {
+    const { server, workspace } = await createServerFixture();
+    await fs.mkdir(workspace.path, { recursive: true });
+    await runGit(workspace.path, ["init", "-b", "main"]);
+    await runGit(workspace.path, ["remote", "add", "origin", "git@github.com:openai/other.git"]);
+
+    const result = await server.handleRpc("create_github_repo", {
+      workspaceId: "ws-1",
+      repo: "openai/codex",
+      visibility: "public",
+    });
+
+    expect(result).toEqual({
+      error: {
+        message:
+          "Origin remote already points to 'openai/other', but 'openai/codex' was requested. Remove or reconfigure origin to continue.",
+      },
+    });
   });
 });

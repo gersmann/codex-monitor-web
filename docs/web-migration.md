@@ -13,7 +13,7 @@ The browser UI path is working and the active web backend is the in-process Type
 - Browser frontend: React + Vite
 - Active web transport: Node.js server in `server/index.ts`
 - Active backend core: `server/codex.ts`
-- Vendored Codex runtime: `server/vendor/codex-sdk`
+- Vendored app-server client: `server/vendor/codexSdk.ts`
 - Active parity policy: `server/parity.ts` + `server/parity.test.ts`
 - Frontend compatibility seam: `src/services/tauri.ts` and `src/services/events.ts`
 - Rust parity reference: `src-tauri/src/lib.rs` and `src-tauri/src/bin/codex_monitor_daemon.rs`
@@ -22,7 +22,7 @@ The browser UI path is working and the active web backend is the in-process Type
 
 - Browser frontend: React + Vite
 - Local backend process: Node.js
-- Codex integration: vendored local app-server client with a small remaining SDK utility shim
+- Codex integration: vendored local app-server client
 - Frontend compatibility seam: `src/services/tauri.ts` and `src/services/events.ts`
 
 The web build keeps the frontend IPC contract stable and exposes:
@@ -63,14 +63,18 @@ These areas are currently excluded from the web migration plan:
 
 - Browser-safe transport layer for the frontend service facade
 - In-process TS companion server for app settings, workspaces, prompts, and threads
-- Vendored local Codex runtime and app-server shellout client
+- Vendored local app-server shellout client
 - Persistent app-server client reuse for metadata, account, and control-plane requests
 - Direct app-server-backed thread start, turn start, turn interrupt, approval responses, and live server-request forwarding
 - Shell-out based external session discovery via `codex app-server`
-- Thread controls for steer, review start, fork, compact, and run metadata
+- Thread controls for steer, review start, fork, compact, and app-server-backed run metadata
 - Backend admin parity methods: `ping`, `daemon_info`, `daemon_shutdown`
 - Explicit support policy for web-adapted and intentionally unsupported RPC methods
 - App-server-backed metadata/account parity for `model_list`, `skills_list`, `apps_list`, `list_mcp_server_status`, `collaboration_mode_list`, `experimental_feature_list`, `account_rate_limits`, `account_read`, `codex_login`, and `codex_login_cancel`
+- Metadata parity for `codex_doctor`, `generate_commit_message`, and `generate_agent_description`
+- Local usage parity for `local_usage_snapshot` against `CODEX_HOME/sessions`
+- Runtime Codex arg handoff parity for `set_workspace_runtime_codex_args`
+- Agent settings parity backed directly by `CODEX_HOME/config.toml`, including managed agent CRUD and managed agent config TOML reads and writes
 - Core git reads and actions through the local companion: status, diffs, log, commit diffs, remote detection, staging, commit/fetch/pull/push/sync, and branch list/create/checkout
 - Worktree setup markers plus basic worktree add and rename flows
 - Browser-safe event subscription and runtime guards for Tauri-only features
@@ -79,16 +83,24 @@ These areas are currently excluded from the web migration plan:
 
 ### Partially Implemented
 
-- `generate_run_metadata` still uses a small SDK utility path instead of the app-server client
 - App-server notification persistence is in place for core thread and turn lifecycle, and the frontend now handles `skills/changed` and `serverRequest/resolved`, but some secondary notification families still need parity work
-- Agent settings work in the web companion but are not yet sourced from `CODEX_HOME/config.toml`
-- `local_usage_snapshot`, `generate_commit_message`, and runtime Codex arg respawn behavior are not yet at daemon parity
 
 ### Not Implemented
 
-- GitHub issue and pull request API parity
-- Full metadata parity for skills, MCP status, experimental features, and related config surfaces
 - Frontend handling for some web-relevant app-server notifications such as `model/rerouted`, config warnings, deprecation notices, and MCP progress updates
+
+### Explicit Support Policy
+
+Web-adapted RPC methods:
+
+- Runtime and backend identity: `ping`, `daemon_info`, `daemon_shutdown`, `app_build_type`, `is_mobile_runtime`, `is_macos_debug_build`
+- Browser-only adapters: `open_workspace_in` (URL-only), `send_notification_fallback`
+
+Intentionally unsupported RPC methods:
+
+- Native shell and tray surfaces: `get_open_app_icon`, `menu_set_accelerators`, `set_tray_recent_threads`, `set_tray_session_usage`, `write_text_file`
+- Desktop-only integrations: `dictation_*`, `tailscale_*`, `terminal_*`
+- Codex self-update: `codex_update`
 
 ## Migration Direction
 
@@ -100,8 +112,8 @@ These areas are currently excluded from the web migration plan:
 
 ### Phase 2: Vendor Codex Integration
 
-- Vendor the Codex SDK runtime into the repo
-- Add a local app-server client abstraction for missing control-plane features
+- Vendor the local app-server client into the repo
+- Add typed app-server abstractions for missing control-plane features
 - Route all Codex CLI and app-server calls through the vendored local layer
 
 ### Phase 3: Close Parity Gaps
@@ -115,10 +127,6 @@ These areas are currently excluded from the web migration plan:
 The long-running migration work is tracked in `bd`:
 
 - `CodexMonitor-ac41` Complete TS-only web backend migration
-- `CodexMonitor-5a4d` Remove remaining SDK utility usage from TS web backend
-- `CodexMonitor-9e2e` Use `CODEX_HOME/config.toml` as the source of truth for web companion agent settings
-- `CodexMonitor-cf85` Validate TS-backed web parity and document unsupported surfaces
-- `CodexMonitor-bf58` Improve metadata parity for web companion
 - `CodexMonitor-3e35` Port GitHub issue and PR parity to web companion
 - `CodexMonitor-f550` Port GitHub repo creation parity to web companion
 
