@@ -4,6 +4,11 @@ import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
 import { CodexCompanionServer } from "./codex.js";
 import { resolveDataDir } from "./paths.js";
+import {
+  contentTypeForPath,
+  readStaticResponse,
+  resolveStaticRoot,
+} from "./staticServer.js";
 import { CompanionStorage } from "./storage.js";
 import type { RpcErrorShape } from "./types.js";
 
@@ -53,6 +58,13 @@ function responseHeaders() {
     "access-control-allow-methods": "GET,POST,OPTIONS",
     "access-control-allow-headers": "content-type",
     "content-type": "application/json",
+  };
+}
+
+function staticResponseHeaders(contentType: string, contentLength: number) {
+  return {
+    "content-type": contentType,
+    "content-length": String(contentLength),
   };
 }
 
@@ -145,6 +157,7 @@ function summarizeClientLogPayload(payload: unknown) {
 async function main() {
   const sockets = new Set<WsWebSocket>();
   const storage = new CompanionStorage(resolveDataDir());
+  const staticRoot = resolveStaticRoot();
   let shutdownPromise: Promise<void> | null = null;
   let server: import("node:http").Server | null = null;
   const requestShutdown = () => {
@@ -199,6 +212,34 @@ async function main() {
         ok: true,
         ...(await app.getHealth()),
       });
+      return;
+    }
+
+    if (
+      (request.method === "GET" || request.method === "HEAD") &&
+      !url.pathname.startsWith("/api/")
+    ) {
+      if (!staticRoot) {
+        writeJson(response, 404, { error: { message: "Not found" } });
+        return;
+      }
+      const staticResponse = await readStaticResponse(staticRoot, url.pathname);
+      if (!staticResponse) {
+        writeJson(response, 404, { error: { message: "Not found" } });
+        return;
+      }
+      response.writeHead(
+        200,
+        staticResponseHeaders(
+          contentTypeForPath(staticResponse.filePath),
+          staticResponse.body.length,
+        ),
+      );
+      if (request.method === "HEAD") {
+        response.end();
+        return;
+      }
+      response.end(staticResponse.body);
       return;
     }
 
@@ -299,7 +340,10 @@ async function main() {
   });
 
   server.listen(DEFAULT_PORT, DEFAULT_HOST, () => {
-    console.log(`[codex-monitor-web] listening on http://${DEFAULT_HOST}:${DEFAULT_PORT}`);
+    console.log(
+      `[codex-monitor-web] listening on http://${DEFAULT_HOST}:${DEFAULT_PORT}`,
+      staticRoot ? { staticRoot } : undefined,
+    );
   });
 
   const shutdown = async (reason: "sigint" | "sigterm" | "app-request") => {

@@ -1343,6 +1343,10 @@ async function readTextSnapshot(
     return null;
   }
   try {
+    const metadata = await fs.stat(absolutePath);
+    if (!metadata.isFile()) {
+      return null;
+    }
     const content = await fs.readFile(absolutePath, "utf8");
     return {
       path: relativePath,
@@ -1517,6 +1521,10 @@ function parseNumstat(output: string) {
 
 async function countTextFileAdditions(absolutePath: string) {
   try {
+    const metadata = await fs.stat(absolutePath);
+    if (!metadata.isFile()) {
+      return 0;
+    }
     const content = await fs.readFile(absolutePath, "utf8");
     if (!content) {
       return 0;
@@ -1525,6 +1533,12 @@ async function countTextFileAdditions(absolutePath: string) {
   } catch {
     return 0;
   }
+}
+
+async function isUntrackedDirectory(repoRoot: string, relativePath: string) {
+  const absolutePath = path.join(repoRoot, relativePath);
+  const metadata = await fs.lstat(absolutePath).catch(() => null);
+  return metadata?.isDirectory() === true;
 }
 
 async function scanGitRoots(root: string, depth: number) {
@@ -1669,6 +1683,9 @@ async function buildGitStatusSummary(workspacePath: string) {
   let totalDeletions = 0;
 
   for (const entry of entries) {
+    if (entry.untracked && (await isUntrackedDirectory(repoRoot, entry.path))) {
+      continue;
+    }
     const staged = stagedStats.get(entry.path) ?? { additions: 0, deletions: 0 };
     const unstaged = unstagedStats.get(entry.path) ?? { additions: 0, deletions: 0 };
     if (entry.untracked && !entry.worktreeStatus) {
@@ -1725,9 +1742,15 @@ async function buildWorkingTreeDiffs(workspacePath: string) {
       let diff = "";
       if (isUntracked) {
         const snapshot = await readTextSnapshot(status.repoRoot, file.path);
+        if (!snapshot) {
+          return null;
+        }
         diff = buildUnifiedFileDiff(file.path, "", snapshot?.content ?? "");
       } else {
         diff = (await runGit(status.repoRoot, ["diff", "--binary", "HEAD", "--", file.path])).stdout;
+      }
+      if (!diff.trim()) {
+        return null;
       }
       return {
         path: file.path,
@@ -1735,7 +1758,7 @@ async function buildWorkingTreeDiffs(workspacePath: string) {
       };
     }),
   );
-  return diffs;
+  return diffs.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 }
 
 function parseGitLogEntries(output: string) {

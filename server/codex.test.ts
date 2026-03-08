@@ -1614,6 +1614,33 @@ describe("CodexCompanionServer git/worktree support", () => {
     });
   });
 
+  it("omits untracked directories from git status and working tree diffs", async () => {
+    const { server, workspace } = await createServerFixture();
+    await fs.mkdir(workspace.path, { recursive: true });
+    await runGit(workspace.path, ["init", "-b", "main"]);
+    await runGit(workspace.path, ["config", "user.email", "dev@example.com"]);
+    await runGit(workspace.path, ["config", "user.name", "Dev"]);
+    await fs.writeFile(path.join(workspace.path, "tracked.txt"), "hello\n", "utf8");
+    await runGit(workspace.path, ["add", "tracked.txt"]);
+    await runGit(workspace.path, ["commit", "-m", "Initial commit"]);
+    await fs.mkdir(path.join(workspace.path, "untracked-dir"), { recursive: true });
+    await fs.writeFile(path.join(workspace.path, "untracked-dir", "nested.txt"), "nested\n", "utf8");
+    await fs.writeFile(path.join(workspace.path, "loose.txt"), "loose\n", "utf8");
+
+    const status = await server.handleRpc("get_git_status", { workspaceId: "ws-1" });
+    const diffs = await server.handleRpc("get_git_diffs", { workspaceId: "ws-1" });
+
+    expect((status as { files: Array<{ path: string }> }).files).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "loose.txt" })]),
+    );
+    expect((status as { files: Array<{ path: string }> }).files).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "untracked-dir/" })]),
+    );
+    expect(diffs).toEqual([
+      expect.objectContaining({ path: "loose.txt" }),
+    ]);
+  });
+
   it("tracks worktree setup markers", async () => {
     const { server, storage, workspace } = await createServerFixture();
     const worktreeWorkspace: StoredWorkspace = {

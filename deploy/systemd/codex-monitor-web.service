@@ -1,0 +1,21 @@
+[Unit]
+Description=CodexMonitor Web
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USER
+Group=YOUR_GROUP
+WorkingDirectory=/path/to/CodexMonitor
+Environment=HOME=/home/YOUR_USER
+Environment=NODE_ENV=production
+Environment=CODEX_MONITOR_WEB_HOST=127.0.0.1
+Environment=CODEX_MONITOR_WEB_PORT=4320
+Environment=CODEX_MONITOR_WEB_CLIENT_LOGS=1
+ExecStart=/usr/bin/env node /path/to/CodexMonitor/build/server/index.js
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

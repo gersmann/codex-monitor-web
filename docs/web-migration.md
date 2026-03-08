@@ -20,12 +20,12 @@ The browser UI path is working and the active web backend is the in-process Type
 
 ## Current Stage
 
-The migration is no longer in architecture-buildout mode. The TS-only web backend is established and the remaining work is parity hardening and web-shell cleanup.
+The migration is complete. The TS-only web backend is the established browser runtime and production deployment now runs without the Vite dev server.
 
 Current focus:
 
-- Verify the remaining web path in daily use and close any newly discovered parity gaps
-- Close the migration epic once the web path is stable enough to be treated as the default browser runtime
+- Daily-use validation and normal bug fixing
+- Deployment/runbook maintenance for the production web path
 
 ## Target Runtime Model
 
@@ -38,6 +38,12 @@ The web build keeps the frontend IPC contract stable and exposes:
 
 - HTTP RPC under `/api/rpc/<method>`
 - WebSocket events under `/events`
+
+Production deployment can now run without the Vite dev server:
+
+- built frontend served by the Node companion
+- compiled server runtime in `build/server/`
+- optional reverse proxy in front, such as Caddy
 
 ## In Scope
 
@@ -138,7 +144,7 @@ Status: complete for the core runtime path.
 - Fill the remaining metadata, config, GitHub, and control-plane gaps in TS
 - Keep desktop-only features out of the web runtime unless intentionally ported
 
-Status: mostly complete.
+Status: complete for the current web product scope.
 
 ### Phase 4: Parity Hardening
 
@@ -151,11 +157,11 @@ Status: mostly complete.
 - Refresh the canonical docs and support-policy lists to match live state
 - Close the migration epic once the remaining open web-only tasks are complete
 
+Status: complete.
+
 ## Active Tracking
 
-The long-running migration work is tracked in `bd`:
-
-- `CodexMonitor-ac41` Complete TS-only web backend migration
+The migration epic is complete. New work should be tracked as ordinary web-runtime or deployment bugs/features rather than under a standing migration epic.
 
 ## Implementation Notes
 
