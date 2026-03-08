@@ -153,7 +153,6 @@ function summarizeClientLogPayload(payload: unknown) {
     details: record.details,
   };
 }
-
 async function main() {
   const sockets = new Set<WsWebSocket>();
   const storage = new CompanionStorage(resolveDataDir());
