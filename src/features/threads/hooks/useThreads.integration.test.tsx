@@ -1835,6 +1835,7 @@ describe("useThreads UX integration", () => {
     expect(unpinnedRows.map((row) => row.thread.id)).toEqual(["thread-b"]);
   });
 
+
   it("keeps parent rows anchored when refresh only returns subagent children", async () => {
     vi.mocked(listThreads)
       .mockResolvedValueOnce({

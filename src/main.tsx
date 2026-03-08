@@ -229,6 +229,12 @@ disableMobileZoomGestures();
 syncMobileViewportHeight();
 installWebClientErrorLogging();
 
+if (typeof document !== "undefined") {
+  document.documentElement.dataset.runtime = isWebCompanionRuntime()
+    ? "web"
+    : "tauri";
+}
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />

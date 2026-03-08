@@ -235,7 +235,7 @@ export function Home({
   return (
     <div className="home">
       <div className="home-hero">
-        <div className="home-title">Codex Monitor</div>
+        <div className="home-title">Codex Monitor Web</div>
         <div className="home-subtitle">
           Orchestrate agents across your local projects.
         </div>

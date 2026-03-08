@@ -1535,12 +1535,6 @@ async function countTextFileAdditions(absolutePath: string) {
   }
 }
 
-async function isUntrackedDirectory(repoRoot: string, relativePath: string) {
-  const absolutePath = path.join(repoRoot, relativePath);
-  const metadata = await fs.lstat(absolutePath).catch(() => null);
-  return metadata?.isDirectory() === true;
-}
-
 async function scanGitRoots(root: string, depth: number) {
   const resolvedRoot = path.resolve(root);
   const roots = new Set<string>();
@@ -1666,7 +1660,7 @@ function parseStatusEntries(output: string) {
 async function buildGitStatusSummary(workspacePath: string) {
   const repoRoot = await resolveGitRootFromPath(workspacePath);
   const [statusResult, branchResult, stagedStatsResult, unstagedStatsResult] = await Promise.all([
-    runGit(repoRoot, ["status", "--porcelain=v1", "-z", "--branch"]),
+    runGit(repoRoot, ["status", "--porcelain=v1", "-z", "--branch", "--untracked-files=all"]),
     tryRunGit(repoRoot, ["branch", "--show-current"]),
     runGit(repoRoot, ["diff", "--cached", "--numstat", "--"]),
     runGit(repoRoot, ["diff", "--numstat", "--"]),
@@ -1683,9 +1677,6 @@ async function buildGitStatusSummary(workspacePath: string) {
   let totalDeletions = 0;
 
   for (const entry of entries) {
-    if (entry.untracked && (await isUntrackedDirectory(repoRoot, entry.path))) {
-      continue;
-    }
     const staged = stagedStats.get(entry.path) ?? { additions: 0, deletions: 0 };
     const unstaged = unstagedStats.get(entry.path) ?? { additions: 0, deletions: 0 };
     if (entry.untracked && !entry.worktreeStatus) {
@@ -5067,7 +5058,18 @@ export class CodexCompanionServer {
         if (!workspace) {
           return notFound("Workspace not found.");
         }
-        await runGit(await resolveGitRootFromPath(workspace.path), ["add", "-A"]);
+        const status = await buildGitStatusSummary(workspace.path);
+        const visiblePaths = Array.from(
+          new Set(
+            status.files
+              .map((entry) => entry.path)
+              .filter((entry) => typeof entry === "string" && entry.length > 0),
+          ),
+        );
+        if (visiblePaths.length === 0) {
+          return null;
+        }
+        await runGit(status.repoRoot, ["add", "-A", "--", ...visiblePaths]);
         return null;
       }
       case "unstage_git_file": {

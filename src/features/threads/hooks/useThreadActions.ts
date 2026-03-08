@@ -29,6 +29,10 @@ import {
   normalizeRootPath,
 } from "@threads/utils/threadNormalize";
 import {
+  getServerThreadName,
+  resolveThreadSummaryName,
+} from "@threads/utils/threadNames";
+import {
   getParentThreadIdFromThread,
   getResumedTurnState,
   isSubagentThreadSource,
@@ -345,8 +349,18 @@ export function useThreadActions({
             dispatch({ type: "setThreadItems", threadId, items: mergedItems });
           }
           const preview = asString(thread?.preview ?? "");
+          const serverName = getServerThreadName(
+            asString(thread.name ?? thread.title ?? ""),
+          );
           const customName = getCustomName(workspaceId, threadId);
-          if (!customName && preview) {
+          if (!customName && serverName) {
+            dispatch({
+              type: "setThreadName",
+              workspaceId,
+              threadId,
+              name: serverName,
+            });
+          } else if (!customName && preview) {
             dispatch({
               type: "setThreadName",
               workspaceId,
@@ -509,15 +523,15 @@ export function useThreadActions({
         return null;
       }
       const preview = asString(thread?.preview ?? "").trim();
+      const serverName = getServerThreadName(asString(thread.name ?? thread.title ?? ""));
       const customName = getCustomName(workspaceId, id);
       const fallbackName = `Agent ${fallbackIndex + 1}`;
-      const name = customName
-        ? customName
-        : preview.length > 0
-          ? preview.length > 38
-            ? `${preview.slice(0, 38)}…`
-            : preview
-          : fallbackName;
+      const name = resolveThreadSummaryName({
+        customName,
+        serverName,
+        preview,
+        fallbackName,
+      });
       const metadata = extractThreadCodexMetadata(thread);
       if (shouldHideSubagentThreadFromSidebar(thread.source)) {
         return null;

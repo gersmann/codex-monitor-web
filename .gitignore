@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+build
 *.local
 src-tauri/tauri.ios.local.conf.json
 .testflight.local.env

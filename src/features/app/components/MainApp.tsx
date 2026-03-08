@@ -47,6 +47,7 @@ import { useMainAppSidebarMenuOrchestration } from "@app/hooks/useMainAppSidebar
 import { useMainAppWorktreeState } from "@app/hooks/useMainAppWorktreeState";
 import { useMainAppWorkspaceActions } from "@app/hooks/useMainAppWorkspaceActions";
 import { useMainAppWorkspaceLifecycle } from "@app/hooks/useMainAppWorkspaceLifecycle";
+import { useAppDocumentTitle } from "@app/hooks/useAppDocumentTitle";
 import type {
   ComposerEditorSettings,
   WorkspaceInfo,
@@ -187,6 +188,7 @@ export default function MainApp() {
     refreshWorkspaces,
   });
   const updaterEnabled = !isMobileRuntime;
+  useAppDocumentTitle(activeWorkspace);
 
   const workspacesById = useMemo(
     () => new Map(workspaces.map((workspace) => [workspace.id, workspace])),
