@@ -24,6 +24,9 @@ type UseTerminalSessionOptions = {
   activeTerminalId: string | null;
   isVisible: boolean;
   focusRequestVersion: number;
+  isRestoredTerminal?: (workspaceId: string, terminalId: string) => boolean;
+  markTerminalRestored?: (workspaceId: string, terminalId: string) => void;
+  onMissingRestoredTerminal?: (workspaceId: string, terminalId: string) => void;
   onDebug?: (entry: DebugEntry) => void;
   onSessionExit?: (workspaceId: string, terminalId: string) => void;
 };
@@ -116,6 +119,9 @@ export function useTerminalSession({
   activeTerminalId,
   isVisible,
   focusRequestVersion,
+  isRestoredTerminal,
+  markTerminalRestored,
+  onMissingRestoredTerminal,
   onDebug,
   onSessionExit,
 }: UseTerminalSessionOptions): TerminalSessionState {
@@ -334,8 +340,21 @@ export function useTerminalSession({
       setStatus("connecting");
       setMessage("Starting terminal session...");
       if (!openedSessionsRef.current.has(key)) {
-        await openTerminalSession(activeWorkspace.id, activeTerminalId, cols, rows);
+        const restoreOnly = isRestoredTerminal?.(activeWorkspace.id, activeTerminalId) ?? false;
+        try {
+          await openTerminalSession(activeWorkspace.id, activeTerminalId, cols, rows, {
+            restoreOnly,
+          });
+        } catch (error) {
+          if (restoreOnly && shouldIgnoreTerminalError(error)) {
+            openedSessionsRef.current.delete(key);
+            onMissingRestoredTerminal?.(activeWorkspace.id, activeTerminalId);
+            return;
+          }
+          throw error;
+        }
         openedSessionsRef.current.add(key);
+        markTerminalRestored?.(activeWorkspace.id, activeTerminalId);
       }
       setStatus("ready");
       setMessage("Terminal ready.");
@@ -357,7 +376,10 @@ export function useTerminalSession({
   }, [
     activeTerminalId,
     activeWorkspace,
+    isRestoredTerminal,
     isVisible,
+    markTerminalRestored,
+    onMissingRestoredTerminal,
     onDebug,
     refreshTerminal,
     syncActiveBuffer,

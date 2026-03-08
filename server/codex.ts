@@ -22,6 +22,11 @@ import {
 } from "./parity.js";
 import { CompanionStorage } from "./storage.js";
 import {
+  createTerminalRuntime,
+  type TerminalBroadcastMessage,
+  type TerminalRuntime,
+} from "./terminal.js";
+import {
   CodexAppServerClient,
   type AppServerNotificationMessage,
 } from "./vendor/codexSdk.js";
@@ -51,7 +56,7 @@ type BroadcastMessage = {
   payload: AppServerEventPayload;
 };
 
-type BroadcastFn = (message: BroadcastMessage) => void;
+type BroadcastFn = (message: BroadcastMessage | TerminalBroadcastMessage) => void;
 
 type PromptEntry = {
   name: string;
@@ -2572,12 +2577,18 @@ export class CodexCompanionServer {
     string,
     Promise<Awaited<ReturnType<typeof buildLocalUsageSnapshot>>>
   >();
+  private readonly terminalRuntime: TerminalRuntime | null;
+  private readonly terminalEnabled: boolean;
 
   constructor(
     private readonly storage: CompanionStorage,
     private readonly broadcast: BroadcastFn,
     private readonly requestShutdown?: () => void,
-  ) {}
+    terminalRuntime?: TerminalRuntime | null,
+  ) {
+    this.terminalRuntime = terminalRuntime ?? createTerminalRuntime(broadcast);
+    this.terminalEnabled = this.terminalRuntime !== null;
+  }
 
   async initialize() {
     const [workspaces, threads] = await Promise.all([
@@ -2603,11 +2614,15 @@ export class CodexCompanionServer {
       threadCount: this.threadsById.size,
       connectedWorkspaceCount: this.connectedWorkspaceIds.size,
       appServerClientCount: this.appServerClients.size,
+      capabilities: {
+        terminal: this.terminalEnabled,
+      },
     };
   }
 
   async close() {
     await Promise.all(Array.from(this.appServerClients.values(), (client) => client.close()));
+    await this.terminalRuntime?.closeAll();
     this.appServerClients.clear();
     this.appServerClientWorkspaceIds.clear();
     this.appServerThreadWorkspaceIds.clear();
@@ -3679,6 +3694,9 @@ export class CodexCompanionServer {
           mode: "typescript",
           transport: "http",
           binaryPath: process.execPath,
+          capabilities: {
+            terminal: this.terminalEnabled,
+          },
         };
       case "daemon_shutdown":
         queueMicrotask(() => {
@@ -5244,12 +5262,96 @@ export class CodexCompanionServer {
       case "dictation_request_permission":
       case "dictation_stop":
       case "dictation_cancel":
-      case "terminal_open":
-      case "terminal_write":
-      case "terminal_resize":
-      case "terminal_close":
       case "write_text_file":
         return badRequest(unsupportedRpcMessage(method));
+      case "terminal_open": {
+        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
+        const terminalId = trimString(params.terminalId);
+        const cols = Number(params.cols ?? 120);
+        const rows = Number(params.rows ?? 40);
+        const restoreOnly = params.restoreOnly === true;
+        if (!this.terminalRuntime) {
+          return badRequest(unsupportedRpcMessage(method));
+        }
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        if (!terminalId) {
+          return badRequest("terminalId is required.");
+        }
+        try {
+          return await this.terminalRuntime.openSession({
+            workspaceId: workspace.id,
+            terminalId,
+            cwd: workspace.path,
+            cols,
+            rows,
+            restoreOnly,
+          });
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
+      case "terminal_write": {
+        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
+        const terminalId = trimString(params.terminalId);
+        const data = String(params.data ?? "");
+        if (!this.terminalRuntime) {
+          return badRequest(unsupportedRpcMessage(method));
+        }
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        if (!terminalId) {
+          return badRequest("terminalId is required.");
+        }
+        try {
+          await this.terminalRuntime.writeSession(workspace.id, terminalId, data);
+          return null;
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
+      case "terminal_resize": {
+        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
+        const terminalId = trimString(params.terminalId);
+        const cols = Number(params.cols ?? 120);
+        const rows = Number(params.rows ?? 40);
+        if (!this.terminalRuntime) {
+          return badRequest(unsupportedRpcMessage(method));
+        }
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        if (!terminalId) {
+          return badRequest("terminalId is required.");
+        }
+        try {
+          await this.terminalRuntime.resizeSession(workspace.id, terminalId, cols, rows);
+          return null;
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
+      case "terminal_close": {
+        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
+        const terminalId = trimString(params.terminalId);
+        if (!this.terminalRuntime) {
+          return badRequest(unsupportedRpcMessage(method));
+        }
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        if (!terminalId) {
+          return badRequest("terminalId is required.");
+        }
+        try {
+          await this.terminalRuntime.closeSession(workspace.id, terminalId);
+          return null;
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
       case "get_github_issues": {
         const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
         if (!workspace) {

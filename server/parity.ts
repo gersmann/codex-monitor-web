@@ -47,12 +47,7 @@ export const INTENTIONALLY_UNSUPPORTED_RPC_METHOD_GROUPS = {
     "tailscale_daemon_stop",
     "tailscale_status",
   ],
-  terminal: [
-    "terminal_close",
-    "terminal_open",
-    "terminal_resize",
-    "terminal_write",
-  ],
+  terminal: [],
 } as const;
 
 export const INTENTIONALLY_UNSUPPORTED_RPC_METHODS = Object.freeze(

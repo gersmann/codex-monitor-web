@@ -128,6 +128,7 @@ type UseMainAppLayoutSurfacesArgs = {
   handleSelectOpenAppId: MainHeaderProps["onSelectOpenAppId"];
   handleCopyThread: MainHeaderProps["onCopyThread"];
   handleToggleTerminalWithFocus: MainHeaderProps["onToggleTerminal"];
+  terminalSupported: boolean | null;
   launchScriptState: {
     launchScript: string | null;
     editorOpen: boolean;
@@ -297,6 +298,7 @@ export function useMainAppLayoutSurfaces({
   handleSelectOpenAppId,
   handleCopyThread,
   handleToggleTerminalWithFocus,
+  terminalSupported,
   launchScriptState,
   launchScriptsState,
   models,
@@ -632,19 +634,29 @@ export function useMainAppLayoutSurfaces({
             onCopyThread: handleCopyThread,
             onToggleTerminal: handleToggleTerminalWithFocus,
             isTerminalOpen: terminalOpen,
-            showTerminalButton: !isCompact,
+            showTerminalButton: !isCompact && terminalSupported === true,
             showWorkspaceTools: !isCompact,
-            launchScript: launchScriptState.launchScript,
-            launchScriptEditorOpen: launchScriptState.editorOpen,
-            launchScriptDraft: launchScriptState.draftScript,
-            launchScriptSaving: launchScriptState.isSaving,
-            launchScriptError: launchScriptState.error,
-            onRunLaunchScript: launchScriptState.onRunLaunchScript,
-            onOpenLaunchScriptEditor: launchScriptState.onOpenEditor,
-            onCloseLaunchScriptEditor: launchScriptState.onCloseEditor,
-            onLaunchScriptDraftChange: launchScriptState.onDraftScriptChange,
-            onSaveLaunchScript: launchScriptState.onSaveLaunchScript,
-            launchScriptsState,
+            launchScript: terminalSupported === true ? launchScriptState.launchScript : null,
+            launchScriptEditorOpen: terminalSupported === true ? launchScriptState.editorOpen : false,
+            launchScriptDraft: terminalSupported === true ? launchScriptState.draftScript : "",
+            launchScriptSaving: terminalSupported === true ? launchScriptState.isSaving : false,
+            launchScriptError: terminalSupported === true ? launchScriptState.error : null,
+            onRunLaunchScript: terminalSupported === true
+              ? launchScriptState.onRunLaunchScript
+              : undefined,
+            onOpenLaunchScriptEditor: terminalSupported === true
+              ? launchScriptState.onOpenEditor
+              : undefined,
+            onCloseLaunchScriptEditor: terminalSupported === true
+              ? launchScriptState.onCloseEditor
+              : undefined,
+            onLaunchScriptDraftChange: terminalSupported === true
+              ? launchScriptState.onDraftScriptChange
+              : undefined,
+            onSaveLaunchScript: terminalSupported === true
+              ? launchScriptState.onSaveLaunchScript
+              : undefined,
+            launchScriptsState: terminalSupported === true ? launchScriptsState : undefined,
             extraActionsNode: displayNodes.mainHeaderActionsNode,
           }
         : null,

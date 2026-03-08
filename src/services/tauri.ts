@@ -4,6 +4,7 @@ import type {
   AppSettings,
   CodexUpdateResult,
   CodexDoctorResult,
+  DaemonInfo,
   DictationModelStatus,
   DictationSessionState,
   LocalUsageSnapshot,
@@ -1266,13 +1267,39 @@ export async function cancelDictation(): Promise<DictationSessionState> {
   return invoke("dictation_cancel");
 }
 
+export async function getDaemonInfo(): Promise<DaemonInfo> {
+  if (isWebCompanionRuntime()) {
+    return invoke<DaemonInfo>("daemon_info");
+  }
+  return {
+    name: "codex-monitor",
+    version: __APP_VERSION__,
+    pid: 0,
+    mode: "tauri",
+    transport: "ipc",
+    binaryPath: "",
+    capabilities: {
+      terminal: true,
+    },
+  };
+}
+
 export async function openTerminalSession(
   workspaceId: string,
   terminalId: string,
   cols: number,
   rows: number,
+  options?: {
+    restoreOnly?: boolean;
+  },
 ): Promise<{ id: string }> {
-  return invoke("terminal_open", { workspaceId, terminalId, cols, rows });
+  return invoke("terminal_open", {
+    workspaceId,
+    terminalId,
+    cols,
+    rows,
+    restoreOnly: options?.restoreOnly ?? false,
+  });
 }
 
 export async function writeTerminalSession(

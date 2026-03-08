@@ -673,6 +673,20 @@ export type DebugEntry = {
   payload?: unknown;
 };
 
+export type RuntimeCapabilities = {
+  terminal: boolean;
+};
+
+export type DaemonInfo = {
+  name: string;
+  version: string;
+  pid: number;
+  mode: string;
+  transport: string;
+  binaryPath: string;
+  capabilities?: Partial<RuntimeCapabilities>;
+};
+
 export type TerminalStatus = "idle" | "connecting" | "ready" | "error";
 
 export type DictationModelState = "missing" | "downloading" | "ready" | "error";

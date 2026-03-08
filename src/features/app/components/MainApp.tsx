@@ -34,6 +34,7 @@ import { useInterruptShortcut } from "@app/hooks/useInterruptShortcut";
 import { useArchiveShortcut } from "@app/hooks/useArchiveShortcut";
 import { useCopyThread } from "@threads/hooks/useCopyThread";
 import { useTerminalController } from "@/features/terminal/hooks/useTerminalController";
+import { useTerminalAvailability } from "@/features/terminal/hooks/useTerminalAvailability";
 import { useWorkspaceLaunchScript } from "@app/hooks/useWorkspaceLaunchScript";
 import { useWorkspaceLaunchScripts } from "@app/hooks/useWorkspaceLaunchScripts";
 import { useWorktreeSetupScript } from "@app/hooks/useWorktreeSetupScript";
@@ -189,6 +190,7 @@ export default function MainApp() {
   });
   const updaterEnabled = !isMobileRuntime;
   useAppDocumentTitle(activeWorkspace);
+  const terminalSupported = useTerminalAvailability();
 
   const workspacesById = useMemo(
     () => new Map(workspaces.map((workspace) => [workspace.id, workspace])),
@@ -247,6 +249,7 @@ export default function MainApp() {
     closeTerminal: closeTerminalPanel,
   } = useLayoutController({
     activeWorkspaceId,
+    terminalSupported,
     setActiveTab,
     setDebugOpen,
     toggleDebugPanelShortcut: appSettings.toggleDebugPanelShortcut,
@@ -877,6 +880,7 @@ export default function MainApp() {
     activeWorkspaceId,
     activeWorkspace,
     terminalOpen,
+    terminalSupported,
     onCloseTerminalPanel: closeTerminalPanel,
     onDebug: addDebugEntry,
   });
@@ -1825,6 +1829,7 @@ export default function MainApp() {
     handleComposerSendWithDraftStart,
     interruptTurn,
     terminalOpen,
+    terminalSupported,
     debugOpen,
     debugEntries,
     terminalTabs,

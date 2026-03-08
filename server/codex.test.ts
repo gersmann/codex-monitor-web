@@ -6,11 +6,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildAppServerUserInputItems, CodexCompanionServer } from "./codex.js";
 import { CompanionStorage } from "./storage.js";
 import type { StoredThread, StoredWorkspace } from "./types.js";
+import type { TerminalRuntime } from "./terminal.js";
 
 const tempDirs: string[] = [];
 
 async function createServerFixture(
   broadcast: (message: { event: string; payload: Record<string, unknown> }) => void = () => {},
+  terminalRuntime?: TerminalRuntime | null,
 ) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-monitor-server-"));
   tempDirs.push(dir);
@@ -42,7 +44,7 @@ async function createServerFixture(
   };
   await storage.writeWorkspaces([workspace]);
   await storage.writeThreads([thread]);
-  const server = new CodexCompanionServer(storage, broadcast);
+  const server = new CodexCompanionServer(storage, broadcast, undefined, terminalRuntime);
   await server.initialize();
   return { dir, storage, server, workspace, thread };
 }
@@ -1569,6 +1571,79 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
       name: "codex-monitor-web",
       mode: "typescript",
       transport: "http",
+      capabilities: {
+        terminal: false,
+      },
+    });
+  });
+
+  it("routes terminal RPCs through the configured terminal runtime", async () => {
+    const openSession = vi.fn().mockResolvedValue({ id: "term-1" });
+    const writeSession = vi.fn().mockResolvedValue(undefined);
+    const resizeSession = vi.fn().mockResolvedValue(undefined);
+    const closeSession = vi.fn().mockResolvedValue(undefined);
+    const closeAll = vi.fn().mockResolvedValue(undefined);
+    const terminalRuntime: TerminalRuntime = {
+      openSession,
+      writeSession,
+      resizeSession,
+      closeSession,
+      closeAll,
+    };
+    const { server, workspace } = await createServerFixture(() => {}, terminalRuntime);
+
+    expect(
+      await server.handleRpc("terminal_open", {
+        workspaceId: "ws-1",
+        terminalId: "term-1",
+        cols: 120,
+        rows: 40,
+        restoreOnly: true,
+      }),
+    ).toEqual({ id: "term-1" });
+    expect(openSession).toHaveBeenCalledWith({
+      workspaceId: workspace.id,
+      terminalId: "term-1",
+      cwd: workspace.path,
+      cols: 120,
+      rows: 40,
+      restoreOnly: true,
+    });
+
+    expect(
+      await server.handleRpc("terminal_write", {
+        workspaceId: "ws-1",
+        terminalId: "term-1",
+        data: "echo hi\n",
+      }),
+    ).toBeNull();
+    expect(writeSession).toHaveBeenCalledWith("ws-1", "term-1", "echo hi\n");
+
+    expect(
+      await server.handleRpc("terminal_resize", {
+        workspaceId: "ws-1",
+        terminalId: "term-1",
+        cols: 132,
+        rows: 44,
+      }),
+    ).toBeNull();
+    expect(resizeSession).toHaveBeenCalledWith("ws-1", "term-1", 132, 44);
+
+    expect(
+      await server.handleRpc("terminal_close", {
+        workspaceId: "ws-1",
+        terminalId: "term-1",
+      }),
+    ).toBeNull();
+    expect(closeSession).toHaveBeenCalledWith("ws-1", "term-1");
+
+    await server.close();
+    expect(closeAll).toHaveBeenCalled();
+
+    expect(await server.handleRpc("daemon_info", {})).toMatchObject({
+      capabilities: {
+        terminal: true,
+      },
     });
   });
 });

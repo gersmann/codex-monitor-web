@@ -31,6 +31,14 @@ CODEX_MONITOR_WEB_HOST=0.0.0.0 npm run server:dev
 CODEX_MONITOR_WEB_HOST=0.0.0.0 npm run dev -- --host 0.0.0.0
 ```
 
+Browser terminal support is available in the web runtime, but it is disabled by default. Enable it explicitly on the backend host with:
+
+```bash
+CODEX_MONITOR_ENABLE_TERMINAL=1 npm run server:dev
+```
+
+The terminal runs on the companion host inside the active workspace directory. Terminal tabs restore after a browser refresh only if the backend session is still alive.
+
 ### Browser Production Build
 
 For the browser deployment path, `npm run build` produces:
