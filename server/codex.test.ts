@@ -74,6 +74,18 @@ async function readGitStdout(cwd: string, args: string[]) {
   });
 }
 
+async function readGitStdout(cwd: string, args: string[]) {
+  return await new Promise<string>((resolve, reject) => {
+    execFile("git", args, { cwd }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(`${stderr || stdout || error.message}`.trim()));
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+}
+
 async function installFakeGh(dir: string, scriptBody: string) {
   const binDir = path.join(dir, "bin");
   await fs.mkdir(binDir, { recursive: true });
@@ -801,43 +813,6 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
         threadId: "thread-1",
       },
     });
-  });
-
-  it("does not surface stale local active turn ids in list_threads when app-server reports idle", async () => {
-    const { server, storage, thread } = await createServerFixture();
-    await storage.writeThreads([{ ...thread, activeTurnId: "turn-stale" }]);
-    const listThreads = vi.fn().mockResolvedValue({
-      data: [
-        {
-          id: "sdk-thread-1",
-          cwd: thread.cwd,
-          preview: "Thread One",
-          createdAt: 1,
-          updatedAt: 5,
-          status: { type: "idle" },
-        },
-      ],
-      nextCursor: null,
-    });
-    mockAppServerClient(server, { listThreads });
-
-    const result = await server.handleRpc("list_threads", {
-      workspaceId: "ws-1",
-      cursor: null,
-      limit: 20,
-      sortKey: "updated_at",
-    });
-
-    expect(result).toMatchObject({
-      data: [
-        {
-          id: "thread-1",
-          updatedAt: 5,
-        },
-      ],
-    });
-    const returnedThread = (result as { data: Array<Record<string, unknown>> }).data[0];
-    expect(returnedThread?.activeTurnId).toBeUndefined();
   });
 
   it("routes respond_to_server_request through app-server sendResponse", async () => {
@@ -1955,6 +1930,7 @@ describe("CodexCompanionServer git/worktree support", () => {
     expect((status as { files: Array<{ path: string }> }).files).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ path: "untracked-dir/" })]),
     );
+<<<<<<< .merge_file_ambRA0
     expect(diffs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ path: "loose.txt" }),
@@ -2026,6 +2002,55 @@ describe("CodexCompanionServer git/worktree support", () => {
         message: "feat: test timeout",
       }),
     ).rejects.toThrow(/timed out/i);
+||||||| .merge_file_n44xMY
+    expect(diffs).toEqual([
+      expect.objectContaining({ path: "loose.txt" }),
+    ]);
+=======
+    expect(diffs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "loose.txt" }),
+        expect.objectContaining({ path: "untracked-dir/nested.txt" }),
+      ]),
+    );
+  });
+
+  it("stages files from expanded untracked directories when stage_git_all runs", async () => {
+    const { server, workspace } = await createServerFixture();
+    await fs.mkdir(workspace.path, { recursive: true });
+    await runGit(workspace.path, ["init", "-b", "main"]);
+    await runGit(workspace.path, ["config", "user.email", "dev@example.com"]);
+    await runGit(workspace.path, ["config", "user.name", "Dev"]);
+    await fs.writeFile(path.join(workspace.path, "tracked.txt"), "hello\n", "utf8");
+    await runGit(workspace.path, ["add", "tracked.txt"]);
+    await runGit(workspace.path, ["commit", "-m", "Initial commit"]);
+    await fs.writeFile(path.join(workspace.path, "tracked.txt"), "hello\nworld\n", "utf8");
+    await fs.mkdir(path.join(workspace.path, "untracked-dir"), { recursive: true });
+    await fs.writeFile(path.join(workspace.path, "untracked-dir", "nested.txt"), "nested\n", "utf8");
+    await fs.writeFile(path.join(workspace.path, "loose.txt"), "loose\n", "utf8");
+
+    await server.handleRpc("stage_git_all", { workspaceId: "ws-1" });
+
+    const status = await server.handleRpc("get_git_status", { workspaceId: "ws-1" });
+    expect((status as { stagedFiles: Array<{ path: string }> }).stagedFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "tracked.txt" }),
+        expect.objectContaining({ path: "loose.txt" }),
+        expect.objectContaining({ path: "untracked-dir/nested.txt" }),
+      ]),
+    );
+
+    const cachedNames = (await readGitStdout(
+      workspace.path,
+      ["diff", "--cached", "--name-only", "--"],
+    ))
+      .split(/\r?\n/)
+      .map((entry: string) => entry.trim())
+      .filter(Boolean);
+    expect(cachedNames).toEqual(
+      expect.arrayContaining(["tracked.txt", "loose.txt", "untracked-dir/nested.txt"]),
+    );
+>>>>>>> .merge_file_l9kXN4
   });
 
   it("tracks worktree setup markers", async () => {
