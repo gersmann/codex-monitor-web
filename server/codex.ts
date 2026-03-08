@@ -525,6 +525,69 @@ function extractTurnIdFromParams(params: JsonRecord) {
   return trimString(turn?.id);
 }
 
+function normalizeLifecycleStatus(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]/g, "");
+}
+
+function isTerminalAppServerItem(item: unknown) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) {
+    return true;
+  }
+  const record = item as JsonRecord;
+  const normalizedStatus = normalizeLifecycleStatus(record.status);
+  if (!normalizedStatus) {
+    return true;
+  }
+  return !(
+    normalizedStatus === "inprogress" ||
+    normalizedStatus === "running" ||
+    normalizedStatus === "processing" ||
+    normalizedStatus === "pending" ||
+    normalizedStatus === "queued" ||
+    normalizedStatus === "waiting" ||
+    normalizedStatus === "blocked"
+  );
+}
+
+function normalizeStaleInProgressThread(rawThread: Record<string, unknown>) {
+  const turns = Array.isArray(rawThread.turns)
+    ? (rawThread.turns as Array<Record<string, unknown>>)
+    : [];
+  const lastTurn = turns.at(-1);
+  if (!lastTurn || typeof lastTurn !== "object") {
+    return rawThread;
+  }
+  if (normalizeLifecycleStatus(lastTurn.status) !== "inprogress") {
+    return rawThread;
+  }
+  const items = Array.isArray(lastTurn.items) ? lastTurn.items : [];
+  if (items.some((item) => !isTerminalAppServerItem(item))) {
+    return rawThread;
+  }
+
+  lastTurn.status = "completed";
+  if (!("error" in lastTurn)) {
+    lastTurn.error = null;
+  }
+
+  const status =
+    rawThread.status && typeof rawThread.status === "object" && !Array.isArray(rawThread.status)
+      ? (rawThread.status as JsonRecord)
+      : null;
+  if (status && normalizeLifecycleStatus(status.type) === "active") {
+    rawThread.status = { type: "idle" };
+  } else if (normalizeLifecycleStatus(rawThread.status) === "active") {
+    rawThread.status = "idle";
+  }
+
+  rawThread.activeTurnId = null;
+  rawThread.active_turn_id = null;
+  return rawThread;
+}
+
 function normalizeThreadStatusType(status: unknown) {
   if (!status || typeof status !== "object" || Array.isArray(status)) {
     return trimString(status).toLowerCase().replace(/[\s_-]/g, "");
@@ -536,6 +599,7 @@ function normalizeThreadStatusType(status: unknown) {
 }
 
 function extractActiveTurnIdFromThread(rawThread: Record<string, unknown>) {
+  normalizeStaleInProgressThread(rawThread);
   const direct =
     trimString(rawThread.activeTurnId) ||
     trimString(rawThread.active_turn_id);

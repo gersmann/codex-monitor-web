@@ -44,6 +44,22 @@ type ThreadEventHandlersOptions = {
   pendingInterruptsRef: MutableRefObject<Set<string>>;
 };
 
+export function getAppServerDebugLabel(method: string) {
+  if (method === "configWarning") {
+    return "config warning";
+  }
+  if (method === "deprecationNotice") {
+    return "deprecation warning";
+  }
+  if (method === "model/rerouted") {
+    return "model rerouted";
+  }
+  if (method === "item/mcpToolCall/progress") {
+    return "mcp tool progress";
+  }
+  return method || "event";
+}
+
 export function useThreadEventHandlers({
   activeThreadId,
   dispatch,
@@ -163,7 +179,7 @@ export function useThreadEventHandlers({
         id: `${Date.now()}-server-event`,
         timestamp: Date.now(),
         source: inferredSource,
-        label: method || "event",
+        label: getAppServerDebugLabel(method),
         payload: event,
       });
     },

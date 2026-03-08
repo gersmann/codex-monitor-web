@@ -90,7 +90,9 @@ export function ThreadRow({
         }
       }}
     >
-      <span className={`thread-status ${statusClass}`} aria-hidden />
+      <span className="thread-indicators" aria-hidden>
+        <span className={`thread-status ${statusClass}`} />
+      </span>
       {isPinned && <span className="thread-pin-icon" aria-label="Pinned">📌</span>}
       <span className="thread-name">{thread.name}</span>
       <div className="thread-meta">
@@ -113,10 +115,10 @@ export function ThreadRow({
             aria-label={subagentsExpanded ? "Hide sub-agents" : "Show sub-agents"}
             aria-expanded={subagentsExpanded}
           >
-            <span className="thread-subagent-time-label">{relativeTime ?? ""}</span>
             <span className="thread-subagent-toggle-icon" aria-hidden>
               ›
             </span>
+            <span className="thread-subagent-time-label">{relativeTime ?? ""}</span>
           </button>
         ) : (
           relativeTime && <span className="thread-time">{relativeTime}</span>

@@ -1002,12 +1002,21 @@
   position: relative;
 }
 
+.thread-indicators {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+}
+
 .thread-status {
   width: 6px;
   height: 6px;
   border-radius: 999px;
   display: inline-block;
-  margin-left: 4px;
+  position: absolute;
+  right: 0;
+  top: 0;
 }
 
 .thread-pin-icon {
@@ -1113,10 +1122,11 @@
 .thread-subagent-time-toggle {
   border: none;
   background: transparent;
-  color: var(--text-faint);
+  color: var(--text-quiet);
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 5px;
   font-size: 11px;
   line-height: 1.2;
   padding: 0;
@@ -1134,31 +1144,29 @@
 
 .thread-subagent-time-label {
   display: inline-block;
+  color: var(--text-faint);
 }
 
 .thread-subagent-toggle-icon {
-  position: absolute;
-  right: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  pointer-events: none;
-  transition: transform 0.15s ease, opacity 0.15s ease;
+  width: 10px;
+  min-width: 10px;
+  color: var(--text-stronger);
+  font-size: 14px;
+  line-height: 1;
+  opacity: 1;
+  transition: transform 0.15s ease, color 0.15s ease;
 }
 
 .thread-subagent-time-toggle.expanded .thread-subagent-toggle-icon {
   transform: rotate(90deg);
 }
 
-.thread-row.has-subagent-children:hover .thread-subagent-time-label,
-.thread-subagent-time-toggle:focus-visible .thread-subagent-time-label {
-  opacity: 0;
-}
-
-.thread-row.has-subagent-children:hover .thread-subagent-toggle-icon,
+.thread-subagent-time-toggle:hover .thread-subagent-toggle-icon,
 .thread-subagent-time-toggle:focus-visible .thread-subagent-toggle-icon {
-  opacity: 1;
+  color: var(--text-strong);
 }
 
 .thread-menu {
