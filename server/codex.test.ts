@@ -354,6 +354,162 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
     });
   });
 
+  it("does not rewrite a live in-progress turn with no item statuses to completed on resume", async () => {
+    const { server, workspace } = await createServerFixture();
+    await server.initialize();
+    const resumeThread = vi.fn().mockResolvedValue({
+      thread: {
+        id: "sdk-thread-1",
+        cwd: workspace.path,
+        preview: "Thread One",
+        createdAt: 1,
+        updatedAt: 3,
+        status: { type: "active" },
+        activeTurnId: "turn-live",
+        turns: [
+          {
+            id: "turn-live",
+            status: "inProgress",
+            items: [],
+          },
+        ],
+      },
+    });
+    mockAppServerClient(server, { resumeThread });
+
+    const result = await server.handleRpc("resume_thread", {
+      workspaceId: "ws-1",
+      threadId: "sdk-thread-1",
+    });
+
+    expect(result).toEqual({
+      thread: expect.objectContaining({
+        id: "sdk-thread-1",
+        activeTurnId: "turn-live",
+        status: { type: "active" },
+        turns: [
+          expect.objectContaining({
+            id: "turn-live",
+            status: "inProgress",
+            items: [],
+          }),
+        ],
+      }),
+    });
+  });
+
+  it("updates stored thread items when item notifications carry threadId on the item payload", async () => {
+    const { server, storage, thread } = await createServerFixture();
+    await storage.writeThreads([
+      {
+        ...thread,
+        activeTurnId: "turn-live",
+        turns: [
+          {
+            id: "turn-live",
+            status: "active",
+            createdAt: 1,
+            completedAt: null,
+            items: [],
+            errorMessage: null,
+          },
+        ],
+      },
+    ]);
+    await server.initialize();
+
+    await (
+      server as unknown as {
+        handleAppServerNotification: (
+          key: string,
+          message: {
+            method: string;
+            params: Record<string, unknown>;
+          },
+        ) => Promise<void>;
+      }
+    ).handleAppServerNotification("client-key", {
+      method: "item/completed",
+      params: {
+        item: {
+          id: "item-1",
+          turnId: "turn-live",
+          threadId: "sdk-thread-1",
+          type: "agentMessage",
+          text: "Done",
+        },
+      },
+    });
+
+    const persisted = (await storage.readThreads()).find((entry) => entry.id === "thread-1");
+    expect(persisted?.turns[0]?.items).toEqual([
+      expect.objectContaining({
+        id: "turn-live:item-1",
+        type: "agentMessage",
+        text: "Done",
+      }),
+    ]);
+  });
+
+  it("broadcasts item notifications with an inferred threadId when only turnId is present", async () => {
+    const broadcast = vi.fn();
+    const { server, storage, thread } = await createServerFixture(broadcast);
+    await storage.writeThreads([
+      {
+        ...thread,
+        activeTurnId: "turn-live",
+        turns: [
+          {
+            id: "turn-live",
+            status: "active",
+            createdAt: 1,
+            completedAt: null,
+            items: [],
+            errorMessage: null,
+          },
+        ],
+      },
+    ]);
+    await server.initialize();
+
+    await (
+      server as unknown as {
+        handleAppServerNotification: (
+          key: string,
+          message: {
+            method: string;
+            params: Record<string, unknown>;
+          },
+        ) => Promise<void>;
+      }
+    ).handleAppServerNotification("client-key", {
+      method: "item/started",
+      params: {
+        item: {
+          id: "item-1",
+          turnId: "turn-live",
+          type: "commandExecution",
+          status: "inProgress",
+        },
+      },
+    });
+
+    expect(broadcast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "app-server-event",
+        payload: expect.objectContaining({
+          workspace_id: "ws-1",
+          message: expect.objectContaining({
+            method: "item/started",
+            params: expect.objectContaining({
+              threadId: "sdk-thread-1",
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it("does not surface stale local active turn ids in list_threads when app-server reports idle", async () => {
     const { server, storage, thread } = await createServerFixture();
     await storage.writeThreads([{ ...thread, activeTurnId: "turn-stale" }]);

@@ -506,6 +506,32 @@ function extractThreadIdFromParams(params: JsonRecord) {
   if (direct) {
     return direct;
   }
+  const turn =
+    params.turn && typeof params.turn === "object" && !Array.isArray(params.turn)
+      ? (params.turn as JsonRecord)
+      : null;
+  const fromTurn =
+    trimString(turn?.threadId) ||
+    trimString(turn?.thread_id) ||
+    (turn?.thread && typeof turn.thread === "object" && !Array.isArray(turn.thread)
+      ? trimString((turn.thread as JsonRecord).id)
+      : "");
+  if (fromTurn) {
+    return fromTurn;
+  }
+  const item =
+    params.item && typeof params.item === "object" && !Array.isArray(params.item)
+      ? (params.item as JsonRecord)
+      : null;
+  const fromItem =
+    trimString(item?.threadId) ||
+    trimString(item?.thread_id) ||
+    (item?.thread && typeof item.thread === "object" && !Array.isArray(item.thread)
+      ? trimString((item.thread as JsonRecord).id)
+      : "");
+  if (fromItem) {
+    return fromItem;
+  }
   const thread =
     params.thread && typeof params.thread === "object" && !Array.isArray(params.thread)
       ? (params.thread as JsonRecord)
@@ -522,7 +548,15 @@ function extractTurnIdFromParams(params: JsonRecord) {
     params.turn && typeof params.turn === "object" && !Array.isArray(params.turn)
       ? (params.turn as JsonRecord)
       : null;
-  return trimString(turn?.id);
+  const fromTurn = trimString(turn?.id);
+  if (fromTurn) {
+    return fromTurn;
+  }
+  const item =
+    params.item && typeof params.item === "object" && !Array.isArray(params.item)
+      ? (params.item as JsonRecord)
+      : null;
+  return trimString(item?.turnId) || trimString(item?.turn_id);
 }
 
 function normalizeLifecycleStatus(value: unknown) {
@@ -552,6 +586,51 @@ function isTerminalAppServerItem(item: unknown) {
   );
 }
 
+function hasExplicitAppServerItemStatus(item: unknown) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) {
+    return false;
+  }
+  const record = item as JsonRecord;
+  return normalizeLifecycleStatus(record.status).length > 0;
+}
+
+function readLifecycleTimestampMs(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  const trimmed = trimString(value);
+  if (!trimmed) {
+    return null;
+  }
+  const parsedDate = Date.parse(trimmed);
+  if (Number.isFinite(parsedDate) && parsedDate > 0) {
+    return parsedDate;
+  }
+  const parsedNumber = Number(trimmed);
+  return Number.isFinite(parsedNumber) && parsedNumber > 0 ? parsedNumber : null;
+}
+
+function readThreadActivityTimestampMs(rawThread: Record<string, unknown>, rawTurn: Record<string, unknown>) {
+  const turnTimestamp =
+    readLifecycleTimestampMs(rawTurn.updatedAt) ??
+    readLifecycleTimestampMs(rawTurn.updated_at) ??
+    readLifecycleTimestampMs(rawTurn.completedAt) ??
+    readLifecycleTimestampMs(rawTurn.completed_at) ??
+    readLifecycleTimestampMs(rawTurn.startedAt) ??
+    readLifecycleTimestampMs(rawTurn.started_at) ??
+    readLifecycleTimestampMs(rawTurn.createdAt) ??
+    readLifecycleTimestampMs(rawTurn.created_at);
+  if (turnTimestamp !== null) {
+    return turnTimestamp;
+  }
+  return (
+    readLifecycleTimestampMs(rawThread.updatedAt) ??
+    readLifecycleTimestampMs(rawThread.updated_at) ??
+    readLifecycleTimestampMs(rawThread.createdAt) ??
+    readLifecycleTimestampMs(rawThread.created_at)
+  );
+}
+
 function normalizeStaleInProgressThread(rawThread: Record<string, unknown>) {
   const turns = Array.isArray(rawThread.turns)
     ? (rawThread.turns as Array<Record<string, unknown>>)
@@ -563,8 +642,31 @@ function normalizeStaleInProgressThread(rawThread: Record<string, unknown>) {
   if (normalizeLifecycleStatus(lastTurn.status) !== "inprogress") {
     return rawThread;
   }
+  const statusType = normalizeThreadStatusType(rawThread.status);
+  const directActiveTurnId =
+    trimString(rawThread.activeTurnId) || trimString(rawThread.active_turn_id);
   const items = Array.isArray(lastTurn.items) ? lastTurn.items : [];
+  if (items.length === 0) {
+    return rawThread;
+  }
   if (items.some((item) => !isTerminalAppServerItem(item))) {
+    return rawThread;
+  }
+  const hasExplicitTerminalItem = items.some(
+    (item) => hasExplicitAppServerItemStatus(item) && isTerminalAppServerItem(item),
+  );
+  if (!hasExplicitTerminalItem) {
+    return rawThread;
+  }
+  const activityTimestamp = readThreadActivityTimestampMs(rawThread, lastTurn);
+  const isInactiveThreadStatus =
+    statusType === "idle" || statusType === "notloaded" || statusType === "systemerror";
+  const isStaleByAge =
+    activityTimestamp !== null && Date.now() - activityTimestamp > MAX_ACTIVITY_GAP_MS;
+  if (!isInactiveThreadStatus && directActiveTurnId) {
+    return rawThread;
+  }
+  if (!isInactiveThreadStatus && !isStaleByAge) {
     return rawThread;
   }
 
@@ -2909,6 +3011,61 @@ export class CodexCompanionServer {
     return Array.from(this.connectedWorkspaceIds);
   }
 
+  private findStoredThreadForTurn(workspaceIds: string[], turnId: string) {
+    for (const thread of this.threadsById.values()) {
+      if (!workspaceIds.includes(thread.workspaceId)) {
+        continue;
+      }
+      if (thread.activeTurnId === turnId || thread.turns.some((turn) => turn.id === turnId)) {
+        return thread;
+      }
+    }
+    return null;
+  }
+
+  private findStoredThreadByTurnId(turnId: string) {
+    for (const thread of this.threadsById.values()) {
+      if (thread.activeTurnId === turnId || thread.turns.some((turn) => turn.id === turnId)) {
+        return thread;
+      }
+    }
+    return null;
+  }
+
+  private inferThreadIdForNotification(workspaceIds: string[], params: JsonRecord) {
+    const turnId = extractTurnIdFromParams(params);
+    if (turnId) {
+      const thread = this.findStoredThreadForTurn(workspaceIds, turnId);
+      if (thread) {
+        return this.resolveAppServerThreadId(thread);
+      }
+    }
+    if (workspaceIds.length !== 1) {
+      return null;
+    }
+    const activeThreads = Array.from(this.threadsById.values()).filter(
+      (thread) => thread.workspaceId === workspaceIds[0] && Boolean(thread.activeTurnId),
+    );
+    if (activeThreads.length === 1) {
+      return this.resolveAppServerThreadId(activeThreads[0]!);
+    }
+    return null;
+  }
+
+  private enrichNotificationParams(workspaceIds: string[], params: JsonRecord) {
+    if (extractThreadIdFromParams(params)) {
+      return params;
+    }
+    const inferredThreadId = this.inferThreadIdForNotification(workspaceIds, params);
+    if (!inferredThreadId) {
+      return params;
+    }
+    return {
+      ...params,
+      threadId: inferredThreadId,
+    };
+  }
+
   private resolveWorkspaceIdsForNotification(
     key: string,
     method: string,
@@ -2919,6 +3076,13 @@ export class CodexCompanionServer {
       const workspaceId = this.appServerThreadWorkspaceIds.get(threadId);
       if (workspaceId) {
         return [workspaceId];
+      }
+    }
+    const turnId = extractTurnIdFromParams(params);
+    if (turnId) {
+      const thread = this.findStoredThreadByTurnId(turnId);
+      if (thread) {
+        return [thread.workspaceId];
       }
     }
     if (method === "thread/started") {
@@ -3092,11 +3256,12 @@ export class CodexCompanionServer {
     message: AppServerNotificationMessage,
   ) {
     const workspaceIds = this.resolveWorkspaceIdsForNotification(key, message.method, message.params);
-    await this.applyAppServerNotificationToState(workspaceIds, message.method, message.params);
+    const normalizedParams = this.enrichNotificationParams(workspaceIds, message.params);
+    await this.applyAppServerNotificationToState(workspaceIds, message.method, normalizedParams);
     for (const workspaceId of workspaceIds) {
       this.broadcast({
         event: "app-server-event",
-        payload: buildAppServerEvent(workspaceId, message.method, message.params, message.id),
+        payload: buildAppServerEvent(workspaceId, message.method, normalizedParams, message.id),
       });
     }
   }

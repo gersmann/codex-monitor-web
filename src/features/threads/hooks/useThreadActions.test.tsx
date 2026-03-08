@@ -350,7 +350,7 @@ describe("useThreadActions", () => {
     expect(onSubagentThreadDetected).toHaveBeenCalledWith("ws-1", "child-thread");
   });
 
-  it("does not hydrate status from resume when local items are preserved", async () => {
+  it("hydrates status from resume even when local items are preserved", async () => {
     const localItem: ConversationItem = {
       id: "local-assistant-1",
       kind: "message",
@@ -378,18 +378,18 @@ describe("useThreadActions", () => {
       await result.current.resumeThreadForWorkspace("ws-1", "thread-1", true);
     });
 
-    expect(dispatch).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "markProcessing",
-        threadId: "thread-1",
-      }),
-    );
-    expect(dispatch).not.toHaveBeenCalledWith({
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "markProcessing",
+      threadId: "thread-1",
+      isProcessing: true,
+      timestamp: expect.any(Number),
+    });
+    expect(dispatch).toHaveBeenCalledWith({
       type: "setActiveTurnId",
       threadId: "thread-1",
       turnId: "turn-stale",
     });
-    expect(dispatch).not.toHaveBeenCalledWith({
+    expect(dispatch).toHaveBeenCalledWith({
       type: "markReviewing",
       threadId: "thread-1",
       isReviewing: true,
@@ -434,6 +434,59 @@ describe("useThreadActions", () => {
 
     await act(async () => {
       await result.current.resumeThreadForWorkspace("ws-1", "thread-1", true, true);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "markProcessing",
+      threadId: "thread-1",
+      isProcessing: false,
+      timestamp: expect.any(Number),
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setActiveTurnId",
+      threadId: "thread-1",
+      turnId: null,
+    });
+  });
+
+  it("clears stale processing state on resume even when local items already exist", async () => {
+    const localItem: ConversationItem = {
+      id: "local-assistant-1",
+      kind: "message",
+      role: "assistant",
+      text: "Local snapshot",
+    };
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          id: "thread-1",
+          preview: "Done thread",
+          updated_at: 1000,
+          turns: [{ id: "turn-1", status: "completed", items: [] }],
+        },
+      },
+    });
+    vi.mocked(buildItemsFromThread).mockReturnValue([]);
+    vi.mocked(isReviewingFromThread).mockReturnValue(false);
+
+    const { result, dispatch } = renderActions({
+      itemsByThread: { "thread-1": [localItem] },
+      threadStatusById: {
+        "thread-1": {
+          isProcessing: true,
+          hasUnread: false,
+          isReviewing: false,
+          processingStartedAt: 10,
+          lastDurationMs: null,
+        },
+      },
+      activeTurnIdByThread: {
+        "thread-1": "turn-stale",
+      },
+    });
+
+    await act(async () => {
+      await result.current.resumeThreadForWorkspace("ws-1", "thread-1", true);
     });
 
     expect(dispatch).toHaveBeenCalledWith({

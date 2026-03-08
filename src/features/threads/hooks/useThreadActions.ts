@@ -290,10 +290,6 @@ export function useThreadActions({
           if (shouldReplace) {
             replaceOnResumeRef.current[threadId] = false;
           }
-          if (localItems.length > 0 && !shouldReplace) {
-            loadedThreadsRef.current[threadId] = true;
-            return threadId;
-          }
           const resumedTurnState = getResumedTurnState(thread);
           const localStatus = threadStatusByIdRef.current[threadId];
           const localActiveTurnId =

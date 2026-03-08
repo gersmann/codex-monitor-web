@@ -59,6 +59,7 @@ describe("useAppServerEvents", () => {
       onPlanDelta: vi.fn(),
       onApprovalRequest: vi.fn(),
       onRequestUserInput: vi.fn(),
+      onItemStarted: vi.fn(),
       onItemCompleted: vi.fn(),
       onAgentMessageCompleted: vi.fn(),
       onTurnStarted: vi.fn(),
@@ -353,6 +354,29 @@ describe("useAppServerEvents", () => {
       threadId: "thread-1",
       itemId: "item-2",
       text: "Done",
+    });
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "item/started",
+          params: {
+            item: {
+              type: "commandExecution",
+              id: "item-3",
+              threadId: "thread-1",
+              status: "inProgress",
+            },
+          },
+        },
+      });
+    });
+    expect(handlers.onItemStarted).toHaveBeenCalledWith("ws-1", "thread-1", {
+      type: "commandExecution",
+      id: "item-3",
+      threadId: "thread-1",
+      status: "inProgress",
     });
 
     act(() => {

@@ -18,6 +18,17 @@ The browser UI path is working and the active web backend is the in-process Type
 - Frontend compatibility seam: `src/services/tauri.ts` and `src/services/events.ts`
 - Rust parity reference: `src-tauri/src/lib.rs` and `src-tauri/src/bin/codex_monitor_daemon.rs`
 
+## Current Stage
+
+The migration is no longer in architecture-buildout mode. The TS-only web backend is established and the remaining work is parity hardening and web-shell cleanup.
+
+Current focus:
+
+- Finish live-thread parity edge cases where the backend is idle but the UI can remain stuck in `Working...`
+- Wire the remaining lower-priority app-server notifications that have real frontend value
+- Remove the last native menu surfaces that still leak into the web experience
+- Close the migration epic once the web path is stable enough to be treated as the default browser runtime
+
 ## Target Runtime Model
 
 - Browser frontend: React + Vite
@@ -81,10 +92,13 @@ These areas are currently excluded from the web migration plan:
 - Browser-safe event subscription and runtime guards for Tauri-only features
 - Web-safe rendering fixes for messages, file previews, drag/drop hooks, liquid glass hooks, and usage widgets
 - Sentry disabled in the web runtime
+- GitHub parity for issues, pull requests, checkout, diff/comments, and repository creation
+- Stable one-shot backend runtime plus explicit helper scripts for daemonized local server operation
 
 ### Partially Implemented
 
 - App-server notification persistence is in place for core thread and turn lifecycle, and the frontend now handles `skills/changed`, `serverRequest/resolved`, `model/rerouted`, `configWarning`, `deprecationNotice`, and `item/mcpToolCall/progress`
+- Live-thread parity is close, but still under hardening for rare stale-processing cases during resume/read reconciliation
 
 ### Not Implemented
 
@@ -105,31 +119,49 @@ Intentionally unsupported RPC methods:
 
 ## Migration Direction
 
-### Phase 1: TS Backend Reset
+### Phase 1: Architecture Reset And TS Backend Cutover
 
 - Keep the browser transport seam and restore the in-process TS backend as the active path
 - Remove Rust daemon runtime assumptions from web mode
 - Preserve request logging, WebSocket fanout, and browser-safe runtime guards
 
-### Phase 2: Vendor Codex Integration
+Status: complete.
+
+### Phase 2: Vendor Codex Integration And App-Server Promotion
 
 - Vendor the local app-server client into the repo
 - Add typed app-server abstractions for missing control-plane features
 - Route all Codex CLI and app-server calls through the vendored local layer
 
-### Phase 3: Close Parity Gaps
+Status: complete for the core runtime path.
+
+### Phase 3: Close Core Parity Gaps
 
 - Use `src-tauri/src/lib.rs` and the Rust daemon as behavior references only
 - Fill the remaining metadata, config, GitHub, and control-plane gaps in TS
 - Keep desktop-only features out of the web runtime unless intentionally ported
+
+Status: mostly complete.
+
+### Phase 4: Parity Hardening
+
+- Fix remaining live-thread correctness bugs in resume/read/event reconciliation
+- Tighten app-server notification handling for less common but user-visible event families
+- Keep the backend and frontend parity tests aligned with real failure cases found during daily use
+
+### Phase 5: Web Shell Cleanup And Epic Closure
+
+- Replace remaining native menu surfaces with web-safe menus
+- Refresh the canonical docs and support-policy lists to match live state
+- Close the migration epic once the remaining open web-only tasks are complete
 
 ## Active Tracking
 
 The long-running migration work is tracked in `bd`:
 
 - `CodexMonitor-ac41` Complete TS-only web backend migration
-- `CodexMonitor-3e35` Port GitHub issue and PR parity to web companion
-- `CodexMonitor-f550` Port GitHub repo creation parity to web companion
+- `CodexMonitor-131d` Normalize stale in-progress app-server turns during resume/read
+- `CodexMonitor-cea0` Replace remaining native menus outside sidebar with web menus
 
 ## Implementation Notes
 
