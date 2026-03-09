@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "sync:material-icons": "node scripts/sync-material-icons.mjs",
-    "postinstall": "npm run sync:material-icons",
-    "predev": "npm run sync:material-icons",
+    "sync:pwa-icons": "node scripts/generate-pwa-icons.mjs",
+    "postinstall": "npm run sync:material-icons && npm run sync:pwa-icons",
+    "predev": "npm run sync:material-icons && npm run sync:pwa-icons",
     "dev": "vite",
     "server:dev": "tsx server/index.ts",
     "server:start": "sh -c 'CODEX_MONITOR_WEB_PORT=\"${CODEX_MONITOR_WEB_PORT:-4320}\" node build/server/index.js'",
@@ -15,7 +16,7 @@
     "server:stop": "sh -c 'if [ ! -f /tmp/codex-monitor-web.pid ]; then echo \"codex-monitor-web is not running\"; exit 0; fi; pid=$(cat /tmp/codex-monitor-web.pid); if kill -0 \"$pid\" 2>/dev/null; then kill \"$pid\" && echo \"stopped codex-monitor-web (PID $pid)\"; else echo \"removing stale pid file for PID $pid\"; fi; rm -f /tmp/codex-monitor-web.pid'",
     "server:status": "sh -c 'if [ -f /tmp/codex-monitor-web.pid ] && kill -0 \"$(cat /tmp/codex-monitor-web.pid)\" 2>/dev/null; then echo \"codex-monitor-web running as PID $(cat /tmp/codex-monitor-web.pid)\"; exit 0; fi; echo \"codex-monitor-web is not running\"; exit 1'",
     "server:logs": "tail -n 200 -f /tmp/codex-monitor-web.log",
-    "prebuild": "npm run sync:material-icons",
+    "prebuild": "npm run sync:material-icons && npm run sync:pwa-icons",
     "build:server": "tsc -p tsconfig.server.build.json",
     "build": "npm run typecheck && vite build && npm run build:server",
     "build:appimage": "NO_STRIP=1 tauri build --bundles appimage",
@@ -80,9 +81,11 @@
     "eslint-plugin-react": "^7.36.1",
     "eslint-plugin-react-hooks": "^4.6.2",
     "jsdom": "^27.0.1",
+    "pngjs": "^7.0.0",
     "tsx": "^4.21.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
+    "vite-plugin-pwa": "^1.0.3",
     "vitest": "^3.2.4"
   }
 }

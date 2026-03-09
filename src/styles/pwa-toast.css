@@ -1,0 +1,36 @@
+.pwa-toasts {
+  position: absolute;
+  bottom: 36px;
+  left: 20px;
+  width: min(360px, calc(100vw - 40px));
+  z-index: 5;
+  pointer-events: none;
+  -webkit-app-region: no-drag;
+}
+
+.pwa-toast {
+  --ds-toast-enter-duration: 0.2s;
+}
+
+.pwa-toast-header {
+  margin-bottom: 6px;
+}
+
+.pwa-toast-title {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pwa-toast-body {
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 960px) {
+  .pwa-toasts {
+    left: 50%;
+    bottom: 152px;
+    transform: translateX(-50%);
+  }
+}

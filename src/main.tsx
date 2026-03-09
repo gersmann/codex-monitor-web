@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import * as Sentry from "@sentry/react";
 import App from "./App";
 import { isWebCompanionRuntime } from "./services/runtime";
+import { registerPwaServiceWorker } from "./services/pwa";
 import { isMobilePlatform } from "./utils/platformPaths";
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
@@ -228,6 +229,7 @@ function syncMobileViewportHeight() {
 disableMobileZoomGestures();
 syncMobileViewportHeight();
 installWebClientErrorLogging();
+void registerPwaServiceWorker();
 
 if (typeof document !== "undefined") {
   document.documentElement.dataset.runtime = isWebCompanionRuntime()

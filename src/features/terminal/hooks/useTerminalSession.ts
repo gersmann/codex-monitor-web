@@ -73,6 +73,8 @@ function shouldIgnoreTerminalError(error: unknown) {
 }
 
 function getTerminalAppearance(container: HTMLElement | null): TerminalAppearance {
+  const fallbackTerminalFontFamily =
+    "\"JetBrainsMono Nerd Font Mono\", \"JetBrainsMono Nerd Font\", \"JetBrains Mono\", Menlo, Monaco, \"Courier New\", monospace";
   if (typeof window === "undefined") {
     return {
       theme: {
@@ -80,7 +82,7 @@ function getTerminalAppearance(container: HTMLElement | null): TerminalAppearanc
         foreground: "#d9dee7",
         cursor: "#d9dee7",
       },
-      fontFamily: "Menlo, Monaco, \"Courier New\", monospace",
+      fontFamily: fallbackTerminalFontFamily,
     };
   }
 
@@ -101,7 +103,7 @@ function getTerminalAppearance(container: HTMLElement | null): TerminalAppearanc
   const fontFamily =
     styles.getPropertyValue("--terminal-font-family").trim() ||
     styles.getPropertyValue("--code-font-family").trim() ||
-    "Menlo, Monaco, \"Courier New\", monospace";
+    fallbackTerminalFontFamily;
 
   return {
     theme: {

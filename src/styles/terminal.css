@@ -11,7 +11,11 @@
   --terminal-foreground: var(--text-stronger);
   --terminal-cursor: var(--text-stronger);
   --terminal-selection: rgba(100, 200, 255, 0.25);
-  --terminal-font-family: var(--code-font-family);
+  --terminal-font-family:
+    "JetBrainsMono Nerd Font Mono",
+    "JetBrainsMono Nerd Font",
+    "JetBrains Mono",
+    var(--code-font-family);
 }
 
 .terminal-panel-resizer {

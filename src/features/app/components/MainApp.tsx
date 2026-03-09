@@ -49,6 +49,8 @@ import { useMainAppWorktreeState } from "@app/hooks/useMainAppWorktreeState";
 import { useMainAppWorkspaceActions } from "@app/hooks/useMainAppWorkspaceActions";
 import { useMainAppWorkspaceLifecycle } from "@app/hooks/useMainAppWorkspaceLifecycle";
 import { useAppDocumentTitle } from "@app/hooks/useAppDocumentTitle";
+import { PwaInstallToast } from "@/features/pwa/components/PwaInstallToast";
+import { usePwaInstall } from "@/features/pwa/hooks/usePwaInstall";
 import type {
   ComposerEditorSettings,
   WorkspaceInfo,
@@ -191,6 +193,7 @@ export default function MainApp() {
   const updaterEnabled = !isMobileRuntime;
   useAppDocumentTitle(activeWorkspace);
   const terminalSupported = useTerminalAvailability();
+  const pwaInstall = usePwaInstall();
 
   const workspacesById = useMemo(
     () => new Map(workspaces.map((workspace) => [workspace.id, workspace])),
@@ -1928,7 +1931,23 @@ export default function MainApp() {
       messagesNode: mainMessagesNode,
       composerNode,
       approvalToastsNode,
-      updateToastNode,
+      updateToastNode: (
+        <>
+          {updateToastNode}
+          <PwaInstallToast
+            showInstallPrompt={pwaInstall.showInstallPrompt}
+            updateAvailable={pwaInstall.updateAvailable}
+            onInstall={() => {
+              void pwaInstall.installApp();
+            }}
+            onDismissInstall={pwaInstall.dismissInstallPrompt}
+            onApplyUpdate={() => {
+              void pwaInstall.applyUpdate();
+            }}
+            onDismissUpdate={pwaInstall.dismissUpdate}
+          />
+        </>
+      ),
       errorToastsNode,
       homeNode,
       mainHeaderNode,
