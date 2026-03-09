@@ -1414,16 +1414,42 @@ function parseTopLevelTomlString(content: string, key: string) {
   return match?.[1] ?? null;
 }
 
-async function runCommand(command: string, args: string[], cwd: string) {
+async function runCommand(
+  command: string,
+  args: string[],
+  cwd: string,
+  options: {
+    env?: NodeJS.ProcessEnv;
+    timeoutMs?: number;
+  } = {},
+) {
   return await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    execFile(command, args, { cwd, encoding: "utf8", maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (!error) {
-        resolve({ stdout, stderr });
-        return;
-      }
-      const detail = `${stderr || stdout || error.message}`.trim() || "Command failed.";
-      reject(new Error(detail));
-    });
+    execFile(
+      command,
+      args,
+      {
+        cwd,
+        encoding: "utf8",
+        maxBuffer: 10 * 1024 * 1024,
+        env: options.env,
+        timeout: options.timeoutMs,
+      },
+      (error, stdout, stderr) => {
+        if (!error) {
+          resolve({ stdout, stderr });
+          return;
+        }
+        const timedOut =
+          error.name === "TimeoutError" ||
+          error.killed ||
+          error.signal === "SIGTERM" ||
+          /timed out/i.test(error.message);
+        const detail = timedOut
+          ? `Command timed out: ${command} ${args.join(" ")}`
+          : `${stderr || stdout || error.message}`.trim() || "Command failed.";
+        reject(new Error(detail));
+      },
+    );
   });
 }
 
@@ -1473,6 +1499,26 @@ async function runCommandCapture(
 
 async function runGit(repoRoot: string, args: string[]) {
   return await runCommand("git", args, repoRoot);
+}
+
+function gitCommitTimeoutMs() {
+  const raw = Number(process.env.CODEX_MONITOR_GIT_COMMIT_TIMEOUT_MS ?? "120000");
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return 120_000;
+  }
+  return Math.round(raw);
+}
+
+async function runGitCommit(repoRoot: string, message: string) {
+  const env = {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: "0",
+    GIT_EDITOR: "true",
+  };
+  return await runCommand("git", ["commit", "-m", message], repoRoot, {
+    env,
+    timeoutMs: gitCommitTimeoutMs(),
+  });
 }
 
 async function runGh(repoRoot: string, args: string[]) {
@@ -5133,7 +5179,7 @@ export class CodexCompanionServer {
         if (!message) {
           return badRequest("Commit message is required.");
         }
-        await runGit(await resolveGitRootFromPath(workspace.path), ["commit", "-m", message]);
+        await runGitCommit(await resolveGitRootFromPath(workspace.path), message);
         return null;
       }
       case "push_git": {

@@ -1771,6 +1771,34 @@ describe("CodexCompanionServer git/worktree support", () => {
     );
   });
 
+  it("times out a hanging pre-commit hook instead of hanging commit_git forever", async () => {
+    const { server, workspace } = await createServerFixture();
+    await fs.mkdir(workspace.path, { recursive: true });
+    await runGit(workspace.path, ["init", "-b", "main"]);
+    await runGit(workspace.path, ["config", "user.email", "dev@example.com"]);
+    await runGit(workspace.path, ["config", "user.name", "Dev"]);
+    await fs.writeFile(path.join(workspace.path, "tracked.txt"), "hello\n", "utf8");
+    await runGit(workspace.path, ["add", "tracked.txt"]);
+    await runGit(workspace.path, ["commit", "-m", "Initial commit"]);
+    await fs.writeFile(path.join(workspace.path, "tracked.txt"), "hello\nworld\n", "utf8");
+    await runGit(workspace.path, ["add", "tracked.txt"]);
+    await fs.mkdir(path.join(workspace.path, ".git", "hooks"), { recursive: true });
+    await fs.writeFile(
+      path.join(workspace.path, ".git", "hooks", "pre-commit"),
+      "#!/bin/sh\nsleep 1\n",
+      "utf8",
+    );
+    await fs.chmod(path.join(workspace.path, ".git", "hooks", "pre-commit"), 0o755);
+    vi.stubEnv("CODEX_MONITOR_GIT_COMMIT_TIMEOUT_MS", "100");
+
+    await expect(
+      server.handleRpc("commit_git", {
+        workspaceId: "ws-1",
+        message: "feat: test timeout",
+      }),
+    ).rejects.toThrow(/timed out/i);
+  });
+
   it("tracks worktree setup markers", async () => {
     const { server, storage, workspace } = await createServerFixture();
     const worktreeWorkspace: StoredWorkspace = {
