@@ -45,7 +45,9 @@ export function DebugPanel({
 
   const formattedEntries = useMemo(() => {
     if (!isVisible) {
-      return previousFormattedRef.current ?? [];
+      previousEntriesRef.current = null;
+      previousFormattedRef.current = null;
+      return [];
     }
     const previousEntries = previousEntriesRef.current;
     const previousFormatted = previousFormattedRef.current;

@@ -78,6 +78,68 @@ export function getAppServerDebugLabel(method: string) {
   return method || "event";
 }
 
+function truncateDebugValue(value: string, maxLength = 240) {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, maxLength - 1)}…`;
+}
+
+function compactNestedDebugRecord(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  const source = value as Record<string, unknown>;
+  const compact: Record<string, unknown> = {};
+  for (const key of ["id", "threadId", "thread_id", "turnId", "turn_id", "itemId", "item_id", "status", "type"]) {
+    const next = source[key];
+    if (next !== undefined && next !== null && next !== "") {
+      compact[key] = next;
+    }
+  }
+  return Object.keys(compact).length > 0 ? compact : undefined;
+}
+
+export function buildAppServerDebugPayload(event: AppServerEvent) {
+  const method = getAppServerRawMethod(event) ?? "";
+  const message =
+    event.message && typeof event.message === "object" && !Array.isArray(event.message)
+      ? (event.message as Record<string, unknown>)
+      : {};
+  const params =
+    message.params && typeof message.params === "object" && !Array.isArray(message.params)
+      ? (message.params as Record<string, unknown>)
+      : {};
+
+  const summary: Record<string, unknown> = {
+    workspaceId: event.workspace_id,
+    method: method || null,
+  };
+
+  for (const key of ["threadId", "thread_id", "turnId", "turn_id", "itemId", "item_id", "requestId", "request_id", "loginId", "login_id", "success", "willRetry"]) {
+    const value = params[key];
+    if (value !== undefined && value !== null && value !== "") {
+      summary[key] = value;
+    }
+  }
+
+  for (const key of ["message", "error", "delta", "stdin", "diff"]) {
+    const value = params[key];
+    if (typeof value === "string" && value.trim()) {
+      summary[key] = truncateDebugValue(value);
+    }
+  }
+
+  for (const key of ["thread", "turn", "item", "status", "tokenUsage", "rateLimits"]) {
+    const compact = compactNestedDebugRecord(params[key]);
+    if (compact !== undefined) {
+      summary[key] = compact;
+    }
+  }
+
+  return summary;
+}
+
 export function useThreadEventHandlers({
   activeThreadId,
   dispatch,
@@ -198,7 +260,7 @@ export function useThreadEventHandlers({
         timestamp: Date.now(),
         source: inferredSource,
         label: getAppServerDebugLabel(method),
-        payload: event,
+        payload: buildAppServerDebugPayload(event),
       });
     },
     [onDebug],
