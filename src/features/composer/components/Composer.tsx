@@ -17,6 +17,7 @@ import type {
   DictationTranscript,
   FollowUpMessageBehavior,
   QueuedMessage,
+  ServiceTier,
   ThreadTokenUsage,
 } from "../../../types";
 import type {
@@ -71,6 +72,7 @@ type ComposerProps = {
   reasoningOptions: string[];
   selectedEffort: string | null;
   onSelectEffort: (effort: string) => void;
+  selectedServiceTier: ServiceTier | null;
   reasoningSupported: boolean;
   codexArgsOptions?: CodexArgsOption[];
   selectedCodexArgsOverride?: string | null;
@@ -180,6 +182,7 @@ export const Composer = memo(function Composer({
   reasoningOptions,
   selectedEffort,
   onSelectEffort,
+  selectedServiceTier,
   reasoningSupported,
   codexArgsOptions = [],
   selectedCodexArgsOverride = null,
@@ -865,6 +868,7 @@ export const Composer = memo(function Composer({
         reasoningOptions={reasoningOptions}
         selectedEffort={selectedEffort}
         onSelectEffort={onSelectEffort}
+        selectedServiceTier={selectedServiceTier}
         reasoningSupported={reasoningSupported}
         codexArgsOptions={codexArgsOptions}
         selectedCodexArgsOverride={selectedCodexArgsOverride}

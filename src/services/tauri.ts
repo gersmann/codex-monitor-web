@@ -666,6 +666,7 @@ export async function sendUserMessage(
   options?: {
     model?: string | null;
     effort?: string | null;
+    serviceTier?: "fast" | "flex" | null | undefined;
     accessMode?: "read-only" | "current" | "full-access";
     images?: string[];
     collaborationMode?: Record<string, unknown> | null;
@@ -682,6 +683,9 @@ export async function sendUserMessage(
     accessMode: options?.accessMode ?? null,
     images,
   };
+  if (options?.serviceTier !== undefined) {
+    payload.serviceTier = options.serviceTier;
+  }
   if (options?.collaborationMode) {
     payload.collaborationMode = options.collaborationMode;
   }

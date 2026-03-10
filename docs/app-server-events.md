@@ -213,6 +213,9 @@ These are v2 request methods CodexMonitor currently sends to Codex app-server:
 - `skills/list`
 - `app/list`
 
+Notes:
+- `turn/start` now forwards the optional `serviceTier` override (`"fast"` for `/fast`, `null` for default/off) alongside `model`, `effort`, and `collaborationMode`.
+
 ## Missing Client Requests (Codex v2 ClientRequest Methods)
 
 Compared against Codex v2 request methods, CodexMonitor currently does not send:

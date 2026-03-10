@@ -677,7 +677,7 @@ describe("tauri invoke wrappers", () => {
       images: ["image.png"],
     });
 
-    expect(invokeMock).toHaveBeenCalledWith("send_user_message", {
+    expect(invokeMock).toHaveBeenLastCalledWith("send_user_message", {
       workspaceId: "ws-4",
       threadId: "thread-1",
       text: "hello",
@@ -685,6 +685,26 @@ describe("tauri invoke wrappers", () => {
       effort: null,
       accessMode: "full-access",
       images: ["image.png"],
+    });
+  });
+
+  it("preserves explicit null serviceTier overrides", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await sendUserMessage("ws-4", "thread-1", "hello", {
+      serviceTier: null,
+    });
+
+    expect(invokeMock).toHaveBeenLastCalledWith("send_user_message", {
+      workspaceId: "ws-4",
+      threadId: "thread-1",
+      text: "hello",
+      model: null,
+      effort: null,
+      serviceTier: null,
+      accessMode: null,
+      images: null,
     });
   });
 
@@ -721,7 +741,7 @@ describe("tauri invoke wrappers", () => {
       images: ["/tmp/image.png"],
     });
 
-    expect(invokeMock).toHaveBeenCalledWith("send_user_message", {
+    expect(invokeMock).toHaveBeenLastCalledWith("send_user_message", {
       workspaceId: "ws-4",
       threadId: "thread-1",
       text: "hello",
@@ -818,7 +838,7 @@ describe("tauri invoke wrappers", () => {
       images: ["/private/var/mobile/sample.png"],
     });
 
-    expect(invokeMock).toHaveBeenCalledWith("send_user_message", {
+    expect(invokeMock).toHaveBeenLastCalledWith("send_user_message", {
       workspaceId: "ws-4",
       threadId: "thread-1",
       text: "hello",
@@ -863,6 +883,20 @@ describe("tauri invoke wrappers", () => {
       workspaceId: "ws-5",
       threadId: "thread-2",
       target: { type: "uncommittedChanges" },
+    });
+  });
+
+  it("includes delivery when starting detached reviews", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({});
+
+    await startReview("ws-5", "thread-2", { type: "uncommittedChanges" }, "detached");
+
+    expect(invokeMock).toHaveBeenCalledWith("start_review", {
+      workspaceId: "ws-5",
+      threadId: "thread-2",
+      target: { type: "uncommittedChanges" },
+      delivery: "detached",
     });
   });
 

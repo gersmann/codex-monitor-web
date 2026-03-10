@@ -54,6 +54,7 @@ import { usePwaInstall } from "@/features/pwa/hooks/usePwaInstall";
 import { useThreadBacklog } from "@/features/backlog/hooks/useThreadBacklog";
 import type {
   ComposerEditorSettings,
+  ServiceTier,
   WorkspaceInfo,
 } from "@/types";
 import { OPEN_APP_STORAGE_KEY } from "@app/constants";
@@ -210,6 +211,8 @@ export default function MainApp() {
     setPreferredModelId,
     preferredEffort,
     setPreferredEffort,
+    preferredServiceTier,
+    setPreferredServiceTier,
     preferredCollabModeId,
     setPreferredCollabModeId,
     preferredCodexArgsOverride,
@@ -321,13 +324,20 @@ export default function MainApp() {
   const [selectedCodexArgsOverride, setSelectedCodexArgsOverride] = useState<string | null>(
     null,
   );
+  const [selectedServiceTier, setSelectedServiceTier] = useState<
+    ServiceTier | null | undefined
+  >(undefined);
   useEffect(() => {
     setSelectedCodexArgsOverride(normalizeCodexArgsInput(preferredCodexArgsOverride));
   }, [preferredCodexArgsOverride, threadCodexSelectionKey]);
+  useEffect(() => {
+    setSelectedServiceTier(preferredServiceTier);
+  }, [preferredServiceTier, threadCodexSelectionKey]);
 
   const {
     handleSelectModel,
     handleSelectEffort,
+    handleSelectServiceTier,
     handleSelectCollaborationMode,
     handleSelectAccessMode,
     handleSelectCodexArgsOverride,
@@ -338,6 +348,7 @@ export default function MainApp() {
     activeThreadIdRef,
     setSelectedModelId,
     setSelectedEffort,
+    setSelectedServiceTier,
     setSelectedCollaborationModeId,
     setAccessMode,
     setSelectedCodexArgsOverride,
@@ -366,6 +377,7 @@ export default function MainApp() {
     reasoningOptions,
     selectedEffort,
     onSelectEffort: handleSelectEffort,
+    selectedServiceTier: selectedServiceTier ?? null,
     reasoningSupported,
   };
 
@@ -527,6 +539,7 @@ export default function MainApp() {
     startCompact,
     startApps,
     startMcp,
+    startFast,
     startStatus,
     reviewPrompt,
     closeReviewPrompt,
@@ -558,7 +571,9 @@ export default function MainApp() {
     onDebug: addDebugEntry,
     model: resolvedModel,
     effort: resolvedEffort,
+    serviceTier: selectedServiceTier,
     collaborationMode: collaborationModePayload,
+    onSelectServiceTier: handleSelectServiceTier,
     accessMode,
     ensureWorkspaceRuntimeCodexArgs,
     reviewDeliveryMode: appSettings.reviewDeliveryMode,
@@ -762,12 +777,14 @@ export default function MainApp() {
     setAccessMode,
     setPreferredModelId,
     setPreferredEffort,
+    setPreferredServiceTier,
     setPreferredCollabModeId,
     setPreferredCodexArgsOverride,
     activeThreadIdRef,
     pendingNewThreadSeedRef,
     selectedModelId,
     resolvedEffort,
+    selectedServiceTier,
     accessMode,
     selectedCollaborationModeId,
     selectedCodexArgsOverride,
@@ -1219,6 +1236,7 @@ export default function MainApp() {
       models,
       selectedModelId,
       resolvedEffort,
+      selectedServiceTier,
       collaborationModePayload,
     },
     refs: {
@@ -1230,12 +1248,14 @@ export default function MainApp() {
       startThreadForWorkspace,
       sendUserMessage,
       sendUserMessageToThread,
+      seedThreadCodexParams: patchThreadCodexParams,
       startFork,
       startReview,
       startResume,
       startCompact,
       startApps,
       startMcp,
+      startFast,
       startStatus,
       addWorktreeAgent,
       handleWorktreeCreated,
@@ -1417,6 +1437,7 @@ export default function MainApp() {
     activeWorkspaceId,
     activeThreadId,
     accessMode,
+    selectedServiceTier,
     selectedCollaborationModeId,
     selectedCodexArgsOverride,
     pendingNewThreadSeedRef,
@@ -1731,6 +1752,7 @@ export default function MainApp() {
     usageWorkspaceOptions,
     onUsageWorkspaceChange: setUsageWorkspaceId,
     gitState,
+    selectedServiceTier: selectedServiceTier ?? null,
     composerWorkspaceState,
     promptActions,
     worktreeState,
