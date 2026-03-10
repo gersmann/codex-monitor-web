@@ -88,7 +88,18 @@ import {
 } from "@threads/utils/threadCodexParamsSeed";
 import { subscribeTrayOpenThread } from "@services/events";
 import { isWebCompanionRuntime } from "@services/runtime";
-import { setWorkspaceRuntimeCodexArgs } from "@services/tauri";
+import {
+  rollbackThreadToMessage,
+  setWorkspaceRuntimeCodexArgs,
+} from "@services/tauri";
+
+type UserMessageItem = {
+  id: string;
+  kind: "message";
+  role: "user";
+  text: string;
+  images?: string[];
+};
 
 const SettingsView = lazy(() =>
   import("@settings/components/SettingsView").then((module) => ({
@@ -1291,6 +1302,51 @@ export default function MainApp() {
     setModelCount: setWorkspaceModelCount,
     startRun: startWorkspaceRun,
   } = workspaceHomeState;
+  const handleRollbackMessage = useCallback(
+    async (item: UserMessageItem) => {
+      if (!activeWorkspace || !activeThreadId) {
+        return;
+      }
+      try {
+        const result = await rollbackThreadToMessage(
+          activeWorkspace.id,
+          activeThreadId,
+          item.id,
+        );
+        clearActiveImages();
+        composerWorkspaceState.handleDraftChange(result.restoredText);
+        requestAnimationFrame(() => {
+          const node = composerInputRef.current;
+          if (!node) {
+            return;
+          }
+          node.focus();
+          const cursor = result.restoredText.length;
+          node.setSelectionRange(cursor, cursor);
+        });
+        await refreshThread(activeWorkspace.id, activeThreadId);
+      } catch (error) {
+        alertError(error);
+        addDebugEntry({
+          id: `${Date.now()}-client-thread-rollback-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread/rollback error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [
+      activeThreadId,
+      activeWorkspace,
+      addDebugEntry,
+      alertError,
+      clearActiveImages,
+      composerInputRef,
+      composerWorkspaceState,
+      refreshThread,
+    ],
+  );
   const {
     content: agentMdContent,
     exists: agentMdExists,
@@ -1802,6 +1858,7 @@ export default function MainApp() {
     handleAddWorktreeAgent,
     handleAddCloneAgent,
     handleOpenThreadLink,
+    handleRollbackMessage,
     handleSelectOpenAppId,
     handleCopyThread,
     handleToggleTerminalWithFocus,

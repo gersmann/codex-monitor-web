@@ -20,6 +20,7 @@ import {
   listMcpServerStatus,
   readGlobalAgentsMd,
   readGlobalCodexConfigToml,
+  rollbackThreadToMessage,
   listWorkspaces,
   openWorkspaceIn,
   readAgentMd,
@@ -188,6 +189,19 @@ describe("tauri invoke wrappers", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("get_github_issues", {
       workspaceId: "ws-2",
+    });
+  });
+
+  it("maps rollback params for thread rollback", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ restoredText: "redo this", thread: { id: "thread-1" } });
+
+    await rollbackThreadToMessage("ws-1", "thread-1", "item-7");
+
+    expect(invokeMock).toHaveBeenCalledWith("rollback_thread_to_message", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      messageItemId: "item-7",
     });
   });
 

@@ -373,6 +373,10 @@ export class CodexAppServerClient {
     return await this.request("thread/fork", { threadId });
   }
 
+  async rollbackThread(threadId: string, numTurns: number) {
+    return await this.request("thread/rollback", { threadId, numTurns });
+  }
+
   async compactThread(threadId: string) {
     return await this.request("thread/compact/start", { threadId });
   }

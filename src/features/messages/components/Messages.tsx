@@ -44,6 +44,14 @@ import {
   WorkingIndicator,
 } from "./MessageRows";
 
+type UserMessageItem = {
+  id: string;
+  kind: "message";
+  role: "user";
+  text: string;
+  images?: string[];
+};
+
 type MessagesProps = {
   items: ConversationItem[];
   threadId: string | null;
@@ -68,6 +76,7 @@ type MessagesProps = {
   onPlanSubmitChanges?: (changes: string) => void;
   onOpenThreadLink?: (threadId: string, workspaceId?: string | null) => void;
   onQuoteMessage?: (text: string) => void;
+  onRollbackMessage?: (item: UserMessageItem) => void;
 };
 
 function toMarkdownQuote(text: string): string {
@@ -103,6 +112,7 @@ export const Messages = memo(function Messages({
   onPlanSubmitChanges,
   onOpenThreadLink,
   onQuoteMessage,
+  onRollbackMessage,
 }: MessagesProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -407,6 +417,7 @@ export const Messages = memo(function Messages({
           isCopied={isCopied}
           onCopy={handleCopyMessage}
           onQuote={onQuoteMessage ? handleQuoteMessage : undefined}
+          onRollback={onRollbackMessage}
           codeBlockCopyUseModifier={codeBlockCopyUseModifier}
           showMessageFilePath={showMessageFilePath}
           workspacePath={workspacePath}

@@ -107,6 +107,7 @@ function mockAppServerClient(
     modelList: (...args: unknown[]) => Promise<unknown>;
     onNotification: (...args: unknown[]) => () => void;
     readThreadWithTurns: (...args: unknown[]) => Promise<unknown>;
+    rollbackThread: (...args: unknown[]) => Promise<unknown>;
     resumeThread: (...args: unknown[]) => Promise<unknown>;
     sendResponse: (...args: unknown[]) => Promise<unknown>;
     skillsList: (...args: unknown[]) => Promise<unknown>;
@@ -999,6 +1000,161 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
     });
     const threads = await storage.readThreads();
     expect(threads.some((thread) => thread.id === "sdk-fork-1")).toBe(true);
+  });
+
+  it("rolls a thread back to a selected user message and preserves local metadata", async () => {
+    const { server, storage, workspace, thread } = await createServerFixture();
+    const storedThread: StoredThread = {
+      ...thread,
+      name: "Pinned title",
+      backlog: [
+        {
+          id: "backlog-1",
+          text: "later",
+          createdAt: 11,
+          updatedAt: 11,
+        },
+      ],
+      turns: [
+        {
+          id: "turn-1",
+          createdAt: 1,
+          completedAt: 2,
+          status: "completed",
+          errorMessage: null,
+          items: [
+            {
+              id: "item-user-1",
+              type: "userMessage",
+              content: [{ type: "text", text: "First draft" }],
+            },
+            {
+              id: "item-agent-1",
+              type: "agentMessage",
+              text: "Reply",
+            },
+          ],
+        },
+        {
+          id: "turn-2",
+          createdAt: 3,
+          completedAt: 4,
+          status: "completed",
+          errorMessage: null,
+          items: [
+            {
+              id: "item-user-2",
+              type: "userMessage",
+              content: [{ type: "text", text: "Second draft" }],
+            },
+          ],
+        },
+      ],
+    };
+    await storage.writeThreads([storedThread]);
+    await server.initialize();
+
+    const rollbackThread = vi.fn().mockResolvedValue({
+      thread: {
+        id: "sdk-thread-1",
+        cwd: workspace.path,
+        preview: "Rolled back",
+        createdAt: 1,
+        updatedAt: 99,
+        turns: [
+          {
+            id: "turn-1",
+            status: "completed",
+            items: [
+              {
+                id: "item-user-1",
+                type: "userMessage",
+                content: [{ type: "text", text: "First draft" }],
+              },
+            ],
+          },
+        ],
+        status: "idle",
+      },
+    });
+    mockAppServerClient(server, { rollbackThread });
+
+    const result = await server.handleRpc("rollback_thread_to_message", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      messageItemId: "item-user-1",
+    });
+
+    expect(rollbackThread).toHaveBeenCalledWith("sdk-thread-1", 2);
+    expect(result).toEqual({
+      restoredText: "First draft",
+      thread: {
+        id: "thread-1",
+        cwd: workspace.path,
+        preview: "Pinned title",
+        createdAt: 1,
+        updatedAt: 99,
+        activeTurnId: null,
+        source: "appServer",
+        model: null,
+        modelReasoningEffort: null,
+        turns: [
+          {
+            id: "turn-1",
+            status: "completed",
+            createdAt: 1,
+            completedAt: 2,
+            items: [
+              {
+                id: "item-user-1",
+                type: "userMessage",
+                content: [{ type: "text", text: "First draft" }],
+              },
+            ],
+            errorMessage: null,
+          },
+        ],
+        tokenUsage: null,
+      },
+    });
+    const threads = await storage.readThreads();
+    expect(threads[0]?.name).toBe("Pinned title");
+    expect(threads[0]?.backlog).toEqual(storedThread.backlog);
+  });
+
+  it("rejects rollback targets that are not user messages", async () => {
+    const { server, storage, thread } = await createServerFixture();
+    const storedThread: StoredThread = {
+      ...thread,
+      turns: [
+        {
+          id: "turn-1",
+          createdAt: 1,
+          completedAt: 2,
+          status: "completed",
+          errorMessage: null,
+          items: [
+            {
+              id: "item-agent-1",
+              type: "agentMessage",
+              text: "Reply",
+            },
+          ],
+        },
+      ],
+    };
+    await storage.writeThreads([storedThread]);
+    await server.initialize();
+
+    const result = await server.handleRpc("rollback_thread_to_message", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      messageItemId: "item-agent-1",
+    });
+
+    expect(result).toEqual({
+      error: { message: "Only user messages can be used as rollback targets." },
+    });
   });
 
   it("preserves a local thread rename when app-server sync omits the name", async () => {

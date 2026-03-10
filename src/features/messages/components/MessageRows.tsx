@@ -9,6 +9,7 @@ import FileDiffIcon from "lucide-react/dist/esm/icons/file-diff";
 import FileText from "lucide-react/dist/esm/icons/file-text";
 import Image from "lucide-react/dist/esm/icons/image";
 import Quote from "lucide-react/dist/esm/icons/quote";
+import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import Search from "lucide-react/dist/esm/icons/search";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
 import Users from "lucide-react/dist/esm/icons/users";
@@ -34,6 +35,14 @@ import {
 } from "../utils/messageRenderUtils";
 import { Markdown } from "./Markdown";
 
+type UserMessageItem = {
+  id: string;
+  kind: "message";
+  role: "user";
+  text: string;
+  images?: string[];
+};
+
 type MarkdownFileLinkProps = {
   showMessageFilePath?: boolean;
   workspacePath?: string | null;
@@ -57,6 +66,7 @@ type MessageRowProps = MarkdownFileLinkProps & {
   isCopied: boolean;
   onCopy: (item: Extract<ConversationItem, { kind: "message" }>) => void;
   onQuote?: (item: Extract<ConversationItem, { kind: "message" }>, selectedText?: string) => void;
+  onRollback?: (item: UserMessageItem) => void;
   codeBlockCopyUseModifier?: boolean;
 };
 
@@ -368,6 +378,7 @@ export const MessageRow = memo(function MessageRow({
   isCopied,
   onCopy,
   onQuote,
+  onRollback,
   codeBlockCopyUseModifier,
   showMessageFilePath,
   workspacePath,
@@ -414,7 +425,11 @@ export const MessageRow = memo(function MessageRow({
         return false;
       }
       const element = node instanceof Element ? node : node.parentElement;
-      return Boolean(element?.closest(".message-quote-button, .message-copy-button"));
+      return Boolean(
+        element?.closest(
+          ".message-quote-button, .message-copy-button, .message-rollback-button",
+        ),
+      );
     };
 
     if (isWithinMessageControls(selection.anchorNode) || isWithinMessageControls(selection.focusNode)) {
@@ -477,6 +492,17 @@ export const MessageRow = memo(function MessageRow({
             title="Quote message"
           >
             <Quote size={14} aria-hidden />
+          </button>
+        )}
+        {item.role === "user" && onRollback && (
+          <button
+            type="button"
+            className="ghost message-rollback-button"
+            onClick={() => onRollback(item as UserMessageItem)}
+            aria-label="Revert to this message"
+            title="Revert to this message"
+          >
+            <RotateCcw size={14} aria-hidden />
           </button>
         )}
         <button

@@ -134,6 +134,7 @@ type UseMainAppLayoutSurfacesArgs = {
   handleAddWorktreeAgent: SidebarProps["onAddWorktreeAgent"];
   handleAddCloneAgent: SidebarProps["onAddCloneAgent"];
   handleOpenThreadLink: LayoutNodesOptions["primary"]["messagesProps"]["onOpenThreadLink"];
+  handleRollbackMessage: LayoutNodesOptions["primary"]["messagesProps"]["onRollbackMessage"];
   handleSelectOpenAppId: MainHeaderProps["onSelectOpenAppId"];
   handleCopyThread: MainHeaderProps["onCopyThread"];
   handleToggleTerminalWithFocus: MainHeaderProps["onToggleTerminal"];
@@ -306,6 +307,7 @@ export function useMainAppLayoutSurfaces({
   handleAddWorktreeAgent,
   handleAddCloneAgent,
   handleOpenThreadLink,
+  handleRollbackMessage,
   handleSelectOpenAppId,
   handleCopyThread,
   handleToggleTerminalWithFocus,
@@ -475,6 +477,7 @@ export function useMainAppLayoutSurfaces({
         onQuoteMessage: composerWorkspaceState.canInsertComposerText
           ? composerWorkspaceState.handleInsertComposerText
           : undefined,
+        onRollbackMessage: handleRollbackMessage,
         isThinking: composerWorkspaceState.isProcessing,
         isLoadingMessages: activeThreadId
           ? threadResumeLoadingById[activeThreadId] ?? false

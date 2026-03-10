@@ -213,6 +213,48 @@ describe("Messages", () => {
     selection?.removeAllRanges();
   });
 
+  it("shows revert action for user messages only and routes the selected item", () => {
+    const onRollbackMessage = vi.fn();
+    const items: ConversationItem[] = [
+      {
+        id: "msg-user-1",
+        kind: "message",
+        role: "user",
+        text: "Please try again",
+      },
+      {
+        id: "msg-assistant-1",
+        kind: "message",
+        role: "assistant",
+        text: "Sure",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+        onRollbackMessage={onRollbackMessage}
+      />,
+    );
+
+    const buttons = screen.getAllByRole("button", {
+      name: "Revert to this message",
+    });
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]!);
+    expect(onRollbackMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "msg-user-1", role: "user" }),
+    );
+    expect(
+      container.querySelectorAll(".message.assistant .message-rollback-button"),
+    ).toHaveLength(0);
+  });
+
   it("opens linked review thread when clicking thread link", () => {
     const onOpenThreadLink = vi.fn();
     const items: ConversationItem[] = [

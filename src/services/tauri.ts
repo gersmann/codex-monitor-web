@@ -609,6 +609,17 @@ export async function forkThread(workspaceId: string, threadId: string) {
   return invoke<any>("fork_thread", { workspaceId, threadId });
 }
 
+export async function rollbackThreadToMessage(
+  workspaceId: string,
+  threadId: string,
+  messageItemId: string,
+): Promise<{ restoredText: string; thread: Record<string, unknown> }> {
+  return invoke<{ restoredText: string; thread: Record<string, unknown> }>(
+    "rollback_thread_to_message",
+    { workspaceId, threadId, messageItemId },
+  );
+}
+
 export async function compactThread(workspaceId: string, threadId: string) {
   return invoke<any>("compact_thread", { workspaceId, threadId });
 }

@@ -466,6 +466,31 @@ export function buildAppServerUserInputItems(
   return input;
 }
 
+function extractUserMessageTextFromStoredItem(item: JsonRecord) {
+  const content = Array.isArray(item.content) ? (item.content as JsonRecord[]) : [];
+  const textParts: string[] = [];
+  for (const entry of content) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      continue;
+    }
+    const type = trimString(entry.type);
+    if (type === "text" || type === "input_text") {
+      const text = trimString(entry.text);
+      if (text) {
+        textParts.push(text);
+      }
+      continue;
+    }
+    if (type === "skill") {
+      const name = trimString(entry.name);
+      if (name) {
+        textParts.push(`$${name}`);
+      }
+    }
+  }
+  return textParts.join(" ").trim();
+}
+
 function appServerClientVersion() {
   const packageVersion = process.env.npm_package_version?.trim();
   return packageVersion || "0.0.0";
@@ -799,6 +824,14 @@ function buildStoredTurnFromAppServerThread(
 
 function toStoredItemId(turnId: string, itemId: string) {
   return `${turnId}:${itemId}`;
+}
+
+function appServerItemIdMatches(storedItemId: string, requestedItemId: string) {
+  return (
+    storedItemId === requestedItemId ||
+    storedItemId.endsWith(`:${requestedItemId}`) ||
+    requestedItemId.endsWith(`:${storedItemId}`)
+  );
 }
 
 function trimString(value: unknown) {
@@ -2909,6 +2942,24 @@ export class CodexCompanionServer {
     return items;
   }
 
+  private findRollbackTarget(thread: StoredThread, messageItemId: string) {
+    for (let index = 0; index < thread.turns.length; index += 1) {
+      const turn = thread.turns[index];
+      const item = turn.items.find((entry) =>
+        appServerItemIdMatches(trimString(entry.id), messageItemId),
+      );
+      if (!item) {
+        continue;
+      }
+      return {
+        turnIndex: index,
+        turn,
+        item,
+      };
+    }
+    return null;
+  }
+
   private findThreadBySdkThreadId(threadId: string) {
     return (
       Array.from(this.threadsById.values()).find(
@@ -4593,6 +4644,55 @@ export class CodexCompanionServer {
             await this.persistThreads();
           }
           return response;
+        } catch (error) {
+          return badRequest(error instanceof Error ? error.message : String(error));
+        }
+      }
+      case "rollback_thread_to_message": {
+        const workspaceId = String(params.workspaceId ?? "");
+        const threadId = String(params.threadId ?? "");
+        const messageItemId = trimString(params.messageItemId);
+        const workspace = this.getWorkspace(workspaceId);
+        const thread = this.getThreadForWorkspace(workspaceId, threadId);
+        if (!workspace || !thread) {
+          return notFound("Thread or workspace not found.");
+        }
+        if (!messageItemId) {
+          return badRequest("Message item id is required.");
+        }
+        const target = this.findRollbackTarget(thread, messageItemId);
+        if (!target) {
+          return notFound("Message not found.");
+        }
+        if (trimString(target.item.type) !== "userMessage") {
+          return badRequest("Only user messages can be used as rollback targets.");
+        }
+        const numTurns = thread.turns.length - target.turnIndex;
+        if (numTurns < 1) {
+          return badRequest("Rollback target is invalid.");
+        }
+        const restoredText = extractUserMessageTextFromStoredItem(target.item);
+        try {
+          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
+          const response = await client.rollbackThread(
+            this.resolveAppServerThreadId(thread),
+            numTurns,
+          );
+          const rawThread =
+            response.thread && typeof response.thread === "object"
+              ? (response.thread as Record<string, unknown>)
+              : null;
+          if (!rawThread) {
+            return notFound("Rolled back thread was not returned by app-server.");
+          }
+          const stored = this.buildStoredThreadFromAppServer(workspaceId, rawThread, thread);
+          this.threadsById.set(stored.id, stored);
+          this.updateThreadWorkspaceMapping(stored);
+          await this.persistThreads();
+          return {
+            restoredText,
+            thread: toThreadResponse(stored),
+          };
         } catch (error) {
           return badRequest(error instanceof Error ? error.message : String(error));
         }

@@ -168,6 +168,7 @@ These are v2 request methods CodexMonitor currently sends to Codex app-server:
 - `thread/archive`
 - `thread/compact/start`
 - `thread/name/set`
+- `thread/rollback`
 - `turn/start`
 - `turn/steer` (used for explicit steer follow-ups while a turn is active)
 - `turn/interrupt`
@@ -224,7 +225,6 @@ Compared against Codex v2 request methods, CodexMonitor currently does not send:
 - `thread/realtime/appendText`
 - `thread/realtime/start`
 - `thread/realtime/stop`
-- `thread/rollback`
 - `thread/unarchive`
 - `thread/unsubscribe`
 - `windowsSandbox/setupStart`
