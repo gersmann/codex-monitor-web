@@ -1,4 +1,10 @@
+<<<<<<< .merge_file_N8ww78
 # App-Server Events Reference (Codex `b9a2e400018c219e3010a5a5b8ded8645184da0b`)
+||||||| .merge_file_yaZUL5
+# App-Server Events Reference (Codex `5d4303510cc35571ae99a0a4a7d6ac40ccc03089`)
+=======
+# App-Server Events Reference (Codex `6baeec68bd1bdc11284885a6d00fa4db4e1327b6`)
+>>>>>>> .merge_file_QxjBmm
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
@@ -118,8 +124,11 @@ These notifications are now recognized, routed through the frontend app-server e
 These arrive on the same frontend event stream but are not Codex v2
 `ServerNotification` methods:
 
-- `item/commandExecution/requestApproval` and `item/fileChange/requestApproval`
-  via suffix match in `isApprovalRequestMethod(method)`
+- approval requests ending in `requestApproval`, including
+  `item/commandExecution/requestApproval`,
+  `item/fileChange/requestApproval`, and
+  `item/permissions/requestApproval`, via suffix match in
+  `isApprovalRequestMethod(method)`
 - `item/tool/requestUserInput` (a Codex v2 server request, not a notification)
 - `codex/backgroundThread` (CodexMonitor synthetic bridge event)
 - `codex/connected` (CodexMonitor synthetic bridge event)
@@ -144,6 +153,33 @@ CodexMonitor status:
 Compared against Codex app-server protocol v2 notifications, the following
 events are currently not routed:
 
+<<<<<<< .merge_file_N8ww78
+||||||| .merge_file_yaZUL5
+- `configWarning`
+- `deprecationNotice`
+- `fuzzyFileSearch/sessionCompleted`
+- `fuzzyFileSearch/sessionUpdated`
+- `item/mcpToolCall/progress`
+- `mcpServer/oauthLogin/completed`
+- `model/rerouted`
+- `rawResponseItem/completed`
+- `serverRequest/resolved`
+- `skills/changed`
+=======
+- `configWarning`
+- `command/exec/outputDelta`
+- `deprecationNotice`
+- `fuzzyFileSearch/sessionCompleted`
+- `fuzzyFileSearch/sessionUpdated`
+- `hook/completed`
+- `hook/started`
+- `item/mcpToolCall/progress`
+- `mcpServer/oauthLogin/completed`
+- `model/rerouted`
+- `rawResponseItem/completed`
+- `serverRequest/resolved`
+- `skills/changed`
+>>>>>>> .merge_file_QxjBmm
 - `thread/compacted` (deprecated; intentionally not routed)
 - `thread/realtime/closed`
 - `thread/realtime/error`
@@ -183,6 +219,9 @@ Compared against Codex v2 request methods, CodexMonitor currently does not send:
 
 - `account/logout`
 - `command/exec`
+- `command/exec/resize`
+- `command/exec/terminate`
+- `command/exec/write`
 - `config/batchWrite`
 - `config/mcpServer/reload`
 - `config/read`
@@ -198,10 +237,13 @@ Compared against Codex v2 request methods, CodexMonitor currently does not send:
 - `mock/experimentalMethod`
 - `plugin/install`
 - `plugin/list`
+- `plugin/uninstall`
 - `skills/config/write`
 - `skills/remote/export`
 - `skills/remote/list`
 - `thread/backgroundTerminals/clean`
+- `thread/decrement_elicitation`
+- `thread/increment_elicitation`
 - `thread/loaded/list`
 - `thread/metadata/update`
 - `thread/read`
@@ -220,6 +262,7 @@ Supported server requests:
 
 - `item/commandExecution/requestApproval`
 - `item/fileChange/requestApproval`
+- `item/permissions/requestApproval`
 - `item/tool/requestUserInput`
 
 Missing server requests:

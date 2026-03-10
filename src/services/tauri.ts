@@ -1367,6 +1367,35 @@ export async function setThreadName(
   return invoke<any>("set_thread_name", { workspaceId, threadId, name });
 }
 
+export async function getThreadBacklog(workspaceId: string, threadId: string) {
+  return invoke<any>("get_thread_backlog", { workspaceId, threadId });
+}
+
+export async function addThreadBacklogItem(
+  workspaceId: string,
+  threadId: string,
+  text: string,
+) {
+  return invoke<any>("add_thread_backlog_item", { workspaceId, threadId, text });
+}
+
+export async function updateThreadBacklogItem(
+  workspaceId: string,
+  threadId: string,
+  itemId: string,
+  text: string,
+) {
+  return invoke<any>("update_thread_backlog_item", { workspaceId, threadId, itemId, text });
+}
+
+export async function deleteThreadBacklogItem(
+  workspaceId: string,
+  threadId: string,
+  itemId: string,
+) {
+  return invoke<any>("delete_thread_backlog_item", { workspaceId, threadId, itemId });
+}
+
 export async function setTrayRecentThreads(entries: TrayRecentThreadEntry[]) {
   if (isWebCompanionRuntime()) {
     void entries;

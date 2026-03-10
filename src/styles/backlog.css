@@ -1,0 +1,130 @@
+.backlog-panel {
+  min-height: 0;
+  gap: 10px;
+}
+
+.backlog-panel-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+.backlog-panel-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.backlog-composer-card {
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--surface-control);
+  border: 1px solid var(--border-subtle);
+}
+
+.backlog-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.backlog-draft-editor {
+  position: relative;
+}
+
+.backlog-draft-input,
+.backlog-item-editor {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--text-emphasis);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.backlog-draft-suggestions {
+  max-width: min(420px, calc(100vw - 48px));
+}
+
+.backlog-actions,
+.backlog-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.backlog-panel-empty,
+.backlog-panel-error {
+  border: 1px dashed var(--border-subtle);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--surface-card);
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.backlog-panel-error {
+  border-style: solid;
+  color: var(--status-error);
+}
+
+.backlog-list {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.backlog-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-control);
+  padding: 10px;
+}
+
+.backlog-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.backlog-item-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+  font-size: 13px;
+  color: var(--text-emphasis);
+}
+
+.backlog-action,
+.backlog-primary-action {
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.backlog-primary-action {
+  min-width: 84px;
+}
+
+.backlog-action.is-danger {
+  color: var(--status-error);
+}

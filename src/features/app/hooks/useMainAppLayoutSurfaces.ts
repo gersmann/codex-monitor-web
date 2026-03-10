@@ -15,6 +15,7 @@ type SidebarProps = LayoutNodesOptions["primary"]["sidebarProps"];
 type ComposerProps = NonNullable<LayoutNodesOptions["primary"]["composerProps"]>;
 type MainHeaderProps = NonNullable<LayoutNodesOptions["primary"]["mainHeaderProps"]>;
 type GitDiffPanelProps = LayoutNodesOptions["git"]["gitDiffPanelProps"];
+type BacklogPanelProps = LayoutNodesOptions["git"]["backlogPanelProps"];
 
 type UseMainAppLayoutSurfacesArgs = {
   appSettings: Pick<
@@ -83,6 +84,14 @@ type UseMainAppLayoutSurfacesArgs = {
   composerWorkspaceState: ReturnType<typeof useMainAppComposerWorkspaceState>;
   promptActions: ReturnType<typeof useMainAppPromptActions>;
   worktreeState: ReturnType<typeof useMainAppWorktreeState>;
+  backlogState: {
+    activeItems: BacklogPanelProps["items"];
+    activeError: BacklogPanelProps["error"];
+    isLoading: BacklogPanelProps["isLoading"];
+    addItem: BacklogPanelProps["onAddItem"];
+    updateItem: BacklogPanelProps["onUpdateItem"];
+    deleteItem: BacklogPanelProps["onDeleteItem"];
+  };
   sidebarHandlers: ReturnType<typeof useMainAppSidebarMenuOrchestration>;
   displayNodes: ReturnType<typeof useMainAppDisplayNodes>;
   threadPinning: Pick<
@@ -279,6 +288,7 @@ export function useMainAppLayoutSurfaces({
   composerWorkspaceState,
   promptActions,
   worktreeState,
+  backlogState,
   sidebarHandlers,
   displayNodes,
   threadPinning,
@@ -686,6 +696,26 @@ export function useMainAppLayoutSurfaces({
     },
     git: {
       filePanelMode: gitState.filePanelMode,
+      backlogPanelProps: {
+        activeThreadId,
+        items: backlogState.activeItems,
+        isLoading: backlogState.isLoading,
+        error: backlogState.activeError,
+        filePanelMode: gitState.filePanelMode,
+        onFilePanelModeChange: gitState.setFilePanelMode,
+        onAddItem: backlogState.addItem,
+        onUpdateItem: backlogState.updateItem,
+        onDeleteItem: backlogState.deleteItem,
+        onInsertText: composerWorkspaceState.canInsertComposerText
+          ? composerWorkspaceState.handleInsertComposerText
+          : undefined,
+        canInsertText: composerWorkspaceState.canInsertComposerText,
+        appsEnabled: appSettings.experimentalAppsEnabled,
+        skills,
+        apps,
+        prompts,
+        files: composerWorkspaceState.files,
+      },
       fileTreeProps: activeWorkspace
         ? {
             workspaceId: activeWorkspace.id,

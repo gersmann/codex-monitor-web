@@ -34,6 +34,13 @@ export type StoredTurn = {
   errorMessage: string | null;
 };
 
+export type ThreadBacklogItem = {
+  id: string;
+  text: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type TokenUsageTotals = {
   totalTokens: number;
   inputTokens: number;
@@ -56,6 +63,7 @@ export type StoredThread = {
   turns: StoredTurn[];
   modelId: string | null;
   effort: string | null;
+  backlog: ThreadBacklogItem[];
   tokenUsage: {
     total: TokenUsageTotals;
     last: TokenUsageTotals;

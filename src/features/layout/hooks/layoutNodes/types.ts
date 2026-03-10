@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactNode } from "react";
 import { ApprovalToasts } from "../../../app/components/ApprovalToasts";
+import { BacklogPanel } from "../../../backlog/components/BacklogPanel";
 import { MainHeader } from "../../../app/components/MainHeader";
 import { Sidebar } from "../../../app/components/Sidebar";
 import { TabBar } from "../../../app/components/TabBar";
@@ -56,6 +57,7 @@ export type LayoutPrimarySurface = {
 
 export type LayoutGitSurface = {
   filePanelMode: ComponentProps<typeof GitDiffPanel>["filePanelMode"];
+  backlogPanelProps: ComponentProps<typeof BacklogPanel>;
   fileTreeProps: ComponentProps<typeof FileTreePanel> | null;
   promptPanelProps: ComponentProps<typeof PromptPanel>;
   gitDiffPanelProps: ComponentProps<typeof GitDiffPanel>;

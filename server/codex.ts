@@ -38,6 +38,7 @@ import type {
   StoredThreadItem,
   StoredTurn,
   StoredWorkspace,
+  ThreadBacklogItem,
 } from "./types.js";
 
 type AccountFallback = {
@@ -2871,6 +2872,29 @@ export class CodexCompanionServer {
     return this.threadsById.get(threadId) ?? null;
   }
 
+  private getThreadForWorkspace(workspaceId: string, threadId: string) {
+    const thread = this.getThread(threadId);
+    if (!thread || thread.workspaceId !== workspaceId) {
+      return null;
+    }
+    return thread;
+  }
+
+  private createBacklogItem(text: string): ThreadBacklogItem {
+    const now = Date.now();
+    return {
+      id: randomUUID(),
+      text,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  private sortBacklog(items: ThreadBacklogItem[]) {
+    items.sort((a, b) => b.createdAt - a.createdAt);
+    return items;
+  }
+
   private findThreadBySdkThreadId(threadId: string) {
     return (
       Array.from(this.threadsById.values()).find(
@@ -3011,6 +3035,7 @@ export class CodexCompanionServer {
       turns,
       modelId: existing?.modelId ?? null,
       effort: existing?.effort ?? null,
+      backlog: existing?.backlog ?? [],
       tokenUsage: existing?.tokenUsage ?? null,
     };
   }
@@ -4609,6 +4634,71 @@ export class CodexCompanionServer {
         } catch (error) {
           return badRequest(error instanceof Error ? error.message : String(error));
         }
+      }
+      case "get_thread_backlog": {
+        const workspaceId = String(params.workspaceId ?? "");
+        const threadId = String(params.threadId ?? "");
+        const thread = this.getThreadForWorkspace(workspaceId, threadId);
+        if (!thread) {
+          return notFound("Thread not found.");
+        }
+        return thread.backlog;
+      }
+      case "add_thread_backlog_item": {
+        const workspaceId = String(params.workspaceId ?? "");
+        const threadId = String(params.threadId ?? "");
+        const text = String(params.text ?? "").trim();
+        const thread = this.getThreadForWorkspace(workspaceId, threadId);
+        if (!thread) {
+          return notFound("Thread not found.");
+        }
+        if (!text) {
+          return badRequest("Backlog text is required.");
+        }
+        const item = this.createBacklogItem(text);
+        thread.backlog = this.sortBacklog([item, ...thread.backlog]);
+        thread.updatedAt = Date.now();
+        await this.persistThreads();
+        return item;
+      }
+      case "update_thread_backlog_item": {
+        const workspaceId = String(params.workspaceId ?? "");
+        const threadId = String(params.threadId ?? "");
+        const itemId = String(params.itemId ?? "");
+        const text = String(params.text ?? "").trim();
+        const thread = this.getThreadForWorkspace(workspaceId, threadId);
+        if (!thread) {
+          return notFound("Thread not found.");
+        }
+        if (!text) {
+          return badRequest("Backlog text is required.");
+        }
+        const item = thread.backlog.find((entry) => entry.id === itemId);
+        if (!item) {
+          return notFound("Backlog item not found.");
+        }
+        item.text = text;
+        item.updatedAt = Date.now();
+        thread.updatedAt = Date.now();
+        await this.persistThreads();
+        return item;
+      }
+      case "delete_thread_backlog_item": {
+        const workspaceId = String(params.workspaceId ?? "");
+        const threadId = String(params.threadId ?? "");
+        const itemId = String(params.itemId ?? "");
+        const thread = this.getThreadForWorkspace(workspaceId, threadId);
+        if (!thread) {
+          return notFound("Thread not found.");
+        }
+        const nextBacklog = thread.backlog.filter((entry) => entry.id !== itemId);
+        if (nextBacklog.length === thread.backlog.length) {
+          return notFound("Backlog item not found.");
+        }
+        thread.backlog = nextBacklog;
+        thread.updatedAt = Date.now();
+        await this.persistThreads();
+        return null;
       }
       case "get_config_model": {
         try {

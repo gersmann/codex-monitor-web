@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { summarizePayload, trimDebugEntries } from "./useDebugLog";
+import {
+  appendDebugEntry,
+  filterClearedDebugEntries,
+  summarizePayload,
+  trimDebugEntries,
+} from "./useDebugLog";
 
 describe("summarizePayload", () => {
   it("deeply summarizes nested arrays, objects, and long strings", () => {
@@ -46,5 +51,36 @@ describe("trimDebugEntries", () => {
     expect(trimmed.length).toBeLessThan(200);
     expect(trimmed[0]?.id).not.toBe("entry-0");
     expect(trimmed[trimmed.length - 1]?.id).toBe("entry-219");
+  });
+});
+
+describe("clear-aware debug entry helpers", () => {
+  it("drops existing entries at or before the clear cutoff", () => {
+    const entries = [
+      { id: "old", timestamp: 10, source: "event" as const, label: "old" },
+      { id: "new", timestamp: 20, source: "event" as const, label: "new" },
+    ];
+
+    expect(filterClearedDebugEntries(entries, 10).map((entry) => entry.id)).toEqual(["new"]);
+  });
+
+  it("does not append stale in-flight entries from before the clear cutoff", () => {
+    const entries = [{ id: "kept", timestamp: 20, source: "event" as const, label: "kept" }];
+
+    expect(
+      appendDebugEntry(
+        entries,
+        { id: "stale", timestamp: 10, source: "event" as const, label: "stale" },
+        15,
+      ).map((entry) => entry.id),
+    ).toEqual(["kept"]);
+
+    expect(
+      appendDebugEntry(
+        entries,
+        { id: "fresh", timestamp: 30, source: "event" as const, label: "fresh" },
+        15,
+      ).map((entry) => entry.id),
+    ).toEqual(["kept", "fresh"]);
   });
 });

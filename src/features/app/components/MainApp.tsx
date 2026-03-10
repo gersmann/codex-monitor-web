@@ -51,6 +51,7 @@ import { useMainAppWorkspaceLifecycle } from "@app/hooks/useMainAppWorkspaceLife
 import { useAppDocumentTitle } from "@app/hooks/useAppDocumentTitle";
 import { PwaInstallToast } from "@/features/pwa/components/PwaInstallToast";
 import { usePwaInstall } from "@/features/pwa/hooks/usePwaInstall";
+import { useThreadBacklog } from "@/features/backlog/hooks/useThreadBacklog";
 import type {
   ComposerEditorSettings,
   WorkspaceInfo,
@@ -570,6 +571,10 @@ export default function MainApp() {
     onMessageActivity: handleThreadMessageActivity,
     threadSortKey: threadListSortKey,
     onThreadCodexMetadataDetected: handleThreadCodexMetadataDetected,
+  });
+  const backlogState = useThreadBacklog({
+    activeWorkspaceId,
+    activeThreadId,
   });
   const { connectionState: remoteThreadConnectionState, reconnectLive } =
     useRemoteThreadLiveConnection({
@@ -1729,6 +1734,7 @@ export default function MainApp() {
     composerWorkspaceState,
     promptActions,
     worktreeState,
+    backlogState,
     sidebarHandlers: sidebarMenuOrchestration,
     displayNodes,
     threadPinning: {

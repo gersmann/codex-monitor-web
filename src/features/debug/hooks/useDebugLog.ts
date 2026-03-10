@@ -96,12 +96,28 @@ export function trimDebugEntries(entries: DebugEntry[]) {
   return kept.reverse();
 }
 
+export function filterClearedDebugEntries(entries: DebugEntry[], clearedAfterTimestamp: number) {
+  return entries.filter((entry) => entry.timestamp > clearedAfterTimestamp);
+}
+
+export function appendDebugEntry(
+  entries: DebugEntry[],
+  entry: DebugEntry,
+  clearedAfterTimestamp: number,
+) {
+  if (entry.timestamp <= clearedAfterTimestamp) {
+    return entries;
+  }
+  return trimDebugEntries([...entries, entry]);
+}
+
 export function useDebugLog() {
   const [debugOpen, setDebugOpenState] = useState(false);
   const [debugEntries, setDebugEntries] = useState<DebugEntry[]>([]);
   const [hasDebugAlerts, setHasDebugAlerts] = useState(false);
   const [debugPinned, setDebugPinned] = useState(false);
   const debugOpenRef = useRef(debugOpen);
+  const lastClearedAtRef = useRef(0);
   debugOpenRef.current = debugOpen;
 
   const isAlertEntry = useCallback((entry: DebugEntry) => {
@@ -129,7 +145,9 @@ export function useDebugLog() {
         setHasDebugAlerts(true);
       }
       const compactEntry = { ...entry, payload: summarizePayload(entry.payload) };
-      setDebugEntries((prev) => trimDebugEntries([...prev, compactEntry]));
+      setDebugEntries((prev) =>
+        appendDebugEntry(prev, compactEntry, lastClearedAtRef.current),
+      );
     },
     [isAlertEntry],
   );
@@ -155,7 +173,9 @@ export function useDebugLog() {
   }, [debugEntries]);
 
   const clearDebugEntries = useCallback(() => {
-    setDebugEntries([]);
+    const clearedAt = Date.now();
+    lastClearedAtRef.current = clearedAt;
+    setDebugEntries((prev) => filterClearedDebugEntries(prev, clearedAt));
     setHasDebugAlerts(false);
   }, []);
 

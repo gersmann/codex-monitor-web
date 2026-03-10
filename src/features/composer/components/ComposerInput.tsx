@@ -13,26 +13,17 @@ import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import Mic from "lucide-react/dist/esm/icons/mic";
 import Square from "lucide-react/dist/esm/icons/square";
 import X from "lucide-react/dist/esm/icons/x";
-import Brain from "lucide-react/dist/esm/icons/brain";
-import GitFork from "lucide-react/dist/esm/icons/git-fork";
-import PlusCircle from "lucide-react/dist/esm/icons/plus-circle";
 import Plus from "lucide-react/dist/esm/icons/plus";
-import Info from "lucide-react/dist/esm/icons/info";
-import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
-import ScrollText from "lucide-react/dist/esm/icons/scroll-text";
-import Wrench from "lucide-react/dist/esm/icons/wrench";
-import FileText from "lucide-react/dist/esm/icons/file-text";
-import Plug from "lucide-react/dist/esm/icons/plug";
 import { useComposerImageDrop } from "../hooks/useComposerImageDrop";
 import {
   PopoverMenuItem,
   PopoverSurface,
 } from "../../design-system/components/popover/PopoverPrimitives";
+import { ComposerAutocompleteList } from "./ComposerAutocompleteList";
 import { ComposerAttachments } from "./ComposerAttachments";
 import { DictationWaveform } from "../../dictation/components/DictationWaveform";
 import { ReviewInlinePrompt } from "./ReviewInlinePrompt";
 import type { ReviewPromptState, ReviewPromptStep } from "../../threads/hooks/useReviewPrompt";
-import { getFileTypeIconUrl } from "../../../utils/fileTypeIcons";
 
 type ComposerInputProps = {
   text: string;
@@ -92,51 +83,6 @@ type ComposerInputProps = {
   onReviewPromptConfirmCustom?: () => Promise<void>;
 };
 
-const isFileSuggestion = (item: AutocompleteItem) => item.group === "Files";
-
-const suggestionIcon = (item: AutocompleteItem) => {
-  if (isFileSuggestion(item)) {
-    return FileText;
-  }
-  if (item.id.startsWith("skill:")) {
-    return Wrench;
-  }
-  if (item.id.startsWith("app:")) {
-    return Plug;
-  }
-  if (item.id === "review") {
-    return Brain;
-  }
-  if (item.id === "fork") {
-    return GitFork;
-  }
-  if (item.id === "mcp") {
-    return Plug;
-  }
-  if (item.id === "apps") {
-    return Plug;
-  }
-  if (item.id === "new") {
-    return PlusCircle;
-  }
-  if (item.id === "resume") {
-    return RotateCcw;
-  }
-  if (item.id === "status") {
-    return Info;
-  }
-  if (item.id.startsWith("prompt:")) {
-    return ScrollText;
-  }
-  return Wrench;
-};
-
-const fileTitle = (path: string) => {
-  const normalized = path.replace(/\\/g, "/");
-  const parts = normalized.split("/").filter(Boolean);
-  return parts.length ? parts[parts.length - 1] : path;
-};
-
 export function ComposerInput({
   text,
   disabled,
@@ -192,8 +138,6 @@ export function ComposerInput({
   onReviewPromptUpdateCustomInstructions,
   onReviewPromptConfirmCustom,
 }: ComposerInputProps) {
-  const suggestionListRef = useRef<HTMLDivElement | null>(null);
-  const suggestionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const mobileActionsRef = useRef<HTMLDivElement | null>(null);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [isPhoneLayout, setIsPhoneLayout] = useState(false);
@@ -211,26 +155,6 @@ export function ComposerInput({
     disabled,
     onAttachImages,
   });
-
-  useEffect(() => {
-    if (!suggestionsOpen || suggestions.length === 0) {
-      return;
-    }
-    const list = suggestionListRef.current;
-    const item = suggestionRefs.current[highlightIndex];
-    if (!list || !item) {
-      return;
-    }
-    const listRect = list.getBoundingClientRect();
-    const itemRect = item.getBoundingClientRect();
-    if (itemRect.top < listRect.top) {
-      item.scrollIntoView({ block: "nearest" });
-      return;
-    }
-    if (itemRect.bottom > listRect.bottom) {
-      item.scrollIntoView({ block: "nearest" });
-    }
-  }, [highlightIndex, suggestionsOpen, suggestions.length]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -574,7 +498,6 @@ export function ComposerInput({
               reviewPromptOpen ? " review-inline-suggestions" : ""
             }`}
             role="listbox"
-            ref={suggestionListRef}
             style={suggestionsStyle}
           >
             {reviewPromptOpen &&
@@ -617,76 +540,12 @@ export function ComposerInput({
                 onConfirmCustom={onReviewPromptConfirmCustom}
               />
             ) : (
-              suggestions.map((item, index) => {
-                const prevGroup = suggestions[index - 1]?.group;
-                const showGroup = Boolean(item.group && item.group !== prevGroup);
-                return (
-                  <div key={item.id}>
-                    {showGroup && (
-                      <div className="composer-suggestion-section">{item.group}</div>
-                    )}
-                    <button
-                      type="button"
-                      className={`composer-suggestion${
-                        index === highlightIndex ? " is-active" : ""
-                      }`}
-                      role="option"
-                      aria-selected={index === highlightIndex}
-                      ref={(node) => {
-                        suggestionRefs.current[index] = node;
-                      }}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => onSelectSuggestion(item)}
-                      onMouseEnter={() => onHighlightIndex(index)}
-                    >
-                      {(() => {
-                        const Icon = suggestionIcon(item);
-                        const fileSuggestion = isFileSuggestion(item);
-                        const skillSuggestion = item.id.startsWith("skill:");
-                        const title = fileSuggestion ? fileTitle(item.label) : item.label;
-                        const description = fileSuggestion ? item.label : item.description;
-                        const fileTypeIconUrl = fileSuggestion
-                          ? getFileTypeIconUrl(item.label)
-                          : null;
-                        return (
-                          <span className="composer-suggestion-row">
-                            <span className="composer-suggestion-icon" aria-hidden>
-                              {fileTypeIconUrl ? (
-                                <img
-                                  className="composer-suggestion-icon-image"
-                                  src={fileTypeIconUrl}
-                                  alt=""
-                                  loading="lazy"
-                                  decoding="async"
-                                />
-                              ) : (
-                                <Icon size={14} />
-                              )}
-                            </span>
-                            <span className="composer-suggestion-content">
-                              <span className="composer-suggestion-title">{title}</span>
-                              {description && (
-                                <span
-                                  className={`composer-suggestion-description${
-                                    skillSuggestion ? " composer-suggestion-description--skill" : ""
-                                  }`}
-                                >
-                                  {description}
-                                </span>
-                              )}
-                              {!fileSuggestion && item.hint && (
-                                <span className="composer-suggestion-description">
-                                  {item.hint}
-                                </span>
-                              )}
-                            </span>
-                          </span>
-                        );
-                      })()}
-                    </button>
-                  </div>
-                );
-              })
+              <ComposerAutocompleteList
+                suggestions={suggestions}
+                highlightIndex={highlightIndex}
+                onHighlightIndex={onHighlightIndex}
+                onSelectSuggestion={onSelectSuggestion}
+              />
             )}
           </PopoverSurface>
         )}

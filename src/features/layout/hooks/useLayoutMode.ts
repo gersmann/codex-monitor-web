@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { isMobileRuntime } from "../../../services/tauri";
-import { isMobilePlatform } from "../../../utils/platformPaths";
 
 export type LayoutMode = "desktop" | "tablet" | "phone";
 
 const TABLET_MAX_WIDTH = 1100;
 const PHONE_MAX_WIDTH = 520;
 
-function getLayoutMode(width: number, forcePhoneLayout: boolean): LayoutMode {
+export function getLayoutMode(width: number, forcePhoneLayout: boolean): LayoutMode {
   if (forcePhoneLayout) {
     return "phone";
   }
@@ -21,20 +20,13 @@ function getLayoutMode(width: number, forcePhoneLayout: boolean): LayoutMode {
 }
 
 export function useLayoutMode() {
-  const [forcePhoneLayout, setForcePhoneLayout] = useState<boolean>(() =>
-    isMobilePlatform(),
-  );
+  const [forcePhoneLayout, setForcePhoneLayout] = useState(false);
   const [mode, setMode] = useState<LayoutMode>(() =>
     getLayoutMode(window.innerWidth, forcePhoneLayout),
   );
 
   useEffect(() => {
     let active = true;
-    if (forcePhoneLayout) {
-      return () => {
-        active = false;
-      };
-    }
     isMobileRuntime()
       .then((mobileRuntime) => {
         if (active && mobileRuntime) {

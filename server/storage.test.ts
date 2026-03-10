@@ -40,6 +40,7 @@ describe("CompanionStorage", () => {
           turns: [],
           modelId: null,
           effort: null,
+          backlog: [],
           tokenUsage: null,
         },
       ],
@@ -59,5 +60,39 @@ describe("CompanionStorage", () => {
 
     const repaired = JSON.parse(await fs.readFile(storage.threadsPath, "utf8")) as typeof valid;
     expect(repaired).toEqual(valid);
+  });
+
+  it("defaults backlog to an empty list for older stored threads", async () => {
+    const dir = await createTempDir();
+    const storage = new CompanionStorage(dir);
+    await fs.mkdir(path.dirname(storage.threadsPath), { recursive: true });
+    await fs.writeFile(
+      storage.threadsPath,
+      JSON.stringify({
+        threads: [
+          {
+            id: "thread-1",
+            workspaceId: "ws-1",
+            sdkThreadId: null,
+            cwd: "/tmp/ws-1",
+            createdAt: 1,
+            updatedAt: 2,
+            archivedAt: null,
+            name: null,
+            preview: "Thread",
+            activeTurnId: null,
+            turns: [],
+            modelId: null,
+            effort: null,
+            tokenUsage: null,
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const threads = await storage.readThreads();
+
+    expect(threads[0]?.backlog).toEqual([]);
   });
 });

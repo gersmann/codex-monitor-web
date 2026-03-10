@@ -611,6 +611,13 @@ export type QueuedMessage = {
   appMentions?: AppMention[];
 };
 
+export type ThreadBacklogItem = {
+  id: string;
+  text: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type AppMention = {
   name: string;
   path: string;

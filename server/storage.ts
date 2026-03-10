@@ -11,6 +11,7 @@ import {
 import type {
   JsonRecord,
   StoredThread,
+  ThreadBacklogItem,
   StoredWorkspace,
   TextFileResponse,
   ThreadsFile,
@@ -149,6 +150,15 @@ function normalizeTurnItems(
 }
 
 function normalizeThread(raw: StoredThread): StoredThread {
+  const backlog = (Array.isArray(raw.backlog) ? raw.backlog : [])
+    .map((item): ThreadBacklogItem => ({
+      id: String(item.id ?? ""),
+      text: String(item.text ?? ""),
+      createdAt: Number(item.createdAt ?? 0),
+      updatedAt: Number(item.updatedAt ?? item.createdAt ?? 0),
+    }))
+    .filter((item) => item.id && item.text.trim().length > 0)
+    .sort((a, b) => b.createdAt - a.createdAt);
   return {
     ...raw,
     sdkThreadId: raw.sdkThreadId ?? null,
@@ -158,6 +168,7 @@ function normalizeThread(raw: StoredThread): StoredThread {
     activeTurnId: raw.activeTurnId ?? null,
     modelId: raw.modelId ?? null,
     effort: raw.effort ?? null,
+    backlog,
     tokenUsage: raw.tokenUsage ?? null,
     turns: Array.isArray(raw.turns)
       ? raw.turns.map((turn) => ({

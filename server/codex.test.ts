@@ -40,6 +40,7 @@ async function createServerFixture(
     turns: [],
     modelId: null,
     effort: null,
+    backlog: [],
     tokenUsage: null,
   };
   await storage.writeWorkspaces([workspace]);
@@ -204,6 +205,72 @@ describe("buildAppServerUserInputItems", () => {
 });
 
 describe("CodexCompanionServer phase 1 rpc support", () => {
+  it("stores backlog items per thread", async () => {
+    const { server, storage } = await createServerFixture();
+
+    const created = (await server.handleRpc("add_thread_backlog_item", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      text: "Follow up after the benchmark run.",
+    })) as { id: string; text: string };
+
+    expect(created.text).toBe("Follow up after the benchmark run.");
+
+    const listed = await server.handleRpc("get_thread_backlog", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+    });
+    expect(listed).toEqual([
+      expect.objectContaining({
+        id: created.id,
+        text: "Follow up after the benchmark run.",
+      }),
+    ]);
+
+    const persisted = await storage.readThreads();
+    expect(persisted[0]?.backlog).toEqual([
+      expect.objectContaining({
+        id: created.id,
+        text: "Follow up after the benchmark run.",
+      }),
+    ]);
+  });
+
+  it("updates and deletes backlog items", async () => {
+    const { server } = await createServerFixture();
+    const created = (await server.handleRpc("add_thread_backlog_item", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      text: "First draft",
+    })) as { id: string };
+
+    const updated = await server.handleRpc("update_thread_backlog_item", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: created.id,
+      text: "Updated draft",
+    });
+    expect(updated).toEqual(
+      expect.objectContaining({
+        id: created.id,
+        text: "Updated draft",
+      }),
+    );
+
+    const deleted = await server.handleRpc("delete_thread_backlog_item", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: created.id,
+    });
+    expect(deleted).toBeNull();
+
+    const listed = await server.handleRpc("get_thread_backlog", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+    });
+    expect(listed).toEqual([]);
+  });
+
   it("routes start_thread through codex app-server and persists the remote thread id", async () => {
     const { server, storage, workspace } = await createServerFixture();
     const startThread = vi.fn().mockResolvedValue({
