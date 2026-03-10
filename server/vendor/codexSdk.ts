@@ -384,6 +384,7 @@ export class CodexAppServerClient {
     sandboxPolicy: JsonRecord;
     model?: string | null;
     effort?: string | null;
+    serviceTier?: "fast" | "flex" | null;
     collaborationMode?: unknown;
     outputSchema?: unknown;
   }) {

@@ -339,6 +339,7 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
       text: "Ship it",
       model: "gpt-5-codex",
       effort: "high",
+      serviceTier: "fast",
       accessMode: "workspace-write",
       images: ["/tmp/mock.png"],
       appMentions: [{ name: "Calendar", path: "app://calendar" }],
@@ -361,6 +362,7 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
       },
       model: "gpt-5-codex",
       effort: "high",
+      serviceTier: "fast",
       collaborationMode: { mode: "delegate" },
     });
     expect(result).toEqual({
@@ -377,6 +379,34 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
       id: "turn-2",
       status: "active",
     });
+  });
+
+  it("preserves explicit null serviceTier overrides when starting a turn", async () => {
+    const { server, workspace } = await createServerFixture();
+    const startTurn = vi.fn().mockResolvedValue({
+      turn: {
+        id: "turn-2",
+        status: "active",
+        items: [],
+      },
+    });
+    mockAppServerClient(server, { startTurn });
+
+    await server.handleRpc("send_user_message", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      text: "Ship it",
+      serviceTier: null,
+      accessMode: "workspace-write",
+    });
+
+    expect(startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "sdk-thread-1",
+        cwd: workspace.path,
+        serviceTier: null,
+      }),
+    );
   });
 
   it("routes turn_interrupt through turn/interrupt using the active turn id", async () => {

@@ -810,6 +810,20 @@ function toNullableString(value: unknown) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function getOptionalServiceTier(
+  params: Record<string, unknown>,
+  key: string,
+): "fast" | "flex" | null | undefined {
+  if (!Object.prototype.hasOwnProperty.call(params, key)) {
+    return undefined;
+  }
+  if (params[key] === null) {
+    return null;
+  }
+  const value = toNullableString(params[key]);
+  return value === "fast" || value === "flex" ? value : undefined;
+}
+
 function parseCodexArgs(value: string | null) {
   if (!value) {
     return [];
@@ -4252,6 +4266,7 @@ export class CodexCompanionServer {
             }
           }
           const accessMode = toNullableString(params.accessMode);
+          const serviceTier = getOptionalServiceTier(params, "serviceTier");
           const response = await client.startTurn({
             threadId: this.resolveAppServerThreadId(thread),
             input: buildAppServerUserInputItems(
@@ -4266,6 +4281,7 @@ export class CodexCompanionServer {
             sandboxPolicy: buildSandboxPolicy(workspace.path, accessMode),
             model: toNullableString(params.model),
             effort: toNullableString(params.effort),
+            ...(serviceTier !== undefined ? { serviceTier } : {}),
             collaborationMode: params.collaborationMode ?? null,
           });
           const rawTurn =
