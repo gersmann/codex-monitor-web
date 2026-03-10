@@ -17,6 +17,7 @@ type BacklogDraftEditorProps = {
   prompts: CustomPromptOption[];
   files: string[];
   onChange: (next: string) => void;
+  onFileAutocompleteActiveChange?: (active: boolean) => void;
   minRows?: number;
   className: string;
 };
@@ -27,6 +28,7 @@ const MAX_POPOVER_HEIGHT = 280;
 
 type SuggestionsLayoutArgs = {
   left: number;
+  viewportTop: number;
   viewportHeight: number;
   textareaTop: number;
   textareaBottom: number;
@@ -35,6 +37,7 @@ type SuggestionsLayoutArgs = {
 
 export function computeBacklogSuggestionsStyle({
   left,
+  viewportTop,
   viewportHeight,
   textareaTop,
   textareaBottom,
@@ -43,10 +46,18 @@ export function computeBacklogSuggestionsStyle({
   const popoverWidth = Math.min(containerWidth, 420);
   const maxLeft = Math.max(0, containerWidth - popoverWidth);
   const clampedLeft = Math.min(Math.max(0, left), maxLeft);
-  const availableAbove = Math.max(0, textareaTop - CARET_ANCHOR_GAP - 12);
-  const availableBelow = Math.max(0, viewportHeight - textareaBottom - CARET_ANCHOR_GAP - 12);
+  const viewportBottom = viewportTop + viewportHeight;
+  const availableAbove = Math.max(
+    0,
+    textareaTop - viewportTop - CARET_ANCHOR_GAP - 12,
+  );
+  const availableBelow = Math.max(
+    0,
+    viewportBottom - textareaBottom - CARET_ANCHOR_GAP - 12,
+  );
   const placeBelow =
-    availableBelow >= MIN_POPOVER_HEIGHT || availableBelow > availableAbove;
+    availableBelow > 0 &&
+    (availableBelow >= MIN_POPOVER_HEIGHT || availableBelow >= availableAbove);
   const maxHeight = Math.max(
     MIN_POPOVER_HEIGHT,
     Math.min(MAX_POPOVER_HEIGHT, placeBelow ? availableBelow : availableAbove),
@@ -72,6 +83,7 @@ export function BacklogDraftEditor({
   prompts,
   files,
   onChange,
+  onFileAutocompleteActiveChange,
   minRows = 3,
   className,
 }: BacklogDraftEditorProps) {
@@ -91,6 +103,7 @@ export function BacklogDraftEditor({
     handleInputKeyDown,
     handleTextChange,
     handleSelectionChange,
+    fileTriggerActive,
   } = useComposerAutocompleteState({
     text: value,
     selectionStart,
@@ -104,6 +117,13 @@ export function BacklogDraftEditor({
     setText: onChange,
     setSelectionStart,
   });
+
+  useLayoutEffect(() => {
+    onFileAutocompleteActiveChange?.(fileTriggerActive);
+    return () => {
+      onFileAutocompleteActiveChange?.(false);
+    };
+  }, [fileTriggerActive, onFileAutocompleteActiveChange]);
 
   useLayoutEffect(() => {
     if (!isAutocompleteOpen) {
@@ -125,10 +145,12 @@ export function BacklogDraftEditor({
     const containerRect = container?.getBoundingClientRect();
     const offsetLeft = textareaRect.left - (containerRect?.left ?? 0);
     const containerWidth = container?.clientWidth ?? textarea.clientWidth ?? 0;
+    const viewport = window.visualViewport;
     setSuggestionsStyle(
       computeBacklogSuggestionsStyle({
         left: offsetLeft + caret.left,
-        viewportHeight: window.innerHeight,
+        viewportTop: viewport?.offsetTop ?? 0,
+        viewportHeight: viewport?.height ?? window.innerHeight,
         textareaTop: textareaRect.top,
         textareaBottom: textareaRect.bottom,
         containerWidth,

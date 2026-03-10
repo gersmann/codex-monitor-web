@@ -1,5 +1,8 @@
+// @vitest-environment jsdom
+
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ThreadBacklogItem } from "@/types";
 import { BacklogPanel } from "./BacklogPanel";
 
@@ -53,9 +56,35 @@ describe("BacklogPanel", () => {
     );
 
     expect(html).toContain("Save");
+    expect(html).toContain("Pop");
     expect(html).toContain("Insert");
     expect(html).toContain("Edit");
     expect(html).toContain("Delete");
     expect(html).toContain(item.text);
+  });
+
+  it("pops a backlog item into the composer and removes it", async () => {
+    const onInsertText = vi.fn();
+    const onDeleteItem = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <BacklogPanel
+        activeThreadId="thread-1"
+        items={[item]}
+        isLoading={false}
+        error={null}
+        {...baseProps}
+        onInsertText={onInsertText}
+        onDeleteItem={onDeleteItem}
+        canInsertText
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Pop" }));
+    });
+
+    expect(onInsertText).toHaveBeenCalledWith(item.text);
+    expect(onDeleteItem).toHaveBeenCalledWith(item.id);
   });
 });

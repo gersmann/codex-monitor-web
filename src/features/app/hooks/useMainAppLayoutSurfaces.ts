@@ -718,6 +718,7 @@ export function useMainAppLayoutSurfaces({
         apps,
         prompts,
         files: composerWorkspaceState.files,
+        onFileAutocompleteActiveChange: composerWorkspaceState.setFileAutocompleteActive,
       },
       fileTreeProps: activeWorkspace
         ? {

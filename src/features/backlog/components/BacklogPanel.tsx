@@ -24,6 +24,7 @@ type BacklogPanelProps = {
   apps: AppOption[];
   prompts: CustomPromptOption[];
   files: string[];
+  onFileAutocompleteActiveChange?: (active: boolean) => void;
 };
 
 function formatTimestamp(timestamp: number) {
@@ -54,6 +55,7 @@ export function BacklogPanel({
   apps,
   prompts,
   files,
+  onFileAutocompleteActiveChange,
 }: BacklogPanelProps) {
   const [draft, setDraft] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -126,6 +128,25 @@ export function BacklogPanel({
     }
   };
 
+  const handlePop = async (item: ThreadBacklogItem) => {
+    if (isSaving || !canInsertText || !onInsertText) {
+      return;
+    }
+    setIsSaving(true);
+    setActionError(null);
+    try {
+      onInsertText(item.text);
+      await onDeleteItem(item.id);
+      if (editingId === item.id) {
+        handleCancelEdit();
+      }
+    } catch (errorValue) {
+      setActionError(errorValue instanceof Error ? errorValue.message : String(errorValue));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const emptyState = !activeThreadId
     ? "Select a thread to keep follow-up notes here."
     : "No backlog items yet.";
@@ -150,6 +171,7 @@ export function BacklogPanel({
                 className="backlog-draft-input"
                 value={draft}
                 onChange={setDraft}
+                onFileAutocompleteActiveChange={onFileAutocompleteActiveChange}
                 placeholder="Write a follow-up note or future message…"
                 appsEnabled={appsEnabled}
                 skills={skills}
@@ -198,6 +220,7 @@ export function BacklogPanel({
                             className="backlog-item-editor"
                             value={editingText}
                             onChange={setEditingText}
+                            onFileAutocompleteActiveChange={onFileAutocompleteActiveChange}
                             placeholder="Edit backlog draft…"
                             appsEnabled={appsEnabled}
                             skills={skills}
@@ -231,6 +254,21 @@ export function BacklogPanel({
                         <>
                           <div className="backlog-item-text">{item.text}</div>
                           <div className="backlog-item-actions">
+                            <button
+                              type="button"
+                              className="ghost backlog-action"
+                              onClick={() => {
+                                void handlePop(item);
+                              }}
+                              disabled={!canInsertText || isSaving}
+                              title={
+                                canInsertText
+                                  ? "Insert into composer and remove from backlog"
+                                  : "Open a thread or workspace draft first"
+                              }
+                            >
+                              Pop
+                            </button>
                             <button
                               type="button"
                               className="ghost backlog-action"
