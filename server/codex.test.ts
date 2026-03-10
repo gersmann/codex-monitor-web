@@ -150,6 +150,44 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
 });
 
+describe("workspace file listing", () => {
+  it("respects gitignore while keeping visible hidden files", async () => {
+    const { server, workspace } = await createServerFixture();
+    await fs.mkdir(workspace.path, { recursive: true });
+    await runGit(workspace.path, ["init", "-b", "main"]);
+    await fs.mkdir(path.join(workspace.path, "src"), { recursive: true });
+    await fs.mkdir(path.join(workspace.path, "nested"), { recursive: true });
+    await fs.writeFile(
+      path.join(workspace.path, ".gitignore"),
+      ["ignored.txt", "nested/", "dist/", ""].join("\n"),
+      "utf8",
+    );
+    await fs.writeFile(path.join(workspace.path, ".env"), "SECRET=1\n", "utf8");
+    await fs.writeFile(path.join(workspace.path, "src", "kept.ts"), "export {};\n", "utf8");
+    await fs.writeFile(path.join(workspace.path, "ignored.txt"), "ignore me\n", "utf8");
+    await fs.writeFile(path.join(workspace.path, "nested", "secret.ts"), "hidden\n", "utf8");
+    await fs.mkdir(path.join(workspace.path, "dist"), { recursive: true });
+    await fs.writeFile(path.join(workspace.path, "dist", "bundle.js"), "bundle\n", "utf8");
+
+    const result = await server.handleRpc("list_workspace_files", { workspaceId: "ws-1" });
+
+    expect(result).toEqual([".env", ".gitignore", "src/kept.ts"]);
+  });
+
+  it("falls back to recursive listing for non-git workspaces", async () => {
+    const { server, workspace } = await createServerFixture();
+    await fs.mkdir(path.join(workspace.path, "src"), { recursive: true });
+    await fs.mkdir(path.join(workspace.path, "node_modules"), { recursive: true });
+    await fs.writeFile(path.join(workspace.path, ".env"), "SECRET=1\n", "utf8");
+    await fs.writeFile(path.join(workspace.path, "src", "kept.ts"), "export {};\n", "utf8");
+    await fs.writeFile(path.join(workspace.path, "node_modules", "ignored.js"), "noop\n", "utf8");
+
+    const result = await server.handleRpc("list_workspace_files", { workspaceId: "ws-1" });
+
+    expect(result).toEqual([".env", "src/kept.ts"]);
+  });
+});
+
 describe("buildAppServerUserInputItems", () => {
   it("maps text, images, and mentions to app-server input items", () => {
     expect(

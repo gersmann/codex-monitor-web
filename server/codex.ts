@@ -1537,6 +1537,24 @@ function normalizeGitPathForUi(filePath: string) {
   return filePath.replace(/\\/g, "/");
 }
 
+const WORKSPACE_FILE_SKIP_DIRS = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "target",
+  "release-artifacts",
+]);
+
+function shouldSkipWorkspaceDirName(name: string) {
+  return WORKSPACE_FILE_SKIP_DIRS.has(name);
+}
+
+function shouldSkipWorkspaceRelativePath(relativePath: string) {
+  return normalizeGitPathForUi(relativePath)
+    .split("/")
+    .some((segment) => shouldSkipWorkspaceDirName(segment));
+}
+
 function worktreeSetupMarkerPath(dataDir: string, workspaceId: string) {
   return path.join(dataDir, "worktree-setup", `${workspaceId}.ran`);
 }
@@ -2739,11 +2757,36 @@ export class CodexCompanionServer {
     throw new Error("Invalid scope.");
   }
 
+  private async listWorkspaceFilesFromGit(root: string) {
+    const listed = await tryRunGit(root, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"]);
+    if (!listed) {
+      return null;
+    }
+    const files = Array.from(
+      new Set(
+        listed.stdout
+          .split("\0")
+          .map((entry) => normalizeGitPathForUi(entry.trim()))
+          .filter((entry) => entry.length > 0 && !shouldSkipWorkspaceRelativePath(entry)),
+      ),
+    );
+    files.sort();
+    return files;
+  }
+
+  private async listWorkspaceFiles(root: string) {
+    const gitFiles = await this.listWorkspaceFilesFromGit(root);
+    if (gitFiles) {
+      return gitFiles;
+    }
+    return this.listWorkspaceFilesRecursive(root);
+  }
+
   private async listWorkspaceFilesRecursive(root: string, current = root) {
     const entries = await fs.readdir(current, { withFileTypes: true });
     const files: string[] = [];
     for (const entry of entries) {
-      if (entry.name === ".git" || entry.name === "node_modules") {
+      if (shouldSkipWorkspaceDirName(entry.name)) {
         continue;
       }
       const absolute = path.join(current, entry.name);
@@ -2752,9 +2795,13 @@ export class CodexCompanionServer {
         continue;
       }
       if (entry.isFile()) {
-        files.push(path.relative(root, absolute).replace(/\\/g, "/"));
+        const relative = normalizeGitPathForUi(path.relative(root, absolute));
+        if (!shouldSkipWorkspaceRelativePath(relative)) {
+          files.push(relative);
+        }
       }
     }
+    files.sort();
     return files;
   }
 
@@ -4955,7 +5002,7 @@ export class CodexCompanionServer {
         if (!workspace) {
           return [];
         }
-        return this.listWorkspaceFilesRecursive(workspace.path);
+        return this.listWorkspaceFiles(workspace.path);
       }
       case "read_workspace_file":
         return this.readWorkspaceFileContents(
