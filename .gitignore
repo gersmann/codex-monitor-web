@@ -29,6 +29,7 @@ src-tauri/tauri.ios.local.conf.json
 CodexMonitor.zip
 .codex-worktrees/
 .codexmonitor/
+.beads/
 .agent/
 .agents/
 .claude/
