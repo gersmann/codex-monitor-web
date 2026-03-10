@@ -252,6 +252,11 @@ describe("useRemoteThreadRefreshOnFocus", () => {
       }),
     );
 
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
     act(() => {
       for (const handler of windowListeners.get("tauri://focus") ?? []) {
         handler();

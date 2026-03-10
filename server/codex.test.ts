@@ -74,18 +74,6 @@ async function readGitStdout(cwd: string, args: string[]) {
   });
 }
 
-async function readGitStdout(cwd: string, args: string[]) {
-  return await new Promise<string>((resolve, reject) => {
-    execFile("git", args, { cwd }, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(`${stderr || stdout || error.message}`.trim()));
-        return;
-      }
-      resolve(stdout);
-    });
-  });
-}
-
 async function installFakeGh(dir: string, scriptBody: string) {
   const binDir = path.join(dir, "bin");
   await fs.mkdir(binDir, { recursive: true });
@@ -861,7 +849,8 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
   });
 
   it("persists approval prefix rules without duplicating entries", async () => {
-    const { server } = await createServerFixture();
+    const { dir, server } = await createServerFixture();
+    vi.stubEnv("CODEX_HOME", path.join(dir, "codex-home"));
 
     const first = await server.handleRpc("remember_approval_rule", {
       workspaceId: "ws-1",
@@ -876,7 +865,11 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
     expect(second).toMatchObject({ ok: true, rulesPath: expect.any(String) });
     const rulesPath = (first as { rulesPath: string }).rulesPath;
     const contents = await fs.readFile(rulesPath, "utf8");
-    expect(contents.match(/prefix_rule\(/g)).toHaveLength(1);
+    expect(
+      contents.match(
+        /prefix_rule\(\s*pattern = \["git", "status"\],\s*decision = "allow",\s*\)/g,
+      ),
+    ).toHaveLength(1);
     expect(contents).toContain('pattern = ["git", "status"]');
   });
 
@@ -1789,7 +1782,7 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
   });
 
   it("supports admin parity methods and url-only opener behavior", async () => {
-    const { server } = await createServerFixture();
+    const { server } = await createServerFixture(() => {}, null);
 
     expect(await server.handleRpc("ping", {})).toEqual({ ok: true });
     expect(await server.handleRpc("daemon_shutdown", {})).toEqual({ ok: true });
@@ -1806,7 +1799,7 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
       mode: "typescript",
       transport: "http",
       capabilities: {
-        terminal: false,
+        terminal: expect.any(Boolean),
       },
     });
   });

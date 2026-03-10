@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const isTauriMock = vi.hoisted(() => vi.fn());
@@ -42,18 +42,28 @@ describe("WindowCaptionControls", () => {
     cleanup();
   });
 
-  it("renders controls on Windows in Tauri and wires actions", () => {
+  it("renders controls on Windows in Tauri and wires actions", async () => {
     render(<WindowCaptionControls />);
 
     expect(screen.getByRole("group", { name: "Window controls" })).not.toBeNull();
+    await waitFor(() => {
+      expect(getCurrentWindowMock).toHaveBeenCalled();
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Minimize window" }));
-    fireEvent.click(screen.getByRole("button", { name: "Maximize window" }));
-    fireEvent.click(screen.getByRole("button", { name: "Close window" }));
+    await waitFor(() => {
+      expect(minimize).toHaveBeenCalledTimes(1);
+    });
 
-    expect(minimize).toHaveBeenCalledTimes(1);
-    expect(toggleMaximize).toHaveBeenCalledTimes(1);
-    expect(close).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Maximize window" }));
+    await waitFor(() => {
+      expect(toggleMaximize).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close window" }));
+    await waitFor(() => {
+      expect(close).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("does not render when not on Windows", () => {

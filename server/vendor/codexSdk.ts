@@ -33,6 +33,15 @@ type CodexAppServerClientOptions = {
 const DEFAULT_APP_SERVER_INIT_TIMEOUT_MS = 15_000;
 const DEFAULT_APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
 
+export function buildAppServerEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const nextEnv: NodeJS.ProcessEnv = { ...env };
+  delete nextEnv.NODE_ENV;
+  delete nextEnv.VITEST;
+  return nextEnv;
+}
+
 function trimString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -73,7 +82,7 @@ export class CodexAppServerClient {
     this.cliArgs = Array.isArray(options.cliArgs)
       ? options.cliArgs.filter((value) => typeof value === "string" && value.trim().length > 0)
       : [];
-    this.env = options.env ?? process.env;
+    this.env = buildAppServerEnv(options.env ?? process.env);
     this.initializeParams = options.initializeParams;
     this.initTimeoutMs = options.initTimeoutMs ?? DEFAULT_APP_SERVER_INIT_TIMEOUT_MS;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_APP_SERVER_REQUEST_TIMEOUT_MS;
