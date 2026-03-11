@@ -3093,7 +3093,7 @@ export class CodexCompanionServer {
       cwd: trimString(rawThread.cwd) || this.getWorkspace(workspaceId)?.path || "",
       createdAt,
       updatedAt,
-      archivedAt: null,
+      archivedAt: existing?.archivedAt ?? null,
       name: existing?.name ?? appServerName,
       preview: trimString(rawThread.preview) || existing?.preview || "New Agent",
       activeTurnId,
@@ -3106,12 +3106,13 @@ export class CodexCompanionServer {
   }
 
   private async listThreadsFromCodexAppServer(
+    workspaceId: string,
     cursor: string | null,
     limit: number | null,
     sortKey: "created_at" | "updated_at",
   ) {
     const settings = await this.storage.readSettings();
-    const client = this.buildAppServerClient(settings);
+    const client = this.buildAppServerClient(settings, workspaceId);
     return await client.listThreads({
       cursor,
       limit,
@@ -4495,6 +4496,7 @@ export class CodexCompanionServer {
         return null;
       }
       case "list_threads": {
+        const workspaceId = String(params.workspaceId ?? "");
         const sortKey =
           String(params.sortKey ?? "updated_at") === "created_at" ? "created_at" : "updated_at";
         const cursor = toNullableString(params.cursor);
@@ -4502,9 +4504,12 @@ export class CodexCompanionServer {
           typeof params.limit === "number" && Number.isFinite(params.limit)
             ? params.limit
             : null;
+        if (!this.getWorkspace(workspaceId)) {
+          return notFound("Workspace not found.");
+        }
 
         const localOnlyThreads = Array.from(this.threadsById.values())
-          .filter((thread) => thread.archivedAt === null)
+          .filter((thread) => thread.workspaceId === workspaceId && thread.archivedAt === null)
           .sort((left, right) =>
             sortKey === "created_at"
               ? right.createdAt - left.createdAt
@@ -4513,7 +4518,12 @@ export class CodexCompanionServer {
           .map(toThreadSummary);
 
         try {
-          const result = await this.listThreadsFromCodexAppServer(cursor, limit, sortKey);
+          const result = await this.listThreadsFromCodexAppServer(
+            workspaceId,
+            cursor,
+            limit,
+            sortKey,
+          );
           const externalData = Array.isArray(result.data)
             ? (result.data as Record<string, unknown>[])
             : [];
@@ -4527,6 +4537,13 @@ export class CodexCompanionServer {
             }
             const localThread = this.findThreadBySdkThreadId(externalId);
             if (localThread) {
+              if (localThread.workspaceId !== workspaceId) {
+                return;
+              }
+              if (localThread.archivedAt !== null) {
+                matchedLocalIds.add(localThread.id);
+                return;
+              }
               matchedLocalIds.add(localThread.id);
               const externalActiveTurnId = extractActiveTurnIdFromThread(thread);
               const externalUpdatedAt = Number(thread.updatedAt ?? thread.updated_at ?? 0);

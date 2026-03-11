@@ -747,6 +747,175 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
     expect(returnedThread?.activeTurnId).toBeUndefined();
   });
 
+  it("lists threads against the requested workspace-scoped app-server runtime", async () => {
+    const { server, workspace, thread } = await createServerFixture();
+    const otherWorkspace: StoredWorkspace = {
+      id: "ws-2",
+      name: "Workspace 2",
+      path: path.join(path.dirname(workspace.path), "workspace-2"),
+      settings: {
+        sidebarCollapsed: false,
+      },
+    };
+    await fs.mkdir(otherWorkspace.path, { recursive: true });
+    const otherThread: StoredThread = {
+      id: "thread-2",
+      workspaceId: "ws-2",
+      sdkThreadId: "sdk-thread-2",
+      cwd: otherWorkspace.path,
+      createdAt: 10,
+      updatedAt: 20,
+      archivedAt: null,
+      name: null,
+      preview: "Thread Two",
+      activeTurnId: null,
+      turns: [],
+      modelId: null,
+      effort: null,
+      backlog: [],
+      tokenUsage: null,
+    };
+    await server["storage"].writeWorkspaces([workspace, otherWorkspace]);
+    await server["storage"].writeThreads([thread, otherThread]);
+    await server.initialize();
+    const buildAppServerClient = vi.fn().mockImplementation((_settings, targetWorkspaceId) => {
+      if (targetWorkspaceId !== "ws-1") {
+        throw new Error(`unexpected workspace ${String(targetWorkspaceId)}`);
+      }
+      return {
+        listThreads: vi.fn().mockResolvedValue({
+          data: [
+            {
+              id: "sdk-thread-1",
+              cwd: thread.cwd,
+              preview: "Thread One",
+              createdAt: 1,
+              updatedAt: 5,
+            },
+          ],
+          nextCursor: null,
+        }),
+      };
+    });
+    (
+      server as unknown as {
+        buildAppServerClient: typeof buildAppServerClient;
+      }
+    ).buildAppServerClient = buildAppServerClient;
+
+    const result = await server.handleRpc("list_threads", {
+      workspaceId: "ws-1",
+      cursor: null,
+      limit: 20,
+      sortKey: "updated_at",
+    });
+
+    expect(buildAppServerClient).toHaveBeenCalledWith(expect.anything(), "ws-1");
+    expect(result).toMatchObject({
+      data: [
+        {
+          id: "thread-1",
+        },
+      ],
+      nextCursor: null,
+    });
+  });
+
+  it("keeps locally archived threads hidden across list_threads refreshes", async () => {
+    const { server, storage, thread } = await createServerFixture();
+    await storage.writeThreads([
+      {
+        ...thread,
+        archivedAt: 1234,
+      },
+    ]);
+    await server.initialize();
+    const listThreads = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "sdk-thread-1",
+          cwd: thread.cwd,
+          preview: "Thread One",
+          createdAt: 1,
+          updatedAt: 5,
+        },
+      ],
+      nextCursor: null,
+    });
+    mockAppServerClient(server, { listThreads });
+
+    const result = await server.handleRpc("list_threads", {
+      workspaceId: "ws-1",
+      cursor: null,
+      limit: 20,
+      sortKey: "updated_at",
+    });
+
+    expect(result).toEqual({
+      data: [],
+      nextCursor: null,
+    });
+  });
+
+  it("surfaces archived threads again after thread/unarchived notification", async () => {
+    const { server, storage, thread } = await createServerFixture();
+    await storage.writeThreads([
+      {
+        ...thread,
+        archivedAt: 1234,
+      },
+    ]);
+    await server.initialize();
+    await (
+      server as unknown as {
+        handleAppServerNotification: (
+          key: string,
+          message: {
+            method: string;
+            params: Record<string, unknown>;
+          },
+        ) => Promise<void>;
+      }
+    ).handleAppServerNotification("client-key", {
+      method: "thread/unarchived",
+      params: {
+        threadId: "sdk-thread-1",
+      },
+    });
+    const listThreads = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "sdk-thread-1",
+          cwd: thread.cwd,
+          preview: "Thread One",
+          createdAt: 1,
+          updatedAt: 5,
+        },
+      ],
+      nextCursor: null,
+    });
+    mockAppServerClient(server, { listThreads });
+
+    const result = await server.handleRpc("list_threads", {
+      workspaceId: "ws-1",
+      cursor: null,
+      limit: 20,
+      sortKey: "updated_at",
+    });
+
+    expect(result).toMatchObject({
+      data: [
+        {
+          id: "thread-1",
+          updatedAt: 5,
+        },
+      ],
+      nextCursor: null,
+    });
+    const persisted = (await storage.readThreads()).find((entry) => entry.id === "thread-1");
+    expect(persisted?.archivedAt).toBeNull();
+  });
+
   it("clears stored active turn state when turn/completed omits the turn payload", async () => {
     const { server, storage, thread } = await createServerFixture();
     await storage.writeThreads([

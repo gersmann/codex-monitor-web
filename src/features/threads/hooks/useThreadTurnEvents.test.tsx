@@ -297,7 +297,7 @@ describe("useThreadTurnEvents", () => {
     );
   });
 
-  it("removes thread state on thread archived", () => {
+  it("hides thread state on thread archived", () => {
     const { result, dispatch } = makeOptions();
 
     act(() => {
@@ -305,7 +305,7 @@ describe("useThreadTurnEvents", () => {
     });
 
     expect(dispatch).toHaveBeenCalledWith({
-      type: "removeThread",
+      type: "hideThread",
       workspaceId: "ws-1",
       threadId: "thread-7",
     });

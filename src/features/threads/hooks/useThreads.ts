@@ -838,7 +838,7 @@ export function useThreads({
   const removeThread = useCallback(
     (workspaceId: string, threadId: string) => {
       unpinThread(workspaceId, threadId);
-      dispatch({ type: "removeThread", workspaceId, threadId });
+      dispatch({ type: "hideThread", workspaceId, threadId });
       void archiveThread(workspaceId, threadId);
     },
     [archiveThread, unpinThread],

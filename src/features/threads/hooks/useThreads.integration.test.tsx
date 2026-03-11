@@ -135,6 +135,79 @@ describe("useThreads UX integration", () => {
     }
   });
 
+  it("keeps archived threads hidden after a thread-list refresh", async () => {
+    vi.mocked(listThreads)
+      .mockResolvedValueOnce({
+        result: {
+          data: [
+            {
+              id: "thread-archive-me",
+              preview: "Archive me",
+              updated_at: 2000,
+              cwd: workspace.path,
+            },
+          ],
+          nextCursor: null,
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          data: [
+            {
+              id: "thread-archive-me",
+              preview: "Archive me",
+              updated_at: 2000,
+              cwd: workspace.path,
+            },
+          ],
+          nextCursor: null,
+        },
+      });
+    vi.mocked(archiveThread).mockResolvedValue({ result: null });
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspaces([workspace]);
+    });
+
+    await waitFor(() => {
+      expect(
+        result.current.threadsByWorkspace["ws-1"]?.some(
+          (thread) => thread.id === "thread-archive-me",
+        ),
+      ).toBe(true);
+    });
+
+    act(() => {
+      result.current.removeThread("ws-1", "thread-archive-me");
+    });
+
+    expect(vi.mocked(archiveThread)).toHaveBeenCalledWith("ws-1", "thread-archive-me");
+    expect(
+      result.current.threadsByWorkspace["ws-1"]?.some(
+        (thread) => thread.id === "thread-archive-me",
+      ),
+    ).toBe(false);
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspaces([workspace]);
+    });
+
+    await waitFor(() => {
+      expect(
+        result.current.threadsByWorkspace["ws-1"]?.some(
+          (thread) => thread.id === "thread-archive-me",
+        ),
+      ).toBe(false);
+    });
+  });
+
   it("applies runtime codex args before start and selection resume", async () => {
     const ensureWorkspaceRuntimeCodexArgs = vi.fn(async () => undefined);
     vi.mocked(startThread).mockResolvedValue({

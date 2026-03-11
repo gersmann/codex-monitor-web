@@ -271,7 +271,7 @@ export function useThreadTurnEvents({
       if (!threadId) {
         return;
       }
-      dispatch({ type: "removeThread", workspaceId, threadId });
+      dispatch({ type: "hideThread", workspaceId, threadId });
     },
     [dispatch],
   );
