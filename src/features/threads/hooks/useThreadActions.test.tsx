@@ -1045,6 +1045,96 @@ describe("useThreadActions", () => {
     });
   });
 
+  it("prefers repo workspaces over broad parent paths for Codex-managed worktrees", async () => {
+    const homeWorkspace: WorkspaceInfo = {
+      ...workspace,
+      id: "ws-home",
+      name: "Julian",
+      path: "/Users/julian",
+    };
+    const portalWorkspace: WorkspaceInfo = {
+      ...workspace,
+      id: "ws-portal",
+      name: "Portal",
+      path: "/Users/julian/Code/portal",
+    };
+    const productApiWorkspace: WorkspaceInfo = {
+      ...workspaceTwo,
+      id: "ws-product-api",
+      name: "Product API",
+      path: "/Users/julian/Code/product-api",
+    };
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "thread-portal-worktree",
+            cwd: "/Users/julian/.codex/worktrees/e164/portal",
+            preview: "Portal worktree thread",
+            updated_at: 5000,
+          },
+          {
+            id: "thread-product-api-worktree",
+            cwd: "/Users/julian/.codex/worktrees/e595/product-api",
+            preview: "Product API worktree thread",
+            updated_at: 4500,
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(getThreadTimestamp).mockImplementation((thread) => {
+      const value = (thread as Record<string, unknown>).updated_at as number;
+      return value ?? 0;
+    });
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspaces([
+        homeWorkspace,
+        portalWorkspace,
+        productApiWorkspace,
+      ]);
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-home",
+      sortKey: "updated_at",
+      preserveAnchors: true,
+      threads: [],
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-portal",
+      sortKey: "updated_at",
+      preserveAnchors: true,
+      threads: [
+        {
+          id: "thread-portal-worktree",
+          name: "Portal worktree thread",
+          updatedAt: 5000,
+          createdAt: 0,
+        },
+      ],
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreads",
+      workspaceId: "ws-product-api",
+      sortKey: "updated_at",
+      preserveAnchors: true,
+      threads: [
+        {
+          id: "thread-product-api-worktree",
+          name: "Product API worktree thread",
+          updatedAt: 4500,
+          createdAt: 0,
+        },
+      ],
+    });
+  });
+
   it("keeps unmatched top-level threads on the requester workspace", async () => {
     vi.mocked(listThreads).mockResolvedValue({
       result: {

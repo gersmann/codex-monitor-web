@@ -65,6 +65,10 @@ type WorkspacePathLookup = {
   workspacePathsSorted: string[];
 };
 
+function isCodexManagedWorktreePath(path: string) {
+  return /(?:^|\/)(?:\.codex\/worktrees|\.codex-worktrees)\//i.test(path);
+}
+
 function uniqueIds(ids: string[]) {
   return Array.from(new Set(ids));
 }
@@ -132,24 +136,31 @@ function resolveWorkspaceIdForThreadPath(
   if (!normalizedPath) {
     return null;
   }
+  const codexManagedWorkspaceId = isCodexManagedWorktreePath(normalizedPath)
+    ? resolveWorkspaceIdForCodexManagedWorktree(
+        normalizedPath,
+        lookup,
+        allowedWorkspaceIds,
+      )
+    : null;
   const matchedWorkspacePath = lookup.workspacePathsSorted.find((workspacePath) =>
     isWithinWorkspaceRoot(normalizedPath, workspacePath),
   );
   if (!matchedWorkspacePath) {
-    return resolveWorkspaceIdForCodexManagedWorktree(
-      normalizedPath,
-      lookup,
-      allowedWorkspaceIds,
-    );
+    return codexManagedWorkspaceId;
   }
   const workspaceIds = lookup.workspaceIdsByPath[matchedWorkspacePath] ?? [];
-  if (!allowedWorkspaceIds) {
-    return workspaceIds[0] ?? null;
+  const matchedWorkspaceId = !allowedWorkspaceIds
+    ? workspaceIds[0] ?? null
+    : workspaceIds.find((workspaceId) => allowedWorkspaceIds.has(workspaceId)) ??
+      null;
+  if (
+    codexManagedWorkspaceId &&
+    !isCodexManagedWorktreePath(matchedWorkspacePath)
+  ) {
+    return codexManagedWorkspaceId;
   }
-  return (
-    workspaceIds.find((workspaceId) => allowedWorkspaceIds.has(workspaceId)) ??
-    null
-  );
+  return matchedWorkspaceId;
 }
 
 function findAssignedWorkspaceIdForThread(
