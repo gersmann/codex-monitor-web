@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { CompanionStorage } from "./storage.js";
 
 const tempDirs: string[] = [];
@@ -12,7 +12,19 @@ async function createTempDir() {
   return dir;
 }
 
+function createDeferred() {
+  let resolve: (() => void) | null = null;
+  const promise = new Promise<void>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return {
+    promise,
+    resolve: () => resolve?.(),
+  };
+}
+
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(
     tempDirs.splice(0).map(async (dir) => {
       await fs.rm(dir, { recursive: true, force: true });
@@ -94,5 +106,64 @@ describe("CompanionStorage", () => {
     const threads = await storage.readThreads();
 
     expect(threads[0]?.backlog).toEqual([]);
+  });
+
+  it("serializes concurrent thread writes and keeps only the final state", async () => {
+    const dir = await createTempDir();
+    const storage = new CompanionStorage(dir);
+    const unblockFirstRename = createDeferred();
+    const originalRename = fs.rename.bind(fs);
+    let renameCalls = 0;
+
+    vi.spyOn(fs, "rename").mockImplementation(async (from, to) => {
+      renameCalls += 1;
+      if (renameCalls === 1) {
+        await unblockFirstRename.promise;
+      }
+      return originalRename(from, to);
+    });
+
+    const firstThread = {
+      id: "thread-1",
+      workspaceId: "ws-1",
+      sdkThreadId: "sdk-thread-1",
+      cwd: "/tmp/ws-1",
+      createdAt: 1,
+      updatedAt: 1,
+      archivedAt: null,
+      name: "First",
+      preview: "First",
+      activeTurnId: null,
+      turns: [],
+      modelId: null,
+      effort: null,
+      backlog: [],
+      tokenUsage: null,
+    };
+    const secondThread = {
+      ...firstThread,
+      updatedAt: 2,
+      name: "Second",
+      preview: "Second",
+    };
+
+    const firstWrite = storage.writeThreads([firstThread]);
+    await vi.waitFor(() => {
+      expect(renameCalls).toBe(1);
+    });
+
+    const secondWrite = storage.writeThreads([secondThread]);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(renameCalls).toBe(1);
+
+    unblockFirstRename.resolve();
+    await Promise.all([firstWrite, secondWrite]);
+
+    const threads = await storage.readThreads();
+    expect(threads).toHaveLength(1);
+    expect(threads[0]?.name).toBe("Second");
+
+    const entries = await fs.readdir(dir);
+    expect(entries.filter((entry) => entry.includes(".threads.json."))).toEqual([]);
   });
 });

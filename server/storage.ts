@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
@@ -20,6 +21,8 @@ import type {
 async function ensureParent(filePath: string) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
 }
+
+const pendingJsonWrites = new Map<string, Promise<void>>();
 
 type JsonScannerState = {
   inString: boolean;
@@ -140,9 +143,55 @@ async function recoverJsonFile<T>(filePath: string, fallback: T): Promise<T> {
   }
 }
 
-async function writeJsonFile(filePath: string, value: unknown) {
+async function syncParentDirectory(filePath: string) {
+  let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
+  try {
+    handle = await fs.open(path.dirname(filePath), "r");
+    await handle.sync();
+  } catch {
+    // Best-effort durability only. Some platforms/filesystems don't support directory sync.
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
+async function writeJsonFileAtomically(filePath: string, value: unknown) {
   await ensureParent(filePath);
-  await fs.writeFile(filePath, JSON.stringify(value, null, 2));
+  const tempPath = path.join(
+    path.dirname(filePath),
+    `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`,
+  );
+  const contents = JSON.stringify(value, null, 2);
+  let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
+  try {
+    handle = await fs.open(tempPath, "w");
+    await handle.writeFile(contents, "utf8");
+    await handle.sync();
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+  try {
+    await fs.rename(tempPath, filePath);
+    await syncParentDirectory(filePath);
+  } catch (error) {
+    await fs.rm(tempPath, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+async function writeJsonFile(filePath: string, value: unknown) {
+  const previous = pendingJsonWrites.get(filePath) ?? Promise.resolve();
+  const next = previous.catch(() => {}).then(async () => {
+    await writeJsonFileAtomically(filePath, value);
+  });
+  pendingJsonWrites.set(filePath, next);
+  try {
+    await next;
+  } finally {
+    if (pendingJsonWrites.get(filePath) === next) {
+      pendingJsonWrites.delete(filePath);
+    }
+  }
 }
 
 function normalizeWorkspace(raw: StoredWorkspace): StoredWorkspace {
