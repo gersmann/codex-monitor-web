@@ -15,6 +15,7 @@ type ComposerMetaBarProps = {
   selectedEffort: string | null;
   onSelectEffort: (effort: string) => void;
   selectedServiceTier: ServiceTier | null;
+  onSelectServiceTier: (tier: ServiceTier | null) => void;
   reasoningSupported: boolean;
   accessMode: AccessMode;
   onSelectAccessMode: (mode: AccessMode) => void;
@@ -23,6 +24,16 @@ type ComposerMetaBarProps = {
   onSelectCodexArgsOverride?: (value: string | null) => void;
   contextUsage?: ThreadTokenUsage | null;
 };
+
+const FAST_MODE_UNSUPPORTED_TITLE = "Fast mode is available for GPT-5.4 models only.";
+
+function supportsFastMode(model: { model: string; displayName: string } | null): boolean {
+  if (!model) {
+    return false;
+  }
+  const candidates = [model.model, model.displayName];
+  return candidates.some((value) => /\bgpt-5\.4(?:[-.\w]*)?\b/i.test(value));
+}
 
 export function ComposerMetaBar({
   disabled,
@@ -36,6 +47,7 @@ export function ComposerMetaBar({
   selectedEffort,
   onSelectEffort,
   selectedServiceTier,
+  onSelectServiceTier,
   reasoningSupported,
   accessMode,
   onSelectAccessMode,
@@ -56,6 +68,8 @@ export function ComposerMetaBar({
             Math.min(Math.max((usedTokens / contextWindow) * 100, 0), 100),
         )
       : null;
+  const selectedModel = models.find((model) => model.id === selectedModelId) ?? null;
+  const fastModeSupported = supportsFastMode(selectedModel);
   const planMode =
     collaborationModes.find((mode) => mode.id === "plan") ?? null;
   const defaultMode =
@@ -66,6 +80,13 @@ export function ComposerMetaBar({
       (mode) => mode.id === "default" || mode.id === "plan",
     );
   const planSelected = selectedCollaborationModeId === (planMode?.id ?? "");
+  const fastSelected = selectedServiceTier === "fast";
+  const fastToggleDisabled = disabled || !fastModeSupported;
+  const fastToggleTitle = fastModeSupported
+    ? fastSelected
+      ? "Fast mode enabled"
+      : "Fast mode disabled"
+    : FAST_MODE_UNSUPPORTED_TITLE;
 
   return (
     <div className="composer-bar">
@@ -134,6 +155,27 @@ export function ComposerMetaBar({
             </div>
           )
         )}
+        <div className="composer-select-wrap composer-fast-toggle-wrap">
+          <label
+            className="composer-fast-toggle"
+            aria-label="Fast mode"
+            title={fastToggleTitle}
+          >
+            <input
+              className="composer-fast-toggle-input"
+              type="checkbox"
+              checked={fastSelected}
+              disabled={fastToggleDisabled}
+              onChange={(event) =>
+                onSelectServiceTier(event.target.checked ? "fast" : null)
+              }
+            />
+            <span className="composer-fast-toggle-icon" aria-hidden>
+              <Zap size={14} strokeWidth={1.8} />
+            </span>
+            <span className="composer-fast-toggle-label">Fast</span>
+          </label>
+        </div>
         <div className="composer-select-wrap composer-select-wrap--model">
           <span className="composer-icon composer-icon--model" aria-hidden>
             <svg viewBox="0 0 24 24" fill="none">
@@ -179,16 +221,6 @@ export function ComposerMetaBar({
               </option>
             ))}
           </select>
-          {selectedServiceTier === "fast" && (
-            <span
-              className="composer-fast-indicator"
-              role="status"
-              aria-label="Fast mode enabled"
-              title="Fast mode enabled"
-            >
-              <Zap size={12} strokeWidth={1.8} />
-            </span>
-          )}
         </div>
         <div className="composer-select-wrap composer-select-wrap--effort">
           <span className="composer-icon composer-icon--effort" aria-hidden>

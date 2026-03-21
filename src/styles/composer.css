@@ -733,7 +733,12 @@
   padding: 2px 8px;
 }
 
-.composer-plan-toggle {
+.composer-fast-toggle-wrap {
+  padding: 2px 8px;
+}
+
+.composer-plan-toggle,
+.composer-fast-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -741,7 +746,8 @@
   user-select: none;
 }
 
-.composer-plan-toggle-input {
+.composer-plan-toggle-input,
+.composer-fast-toggle-input {
   margin: 0;
   width: 12px;
   height: 12px;
@@ -749,35 +755,47 @@
   cursor: pointer;
 }
 
-.composer-plan-toggle-icon {
+.composer-plan-toggle-icon,
+.composer-fast-toggle-icon {
   display: inline-flex;
   width: 16px;
   height: 16px;
   color: var(--text-muted);
 }
 
-.composer-plan-toggle-icon svg {
+.composer-plan-toggle-icon svg,
+.composer-fast-toggle-icon svg {
   width: 16px;
   height: 16px;
 }
 
-.composer-plan-toggle-label {
+.composer-plan-toggle-label,
+.composer-fast-toggle-label {
   font-size: 11px;
   color: var(--text-muted);
   line-height: 1;
 }
 
 .composer-plan-toggle:has(.composer-plan-toggle-input:checked) .composer-plan-toggle-icon,
-.composer-plan-toggle:has(.composer-plan-toggle-input:checked) .composer-plan-toggle-label {
+.composer-plan-toggle:has(.composer-plan-toggle-input:checked) .composer-plan-toggle-label,
+.composer-fast-toggle:has(.composer-fast-toggle-input:checked) .composer-fast-toggle-icon,
+.composer-fast-toggle:has(.composer-fast-toggle-input:checked) .composer-fast-toggle-label {
   color: var(--text-strong);
 }
 
-.composer-plan-toggle-input:disabled {
+.composer-fast-toggle:has(.composer-fast-toggle-input:checked) .composer-fast-toggle-icon {
+  color: var(--accent-warning-strong, #b45309);
+}
+
+.composer-plan-toggle-input:disabled,
+.composer-fast-toggle-input:disabled {
   cursor: not-allowed;
 }
 
 .composer-plan-toggle:has(.composer-plan-toggle-input:disabled) .composer-plan-toggle-icon,
-.composer-plan-toggle:has(.composer-plan-toggle-input:disabled) .composer-plan-toggle-label {
+.composer-plan-toggle:has(.composer-plan-toggle-input:disabled) .composer-plan-toggle-label,
+.composer-fast-toggle:has(.composer-fast-toggle-input:disabled) .composer-fast-toggle-icon,
+.composer-fast-toggle:has(.composer-fast-toggle-input:disabled) .composer-fast-toggle-label {
   opacity: 0.6;
 }
 
@@ -806,17 +824,6 @@
 .composer-icon--model,
 .composer-icon--effort {
   transform: translateY(1px);
-}
-
-.composer-fast-indicator {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  color: var(--accent-warning-strong, #b45309);
-  background: color-mix(in srgb, var(--accent-warning-strong, #b45309) 16%, transparent);
 }
 
 .composer-select {

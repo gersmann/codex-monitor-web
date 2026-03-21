@@ -164,6 +164,7 @@ type UseMainAppLayoutSurfacesArgs = {
   selectedEffort: ComposerProps["selectedEffort"];
   onSelectEffort: ComposerProps["onSelectEffort"];
   selectedServiceTier: ComposerProps["selectedServiceTier"];
+  onSelectServiceTier: ComposerProps["onSelectServiceTier"];
   reasoningSupported: boolean;
   codexArgsOptions: ComposerProps["codexArgsOptions"];
   selectedCodexArgsOverride: ComposerProps["selectedCodexArgsOverride"];
@@ -328,6 +329,7 @@ export function useMainAppLayoutSurfaces({
   selectedEffort,
   onSelectEffort,
   selectedServiceTier,
+  onSelectServiceTier,
   reasoningSupported,
   codexArgsOptions,
   selectedCodexArgsOverride,
@@ -543,6 +545,7 @@ export function useMainAppLayoutSurfaces({
             selectedEffort,
             onSelectEffort,
             selectedServiceTier,
+            onSelectServiceTier,
             reasoningSupported,
             codexArgsOptions,
             selectedCodexArgsOverride,

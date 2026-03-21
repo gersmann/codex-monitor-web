@@ -9,6 +9,7 @@ import type {
   AppMention,
   ComposerSendIntent,
   FollowUpMessageBehavior,
+  ModelOption,
 } from "../../../types";
 
 vi.mock("../../../services/dragDrop", () => ({
@@ -41,6 +42,29 @@ type HarnessProps = {
   followUpMessageBehavior?: FollowUpMessageBehavior;
   steerAvailable?: boolean;
   selectedServiceTier?: "fast" | "flex" | null;
+  models?: ModelOption[];
+  selectedModelId?: string | null;
+  onSelectServiceTier?: (tier: "fast" | "flex" | null) => void;
+};
+
+const FAST_MODEL: ModelOption = {
+  id: "gpt-5.4",
+  model: "gpt-5.4",
+  displayName: "GPT-5.4",
+  description: "",
+  supportedReasoningEfforts: [],
+  defaultReasoningEffort: null,
+  isDefault: true,
+};
+
+const NON_FAST_MODEL: ModelOption = {
+  id: "gpt-5",
+  model: "gpt-5",
+  displayName: "GPT-5",
+  description: "",
+  supportedReasoningEfforts: [],
+  defaultReasoningEffort: null,
+  isDefault: true,
 };
 
 function ComposerHarness({
@@ -50,6 +74,9 @@ function ComposerHarness({
   followUpMessageBehavior = "queue",
   steerAvailable = false,
   selectedServiceTier = null,
+  models = [],
+  selectedModelId = null,
+  onSelectServiceTier = () => {},
 }: HarnessProps) {
   const [draftText, setDraftText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -67,13 +94,14 @@ function ComposerHarness({
       collaborationModes={[]}
       selectedCollaborationModeId={null}
       onSelectCollaborationMode={() => {}}
-      models={[]}
-      selectedModelId={null}
+      models={models}
+      selectedModelId={selectedModelId}
       onSelectModel={() => {}}
       reasoningOptions={[]}
       selectedEffort={null}
       onSelectEffort={() => {}}
       selectedServiceTier={selectedServiceTier}
+      onSelectServiceTier={onSelectServiceTier}
       reasoningSupported={false}
       accessMode="current"
       onSelectAccessMode={() => {}}
@@ -120,11 +148,67 @@ describe("Composer send triggers", () => {
     expect(onSend).toHaveBeenCalledWith("from button", [], undefined, "default");
   });
 
-  it("shows the fast-mode indicator when enabled", () => {
+  it("renders the fast toggle as checked when fast mode is enabled", () => {
     const onSend = vi.fn();
-    render(<ComposerHarness onSend={onSend} selectedServiceTier="fast" />);
+    render(
+      <ComposerHarness
+        onSend={onSend}
+        models={[FAST_MODEL]}
+        selectedModelId={FAST_MODEL.id}
+        selectedServiceTier="fast"
+      />,
+    );
 
-    expect(screen.getByLabelText("Fast mode enabled")).toBeTruthy();
+    expect((screen.getByRole("checkbox", { name: "Fast mode" }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("toggles fast mode on for supported models", () => {
+    const onSend = vi.fn();
+    const onSelectServiceTier = vi.fn();
+    render(
+      <ComposerHarness
+        onSend={onSend}
+        models={[FAST_MODEL]}
+        selectedModelId={FAST_MODEL.id}
+        onSelectServiceTier={onSelectServiceTier}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Fast mode" }));
+
+    expect(onSelectServiceTier).toHaveBeenCalledWith("fast");
+  });
+
+  it("toggles fast mode off back to default service tier", () => {
+    const onSend = vi.fn();
+    const onSelectServiceTier = vi.fn();
+    render(
+      <ComposerHarness
+        onSend={onSend}
+        models={[FAST_MODEL]}
+        selectedModelId={FAST_MODEL.id}
+        selectedServiceTier="fast"
+        onSelectServiceTier={onSelectServiceTier}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Fast mode" }));
+
+    expect(onSelectServiceTier).toHaveBeenCalledWith(null);
+  });
+
+  it("disables the fast toggle for unsupported models", () => {
+    const onSend = vi.fn();
+    render(
+      <ComposerHarness
+        onSend={onSend}
+        models={[NON_FAST_MODEL]}
+        selectedModelId={NON_FAST_MODEL.id}
+      />,
+    );
+
+    const fastToggle = screen.getByRole("checkbox", { name: "Fast mode" }) as HTMLInputElement;
+    expect(fastToggle.disabled).toBe(true);
   });
 
   it("blurs the textarea after Enter send on mobile", () => {

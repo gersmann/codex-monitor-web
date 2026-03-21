@@ -1906,6 +1906,7 @@ export default function MainApp() {
     selectedEffort,
     onSelectEffort: handleSelectEffort,
     reasoningSupported,
+    onSelectServiceTier: handleSelectServiceTier,
     codexArgsOptions,
     selectedCodexArgsOverride,
     onSelectCodexArgsOverride: handleSelectCodexArgsOverride,
