@@ -11,6 +11,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+build
 *.local
 src-tauri/tauri.ios.local.conf.json
 .testflight.local.env
@@ -29,6 +30,7 @@ src-tauri/tauri.ios.local.conf.json
 CodexMonitor.zip
 .codex-worktrees/
 .codexmonitor/
+.beads/
 .agent/
 .agents/
 .claude/

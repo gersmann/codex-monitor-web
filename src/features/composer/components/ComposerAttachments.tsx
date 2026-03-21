@@ -1,6 +1,6 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import Image from "lucide-react/dist/esm/icons/image";
 import X from "lucide-react/dist/esm/icons/x";
+import { convertLocalFileSrc } from "../../../services/fileSrc";
 
 type ComposerAttachmentsProps = {
   attachments: string[];
@@ -21,17 +21,7 @@ function fileTitle(path: string) {
 }
 
 function attachmentPreviewSrc(path: string) {
-  if (path.startsWith("data:")) {
-    return path;
-  }
-  if (path.startsWith("http://") || path.startsWith("https://")) {
-    return path;
-  }
-  try {
-    return convertFileSrc(path);
-  } catch {
-    return "";
-  }
+  return convertLocalFileSrc(path);
 }
 
 export function ComposerAttachments({

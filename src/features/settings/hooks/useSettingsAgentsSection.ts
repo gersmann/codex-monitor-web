@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import type { AgentsSettings, GeneratedAgentConfiguration } from "@services/tauri";
+import type {
+  AgentConfigTomlReadResult,
+  AgentsSettings,
+  GeneratedAgentConfiguration,
+} from "@services/tauri";
 import type { ModelOption, WorkspaceInfo } from "@/types";
 import {
   connectWorkspace,
@@ -51,7 +55,7 @@ export type SettingsAgentsSectionProps = {
     name: string;
     deleteManagedFile?: boolean;
   }) => Promise<boolean>;
-  onReadAgentConfig: (agentName: string) => Promise<string | null>;
+  onReadAgentConfig: (agentName: string) => Promise<AgentConfigTomlReadResult | null>;
   onWriteAgentConfig: (agentName: string, content: string) => Promise<boolean>;
   createDescriptionGenerating: boolean;
   editDescriptionGenerating: boolean;
@@ -249,7 +253,7 @@ export const useSettingsAgentsSection = ({
     [],
   );
 
-  const onReadAgentConfig = useCallback(async (agentName: string): Promise<string | null> => {
+  const onReadAgentConfig = useCallback(async (agentName: string): Promise<AgentConfigTomlReadResult | null> => {
     setReadingConfigAgentName(agentName);
     setError(null);
     try {

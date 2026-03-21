@@ -176,6 +176,16 @@
   pointer-events: auto;
 }
 
+.file-tree-menu-shell {
+  width: 220px;
+}
+
+.file-tree-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .file-preview-popover {
   border-radius: 12px;
   padding: 12px;

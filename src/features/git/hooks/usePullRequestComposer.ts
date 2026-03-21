@@ -26,7 +26,7 @@ type UsePullRequestComposerOptions = {
   activeWorkspace: WorkspaceInfo | null;
   selectedPullRequest: GitHubPullRequest | null;
   selectedCommit: GitLogEntry | null;
-  filePanelMode: "git" | "files" | "prompts";
+  filePanelMode: "git" | "files" | "prompts" | "backlog";
   gitPanelMode: GitPanelMode;
   centerMode: "chat" | "diff";
   isCompact: boolean;

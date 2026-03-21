@@ -1,4 +1,5 @@
 import type { MouseEvent } from "react";
+import MoreHorizontal from "lucide-react/dist/esm/icons/more-horizontal";
 
 import type { WorkspaceInfo } from "../../../types";
 
@@ -70,6 +71,17 @@ export function WorkspaceCard({
                 <span className="workspace-toggle-icon">›</span>
               </button>
             </div>
+            <button
+              className="ghost workspace-menu-trigger"
+              onClick={(event) => {
+                event.stopPropagation();
+                onShowWorkspaceMenu(event, workspace.id);
+              }}
+              data-tauri-drag-region="false"
+              aria-label="Workspace actions"
+            >
+              <MoreHorizontal size={14} aria-hidden />
+            </button>
             <button
               className="ghost workspace-add"
               onClick={(event) => {

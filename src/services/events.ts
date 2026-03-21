@@ -1,10 +1,11 @@
-import { listen } from "@tauri-apps/api/event";
+import { listen as tauriListen } from "@tauri-apps/api/event";
 import type {
   AppServerEvent,
   DictationEvent,
   DictationModelStatus,
   TrayOpenThreadPayload,
 } from "../types";
+import { getWebSocketUrl, isWebCompanionRuntime } from "./runtime";
 
 export type Unsubscribe = () => void;
 
@@ -24,6 +25,116 @@ type SubscriptionOptions = {
 };
 
 type Listener<T> = (payload: T) => void;
+type WebSocketEventEnvelope = {
+  event?: string;
+  payload?: unknown;
+};
+
+const webSocketListeners = new Map<string, Set<Listener<unknown>>>();
+let webSocket: WebSocket | null = null;
+let webSocketReconnectTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+
+function clearReconnectTimer() {
+  if (webSocketReconnectTimer === null) {
+    return;
+  }
+  globalThis.clearTimeout(webSocketReconnectTimer);
+  webSocketReconnectTimer = null;
+}
+
+function dispatchWebSocketEvent(eventName: string, payload: unknown) {
+  const listeners = webSocketListeners.get(eventName);
+  if (!listeners || listeners.size === 0) {
+    return;
+  }
+  for (const listener of listeners) {
+    try {
+      listener(payload);
+    } catch (error) {
+      console.error(`[events] ${eventName} listener failed`, error);
+    }
+  }
+}
+
+function connectWebSocket(options?: SubscriptionOptions) {
+  if (!isWebCompanionRuntime()) {
+    return;
+  }
+  if (webSocket) {
+    return;
+  }
+
+  try {
+    webSocket = new WebSocket(getWebSocketUrl());
+  } catch (error) {
+    options?.onError?.(error);
+    webSocket = null;
+    return;
+  }
+
+  webSocket.addEventListener("message", (event) => {
+    try {
+      const envelope = JSON.parse(String(event.data)) as WebSocketEventEnvelope;
+      const eventName = typeof envelope.event === "string" ? envelope.event.trim() : "";
+      if (!eventName) {
+        return;
+      }
+      dispatchWebSocketEvent(eventName, envelope.payload);
+    } catch (error) {
+      console.error("[events] failed to parse websocket payload", error);
+    }
+  });
+
+  webSocket.addEventListener("close", () => {
+    webSocket = null;
+    clearReconnectTimer();
+    webSocketReconnectTimer = globalThis.setTimeout(() => {
+      if (Array.from(webSocketListeners.values()).some((listeners) => listeners.size > 0)) {
+        connectWebSocket(options);
+      }
+    }, 1000);
+  });
+
+  webSocket.addEventListener("error", (error) => {
+    options?.onError?.(error);
+  });
+}
+
+function listenCompat<T>(
+  eventName: string,
+  callback: (event: { payload: T }) => void,
+  options?: SubscriptionOptions,
+): Promise<Unsubscribe> {
+  if (!isWebCompanionRuntime()) {
+    return tauriListen<T>(eventName, callback);
+  }
+
+  const listeners = webSocketListeners.get(eventName) ?? new Set<Listener<unknown>>();
+  const wrappedListener: Listener<unknown> = (payload) => {
+    callback({ payload: payload as T });
+  };
+  listeners.add(wrappedListener);
+  webSocketListeners.set(eventName, listeners);
+  connectWebSocket(options);
+
+  return Promise.resolve(() => {
+    const currentListeners = webSocketListeners.get(eventName);
+    if (!currentListeners) {
+      return;
+    }
+    currentListeners.delete(wrappedListener);
+    if (currentListeners.size === 0) {
+      webSocketListeners.delete(eventName);
+    }
+    if (
+      webSocket &&
+      Array.from(webSocketListeners.values()).every((registered) => registered.size === 0)
+    ) {
+      webSocket.close();
+      webSocket = null;
+    }
+  });
+}
 
 function createEventHub<T>(eventName: string) {
   const listeners = new Set<Listener<T>>();
@@ -34,7 +145,7 @@ function createEventHub<T>(eventName: string) {
     if (unlisten || listenPromise) {
       return;
     }
-    listenPromise = listen<T>(eventName, (event) => {
+    listenPromise = listenCompat<T>(eventName, (event) => {
       for (const listener of listeners) {
         try {
           listener(event.payload);

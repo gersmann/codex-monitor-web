@@ -364,4 +364,26 @@ describe("Home", () => {
     expect(screen.getByText(/user@example\.com/)).toBeTruthy();
     expect(screen.getByText("No usage data yet")).toBeTruthy();
   });
+
+  it("tolerates malformed local usage snapshots", () => {
+    render(
+      <Home
+        {...baseProps}
+        localUsageSnapshot={
+          {
+            updatedAt: Date.now(),
+            days: [{ day: "2026-01-20" }],
+            totals: {
+              last7DaysTokens: 15,
+            },
+            topModels: [{ model: "gpt-5-codex" }],
+          } as never
+        }
+      />,
+    );
+
+    expect(screen.getAllByText("0.0%").length).toBeGreaterThan(0);
+    expect(screen.getByText("gpt-5-codex")).toBeTruthy();
+    expect(screen.getAllByText("--").length).toBeGreaterThan(0);
+  });
 });

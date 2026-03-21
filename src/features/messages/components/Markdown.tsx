@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type MouseEvent } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openExternalUrl } from "@services/opener";
 import {
   decodeFileLink,
   isFileLinkUrl,
@@ -518,7 +518,7 @@ function LinkBlock({ urls }: LinkBlockProps) {
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            void openUrl(url);
+            void openExternalUrl(url);
           }}
         >
           {url}
@@ -588,6 +588,24 @@ function FileReferenceLink({
       ) : null}
     </a>
   );
+}
+
+function hasInlineCodeLabel(node: unknown) {
+  if (!node || typeof node !== "object" || !("children" in node)) {
+    return false;
+  }
+  const children = (node as { children?: unknown }).children;
+  if (!Array.isArray(children)) {
+    return false;
+  }
+  return children.some((child) => {
+    if (!child || typeof child !== "object") {
+      return false;
+    }
+    const tagName =
+      "tagName" in child ? String((child as { tagName?: unknown }).tagName ?? "") : "";
+    return tagName === "code";
+  });
 }
 
 function CodeBlock({ className, value, copyUseModifier }: CodeBlockProps) {
@@ -755,7 +773,7 @@ export function Markdown({
     return getLinkablePath(fileUrlPath);
   };
   const components: Components = {
-    a: ({ href, children }) => {
+    a: ({ href, children, node }) => {
       const url = (href ?? "").trim();
       const threadId = url.startsWith("thread://")
         ? url.slice("thread://".length).trim()
@@ -804,6 +822,18 @@ export function Markdown({
       }
       const hrefFilePath = resolveHrefFilePath(url);
       if (hrefFilePath) {
+        if (hasInlineCodeLabel(node)) {
+          return (
+            <FileReferenceLink
+              href={href ?? toFileLink(hrefFilePath)}
+              rawPath={hrefFilePath}
+              showFilePath={showFilePath}
+              workspacePath={workspacePath}
+              onClick={handleFileLinkClick}
+              onContextMenu={handleFileLinkContextMenu}
+            />
+          );
+        }
         const clickHandler = (event: React.MouseEvent) =>
           handleFileLinkClick(event, hrefFilePath);
         const contextMenuHandler = onOpenFileLinkMenu
@@ -841,7 +871,7 @@ export function Markdown({
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            void openUrl(url);
+            void openExternalUrl(url);
           }}
         >
           {children}

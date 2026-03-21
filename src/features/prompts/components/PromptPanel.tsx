@@ -3,7 +3,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
 } from "react";
 import type { CustomPromptOption } from "../../../types";
 import { expandCustomPromptText, getPromptArgumentHint } from "../../../utils/customPrompts";
@@ -13,13 +12,16 @@ import {
   PanelMeta,
   PanelSearchField,
 } from "../../design-system/components/panel/PanelPrimitives";
-import { Menu, MenuItem } from "@tauri-apps/api/menu";
-import { LogicalPosition } from "@tauri-apps/api/dpi";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  MenuTrigger,
+  PopoverMenuItem,
+  PopoverSurface,
+} from "../../design-system/components/popover/PopoverPrimitives";
 import MoreHorizontal from "lucide-react/dist/esm/icons/more-horizontal";
 import Plus from "lucide-react/dist/esm/icons/plus";
 import ScrollText from "lucide-react/dist/esm/icons/scroll-text";
 import Search from "lucide-react/dist/esm/icons/search";
+import { useMenuController } from "../../app/hooks/useMenuController";
 
 type PromptPanelProps = {
   prompts: CustomPromptOption[];
@@ -68,6 +70,68 @@ function buildPromptCommand(name: string, args: string) {
 
 function isWorkspacePrompt(prompt: CustomPromptOption) {
   return prompt.scope === "workspace";
+}
+
+type PromptActionMenuProps = {
+  prompt: CustomPromptOption;
+  onEdit: () => void;
+  onMove: (scope: "workspace" | "global") => void | Promise<void>;
+  onDelete: () => void;
+};
+
+function PromptActionMenu({
+  prompt,
+  onEdit,
+  onMove,
+  onDelete,
+}: PromptActionMenuProps) {
+  const menu = useMenuController();
+  const scope = isWorkspacePrompt(prompt) ? "workspace" : "global";
+  const nextScope = scope === "workspace" ? "global" : "workspace";
+
+  return (
+    <div className="prompt-action-menu-shell" ref={menu.containerRef}>
+      <MenuTrigger
+        type="button"
+        isOpen={menu.isOpen}
+        className="ghost icon-button prompt-action-menu"
+        activeClassName="is-active"
+        onClick={menu.toggle}
+        aria-label="Prompt actions"
+        title="Prompt actions"
+      >
+        <MoreHorizontal aria-hidden />
+      </MenuTrigger>
+      {menu.isOpen && (
+        <PopoverSurface className="prompt-action-popover" role="menu">
+          <PopoverMenuItem
+            onClick={() => {
+              menu.close();
+              onEdit();
+            }}
+          >
+            Edit
+          </PopoverMenuItem>
+          <PopoverMenuItem
+            onClick={() => {
+              menu.close();
+              void onMove(nextScope);
+            }}
+          >
+            {`Move to ${nextScope === "workspace" ? "workspace" : "general"}`}
+          </PopoverMenuItem>
+          <PopoverMenuItem
+            onClick={() => {
+              menu.close();
+              onDelete();
+            }}
+          >
+            Delete
+          </PopoverMenuItem>
+        </PopoverSurface>
+      )}
+    </div>
+  );
 }
 
 export function PromptPanel({
@@ -287,35 +351,6 @@ export function PromptPanel({
     }
   };
 
-  const showPromptMenu = async (
-    event: ReactMouseEvent<HTMLButtonElement>,
-    prompt: CustomPromptOption,
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const scope = isWorkspacePrompt(prompt) ? "workspace" : "global";
-    const nextScope = scope === "workspace" ? "global" : "workspace";
-    const menu = await Menu.new({
-      items: [
-        await MenuItem.new({
-          text: "Edit",
-          action: () => startEdit(prompt),
-        }),
-        await MenuItem.new({
-          text: `Move to ${nextScope === "workspace" ? "workspace" : "general"}`,
-          action: () => void handleMove(prompt, nextScope),
-        }),
-        await MenuItem.new({
-          text: "Delete",
-          action: () => handleDeleteRequest(prompt),
-        }),
-      ],
-    });
-    const position = new LogicalPosition(event.clientX, event.clientY);
-    const window = getCurrentWindow();
-    await menu.popup(position, window);
-  };
-
   const renderPromptRow = (prompt: CustomPromptOption) => {
     const hint = getPromptArgumentHint(prompt);
     const showArgsInput = Boolean(hint);
@@ -371,15 +406,12 @@ export function PromptPanel({
           >
             New agent
           </button>
-          <button
-            type="button"
-            className="ghost icon-button prompt-action-menu"
-            onClick={(event) => void showPromptMenu(event, prompt)}
-            aria-label="Prompt actions"
-            title="Prompt actions"
-          >
-            <MoreHorizontal aria-hidden />
-          </button>
+          <PromptActionMenu
+            prompt={prompt}
+            onEdit={() => startEdit(prompt)}
+            onMove={(scope) => handleMove(prompt, scope)}
+            onDelete={() => handleDeleteRequest(prompt)}
+          />
         </div>
         {pendingDeletePath === prompt.path && (
           <div className="prompt-delete-confirm">

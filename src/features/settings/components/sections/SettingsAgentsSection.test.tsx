@@ -39,7 +39,10 @@ const baseProps = (): SettingsAgentsSectionProps => ({
   onCreateAgent: vi.fn(async () => true),
   onUpdateAgent: vi.fn(async () => true),
   onDeleteAgent: vi.fn(async () => true),
-  onReadAgentConfig: vi.fn(async () => "model = \"gpt-5-codex\""),
+  onReadAgentConfig: vi.fn(async () => ({
+    exists: true,
+    content: "model = \"gpt-5-codex\"",
+  })),
   onWriteAgentConfig: vi.fn(async () => true),
   onGenerateCreateDescription: vi.fn(async () => null),
   onGenerateEditDescription: vi.fn(async () => null),

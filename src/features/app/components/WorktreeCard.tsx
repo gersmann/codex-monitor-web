@@ -1,4 +1,5 @@
 import type { MouseEvent } from "react";
+import MoreHorizontal from "lucide-react/dist/esm/icons/more-horizontal";
 
 import type { WorkspaceInfo } from "../../../types";
 
@@ -64,6 +65,17 @@ export function WorktreeCard({
             </div>
           ) : (
             <>
+              <button
+                className="ghost worktree-menu-trigger"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onShowWorktreeMenu(event, worktree);
+                }}
+                data-tauri-drag-region="false"
+                aria-label="Workspace actions"
+              >
+                <MoreHorizontal size={14} aria-hidden />
+              </button>
               <button
                 className={`worktree-toggle ${worktreeCollapsed ? "" : "expanded"}`}
                 onClick={(event) => {

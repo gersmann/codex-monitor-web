@@ -8,6 +8,8 @@ export const SUPPORTED_APP_SERVER_METHODS = [
   "codex/backgroundThread",
   "codex/connected",
   "codex/event/skills_update_available",
+  "configWarning",
+  "deprecationNotice",
   "error",
   "hook/completed",
   "hook/started",
@@ -16,12 +18,20 @@ export const SUPPORTED_APP_SERVER_METHODS = [
   "item/commandExecution/terminalInteraction",
   "item/completed",
   "item/fileChange/outputDelta",
+  "item/mcpToolCall/progress",
   "item/plan/delta",
   "item/reasoning/summaryPartAdded",
   "item/reasoning/summaryTextDelta",
   "item/reasoning/textDelta",
   "item/started",
   "item/tool/requestUserInput",
+  "fuzzyFileSearch/sessionCompleted",
+  "fuzzyFileSearch/sessionUpdated",
+  "mcpServer/oauthLogin/completed",
+  "model/rerouted",
+  "rawResponseItem/completed",
+  "serverRequest/resolved",
+  "skills/changed",
   "thread/archived",
   "thread/closed",
   "thread/name/updated",
@@ -33,6 +43,8 @@ export const SUPPORTED_APP_SERVER_METHODS = [
   "turn/diff/updated",
   "turn/plan/updated",
   "turn/started",
+  "windows/worldWritableWarning",
+  "windowsSandbox/setupCompleted",
 ] as const;
 
 export type SupportedAppServerMethod = (typeof SUPPORTED_APP_SERVER_METHODS)[number];
@@ -105,7 +117,8 @@ export function isApprovalRequestMethod(method: string): boolean {
 }
 
 export function isSkillsUpdateAvailableEvent(event: AppServerEvent): boolean {
-  return getAppServerRawMethod(event) === "codex/event/skills_update_available";
+  const method = getAppServerRawMethod(event);
+  return method === "codex/event/skills_update_available" || method === "skills/changed";
 }
 
 export function isAppListUpdatedEvent(event: AppServerEvent): boolean {

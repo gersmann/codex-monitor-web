@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { isWebCompanionRuntime } from "@services/runtime";
 import type { AppSettings } from "../../../types";
 import { clampUiScale, UI_SCALE_STEP } from "../../../utils/uiScale";
 import { isMacPlatform } from "../../../utils/shortcuts";
@@ -29,9 +30,19 @@ export function useUiScaleShortcuts({
     if (typeof window === "undefined") {
       return;
     }
-    getCurrentWebview()
-      .setZoom(uiScale)
-      .catch(() => undefined);
+    if (isWebCompanionRuntime()) {
+      document.documentElement.style.zoom = String(uiScale);
+      return () => {
+        document.documentElement.style.zoom = "1";
+      };
+    }
+    try {
+      getCurrentWebview()
+        .setZoom(uiScale)
+        .catch(() => undefined);
+    } catch {
+      // Ignore missing Tauri webview bindings in browser-like runtimes.
+    }
   }, [uiScale]);
 
   const scaleShortcutLabel = useMemo(() => {

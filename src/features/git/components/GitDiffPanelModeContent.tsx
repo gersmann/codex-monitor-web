@@ -1,7 +1,7 @@
 import type { GitHubIssue, GitHubPullRequest, GitLogEntry } from "../../../types";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openExternalUrl } from "@services/opener";
 import ArrowLeftRight from "lucide-react/dist/esm/icons/arrow-left-right";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
@@ -806,7 +806,7 @@ export function GitIssuesModeContent({
                         href={issue.url}
                         onClick={(event) => {
                             event.preventDefault();
-                            void openUrl(issue.url);
+                            void openExternalUrl(issue.url);
                         }}
                     >
                         <div className="git-issue-summary">

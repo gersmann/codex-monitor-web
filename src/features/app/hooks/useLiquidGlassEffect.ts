@@ -4,8 +4,8 @@ import {
   setLiquidGlassEffect,
   GlassMaterialVariant,
 } from "tauri-plugin-liquid-glass-api";
-import { Effect, EffectState, getCurrentWindow } from "@tauri-apps/api/window";
 import type { DebugEntry } from "../../../types";
+import { isWebCompanionRuntime } from "../../../services/runtime";
 
 type Params = {
   reduceTransparency: boolean;
@@ -19,7 +19,11 @@ export function useLiquidGlassEffect({ reduceTransparency, onDebug }: Params) {
     let cancelled = false;
 
     const apply = async () => {
+      if (isWebCompanionRuntime()) {
+        return;
+      }
       try {
+        const { Effect, EffectState, getCurrentWindow } = await import("@tauri-apps/api/window");
         const window = getCurrentWindow();
         if (reduceTransparency) {
           if (supportedRef.current === null) {

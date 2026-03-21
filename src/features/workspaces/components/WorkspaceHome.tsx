@@ -6,7 +6,6 @@ import {
   type KeyboardEvent,
   type RefObject,
 } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import type {
   AppOption,
   CustomPromptOption,
@@ -34,6 +33,7 @@ import { WorkspaceHomeGitInitBanner } from "./WorkspaceHomeGitInitBanner";
 import { buildIconPath } from "./workspaceHomeHelpers";
 import { useWorkspaceHomeSuggestionsStyle } from "../hooks/useWorkspaceHomeSuggestionsStyle";
 import type { ThreadStatusById } from "../../../utils/threadStatus";
+import { convertLocalFileSrc } from "../../../services/fileSrc";
 
 type WorkspaceHomeProps = {
   workspace: WorkspaceInfo;
@@ -163,7 +163,7 @@ export function WorkspaceHome({
   const [showIcon, setShowIcon] = useState(true);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
   const iconPath = useMemo(() => buildIconPath(workspace.path), [workspace.path]);
-  const iconSrc = useMemo(() => convertFileSrc(iconPath), [iconPath]);
+  const iconSrc = useMemo(() => convertLocalFileSrc(iconPath), [iconPath]);
   const fallbackTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const textareaRef = textareaRefProp ?? fallbackTextareaRef;
   const {
@@ -240,6 +240,12 @@ export function WorkspaceHome({
   useEffect(() => {
     setShowIcon(true);
   }, [workspace.id]);
+
+  useEffect(() => {
+    if (!iconSrc) {
+      setShowIcon(false);
+    }
+  }, [iconSrc]);
 
   useEffect(() => {
     if (!dictationTranscript) {
@@ -350,14 +356,14 @@ export function WorkspaceHome({
   return (
     <div className="workspace-home">
       <div className="workspace-home-hero">
-        {showIcon && (
+        {showIcon && iconSrc ? (
           <img
             className="workspace-home-icon"
             src={iconSrc}
             alt=""
             onError={() => setShowIcon(false)}
           />
-        )}
+        ) : null}
         <div>
           <div className="workspace-home-title">{workspace.name}</div>
           <div className="workspace-home-path">{workspace.path}</div>

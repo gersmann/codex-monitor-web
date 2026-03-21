@@ -3,7 +3,7 @@ import { cancelCodexLogin, runCodexLogin } from "../../../services/tauri";
 import { subscribeAppServerEvents } from "../../../services/events";
 import type { AccountSnapshot } from "../../../types";
 import { getAppServerParams, getAppServerRawMethod } from "../../../utils/appServerEvents";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openExternalUrl } from "@services/opener";
 
 type UseAccountSwitchingArgs = {
   activeWorkspaceId: string | null;
@@ -169,7 +169,7 @@ export function useAccountSwitching({
       }
 
       loginIdRef.current = loginId;
-      await openUrl(authUrl);
+      await openExternalUrl(authUrl);
     } catch (error) {
       if (accountSwitchCanceledRef.current || isCodexLoginCanceled(error)) {
         setAccountSwitching(false);

@@ -83,6 +83,7 @@ export function SettingsAgentsSection({
 
   const [configEditorAgentName, setConfigEditorAgentName] = useState<string | null>(null);
   const [configEditorContent, setConfigEditorContent] = useState("");
+  const [configEditorFileExists, setConfigEditorFileExists] = useState(true);
   const [configEditorDirty, setConfigEditorDirty] = useState(false);
   const canGenerateCreateFromName = createName.trim().length > 0;
   const effectiveModelOptions = modelOptions.length > 0 ? modelOptions : FALLBACK_AGENT_MODELS;
@@ -325,17 +326,19 @@ export function SettingsAgentsSection({
     if (configEditorAgentName === name) {
       setConfigEditorAgentName(null);
       setConfigEditorContent("");
+      setConfigEditorFileExists(true);
       setConfigEditorDirty(false);
     }
   };
 
   const handleOpenConfigEditor = async (agentName: string) => {
-    const content = await onReadAgentConfig(agentName);
-    if (content == null) {
+    const config = await onReadAgentConfig(agentName);
+    if (config == null) {
       return;
     }
     setConfigEditorAgentName(agentName);
-    setConfigEditorContent(content);
+    setConfigEditorContent(config.content ?? "");
+    setConfigEditorFileExists(config.exists);
     setConfigEditorDirty(false);
   };
 
@@ -345,6 +348,7 @@ export function SettingsAgentsSection({
     }
     const success = await onWriteAgentConfig(configEditorAgentName, configEditorContent);
     if (success) {
+      setConfigEditorFileExists(true);
       setConfigEditorDirty(false);
     }
   };
@@ -823,6 +827,11 @@ export function SettingsAgentsSection({
                     <div className="settings-toggle-subtitle">
                       <code>{agent.configFile}</code>
                     </div>
+                    {!configEditorFileExists && (
+                      <div className="settings-help settings-help-inline">
+                        No managed config file exists yet. Saving will create it.
+                      </div>
+                    )}
                   </div>
                   <div className="settings-agents-actions">
                     <button
@@ -830,6 +839,7 @@ export function SettingsAgentsSection({
                       className="ghost"
                       onClick={() => {
                         setConfigEditorAgentName(null);
+                        setConfigEditorFileExists(true);
                         setConfigEditorDirty(false);
                       }}
                     >

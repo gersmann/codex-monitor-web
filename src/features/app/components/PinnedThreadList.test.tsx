@@ -143,10 +143,9 @@ describe("PinnedThreadList", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Show sub-agents" }));
     expect(screen.getByText("Pinned Nested")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Hide sub-agents" }));
     expect(screen.queryByText("Pinned Nested")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Show sub-agents" }));
-    expect(screen.getByText("Pinned Nested")).toBeTruthy();
   });
 });

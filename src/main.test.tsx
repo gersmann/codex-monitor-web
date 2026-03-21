@@ -26,6 +26,10 @@ vi.mock("./App", () => ({
   default: () => null,
 }));
 
+vi.mock("./services/runtime", () => ({
+  isWebCompanionRuntime: () => true,
+}));
+
 describe("main sentry bootstrap", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -36,26 +40,10 @@ describe("main sentry bootstrap", () => {
     document.body.innerHTML = '<div id="root"></div>';
   });
 
-  it("initializes sentry and records app_open", async () => {
+  it("does not initialize sentry in the web companion runtime", async () => {
     await import("./main");
 
-    expect(sentryInitMock).toHaveBeenCalledTimes(1);
-    expect(sentryInitMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        dsn: expect.stringContaining("ingest.us.sentry.io"),
-        enabled: true,
-        release: expect.any(String),
-      }),
-    );
-    expect(sentryMetricsCountMock).toHaveBeenCalledTimes(1);
-    expect(sentryMetricsCountMock).toHaveBeenCalledWith(
-      "app_open",
-      1,
-      expect.objectContaining({
-        attributes: expect.objectContaining({
-          platform: "macos",
-        }),
-      }),
-    );
+    expect(sentryInitMock).not.toHaveBeenCalled();
+    expect(sentryMetricsCountMock).not.toHaveBeenCalled();
   });
 });

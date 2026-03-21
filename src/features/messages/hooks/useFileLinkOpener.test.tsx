@@ -3,6 +3,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { openWorkspaceIn } from "../../../services/tauri";
 import { useFileLinkOpener } from "./useFileLinkOpener";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 vi.mock("../../../services/tauri", () => ({
   openWorkspaceIn: vi.fn(),
@@ -10,20 +11,6 @@ vi.mock("../../../services/tauri", () => ({
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   revealItemInDir: vi.fn(),
-}));
-
-vi.mock("@tauri-apps/api/menu", () => ({
-  Menu: { new: vi.fn() },
-  MenuItem: { new: vi.fn() },
-  PredefinedMenuItem: { new: vi.fn() },
-}));
-
-vi.mock("@tauri-apps/api/dpi", () => ({
-  LogicalPosition: vi.fn(),
-}));
-
-vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: vi.fn(),
 }));
 
 vi.mock("@sentry/react", () => ({
@@ -37,6 +24,72 @@ vi.mock("../../../services/toasts", () => ({
 describe("useFileLinkOpener", () => {
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("opens a managed web menu for file links and copies the resolved file URL", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", {
+      clipboard: { writeText },
+    });
+
+    const { result } = renderHook(() =>
+      useFileLinkOpener("/Users/me/CodexMonitor", [], ""),
+    );
+
+    await act(async () => {
+      await result.current.showFileLinkMenu(
+        {
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+          clientX: 32,
+          clientY: 48,
+        } as unknown as React.MouseEvent,
+        "/workspace/src/App.tsx:12:3",
+      );
+    });
+
+    expect(result.current.fileLinkMenu).toMatchObject({
+      rawPath: "/workspace/src/App.tsx:12:3",
+      resolvedPath: "/Users/me/CodexMonitor/src/App.tsx",
+      line: 12,
+      column: 3,
+    });
+    expect(result.current.fileLinkMenuOpenLabel).toBe("Open in Visual Studio Code");
+
+    await act(async () => {
+      await result.current.copyLinkedFileLink();
+    });
+
+    expect(writeText).toHaveBeenCalledWith(
+      "file:///Users/me/CodexMonitor/src/App.tsx#L12C3",
+    );
+    expect(result.current.fileLinkMenu).toBeNull();
+  });
+
+  it("reveals the linked file from the managed web menu", async () => {
+    const { result } = renderHook(() =>
+      useFileLinkOpener("/Users/me/CodexMonitor", [], ""),
+    );
+
+    await act(async () => {
+      await result.current.showFileLinkMenu(
+        {
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+          clientX: 32,
+          clientY: 48,
+        } as unknown as React.MouseEvent,
+        "/workspace/src/App.tsx",
+      );
+    });
+
+    await act(async () => {
+      await result.current.revealLinkedFile();
+    });
+
+    expect(vi.mocked(revealItemInDir)).toHaveBeenCalledWith(
+      "/Users/me/CodexMonitor/src/App.tsx",
+    );
   });
 
   it("maps /workspace root-relative paths to the active workspace path", async () => {

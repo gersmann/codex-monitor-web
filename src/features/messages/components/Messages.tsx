@@ -9,6 +9,8 @@ import {
 } from "react";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
+import Copy from "lucide-react/dist/esm/icons/copy";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
 import type {
   ConversationItem,
   OpenAppTarget,
@@ -18,6 +20,10 @@ import type {
 import { isPlanReadyTaggedMessage } from "../../../utils/internalPlanReadyMessages";
 import { PlanReadyFollowupMessage } from "../../app/components/PlanReadyFollowupMessage";
 import { RequestUserInputMessage } from "../../app/components/RequestUserInputMessage";
+import {
+  PopoverMenuItem,
+  PopoverSurface,
+} from "../../design-system/components/popover/PopoverPrimitives";
 import { useFileLinkOpener } from "../hooks/useFileLinkOpener";
 import {
   SCROLL_THRESHOLD_PX,
@@ -37,6 +43,14 @@ import {
   UserInputRow,
   WorkingIndicator,
 } from "./MessageRows";
+
+type UserMessageItem = {
+  id: string;
+  kind: "message";
+  role: "user";
+  text: string;
+  images?: string[];
+};
 
 type MessagesProps = {
   items: ConversationItem[];
@@ -62,6 +76,7 @@ type MessagesProps = {
   onPlanSubmitChanges?: (changes: string) => void;
   onOpenThreadLink?: (threadId: string, workspaceId?: string | null) => void;
   onQuoteMessage?: (text: string) => void;
+  onRollbackMessage?: (item: UserMessageItem) => void;
 };
 
 function toMarkdownQuote(text: string): string {
@@ -97,6 +112,7 @@ export const Messages = memo(function Messages({
   onPlanSubmitChanges,
   onOpenThreadLink,
   onQuoteMessage,
+  onRollbackMessage,
 }: MessagesProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -117,7 +133,18 @@ export const Messages = memo(function Messages({
         )?.request_id ?? null)
       : null;
   const scrollKey = `${scrollKeyForItems(items)}-${activeUserInputRequestId ?? "no-input"}`;
-  const { openFileLink, showFileLinkMenu } = useFileLinkOpener(
+  const {
+    openFileLink,
+    showFileLinkMenu,
+    fileLinkMenu,
+    fileLinkMenuRef,
+    openFileLinkFromMenu,
+    revealLinkedFile,
+    copyLinkedFileLink,
+    fileLinkMenuOpenLabel,
+    canOpenFileLinkFromMenu,
+    canRevealLinkedFile,
+  } = useFileLinkOpener(
     workspacePath,
     openTargets,
     selectedOpenAppId,
@@ -390,6 +417,7 @@ export const Messages = memo(function Messages({
           isCopied={isCopied}
           onCopy={handleCopyMessage}
           onQuote={onQuoteMessage ? handleQuoteMessage : undefined}
+          onRollback={onRollbackMessage}
           codeBlockCopyUseModifier={codeBlockCopyUseModifier}
           showMessageFilePath={showMessageFilePath}
           workspacePath={workspacePath}
@@ -538,6 +566,48 @@ export const Messages = memo(function Messages({
             <span className="working-spinner" aria-hidden />
             <span className="messages-loading-label">Loading…</span>
           </div>
+        </div>
+      )}
+      {fileLinkMenu && (
+        <div
+          ref={fileLinkMenuRef}
+          className="messages-file-link-menu-shell"
+          style={{
+            position: "fixed",
+            top: fileLinkMenu.top,
+            left: fileLinkMenu.left,
+            zIndex: 40,
+          }}
+        >
+          <PopoverSurface className="messages-file-link-menu" role="menu">
+            <PopoverMenuItem
+              onClick={() => {
+                void openFileLinkFromMenu();
+              }}
+              disabled={!canOpenFileLinkFromMenu}
+              icon={<FolderOpen size={14} aria-hidden />}
+            >
+              {fileLinkMenuOpenLabel}
+            </PopoverMenuItem>
+            {canRevealLinkedFile && (
+              <PopoverMenuItem
+                onClick={() => {
+                  void revealLinkedFile();
+                }}
+                icon={<FolderOpen size={14} aria-hidden />}
+              >
+                Reveal in File Manager
+              </PopoverMenuItem>
+            )}
+            <PopoverMenuItem
+              onClick={() => {
+                void copyLinkedFileLink();
+              }}
+              icon={<Copy size={14} aria-hidden />}
+            >
+              Copy Link
+            </PopoverMenuItem>
+          </PopoverSurface>
         </div>
       )}
       <div ref={bottomRef} />

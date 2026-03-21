@@ -2,24 +2,164 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import * as Sentry from "@sentry/react";
 import App from "./App";
+import { isWebCompanionRuntime } from "./services/runtime";
+import { registerPwaServiceWorker } from "./services/pwa";
 import { isMobilePlatform } from "./utils/platformPaths";
 
-const sentryDsn =
-  import.meta.env.VITE_SENTRY_DSN ??
-  "https://8ab67175daed999e8c432a93d8f98e49@o4510750015094784.ingest.us.sentry.io/4510750016012288";
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+const sentryEnabled =
+  !isWebCompanionRuntime() &&
+  typeof sentryDsn === "string" &&
+  sentryDsn.trim().length > 0;
+const clientLogsEnabled =
+  isWebCompanionRuntime() &&
+  import.meta.env.VITE_CODEX_MONITOR_CLIENT_LOGS !== "0";
 
-Sentry.init({
-  dsn: sentryDsn,
-  enabled: Boolean(sentryDsn),
-  release: __APP_VERSION__,
-});
+type ClientLogPayload = {
+  level: "error";
+  source: "window-error" | "unhandledrejection" | "console.error";
+  message: string;
+  href: string | null;
+  userAgent: string | null;
+  stack?: string;
+  details?: Record<string, unknown>;
+};
 
-Sentry.metrics.count("app_open", 1, {
-  attributes: {
-    env: import.meta.env.MODE,
-    platform: "macos",
-  },
-});
+function serializeUnknown(value: unknown) {
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack,
+    };
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return String(value);
+  }
+}
+
+function extractErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  return String(error);
+}
+
+function postClientLog(payload: ClientLogPayload) {
+  if (!clientLogsEnabled || typeof window === "undefined") {
+    return;
+  }
+  const body = JSON.stringify(payload);
+  const blob = new Blob([body], { type: "application/json" });
+  if (
+    typeof navigator !== "undefined" &&
+    typeof navigator.sendBeacon === "function"
+  ) {
+    try {
+      navigator.sendBeacon("/api/client-log", blob);
+      return;
+    } catch {
+      // Fall through to fetch.
+    }
+  }
+  void fetch("/api/client-log", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body,
+    keepalive: true,
+  }).catch(() => {
+    // Intentionally swallow logging failures.
+  });
+}
+
+function installWebClientErrorLogging() {
+  if (!clientLogsEnabled || typeof window === "undefined") {
+    return;
+  }
+
+  const baseContext = {
+    href: window.location.href,
+    userAgent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+  };
+
+  window.addEventListener("error", (event) => {
+    const target = event.target;
+    const isResourceError =
+      target instanceof HTMLElement && target !== window.document.body;
+    postClientLog({
+      level: "error",
+      source: "window-error",
+      message: event.message || "Unhandled window error",
+      href: baseContext.href,
+      userAgent: baseContext.userAgent,
+      stack: event.error instanceof Error ? event.error.stack : undefined,
+      details: {
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        resourceTag: isResourceError ? target.tagName : undefined,
+        resourceSource:
+          isResourceError && target instanceof HTMLImageElement
+            ? target.currentSrc || target.src
+            : undefined,
+      },
+    });
+  });
+
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason;
+    postClientLog({
+      level: "error",
+      source: "unhandledrejection",
+      message: extractErrorMessage(reason),
+      href: baseContext.href,
+      userAgent: baseContext.userAgent,
+      stack: reason instanceof Error ? reason.stack : undefined,
+      details: {
+        reason: serializeUnknown(reason),
+      },
+    });
+  });
+
+  const originalConsoleError = console.error.bind(console);
+  console.error = (...args: unknown[]) => {
+    originalConsoleError(...args);
+    const [firstArg] = args;
+    postClientLog({
+      level: "error",
+      source: "console.error",
+      message: extractErrorMessage(firstArg),
+      href: baseContext.href,
+      userAgent: baseContext.userAgent,
+      details: {
+        args: args.map((entry) => serializeUnknown(entry)),
+      },
+    });
+  };
+}
+
+if (sentryEnabled) {
+  Sentry.init({
+    dsn: sentryDsn,
+    enabled: true,
+    release: __APP_VERSION__,
+  });
+
+  Sentry.metrics.count("app_open", 1, {
+    attributes: {
+      env: import.meta.env.MODE,
+      platform: "macos",
+    },
+  });
+}
 
 function disableMobileZoomGestures() {
   if (!isMobilePlatform() || typeof document === "undefined") {
@@ -88,6 +228,14 @@ function syncMobileViewportHeight() {
 
 disableMobileZoomGestures();
 syncMobileViewportHeight();
+installWebClientErrorLogging();
+void registerPwaServiceWorker();
+
+if (typeof document !== "undefined") {
+  document.documentElement.dataset.runtime = isWebCompanionRuntime()
+    ? "web"
+    : "tauri";
+}
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

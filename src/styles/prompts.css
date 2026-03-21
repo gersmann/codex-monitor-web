@@ -104,6 +104,24 @@
   height: 14px;
 }
 
+.prompt-action-menu-shell {
+  position: relative;
+  display: inline-flex;
+}
+
+.prompt-action-menu.is-active {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.prompt-action-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  z-index: 24;
+}
+
 .prompt-delete-confirm {
   display: flex;
   align-items: center;

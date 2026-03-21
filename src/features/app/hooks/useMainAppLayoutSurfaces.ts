@@ -15,6 +15,7 @@ type SidebarProps = LayoutNodesOptions["primary"]["sidebarProps"];
 type ComposerProps = NonNullable<LayoutNodesOptions["primary"]["composerProps"]>;
 type MainHeaderProps = NonNullable<LayoutNodesOptions["primary"]["mainHeaderProps"]>;
 type GitDiffPanelProps = LayoutNodesOptions["git"]["gitDiffPanelProps"];
+type BacklogPanelProps = LayoutNodesOptions["git"]["backlogPanelProps"];
 
 type UseMainAppLayoutSurfacesArgs = {
   appSettings: Pick<
@@ -85,6 +86,14 @@ type UseMainAppLayoutSurfacesArgs = {
   composerWorkspaceState: ReturnType<typeof useMainAppComposerWorkspaceState>;
   promptActions: ReturnType<typeof useMainAppPromptActions>;
   worktreeState: ReturnType<typeof useMainAppWorktreeState>;
+  backlogState: {
+    activeItems: BacklogPanelProps["items"];
+    activeError: BacklogPanelProps["error"];
+    isLoading: BacklogPanelProps["isLoading"];
+    addItem: BacklogPanelProps["onAddItem"];
+    updateItem: BacklogPanelProps["onUpdateItem"];
+    deleteItem: BacklogPanelProps["onDeleteItem"];
+  };
   sidebarHandlers: ReturnType<typeof useMainAppSidebarMenuOrchestration>;
   displayNodes: ReturnType<typeof useMainAppDisplayNodes>;
   threadPinning: Pick<
@@ -127,9 +136,11 @@ type UseMainAppLayoutSurfacesArgs = {
   handleAddWorktreeAgent: SidebarProps["onAddWorktreeAgent"];
   handleAddCloneAgent: SidebarProps["onAddCloneAgent"];
   handleOpenThreadLink: LayoutNodesOptions["primary"]["messagesProps"]["onOpenThreadLink"];
+  handleRollbackMessage: LayoutNodesOptions["primary"]["messagesProps"]["onRollbackMessage"];
   handleSelectOpenAppId: MainHeaderProps["onSelectOpenAppId"];
   handleCopyThread: MainHeaderProps["onCopyThread"];
   handleToggleTerminalWithFocus: MainHeaderProps["onToggleTerminal"];
+  terminalSupported: boolean | null;
   launchScriptState: {
     launchScript: string | null;
     editorOpen: boolean;
@@ -283,6 +294,7 @@ export function useMainAppLayoutSurfaces({
   composerWorkspaceState,
   promptActions,
   worktreeState,
+  backlogState,
   sidebarHandlers,
   displayNodes,
   threadPinning,
@@ -299,9 +311,11 @@ export function useMainAppLayoutSurfaces({
   handleAddWorktreeAgent,
   handleAddCloneAgent,
   handleOpenThreadLink,
+  handleRollbackMessage,
   handleSelectOpenAppId,
   handleCopyThread,
   handleToggleTerminalWithFocus,
+  terminalSupported,
   launchScriptState,
   launchScriptsState,
   models,
@@ -433,6 +447,7 @@ export function useMainAppLayoutSurfaces({
         onToggleWorkspaceCollapse: sidebarHandlers.onToggleWorkspaceCollapse,
         onSelectThread: sidebarHandlers.onSelectThread,
         onDeleteThread: sidebarHandlers.onDeleteThread,
+        onForkThread: sidebarHandlers.onForkThread,
         onSyncThread: sidebarHandlers.onSyncThread,
         pinThread: threadPinning.pinThread,
         unpinThread: threadPinning.unpinThread,
@@ -469,6 +484,7 @@ export function useMainAppLayoutSurfaces({
         onQuoteMessage: composerWorkspaceState.canInsertComposerText
           ? composerWorkspaceState.handleInsertComposerText
           : undefined,
+        onRollbackMessage: handleRollbackMessage,
         isThinking: composerWorkspaceState.isProcessing,
         isLoadingMessages: activeThreadId
           ? threadResumeLoadingById[activeThreadId] ?? false
@@ -644,19 +660,29 @@ export function useMainAppLayoutSurfaces({
             onCopyThread: handleCopyThread,
             onToggleTerminal: handleToggleTerminalWithFocus,
             isTerminalOpen: terminalOpen,
-            showTerminalButton: !isCompact,
+            showTerminalButton: !isCompact && terminalSupported === true,
             showWorkspaceTools: !isCompact,
-            launchScript: launchScriptState.launchScript,
-            launchScriptEditorOpen: launchScriptState.editorOpen,
-            launchScriptDraft: launchScriptState.draftScript,
-            launchScriptSaving: launchScriptState.isSaving,
-            launchScriptError: launchScriptState.error,
-            onRunLaunchScript: launchScriptState.onRunLaunchScript,
-            onOpenLaunchScriptEditor: launchScriptState.onOpenEditor,
-            onCloseLaunchScriptEditor: launchScriptState.onCloseEditor,
-            onLaunchScriptDraftChange: launchScriptState.onDraftScriptChange,
-            onSaveLaunchScript: launchScriptState.onSaveLaunchScript,
-            launchScriptsState,
+            launchScript: terminalSupported === true ? launchScriptState.launchScript : null,
+            launchScriptEditorOpen: terminalSupported === true ? launchScriptState.editorOpen : false,
+            launchScriptDraft: terminalSupported === true ? launchScriptState.draftScript : "",
+            launchScriptSaving: terminalSupported === true ? launchScriptState.isSaving : false,
+            launchScriptError: terminalSupported === true ? launchScriptState.error : null,
+            onRunLaunchScript: terminalSupported === true
+              ? launchScriptState.onRunLaunchScript
+              : undefined,
+            onOpenLaunchScriptEditor: terminalSupported === true
+              ? launchScriptState.onOpenEditor
+              : undefined,
+            onCloseLaunchScriptEditor: terminalSupported === true
+              ? launchScriptState.onCloseEditor
+              : undefined,
+            onLaunchScriptDraftChange: terminalSupported === true
+              ? launchScriptState.onDraftScriptChange
+              : undefined,
+            onSaveLaunchScript: terminalSupported === true
+              ? launchScriptState.onSaveLaunchScript
+              : undefined,
+            launchScriptsState: terminalSupported === true ? launchScriptsState : undefined,
             extraActionsNode: displayNodes.mainHeaderActionsNode,
           }
         : null,
@@ -686,6 +712,27 @@ export function useMainAppLayoutSurfaces({
     },
     git: {
       filePanelMode: gitState.filePanelMode,
+      backlogPanelProps: {
+        activeThreadId,
+        items: backlogState.activeItems,
+        isLoading: backlogState.isLoading,
+        error: backlogState.activeError,
+        filePanelMode: gitState.filePanelMode,
+        onFilePanelModeChange: gitState.setFilePanelMode,
+        onAddItem: backlogState.addItem,
+        onUpdateItem: backlogState.updateItem,
+        onDeleteItem: backlogState.deleteItem,
+        onInsertText: composerWorkspaceState.canInsertComposerText
+          ? composerWorkspaceState.handleInsertComposerText
+          : undefined,
+        canInsertText: composerWorkspaceState.canInsertComposerText,
+        appsEnabled: appSettings.experimentalAppsEnabled,
+        skills,
+        apps,
+        prompts,
+        files: composerWorkspaceState.files,
+        onFileAutocompleteActiveChange: composerWorkspaceState.setFileAutocompleteActive,
+      },
       fileTreeProps: activeWorkspace
         ? {
             workspaceId: activeWorkspace.id,

@@ -1,4 +1,4 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertLocalFileSrc } from "../../../services/fileSrc";
 import type { ConversationItem } from "../../../types";
 
 export type ToolSummary = {
@@ -206,17 +206,7 @@ export function normalizeMessageImageSrc(path: string) {
   if (!path) {
     return "";
   }
-  if (path.startsWith("data:") || path.startsWith("http://") || path.startsWith("https://")) {
-    return path;
-  }
-  if (path.startsWith("file://")) {
-    return path;
-  }
-  try {
-    return convertFileSrc(path);
-  } catch {
-    return "";
-  }
+  return convertLocalFileSrc(path);
 }
 
 function isToolGroupItem(item: ConversationItem): item is ToolGroupItem {

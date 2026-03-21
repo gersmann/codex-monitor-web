@@ -1,4 +1,3 @@
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 
 export function useWindowFocusState() {
@@ -23,28 +22,27 @@ export function useWindowFocusState() {
 			}
 		};
 
-		try {
-			const windowHandle = getCurrentWindow();
-			windowHandle
-				.listen("tauri://focus", handleFocus)
-				.then((handler) => {
-					unlistenFocus = handler;
-				})
-				.catch(() => {
-					// Ignore; fallback listeners below cover focus changes.
-				});
-			windowHandle
-				.listen("tauri://blur", handleBlur)
-				.then((handler) => {
-					unlistenBlur = handler;
-				})
-				.catch(() => {
-					// Ignore; fallback listeners below cover focus changes.
-				});
-		} catch {
-			// In non-Tauri environments, getCurrentWindow can throw.
-			// The DOM listeners below still provide focus state.
-		}
+		void import("@tauri-apps/api/window")
+			.then(({ getCurrentWindow }) => {
+				const windowHandle = getCurrentWindow();
+				return Promise.allSettled([
+					windowHandle.listen("tauri://focus", handleFocus),
+					windowHandle.listen("tauri://blur", handleBlur),
+				]);
+			})
+			.then((results) => {
+				const focusResult = results?.[0];
+				if (focusResult?.status === "fulfilled") {
+					unlistenFocus = focusResult.value;
+				}
+				const blurResult = results?.[1];
+				if (blurResult?.status === "fulfilled") {
+					unlistenBlur = blurResult.value;
+				}
+			})
+			.catch(() => {
+				// In non-Tauri environments, the DOM listeners below still provide focus state.
+			});
 
 		window.addEventListener("focus", handleFocus);
 		window.addEventListener("blur", handleBlur);

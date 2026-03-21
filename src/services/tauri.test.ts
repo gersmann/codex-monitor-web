@@ -20,6 +20,7 @@ import {
   listMcpServerStatus,
   readGlobalAgentsMd,
   readGlobalCodexConfigToml,
+  rollbackThreadToMessage,
   listWorkspaces,
   openWorkspaceIn,
   readAgentMd,
@@ -188,6 +189,19 @@ describe("tauri invoke wrappers", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("get_github_issues", {
       workspaceId: "ws-2",
+    });
+  });
+
+  it("maps rollback params for thread rollback", async () => {
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockResolvedValueOnce({ restoredText: "redo this", thread: { id: "thread-1" } });
+
+    await rollbackThreadToMessage("ws-1", "thread-1", "item-7");
+
+    expect(invokeMock).toHaveBeenCalledWith("rollback_thread_to_message", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      messageItemId: "item-7",
     });
   });
 
@@ -631,7 +645,10 @@ describe("tauri invoke wrappers", () => {
 
   it("reads an agent config file", async () => {
     const invokeMock = vi.mocked(invoke);
-    invokeMock.mockResolvedValueOnce("model = \"gpt-5-codex\"");
+    invokeMock.mockResolvedValueOnce({
+      exists: true,
+      content: "model = \"gpt-5-codex\"",
+    });
 
     await readAgentConfigToml("researcher");
 
@@ -712,10 +729,11 @@ describe("tauri invoke wrappers", () => {
     const invokeMock = vi.mocked(invoke);
     invokeMock.mockResolvedValueOnce("data:image/png;base64,abc");
 
-    await readImageAsDataUrl("/tmp/image.png");
+    await readImageAsDataUrl("/tmp/image.png", "ws-4");
 
     expect(invokeMock).toHaveBeenCalledWith("read_image_as_data_url", {
       path: "/tmp/image.png",
+      workspaceId: "ws-4",
     });
   });
 
@@ -741,6 +759,10 @@ describe("tauri invoke wrappers", () => {
       images: ["/tmp/image.png"],
     });
 
+    expect(invokeMock).toHaveBeenCalledWith("read_image_as_data_url", {
+      path: "/tmp/image.png",
+      workspaceId: "ws-4",
+    });
     expect(invokeMock).toHaveBeenLastCalledWith("send_user_message", {
       workspaceId: "ws-4",
       threadId: "thread-1",
@@ -807,6 +829,10 @@ describe("tauri invoke wrappers", () => {
 
     await steerTurn("ws-4", "thread-1", "turn-2", "continue", ["/tmp/image.jpg"]);
 
+    expect(invokeMock).toHaveBeenCalledWith("read_image_as_data_url", {
+      path: "/tmp/image.jpg",
+      workspaceId: "ws-4",
+    });
     expect(invokeMock).toHaveBeenCalledWith("turn_steer", {
       workspaceId: "ws-4",
       threadId: "thread-1",
@@ -838,6 +864,10 @@ describe("tauri invoke wrappers", () => {
       images: ["/private/var/mobile/sample.png"],
     });
 
+    expect(invokeMock).toHaveBeenCalledWith("read_image_as_data_url", {
+      path: "/private/var/mobile/sample.png",
+      workspaceId: "ws-4",
+    });
     expect(invokeMock).toHaveBeenLastCalledWith("send_user_message", {
       workspaceId: "ws-4",
       threadId: "thread-1",

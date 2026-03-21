@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, renderHook } from "@testing-library/react";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const isTauriMock = vi.hoisted(() => vi.fn());
@@ -61,7 +61,9 @@ describe("useWindowDrag", () => {
       }),
     );
 
-    expect(startDragging).toHaveBeenCalledTimes(1);
+    return waitFor(() => {
+      expect(startDragging).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("starts dragging on Windows when click is inside the main topbar", () => {
@@ -83,7 +85,9 @@ describe("useWindowDrag", () => {
       }),
     );
 
-    expect(startDragging).toHaveBeenCalledTimes(1);
+    return waitFor(() => {
+      expect(startDragging).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("starts dragging on Windows when mousedown target is a text node in topbar", () => {
@@ -109,7 +113,9 @@ describe("useWindowDrag", () => {
       }),
     );
 
-    expect(startDragging).toHaveBeenCalledTimes(1);
+    return waitFor(() => {
+      expect(startDragging).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("does not start dragging when text node is inside an interactive target", () => {
@@ -201,6 +207,8 @@ describe("useWindowDrag", () => {
       }),
     );
 
-    expect(startDragging).toHaveBeenCalledTimes(1);
+    return waitFor(() => {
+      expect(startDragging).toHaveBeenCalledTimes(1);
+    });
   });
 });

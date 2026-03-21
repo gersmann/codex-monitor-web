@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useRemoteThreadRefreshOnFocus } from "./useRemoteThreadRefreshOnFocus";
+import {
+  REMOTE_THREAD_POLL_INTERVAL_MS,
+  REMOTE_THREAD_PROCESSING_POLL_INTERVAL_MS,
+  useRemoteThreadRefreshOnFocus,
+} from "./useRemoteThreadRefreshOnFocus";
 
 const windowListeners = new Map<string, Set<() => void>>();
 const listenMock = vi.fn<
@@ -71,6 +75,60 @@ describe("useRemoteThreadRefreshOnFocus", () => {
     act(() => {
       vi.advanceTimersByTime(1);
     });
+    expect(refreshThread).toHaveBeenCalledWith("ws-1", "thread-1");
+  });
+
+  it("refreshes the active thread on focus in web companion mode", () => {
+    const refreshThread = vi.fn().mockResolvedValue(undefined);
+
+    renderHook(() =>
+      useRemoteThreadRefreshOnFocus({
+        backendMode: "local",
+        liveThreadSyncEnabled: true,
+        activeWorkspace: {
+          id: "ws-1",
+          name: "Workspace",
+          path: "/tmp/ws-1",
+          connected: true,
+          settings: { sidebarCollapsed: false },
+        },
+        activeThreadId: "thread-1",
+        refreshThread,
+      }),
+    );
+
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(refreshThread).toHaveBeenCalledWith("ws-1", "thread-1");
+  });
+
+  it("refreshes the active thread on focus in web companion mode", () => {
+    const refreshThread = vi.fn().mockResolvedValue(undefined);
+
+    renderHook(() =>
+      useRemoteThreadRefreshOnFocus({
+        backendMode: "local",
+        liveThreadSyncEnabled: true,
+        activeWorkspace: {
+          id: "ws-1",
+          name: "Workspace",
+          path: "/tmp/ws-1",
+          connected: true,
+          settings: { sidebarCollapsed: false },
+        },
+        activeThreadId: "thread-1",
+        refreshThread,
+      }),
+    );
+
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+      vi.advanceTimersByTime(500);
+    });
+
     expect(refreshThread).toHaveBeenCalledWith("ws-1", "thread-1");
   });
 
@@ -194,6 +252,11 @@ describe("useRemoteThreadRefreshOnFocus", () => {
       }),
     );
 
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
     act(() => {
       for (const handler of windowListeners.get("tauri://focus") ?? []) {
         handler();
@@ -260,7 +323,7 @@ describe("useRemoteThreadRefreshOnFocus", () => {
     expect(unlistenBlur).toHaveBeenCalledTimes(1);
   });
 
-  it("does not poll while processing and refreshes when visibility returns", async () => {
+  it("keeps a faster recovery poll while processing and refreshes when visibility returns", async () => {
     const refreshThread = vi.fn().mockResolvedValue(undefined);
 
     renderHook(() =>
@@ -280,18 +343,24 @@ describe("useRemoteThreadRefreshOnFocus", () => {
     );
 
     await act(async () => {
-      vi.advanceTimersByTime(20_000);
+      vi.advanceTimersByTime(REMOTE_THREAD_PROCESSING_POLL_INTERVAL_MS - 1);
       await Promise.resolve();
     });
     expect(refreshThread).toHaveBeenCalledTimes(0);
 
     await act(async () => {
-      visibilityState = "hidden";
-      document.dispatchEvent(new Event("visibilitychange"));
-      vi.advanceTimersByTime(20_000);
+      vi.advanceTimersByTime(1);
       await Promise.resolve();
     });
-    expect(refreshThread).toHaveBeenCalledTimes(0);
+    expect(refreshThread).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      visibilityState = "hidden";
+      document.dispatchEvent(new Event("visibilitychange"));
+      vi.advanceTimersByTime(REMOTE_THREAD_PROCESSING_POLL_INTERVAL_MS * 2);
+      await Promise.resolve();
+    });
+    expect(refreshThread).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       visibilityState = "visible";
@@ -299,13 +368,13 @@ describe("useRemoteThreadRefreshOnFocus", () => {
       vi.advanceTimersByTime(500);
       await Promise.resolve();
     });
-    expect(refreshThread).toHaveBeenCalledTimes(1);
+    expect(refreshThread).toHaveBeenCalledTimes(2);
 
     await act(async () => {
-      vi.advanceTimersByTime(20_000);
+      vi.advanceTimersByTime(REMOTE_THREAD_PROCESSING_POLL_INTERVAL_MS);
       await Promise.resolve();
     });
-    expect(refreshThread).toHaveBeenCalledTimes(1);
+    expect(refreshThread).toHaveBeenCalledTimes(3);
   });
 
   it("keeps a low-frequency poll for active remote threads when not processing", async () => {
@@ -328,7 +397,7 @@ describe("useRemoteThreadRefreshOnFocus", () => {
     );
 
     await act(async () => {
-      vi.advanceTimersByTime(11_999);
+      vi.advanceTimersByTime(REMOTE_THREAD_POLL_INTERVAL_MS - 1);
       await Promise.resolve();
     });
     expect(refreshThread).toHaveBeenCalledTimes(0);

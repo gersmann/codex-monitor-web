@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { openExternalUrl } from "@services/opener";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { UpdateState } from "../hooks/useUpdater";
 import { UpdateToast } from "./UpdateToast";
 
-vi.mock("@tauri-apps/plugin-opener", () => ({
-  openUrl: vi.fn(),
+vi.mock("@services/opener", () => ({
+  openExternalUrl: vi.fn(),
 }));
 
-const openUrlMock = vi.mocked(openUrl);
+const openUrlMock = vi.mocked(openExternalUrl);
 
 describe("UpdateToast", () => {
   beforeEach(() => {
@@ -120,7 +120,7 @@ describe("UpdateToast", () => {
     expect(onDismissPostUpdateNotice).toHaveBeenCalledTimes(1);
   });
 
-  it("renders post-update release notes and opens GitHub link", () => {
+  it("renders post-update release notes and opens GitHub link", async () => {
     const onDismissPostUpdateNotice = vi.fn();
     const htmlUrl =
       "https://github.com/Dimillian/CodexMonitor/releases/tag/v1.2.3";
@@ -146,13 +146,15 @@ describe("UpdateToast", () => {
     expect(scoped.getByText("Added release notes toast")).toBeTruthy();
 
     fireEvent.click(scoped.getByRole("button", { name: "View on GitHub" }));
-    expect(openUrlMock).toHaveBeenCalledWith(htmlUrl);
+    await waitFor(() => {
+      expect(openUrlMock).toHaveBeenCalledWith(htmlUrl);
+    });
 
     fireEvent.click(scoped.getByRole("button", { name: "Dismiss" }));
     expect(onDismissPostUpdateNotice).toHaveBeenCalledTimes(1);
   });
 
-  it("renders post-update fallback notice", () => {
+  it("renders post-update fallback notice", async () => {
     const htmlUrl =
       "https://github.com/Dimillian/CodexMonitor/releases/tag/v1.2.3";
     const state: UpdateState = { stage: "available", version: "9.9.9" };
@@ -175,7 +177,9 @@ describe("UpdateToast", () => {
       scoped.getByText("Updated to v1.2.3. Release notes could not be loaded."),
     ).toBeTruthy();
     fireEvent.click(scoped.getByRole("button", { name: "View on GitHub" }));
-    expect(openUrlMock).toHaveBeenCalledWith(htmlUrl);
+    await waitFor(() => {
+      expect(openUrlMock).toHaveBeenCalledWith(htmlUrl);
+    });
     expect(scoped.queryByText("A new version is available.")).toBeNull();
   });
 });

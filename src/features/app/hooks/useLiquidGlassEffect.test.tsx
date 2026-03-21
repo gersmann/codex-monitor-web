@@ -4,6 +4,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { useLiquidGlassEffect } from "./useLiquidGlassEffect";
 import { isGlassSupported, setLiquidGlassEffect } from "tauri-plugin-liquid-glass-api";
 import { Effect, EffectState, getCurrentWindow } from "@tauri-apps/api/window";
+import * as runtime from "../../../services/runtime";
 
 vi.mock("tauri-plugin-liquid-glass-api", () => ({
   isGlassSupported: vi.fn(),
@@ -30,10 +31,12 @@ describe("useLiquidGlassEffect", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     mockSetEffects = vi.fn().mockResolvedValue(undefined);
     vi.mocked(getCurrentWindow).mockReturnValue({
       setEffects: mockSetEffects,
     } as any);
+    vi.spyOn(runtime, "isWebCompanionRuntime").mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -49,6 +52,18 @@ describe("useLiquidGlassEffect", () => {
       configurable: true,
     });
   };
+
+  it("does nothing in the web companion runtime", async () => {
+    vi.spyOn(runtime, "isWebCompanionRuntime").mockReturnValue(true);
+
+    renderHook(() => useLiquidGlassEffect({ reduceTransparency: false }));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(getCurrentWindow).not.toHaveBeenCalled();
+    expect(isGlassSupported).not.toHaveBeenCalled();
+    expect(setLiquidGlassEffect).not.toHaveBeenCalled();
+    expect(mockSetEffects).not.toHaveBeenCalled();
+  });
 
   it("clears effects when reduceTransparency is true", async () => {
     vi.mocked(isGlassSupported).mockResolvedValue(true);

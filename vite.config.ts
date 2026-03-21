@@ -3,9 +3,13 @@ import { execSync } from "node:child_process";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 
 // @ts-expect-error process is a nodejs global
-const host = process.env.TAURI_DEV_HOST;
+const tauriHost = process.env.TAURI_DEV_HOST;
+// @ts-expect-error process is a nodejs global
+const webHost = process.env.CODEX_MONITOR_WEB_HOST;
+const bindHost = tauriHost || webHost || false;
 
 const packageJson = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
@@ -59,10 +63,31 @@ function resolveGitBranch() {
 const appCommitHash = resolveCommitHash();
 const appBuildDate = resolveBuildDate();
 const appGitBranch = resolveGitBranch();
+const allowedHosts = ["dev.taild97ff6.ts.net"];
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      manifest: false,
+      registerType: "autoUpdate",
+      includeAssets: [
+        "app-icon.png",
+        "app-icon-180.png",
+        "app-icon-192.png",
+        "app-icon-512.png",
+        "manifest.webmanifest",
+      ],
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest}"],
+        navigateFallbackDenylist: [/^\/api\//, /^\/events(?:\/|$)/],
+      },
+      devOptions: {
+        enabled: false,
+      },
+    }),
+  ],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
@@ -84,7 +109,7 @@ export default defineConfig(async () => ({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "server/**/*.test.ts"],
     setupFiles: ["src/test/vitest.setup.ts"],
   },
 
@@ -96,11 +121,24 @@ export default defineConfig(async () => ({
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
-    hmr: host
+    host: bindHost,
+    allowedHosts,
+    proxy: tauriHost
+      ? undefined
+      : {
+          "/api": {
+            target: "http://127.0.0.1:4318",
+            changeOrigin: true,
+          },
+          "/events": {
+            target: "ws://127.0.0.1:4318",
+            ws: true,
+          },
+        },
+    hmr: tauriHost
       ? {
           protocol: "ws",
-          host,
+          host: tauriHost,
           port: 1421,
         }
       : undefined,

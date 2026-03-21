@@ -1,3 +1,4 @@
+import { BacklogPanel } from "../../../backlog/components/BacklogPanel";
 import { FileTreePanel } from "../../../files/components/FileTreePanel";
 import { GitDiffPanel } from "../../../git/components/GitDiffPanel";
 import { GitDiffViewer } from "../../../git/components/GitDiffViewer";
@@ -36,6 +37,8 @@ export function buildGitNodes(options: GitLayoutNodesOptions): GitLayoutNodes {
   let gitDiffPanelNode;
   if (options.filePanelMode === "files" && options.fileTreeProps) {
     gitDiffPanelNode = <FileTreePanel {...options.fileTreeProps} />;
+  } else if (options.filePanelMode === "backlog") {
+    gitDiffPanelNode = <BacklogPanel {...options.backlogPanelProps} />;
   } else if (options.filePanelMode === "prompts") {
     gitDiffPanelNode = <PromptPanel {...options.promptPanelProps} />;
   } else {

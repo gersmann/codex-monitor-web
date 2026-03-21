@@ -34,6 +34,7 @@ import { useInterruptShortcut } from "@app/hooks/useInterruptShortcut";
 import { useArchiveShortcut } from "@app/hooks/useArchiveShortcut";
 import { useCopyThread } from "@threads/hooks/useCopyThread";
 import { useTerminalController } from "@/features/terminal/hooks/useTerminalController";
+import { useTerminalAvailability } from "@/features/terminal/hooks/useTerminalAvailability";
 import { useWorkspaceLaunchScript } from "@app/hooks/useWorkspaceLaunchScript";
 import { useWorkspaceLaunchScripts } from "@app/hooks/useWorkspaceLaunchScripts";
 import { useWorktreeSetupScript } from "@app/hooks/useWorktreeSetupScript";
@@ -48,6 +49,10 @@ import { useMainAppWorktreeState } from "@app/hooks/useMainAppWorktreeState";
 import { useMainAppWorkspaceActions } from "@app/hooks/useMainAppWorkspaceActions";
 import { useMainAppWorkspaceLifecycle } from "@app/hooks/useMainAppWorkspaceLifecycle";
 import { useHomeAccount } from "@app/hooks/useHomeAccount";
+import { useAppDocumentTitle } from "@app/hooks/useAppDocumentTitle";
+import { PwaInstallToast } from "@/features/pwa/components/PwaInstallToast";
+import { usePwaInstall } from "@/features/pwa/hooks/usePwaInstall";
+import { useThreadBacklog } from "@/features/backlog/hooks/useThreadBacklog";
 import type {
   ComposerEditorSettings,
   ServiceTier,
@@ -83,7 +88,19 @@ import {
   resolveWorkspaceRuntimeCodexArgsOverride,
 } from "@threads/utils/threadCodexParamsSeed";
 import { subscribeTrayOpenThread } from "@services/events";
-import { setWorkspaceRuntimeCodexArgs } from "@services/tauri";
+import { isWebCompanionRuntime } from "@services/runtime";
+import {
+  rollbackThreadToMessage,
+  setWorkspaceRuntimeCodexArgs,
+} from "@services/tauri";
+
+type UserMessageItem = {
+  id: string;
+  kind: "message";
+  role: "user";
+  text: string;
+  images?: string[];
+};
 
 const SettingsView = lazy(() =>
   import("@settings/components/SettingsView").then((module) => ({
@@ -188,6 +205,9 @@ export default function MainApp() {
     refreshWorkspaces,
   });
   const updaterEnabled = !isMobileRuntime;
+  useAppDocumentTitle(activeWorkspace);
+  const terminalSupported = useTerminalAvailability();
+  const pwaInstall = usePwaInstall();
 
   const workspacesById = useMemo(
     () => new Map(workspaces.map((workspace) => [workspace.id, workspace])),
@@ -248,6 +268,7 @@ export default function MainApp() {
     closeTerminal: closeTerminalPanel,
   } = useLayoutController({
     activeWorkspaceId,
+    terminalSupported,
     setActiveTab,
     setDebugOpen,
     toggleDebugPanelShortcut: appSettings.toggleDebugPanelShortcut,
@@ -515,6 +536,7 @@ export default function MainApp() {
     getPinTimestamp,
     renameThread,
     startThreadForWorkspace,
+    forkThreadForWorkspace,
     listThreadsForWorkspaces,
     listThreadsForWorkspace,
     loadOlderThreadsForWorkspace,
@@ -577,9 +599,15 @@ export default function MainApp() {
     threadSortKey: threadListSortKey,
     onThreadCodexMetadataDetected: handleThreadCodexMetadataDetected,
   });
+  const backlogState = useThreadBacklog({
+    activeWorkspaceId,
+    activeThreadId,
+  });
   const { connectionState: remoteThreadConnectionState, reconnectLive } =
     useRemoteThreadLiveConnection({
       backendMode: appSettings.backendMode,
+      liveThreadSyncEnabled:
+        appSettings.backendMode === "remote" || isWebCompanionRuntime(),
       activeWorkspace,
       activeThreadId,
       activeThreadHasLocalSnapshot: hasLocalThreadSnapshot(activeThreadId),
@@ -891,6 +919,7 @@ export default function MainApp() {
     activeWorkspaceId,
     activeWorkspace,
     terminalOpen,
+    terminalSupported,
     onCloseTerminalPanel: closeTerminalPanel,
     onDebug: addDebugEntry,
   });
@@ -1303,6 +1332,51 @@ export default function MainApp() {
     setModelCount: setWorkspaceModelCount,
     startRun: startWorkspaceRun,
   } = workspaceHomeState;
+  const handleRollbackMessage = useCallback(
+    async (item: UserMessageItem) => {
+      if (!activeWorkspace || !activeThreadId) {
+        return;
+      }
+      try {
+        const result = await rollbackThreadToMessage(
+          activeWorkspace.id,
+          activeThreadId,
+          item.id,
+        );
+        clearActiveImages();
+        composerWorkspaceState.handleDraftChange(result.restoredText);
+        requestAnimationFrame(() => {
+          const node = composerInputRef.current;
+          if (!node) {
+            return;
+          }
+          node.focus();
+          const cursor = result.restoredText.length;
+          node.setSelectionRange(cursor, cursor);
+        });
+        await refreshThread(activeWorkspace.id, activeThreadId);
+      } catch (error) {
+        alertError(error);
+        addDebugEntry({
+          id: `${Date.now()}-client-thread-rollback-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread/rollback error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [
+      activeThreadId,
+      activeWorkspace,
+      addDebugEntry,
+      alertError,
+      clearActiveImages,
+      composerInputRef,
+      composerWorkspaceState,
+      refreshThread,
+    ],
+  );
   const {
     content: agentMdContent,
     exists: agentMdExists,
@@ -1352,6 +1426,8 @@ export default function MainApp() {
     listThreadsForWorkspaces,
     refreshWorkspaces,
     backendMode: appSettings.backendMode,
+    liveThreadSyncEnabled:
+      appSettings.backendMode === "remote" || isWebCompanionRuntime(),
     activeWorkspace,
     activeThreadId,
     threadStatusById,
@@ -1555,6 +1631,7 @@ export default function MainApp() {
       clearDraftForThread,
       removeImagesForThread,
       refreshThread,
+      forkThreadForWorkspace,
       handleRenameThread,
       removeWorkspace,
       removeWorktree,
@@ -1767,6 +1844,7 @@ export default function MainApp() {
     composerWorkspaceState,
     promptActions,
     worktreeState,
+    backlogState,
     sidebarHandlers: sidebarMenuOrchestration,
     displayNodes,
     threadPinning: {
@@ -1812,6 +1890,7 @@ export default function MainApp() {
     handleAddWorktreeAgent,
     handleAddCloneAgent,
     handleOpenThreadLink,
+    handleRollbackMessage,
     handleSelectOpenAppId,
     handleCopyThread,
     handleToggleTerminalWithFocus,
@@ -1870,6 +1949,7 @@ export default function MainApp() {
     handleComposerSendWithDraftStart,
     interruptTurn,
     terminalOpen,
+    terminalSupported,
     debugOpen,
     debugEntries,
     terminalTabs,
@@ -1968,7 +2048,23 @@ export default function MainApp() {
       messagesNode: mainMessagesNode,
       composerNode,
       approvalToastsNode,
-      updateToastNode,
+      updateToastNode: (
+        <>
+          {updateToastNode}
+          <PwaInstallToast
+            showInstallPrompt={pwaInstall.showInstallPrompt}
+            updateAvailable={pwaInstall.updateAvailable}
+            onInstall={() => {
+              void pwaInstall.installApp();
+            }}
+            onDismissInstall={pwaInstall.dismissInstallPrompt}
+            onApplyUpdate={() => {
+              void pwaInstall.applyUpdate();
+            }}
+            onDismissUpdate={pwaInstall.dismissUpdate}
+          />
+        </>
+      ),
       errorToastsNode,
       homeNode,
       mainHeaderNode,

@@ -1,10 +1,10 @@
-import { invoke } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import * as tauriCore from "@tauri-apps/api/core";
 import type { Options as NotificationOptions } from "@tauri-apps/plugin-notification";
 import type {
   AppSettings,
   CodexUpdateResult,
   CodexDoctorResult,
+  DaemonInfo,
   DictationModelStatus,
   DictationSessionState,
   LocalUsageSnapshot,
@@ -28,6 +28,27 @@ import type {
   GitLogResponse,
   ReviewTarget,
 } from "../types";
+import { getWebApiBaseUrl, isWebCompanionRuntime } from "./runtime";
+import type { FrontendRpcMethod } from "./tauriRpcRegistry";
+
+type DialogSelection = string | string[] | null;
+
+function isVitestRuntime() {
+  const processValue = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+    .process;
+  return Boolean(processValue?.env?.VITEST);
+}
+
+function isTauriRuntime() {
+  if (isVitestRuntime()) {
+    return true;
+  }
+  try {
+    return typeof tauriCore.isTauri === "function" ? tauriCore.isTauri() : true;
+  } catch {
+    return true;
+  }
+}
 
 function isMissingTauriInvokeError(error: unknown) {
   return (
@@ -35,6 +56,188 @@ function isMissingTauriInvokeError(error: unknown) {
     (error.message.includes("reading 'invoke'") ||
       error.message.includes("reading \"invoke\""))
   );
+}
+
+const BROWSER_TAILSCALE_STATUS: TailscaleStatus = {
+  installed: false,
+  running: false,
+  version: null,
+  dnsName: null,
+  hostName: null,
+  tailnetName: null,
+  ipv4: [],
+  ipv6: [],
+  suggestedRemoteHost: null,
+  message: "Tailscale detection is not available in the web companion.",
+};
+
+const BROWSER_TAILSCALE_COMMAND_PREVIEW: TailscaleDaemonCommandPreview = {
+  command: "",
+  daemonPath: "",
+  args: [],
+  tokenConfigured: false,
+};
+
+const BROWSER_TCP_DAEMON_STATUS: TcpDaemonStatus = {
+  state: "stopped",
+  pid: null,
+  startedAtMs: null,
+  lastError: "Tailscale daemon management is not available in the web companion.",
+  listenAddr: null,
+};
+
+async function invoke<T>(method: FrontendRpcMethod, payload?: Record<string, unknown>): Promise<T> {
+  if (isTauriRuntime()) {
+    return payload === undefined
+      ? tauriCore.invoke<T>(method)
+      : tauriCore.invoke<T>(method, payload);
+  }
+
+  const response = await fetch(`${getWebApiBaseUrl()}/rpc/${method}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(payload ?? {}),
+  });
+
+  const contentType = response.headers.get("content-type") ?? "";
+  const body = contentType.includes("application/json")
+    ? ((await response.json()) as unknown)
+    : await response.text();
+
+  if (!response.ok) {
+    const message =
+      typeof body === "object" && body !== null
+        ? ((body as { error?: { message?: string }; message?: string }).error?.message ??
+          (body as { message?: string }).message ??
+          `Request failed: ${response.status}`)
+        : `Request failed: ${response.status}`;
+    throw new Error(message);
+  }
+
+  return body as T;
+}
+
+async function promptForWorkspacePaths(multiple: boolean): Promise<DialogSelection> {
+  if (typeof window === "undefined") {
+    return multiple ? [] : null;
+  }
+  const raw = window.prompt(
+    multiple
+      ? "Enter one absolute workspace path per line."
+      : "Enter an absolute workspace path.",
+  );
+  if (raw == null) {
+    return multiple ? [] : null;
+  }
+  const values = raw
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (!multiple) {
+    return values[0] ?? null;
+  }
+  return values;
+}
+
+async function pickBrowserFilesAsDataUrls(options?: {
+  multiple?: boolean;
+  accept?: string;
+}): Promise<string[]> {
+  if (typeof document === "undefined") {
+    return [];
+  }
+
+  const input = document.createElement("input");
+  input.type = "file";
+  input.multiple = options?.multiple ?? false;
+  if (options?.accept) {
+    input.accept = options.accept;
+  }
+
+  const files = await new Promise<File[]>((resolve) => {
+    input.addEventListener(
+      "change",
+      () => {
+        resolve(Array.from(input.files ?? []));
+      },
+      { once: true },
+    );
+    input.click();
+  });
+
+  return Promise.all(
+    files.map(
+      (file) =>
+        new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => {
+            reject(new Error(`Failed to read ${file.name}`));
+          };
+          reader.onload = () => {
+            const result = reader.result;
+            if (typeof result !== "string") {
+              reject(new Error(`Failed to convert ${file.name} to data URL`));
+              return;
+            }
+            resolve(result);
+          };
+          reader.readAsDataURL(file);
+        }),
+    ),
+  );
+}
+
+async function openTauriDialog(options: Parameters<typeof import("@tauri-apps/plugin-dialog").open>[0]) {
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  return open(options);
+}
+
+async function saveTauriDialog(options: Parameters<typeof import("@tauri-apps/plugin-dialog").save>[0]) {
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  return save(options);
+}
+
+async function open(options: {
+  directory?: boolean;
+  multiple?: boolean;
+  filters?: { name: string; extensions: string[] }[];
+}): Promise<DialogSelection> {
+  if (isTauriRuntime()) {
+    return openTauriDialog(options);
+  }
+  if (options.directory) {
+    return promptForWorkspacePaths(options.multiple ?? false);
+  }
+  if (options.filters?.some((filter) => filter.name === "Images")) {
+    return pickBrowserFilesAsDataUrls({
+      multiple: options.multiple,
+      accept: "image/*",
+    });
+  }
+  return options.multiple ? [] : null;
+}
+
+async function save(_options: {
+  title?: string;
+  defaultPath?: string;
+  filters?: { name: string; extensions: string[] }[];
+}): Promise<string | null> {
+  if (isTauriRuntime()) {
+    return saveTauriDialog(_options);
+  }
+  return null;
+}
+
+function browserDictationModelStatus(modelId?: string | null): DictationModelStatus {
+  return {
+    state: "missing",
+    modelId: modelId ?? "default",
+    progress: null,
+    error: null,
+    path: null,
+  };
 }
 
 export async function pickWorkspacePath(): Promise<string | null> {
@@ -73,6 +276,19 @@ export async function exportMarkdownFile(
   content: string,
   defaultFileName = "plan.md",
 ): Promise<string | null> {
+  if (isWebCompanionRuntime()) {
+    if (typeof document === "undefined") {
+      return null;
+    }
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = defaultFileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    return defaultFileName;
+  }
   const selection = await save({
     title: "Export plan as Markdown",
     defaultPath: defaultFileName,
@@ -183,8 +399,11 @@ async function fileWrite(
   return invoke("file_write", { scope, kind, workspaceId, content });
 }
 
-export async function readImageAsDataUrl(path: string): Promise<string> {
-  return invoke<string>("read_image_as_data_url", { path });
+export async function readImageAsDataUrl(path: string, workspaceId: string): Promise<string> {
+  if (path.startsWith("data:")) {
+    return path;
+  }
+  return invoke<string>("read_image_as_data_url", { path, workspaceId });
 }
 
 export async function readGlobalAgentsMd(): Promise<GlobalAgentsResponse> {
@@ -225,8 +444,13 @@ export async function deleteAgent(input: DeleteAgentInput): Promise<AgentsSettin
   return invoke<AgentsSettings>("delete_agent", { input });
 }
 
-export async function readAgentConfigToml(agentName: string): Promise<string> {
-  return invoke<string>("read_agent_config_toml", { agentName });
+export type AgentConfigTomlReadResult = {
+  exists: boolean;
+  content: string | null;
+};
+
+export async function readAgentConfigToml(agentName: string): Promise<AgentConfigTomlReadResult> {
+  return invoke<AgentConfigTomlReadResult>("read_agent_config_toml", { agentName });
 }
 
 export async function writeAgentConfigToml(
@@ -348,6 +572,13 @@ export async function openWorkspaceIn(
     column?: number | null;
   },
 ): Promise<void> {
+  if (isWebCompanionRuntime()) {
+    if (/^https?:\/\//i.test(path) && typeof window !== "undefined") {
+      window.open(path, "_blank", "noopener,noreferrer");
+      return;
+    }
+    return;
+  }
   return invoke("open_workspace_in", {
     path,
     app: options.appName ?? null,
@@ -384,6 +615,17 @@ export async function forkThread(workspaceId: string, threadId: string) {
   return invoke<any>("fork_thread", { workspaceId, threadId });
 }
 
+export async function rollbackThreadToMessage(
+  workspaceId: string,
+  threadId: string,
+  messageItemId: string,
+): Promise<{ restoredText: string; thread: Record<string, unknown> }> {
+  return invoke<{ restoredText: string; thread: Record<string, unknown> }>(
+    "rollback_thread_to_message",
+    { workspaceId, threadId, messageItemId },
+  );
+}
+
 export async function compactThread(workspaceId: string, threadId: string) {
   return invoke<any>("compact_thread", { workspaceId, threadId });
 }
@@ -396,18 +638,24 @@ function isInlineImageUrl(image: string) {
   );
 }
 
-async function convertImagesToDataUrls(images: string[]): Promise<string[]> {
+async function convertImagesToDataUrls(
+  images: string[],
+  workspaceId: string,
+): Promise<string[]> {
   return Promise.all(
     images.map(async (image) => {
       if (isInlineImageUrl(image)) {
         return image;
       }
-      return readImageAsDataUrl(image);
+      return readImageAsDataUrl(image, workspaceId);
     }),
   );
 }
 
-async function normalizeImagesForRpc(images?: string[]): Promise<string[] | null> {
+async function normalizeImagesForRpc(
+  workspaceId: string,
+  images?: string[],
+): Promise<string[] | null> {
   if (images == null) {
     return null;
   }
@@ -431,7 +679,7 @@ async function normalizeImagesForRpc(images?: string[]): Promise<string[] | null
   if (settings.backendMode !== "remote" && !mobileRuntime) {
     return images;
   }
-  return convertImagesToDataUrls(images);
+  return convertImagesToDataUrls(images, workspaceId);
 }
 
 export async function sendUserMessage(
@@ -448,7 +696,7 @@ export async function sendUserMessage(
     appMentions?: AppMention[];
   },
 ) {
-  const images = await normalizeImagesForRpc(options?.images);
+  const images = await normalizeImagesForRpc(workspaceId, options?.images);
   const payload: Record<string, unknown> = {
     workspaceId,
     threadId,
@@ -486,7 +734,7 @@ export async function steerTurn(
   images?: string[],
   appMentions?: AppMention[],
 ) {
-  const normalizedImages = await normalizeImagesForRpc(images);
+  const normalizedImages = await normalizeImagesForRpc(workspaceId, images);
   const payload: Record<string, unknown> = {
     workspaceId,
     threadId,
@@ -855,6 +1103,9 @@ export async function getAppSettings(): Promise<AppSettings> {
 }
 
 export async function isMobileRuntime(): Promise<boolean> {
+  if (isWebCompanionRuntime()) {
+    return false;
+  }
   return invoke<boolean>("is_mobile_runtime");
 }
 
@@ -863,22 +1114,37 @@ export async function updateAppSettings(settings: AppSettings): Promise<AppSetti
 }
 
 export async function tailscaleStatus(): Promise<TailscaleStatus> {
+  if (isWebCompanionRuntime()) {
+    return BROWSER_TAILSCALE_STATUS;
+  }
   return invoke<TailscaleStatus>("tailscale_status");
 }
 
 export async function tailscaleDaemonCommandPreview(): Promise<TailscaleDaemonCommandPreview> {
+  if (isWebCompanionRuntime()) {
+    return BROWSER_TAILSCALE_COMMAND_PREVIEW;
+  }
   return invoke<TailscaleDaemonCommandPreview>("tailscale_daemon_command_preview");
 }
 
 export async function tailscaleDaemonStart(): Promise<TcpDaemonStatus> {
+  if (isWebCompanionRuntime()) {
+    return BROWSER_TCP_DAEMON_STATUS;
+  }
   return invoke<TcpDaemonStatus>("tailscale_daemon_start");
 }
 
 export async function tailscaleDaemonStop(): Promise<TcpDaemonStatus> {
+  if (isWebCompanionRuntime()) {
+    return BROWSER_TCP_DAEMON_STATUS;
+  }
   return invoke<TcpDaemonStatus>("tailscale_daemon_stop");
 }
 
 export async function tailscaleDaemonStatus(): Promise<TcpDaemonStatus> {
+  if (isWebCompanionRuntime()) {
+    return BROWSER_TCP_DAEMON_STATUS;
+  }
   return invoke<TcpDaemonStatus>("tailscale_daemon_status");
 }
 
@@ -890,6 +1156,10 @@ type MenuAcceleratorUpdate = {
 export async function setMenuAccelerators(
   updates: MenuAcceleratorUpdate[],
 ): Promise<void> {
+  if (isWebCompanionRuntime()) {
+    void updates;
+    return;
+  }
   return invoke("menu_set_accelerators", { updates });
 }
 
@@ -948,6 +1218,9 @@ function withModelId(modelId?: string | null) {
 export async function getDictationModelStatus(
   modelId?: string | null,
 ): Promise<DictationModelStatus> {
+  if (isWebCompanionRuntime()) {
+    return browserDictationModelStatus(modelId);
+  }
   return invoke<DictationModelStatus>(
     "dictation_model_status",
     withModelId(modelId),
@@ -957,6 +1230,9 @@ export async function getDictationModelStatus(
 export async function downloadDictationModel(
   modelId?: string | null,
 ): Promise<DictationModelStatus> {
+  if (isWebCompanionRuntime()) {
+    return browserDictationModelStatus(modelId);
+  }
   return invoke<DictationModelStatus>(
     "dictation_download_model",
     withModelId(modelId),
@@ -966,6 +1242,9 @@ export async function downloadDictationModel(
 export async function cancelDictationDownload(
   modelId?: string | null,
 ): Promise<DictationModelStatus> {
+  if (isWebCompanionRuntime()) {
+    return browserDictationModelStatus(modelId);
+  }
   return invoke<DictationModelStatus>(
     "dictation_cancel_download",
     withModelId(modelId),
@@ -975,6 +1254,9 @@ export async function cancelDictationDownload(
 export async function removeDictationModel(
   modelId?: string | null,
 ): Promise<DictationModelStatus> {
+  if (isWebCompanionRuntime()) {
+    return browserDictationModelStatus(modelId);
+  }
   return invoke<DictationModelStatus>(
     "dictation_remove_model",
     withModelId(modelId),
@@ -984,19 +1266,49 @@ export async function removeDictationModel(
 export async function startDictation(
   preferredLanguage: string | null,
 ): Promise<DictationSessionState> {
+  if (isWebCompanionRuntime()) {
+    void preferredLanguage;
+    return "idle";
+  }
   return invoke("dictation_start", { preferredLanguage });
 }
 
 export async function requestDictationPermission(): Promise<boolean> {
+  if (isWebCompanionRuntime()) {
+    return false;
+  }
   return invoke("dictation_request_permission");
 }
 
 export async function stopDictation(): Promise<DictationSessionState> {
+  if (isWebCompanionRuntime()) {
+    return "idle";
+  }
   return invoke("dictation_stop");
 }
 
 export async function cancelDictation(): Promise<DictationSessionState> {
+  if (isWebCompanionRuntime()) {
+    return "idle";
+  }
   return invoke("dictation_cancel");
+}
+
+export async function getDaemonInfo(): Promise<DaemonInfo> {
+  if (isWebCompanionRuntime()) {
+    return invoke<DaemonInfo>("daemon_info");
+  }
+  return {
+    name: "codex-monitor",
+    version: __APP_VERSION__,
+    pid: 0,
+    mode: "tauri",
+    transport: "ipc",
+    binaryPath: "",
+    capabilities: {
+      terminal: true,
+    },
+  };
 }
 
 export async function openTerminalSession(
@@ -1004,8 +1316,17 @@ export async function openTerminalSession(
   terminalId: string,
   cols: number,
   rows: number,
+  options?: {
+    restoreOnly?: boolean;
+  },
 ): Promise<{ id: string }> {
-  return invoke("terminal_open", { workspaceId, terminalId, cols, rows });
+  return invoke("terminal_open", {
+    workspaceId,
+    terminalId,
+    cols,
+    rows,
+    restoreOnly: options?.restoreOnly ?? false,
+  });
 }
 
 export async function writeTerminalSession(
@@ -1073,11 +1394,48 @@ export async function setThreadName(
   return invoke<any>("set_thread_name", { workspaceId, threadId, name });
 }
 
+export async function getThreadBacklog(workspaceId: string, threadId: string) {
+  return invoke<any>("get_thread_backlog", { workspaceId, threadId });
+}
+
+export async function addThreadBacklogItem(
+  workspaceId: string,
+  threadId: string,
+  text: string,
+) {
+  return invoke<any>("add_thread_backlog_item", { workspaceId, threadId, text });
+}
+
+export async function updateThreadBacklogItem(
+  workspaceId: string,
+  threadId: string,
+  itemId: string,
+  text: string,
+) {
+  return invoke<any>("update_thread_backlog_item", { workspaceId, threadId, itemId, text });
+}
+
+export async function deleteThreadBacklogItem(
+  workspaceId: string,
+  threadId: string,
+  itemId: string,
+) {
+  return invoke<any>("delete_thread_backlog_item", { workspaceId, threadId, itemId });
+}
+
 export async function setTrayRecentThreads(entries: TrayRecentThreadEntry[]) {
+  if (isWebCompanionRuntime()) {
+    void entries;
+    return;
+  }
   return invoke<void>("set_tray_recent_threads", { entries });
 }
 
 export async function setTraySessionUsage(usage: TraySessionUsage | null) {
+  if (isWebCompanionRuntime()) {
+    void usage;
+    return;
+  }
   return invoke<void>("set_tray_session_usage", { usage });
 }
 
@@ -1103,6 +1461,9 @@ export async function generateAgentDescription(
 export type AppBuildType = "debug" | "release";
 
 export async function getAppBuildType(): Promise<AppBuildType> {
+  if (isWebCompanionRuntime()) {
+    return "release";
+  }
   return invoke<AppBuildType>("app_build_type");
 }
 
@@ -1118,6 +1479,26 @@ export async function sendNotification(
     extra?: Record<string, unknown>;
   },
 ): Promise<void> {
+  if (isWebCompanionRuntime()) {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      return;
+    }
+    let permission = Notification.permission;
+    if (permission === "default") {
+      permission = await Notification.requestPermission();
+    }
+    if (permission === "granted") {
+      const notification = new Notification(title, {
+        body,
+      });
+      if (options?.autoCancel !== false) {
+        window.setTimeout(() => {
+          notification.close();
+        }, 5000);
+      }
+    }
+    return;
+  }
   const macosDebugBuild = await invoke<boolean>("is_macos_debug_build").catch(
     () => false,
   );

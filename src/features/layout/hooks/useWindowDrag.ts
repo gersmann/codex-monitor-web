@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 
 const NEVER_DRAG_TARGET_SELECTOR = [
   "button",
@@ -26,11 +25,13 @@ const NEVER_DRAG_TARGET_SELECTOR = [
 ].join(",");
 
 function startDraggingSafe() {
-  try {
-    void getCurrentWindow().startDragging();
-  } catch {
-    // Ignore non-Tauri runtimes (tests/browser).
-  }
+  void import("@tauri-apps/api/window")
+    .then(({ getCurrentWindow }) => {
+      void getCurrentWindow().startDragging();
+    })
+    .catch(() => {
+      // Ignore non-Tauri runtimes (tests/browser).
+    });
 }
 
 function isNeverDragTarget(event: MouseEvent) {

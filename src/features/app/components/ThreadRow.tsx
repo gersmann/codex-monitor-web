@@ -1,4 +1,5 @@
 import type { CSSProperties, MouseEvent } from "react";
+import MoreHorizontal from "lucide-react/dist/esm/icons/more-horizontal";
 
 import type { ThreadSummary } from "../../../types";
 import { getThreadStatusClass, type ThreadStatusById } from "../../../utils/threadStatus";
@@ -89,7 +90,9 @@ export function ThreadRow({
         }
       }}
     >
-      <span className={`thread-status ${statusClass}`} aria-hidden />
+      <span className="thread-indicators" aria-hidden>
+        <span className={`thread-status ${statusClass}`} />
+      </span>
       {isPinned && <span className="thread-pin-icon" aria-label="Pinned">📌</span>}
       <span className="thread-name">{thread.name}</span>
       <div className="thread-meta">
@@ -112,16 +115,27 @@ export function ThreadRow({
             aria-label={subagentsExpanded ? "Hide sub-agents" : "Show sub-agents"}
             aria-expanded={subagentsExpanded}
           >
-            <span className="thread-subagent-time-label">{relativeTime ?? ""}</span>
             <span className="thread-subagent-toggle-icon" aria-hidden>
               ›
             </span>
+            <span className="thread-subagent-time-label">{relativeTime ?? ""}</span>
           </button>
         ) : (
           relativeTime && <span className="thread-time">{relativeTime}</span>
         )}
         <div className="thread-menu">
-          <div className="thread-menu-trigger" aria-hidden="true" />
+          <button
+            type="button"
+            className="thread-menu-trigger"
+            aria-label="Thread actions"
+            onClick={(event) => {
+              event.stopPropagation();
+              onShowThreadMenu(event, workspaceId, thread.id, canPin);
+            }}
+            data-tauri-drag-region="false"
+          >
+            <MoreHorizontal size={14} aria-hidden />
+          </button>
         </div>
       </div>
     </div>

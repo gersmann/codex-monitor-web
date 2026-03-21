@@ -61,11 +61,15 @@ describe("useAppServerEvents", () => {
       onPlanDelta: vi.fn(),
       onApprovalRequest: vi.fn(),
       onRequestUserInput: vi.fn(),
+      onItemStarted: vi.fn(),
       onItemCompleted: vi.fn(),
       onAgentMessageCompleted: vi.fn(),
+      onTurnStarted: vi.fn(),
+      onTurnCompleted: vi.fn(),
       onAccountRateLimitsUpdated: vi.fn(),
       onAccountUpdated: vi.fn(),
       onAccountLoginCompleted: vi.fn(),
+      onServerRequestResolved: vi.fn(),
     };
     const { root } = await mount(handlers);
 
@@ -75,6 +79,58 @@ describe("useAppServerEvents", () => {
       listener?.({ workspace_id: "ws-1", message: { method: "codex/connected" } });
     });
     expect(handlers.onWorkspaceConnected).toHaveBeenCalledWith("ws-1");
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "turn/started",
+          params: {
+            turn: {
+              id: "turn-1",
+              threadId: "thread-1",
+              items: [{ id: "item-user-1", type: "userMessage", content: [] }],
+            },
+          },
+        },
+      });
+    });
+    expect(handlers.onTurnStarted).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "turn-1",
+      {
+        id: "turn-1",
+        threadId: "thread-1",
+        items: [{ id: "item-user-1", type: "userMessage", content: [] }],
+      },
+    );
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "turn/completed",
+          params: {
+            turn: {
+              id: "turn-1",
+              threadId: "thread-1",
+              items: [{ id: "item-agent-1", type: "agentMessage", text: "Done" }],
+            },
+          },
+        },
+      });
+    });
+    expect(handlers.onTurnCompleted).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "turn-1",
+      {
+        id: "turn-1",
+        threadId: "thread-1",
+        items: [{ id: "item-agent-1", type: "agentMessage", text: "Done" }],
+      },
+    );
 
     act(() => {
       listener?.({
@@ -345,6 +401,29 @@ describe("useAppServerEvents", () => {
       listener?.({
         workspace_id: "ws-1",
         message: {
+          method: "item/started",
+          params: {
+            item: {
+              type: "commandExecution",
+              id: "item-3",
+              threadId: "thread-1",
+              status: "inProgress",
+            },
+          },
+        },
+      });
+    });
+    expect(handlers.onItemStarted).toHaveBeenCalledWith("ws-1", "thread-1", {
+      type: "commandExecution",
+      id: "item-3",
+      threadId: "thread-1",
+      status: "inProgress",
+    });
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
           method: "account/rateLimits/updated",
           params: {
             rateLimits: { primary: { usedPercent: 25 } },
@@ -395,6 +474,20 @@ describe("useAppServerEvents", () => {
       loginId: "login-1",
       success: true,
       error: null,
+    });
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "serverRequest/resolved",
+          params: { threadId: "thread-1", requestId: 99 },
+        },
+      });
+    });
+    expect(handlers.onServerRequestResolved).toHaveBeenCalledWith("ws-1", {
+      threadId: "thread-1",
+      requestId: 99,
     });
 
     await act(async () => {

@@ -1,5 +1,84 @@
 # CodexMonitor
 
+## Run This Fork
+
+This fork currently runs as a browser UI plus a local TypeScript companion server.
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Start the local companion server in one terminal:
+
+```bash
+npm run server:dev
+```
+
+Start Vite in a second terminal:
+
+```bash
+npm run dev
+```
+
+Open the Vite URL shown in the terminal, usually `http://127.0.0.1:1420`.
+
+If you want to access the app from another machine on your network or tailnet, bind both processes to all interfaces:
+
+```bash
+CODEX_MONITOR_WEB_HOST=0.0.0.0 npm run server:dev
+CODEX_MONITOR_WEB_HOST=0.0.0.0 npm run dev -- --host 0.0.0.0
+```
+
+Browser terminal support is available in the web runtime, but it is disabled by default. Enable it explicitly on the backend host with:
+
+```bash
+CODEX_MONITOR_ENABLE_TERMINAL=1 npm run server:dev
+```
+
+The terminal runs on the companion host inside the active workspace directory. Terminal tabs restore after a browser refresh only if the backend session is still alive.
+
+### Browser Production Build
+
+For the browser deployment path, `npm run build` produces:
+
+- frontend assets in `dist/`
+- compiled Node companion output in `build/server/`
+
+Generic production shape:
+
+- serve the built frontend and API from the compiled Node companion
+- run the companion behind a process manager such as `systemd`
+- optionally place a reverse proxy such as Caddy or nginx in front of it
+
+Example `systemd` unit template:
+
+```ini
+[Unit]
+Description=CodexMonitor Web
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USER
+Group=YOUR_GROUP
+WorkingDirectory=/path/to/CodexMonitor
+Environment=HOME=/home/YOUR_USER
+Environment=NODE_ENV=production
+Environment=CODEX_MONITOR_WEB_HOST=127.0.0.1
+Environment=CODEX_MONITOR_WEB_PORT=4320
+ExecStart=/usr/bin/env node /path/to/CodexMonitor/build/server/index.js
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+```
+
+The browser-based migration scope and current parity state are tracked in `docs/web-migration.md`.
+
 ![CodexMonitor](screenshot.png)
 
 CodexMonitor is a Tauri app for orchestrating multiple Codex agents across local workspaces. It provides a sidebar to manage projects, a home screen for quick actions, and a conversation view backed by the Codex app-server protocol.

@@ -615,6 +615,13 @@ export type QueuedMessage = {
   appMentions?: AppMention[];
 };
 
+export type ThreadBacklogItem = {
+  id: string;
+  text: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type AppMention = {
   name: string;
   path: string;
@@ -675,6 +682,20 @@ export type DebugEntry = {
   source: "client" | "server" | "event" | "stderr" | "error";
   label: string;
   payload?: unknown;
+};
+
+export type RuntimeCapabilities = {
+  terminal: boolean;
+};
+
+export type DaemonInfo = {
+  name: string;
+  version: string;
+  pid: number;
+  mode: string;
+  transport: string;
+  binaryPath: string;
+  capabilities?: Partial<RuntimeCapabilities>;
 };
 
 export type TerminalStatus = "idle" | "connecting" | "ready" | "error";

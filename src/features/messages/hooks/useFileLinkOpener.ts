@@ -1,8 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
-import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
-import { LogicalPosition } from "@tauri-apps/api/dpi";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import * as Sentry from "@sentry/react";
 import { openWorkspaceIn } from "../../../services/tauri";
@@ -14,6 +11,7 @@ import {
   revealInFileManagerLabel,
 } from "../../../utils/platformPaths";
 import { resolveMountedWorkspacePath } from "../utils/mountedWorkspacePaths";
+import { useMenuController } from "../../app/hooks/useMenuController";
 
 type OpenTarget = {
   id: string;
@@ -65,6 +63,16 @@ type ParsedFileLocation = {
   path: string;
   line: number | null;
   column: number | null;
+};
+
+type FileLinkMenuState = {
+  rawPath: string;
+  resolvedPath: string;
+  line: number | null;
+  column: number | null;
+  target: OpenTarget;
+  top: number;
+  left: number;
 };
 
 const FILE_LOCATION_SUFFIX_PATTERN = /^(.*?):(\d+)(?::(\d+))?$/;
@@ -141,11 +149,41 @@ function toFileUrl(path: string, line: number | null, column: number | null) {
   return `${base}#L${line}${column !== null ? `C${column}` : ""}`;
 }
 
+function clampMenuPosition(event: MouseEvent, width: number) {
+  const margin = 12;
+  return {
+    top: Math.min(event.clientY, window.innerHeight - margin),
+    left: Math.min(
+      Math.max(event.clientX, margin),
+      Math.max(margin, window.innerWidth - width - margin),
+    ),
+  };
+}
+
+const FILE_LINK_MENU_WIDTH = 220;
+
 export function useFileLinkOpener(
   workspacePath: string | null,
   openTargets: OpenAppTarget[],
   selectedOpenAppId: string,
 ) {
+  const [fileLinkMenu, setFileLinkMenu] = useState<FileLinkMenuState | null>(null);
+  const fileLinkMenuController = useMenuController({
+    open: fileLinkMenu !== null,
+    onOpenChange: (open) => {
+      if (!open) {
+        setFileLinkMenu(null);
+      }
+    },
+  });
+  const target = useMemo(
+    () => ({
+      ...DEFAULT_OPEN_TARGET,
+      ...(openTargets.find((entry) => entry.id === selectedOpenAppId) ??
+        openTargets[0]),
+    }),
+    [openTargets, selectedOpenAppId],
+  );
   const reportOpenError = useCallback(
     (error: unknown, context: Record<string, string | null>) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -169,11 +207,6 @@ export function useFileLinkOpener(
 
   const openFileLink = useCallback(
     async (rawPath: string) => {
-      const target = {
-        ...DEFAULT_OPEN_TARGET,
-        ...(openTargets.find((entry) => entry.id === selectedOpenAppId) ??
-          openTargets[0]),
-      };
       const fileLocation = parseFileLocation(rawPath);
       const resolvedPath = resolveFilePath(fileLocation.path, workspacePath);
       const openLocation = {
@@ -224,89 +257,100 @@ export function useFileLinkOpener(
         });
       }
     },
-    [openTargets, reportOpenError, selectedOpenAppId, workspacePath],
+    [reportOpenError, target, workspacePath],
   );
+
+  const closeFileLinkMenu = useCallback(() => {
+    setFileLinkMenu(null);
+  }, []);
+
+  const openFileLinkFromMenu = useCallback(async () => {
+    if (!fileLinkMenu) {
+      return;
+    }
+    closeFileLinkMenu();
+    await openFileLink(fileLinkMenu.rawPath);
+  }, [closeFileLinkMenu, fileLinkMenu, openFileLink]);
+
+  const revealLinkedFile = useCallback(async () => {
+    if (!fileLinkMenu) {
+      return;
+    }
+    const { rawPath, resolvedPath, target: currentTarget } = fileLinkMenu;
+    closeFileLinkMenu();
+    try {
+      await revealItemInDir(resolvedPath);
+    } catch (error) {
+      reportOpenError(error, {
+        rawPath,
+        resolvedPath,
+        workspacePath,
+        targetId: currentTarget.id,
+        targetKind: "finder",
+        targetAppName: null,
+        targetCommand: null,
+      });
+    }
+  }, [closeFileLinkMenu, fileLinkMenu, reportOpenError, workspacePath]);
+
+  const copyLinkedFileLink = useCallback(async () => {
+    if (!fileLinkMenu) {
+      return;
+    }
+    const { resolvedPath, line, column } = fileLinkMenu;
+    closeFileLinkMenu();
+    const link = toFileUrl(resolvedPath, line, column);
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      // Clipboard failures are non-fatal here.
+    }
+  }, [closeFileLinkMenu, fileLinkMenu]);
 
   const showFileLinkMenu = useCallback(
     async (event: MouseEvent, rawPath: string) => {
       event.preventDefault();
       event.stopPropagation();
-      const target = {
-        ...DEFAULT_OPEN_TARGET,
-        ...(openTargets.find((entry) => entry.id === selectedOpenAppId) ??
-          openTargets[0]),
-      };
       const fileLocation = parseFileLocation(rawPath);
       const resolvedPath = resolveFilePath(fileLocation.path, workspacePath);
-      const appName = resolveAppName(target);
-      const command = resolveCommand(target);
-      const canOpen = canOpenTarget(target);
-      const openLabel =
-        target.kind === "finder"
-          ? revealInFileManagerLabel()
-          : target.kind === "command"
-            ? command
-              ? `Open in ${target.label}`
-              : "Set command in Settings"
-            : appName
-              ? `Open in ${appName}`
-              : "Set app name in Settings";
-      const items = [
-        await MenuItem.new({
-          text: openLabel,
-          enabled: canOpen,
-          action: async () => {
-            await openFileLink(rawPath);
-          },
-        }),
-        ...(target.kind === "finder"
-          ? []
-          : [
-              await MenuItem.new({
-                text: revealInFileManagerLabel(),
-                action: async () => {
-                  try {
-                    await revealItemInDir(resolvedPath);
-                  } catch (error) {
-                    reportOpenError(error, {
-                      rawPath,
-                      resolvedPath,
-                      workspacePath,
-                      targetId: target.id,
-                      targetKind: "finder",
-                      targetAppName: null,
-                      targetCommand: null,
-                    });
-                  }
-                },
-              }),
-            ]),
-        await MenuItem.new({
-          text: "Download Linked File",
-          enabled: false,
-        }),
-        await MenuItem.new({
-          text: "Copy Link",
-          action: async () => {
-            const link = toFileUrl(resolvedPath, fileLocation.line, fileLocation.column);
-            try {
-              await navigator.clipboard.writeText(link);
-            } catch {
-              // Clipboard failures are non-fatal here.
-            }
-          },
-        }),
-        await PredefinedMenuItem.new({ item: "Separator" }),
-        await PredefinedMenuItem.new({ item: "Services" }),
-      ];
-
-      const menu = await Menu.new({ items });
-      const window = getCurrentWindow();
-      const position = new LogicalPosition(event.clientX, event.clientY);
-      await menu.popup(position, window);
+      const { top, left } = clampMenuPosition(event, FILE_LINK_MENU_WIDTH);
+      setFileLinkMenu({
+        rawPath,
+        resolvedPath,
+        line: fileLocation.line,
+        column: fileLocation.column,
+        target,
+        top,
+        left,
+      });
     },
-    [openFileLink, openTargets, reportOpenError, selectedOpenAppId, workspacePath],
+    [target, workspacePath],
   );
 
-  return { openFileLink, showFileLinkMenu };
+  const openLabel =
+    !fileLinkMenu
+      ? ""
+      : fileLinkMenu.target.kind === "finder"
+        ? revealInFileManagerLabel()
+        : fileLinkMenu.target.kind === "command"
+          ? resolveCommand(fileLinkMenu.target)
+            ? `Open in ${fileLinkMenu.target.label}`
+            : "Set command in Settings"
+          : resolveAppName(fileLinkMenu.target)
+            ? `Open in ${resolveAppName(fileLinkMenu.target)}`
+            : "Set app name in Settings";
+
+  return {
+    openFileLink,
+    showFileLinkMenu,
+    fileLinkMenu,
+    fileLinkMenuRef: fileLinkMenuController.containerRef,
+    closeFileLinkMenu,
+    openFileLinkFromMenu,
+    revealLinkedFile,
+    copyLinkedFileLink,
+    fileLinkMenuOpenLabel: openLabel,
+    canOpenFileLinkFromMenu: fileLinkMenu ? canOpenTarget(fileLinkMenu.target) : false,
+    canRevealLinkedFile: fileLinkMenu ? fileLinkMenu.target.kind !== "finder" : false,
+  };
 }

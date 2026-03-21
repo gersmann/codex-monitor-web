@@ -1,4 +1,4 @@
-# App-Server Events Reference (Codex `23e55d7668dabf86f8ae80b2ed1947a5192da11a`)
+# App-Server Events Reference (Codex `b9a2e400018c219e3010a5a5b8ded8645184da0b`)
 
 This document helps agents quickly answer:
 - Which app-server events CodexMonitor supports right now.
@@ -61,19 +61,29 @@ subscriptions.
 - `account/rateLimits/updated`
 - `account/updated`
 - `app/list/updated`
+- `configWarning`
+- `deprecationNotice`
 - `error`
 - `hook/completed`
 - `hook/started`
+- `fuzzyFileSearch/sessionCompleted`
+- `fuzzyFileSearch/sessionUpdated`
 - `item/agentMessage/delta`
 - `item/commandExecution/outputDelta`
 - `item/commandExecution/terminalInteraction`
 - `item/completed`
 - `item/fileChange/outputDelta`
+- `item/mcpToolCall/progress`
 - `item/plan/delta`
 - `item/reasoning/summaryPartAdded`
 - `item/reasoning/summaryTextDelta`
 - `item/reasoning/textDelta`
 - `item/started`
+- `mcpServer/oauthLogin/completed`
+- `model/rerouted`
+- `rawResponseItem/completed`
+- `serverRequest/resolved`
+- `skills/changed`
 - `thread/archived`
 - `thread/closed`
 - `thread/name/updated`
@@ -85,6 +95,25 @@ subscriptions.
 - `turn/diff/updated`
 - `turn/plan/updated`
 - `turn/started`
+- `windows/worldWritableWarning`
+- `windowsSandbox/setupCompleted`
+
+Turn snapshot handling status:
+
+- `turn/started` and `turn/completed` are not treated as flag-only lifecycle events.
+- CodexMonitor consumes the embedded `turn` payload when present and hydrates thread items from the authoritative turn snapshot.
+- That snapshot path is part of the normal live-thread UI update flow and is used to clear stale processing state without requiring manual sync.
+
+Generic routing status:
+
+- `fuzzyFileSearch/sessionCompleted`
+- `fuzzyFileSearch/sessionUpdated`
+- `mcpServer/oauthLogin/completed`
+- `rawResponseItem/completed`
+- `windows/worldWritableWarning`
+- `windowsSandbox/setupCompleted`
+
+These notifications are recognized, routed through the frontend app-server event path, and visible to generic debug/event consumers even when CodexMonitor does not yet render dedicated UI for them.
 
 ## Additional Stream Methods Handled In CodexMonitor
 
@@ -120,25 +149,13 @@ CodexMonitor status:
 Compared against Codex app-server protocol v2 notifications, the following
 events are currently not routed:
 
-- `configWarning`
 - `command/exec/outputDelta`
-- `deprecationNotice`
-- `fuzzyFileSearch/sessionCompleted`
-- `fuzzyFileSearch/sessionUpdated`
-- `item/mcpToolCall/progress`
-- `mcpServer/oauthLogin/completed`
-- `model/rerouted`
-- `rawResponseItem/completed`
-- `serverRequest/resolved`
-- `skills/changed`
 - `thread/compacted` (deprecated; intentionally not routed)
 - `thread/realtime/closed`
 - `thread/realtime/error`
 - `thread/realtime/itemAdded`
 - `thread/realtime/outputAudio/delta`
 - `thread/realtime/started`
-- `windows/worldWritableWarning`
-- `windowsSandbox/setupCompleted`
 
 ## Supported Requests (CodexMonitor -> App-Server, v2)
 
@@ -151,6 +168,7 @@ These are v2 request methods CodexMonitor currently sends to Codex app-server:
 - `thread/archive`
 - `thread/compact/start`
 - `thread/name/set`
+- `thread/rollback`
 - `turn/start`
 - `turn/steer` (used for explicit steer follow-ups while a turn is active)
 - `turn/interrupt`
@@ -207,7 +225,6 @@ Compared against Codex v2 request methods, CodexMonitor currently does not send:
 - `thread/realtime/appendText`
 - `thread/realtime/start`
 - `thread/realtime/stop`
-- `thread/rollback`
 - `thread/unarchive`
 - `thread/unsubscribe`
 - `windowsSandbox/setupStart`
@@ -249,7 +266,7 @@ Use this workflow to update the lists above:
 2. List Codex v2 notification methods:
    - `git -C ../Codex show origin/main:codex-rs/app-server-protocol/src/protocol/common.rs | awk '/server_notification_definitions! \\{/,/client_notification_definitions! \\{/' | rg -N -o '=>\\s*\"[^\"]+\"|rename = \"[^\"]+\"' | sed -E 's/.*\"([^\"]+)\".*/\\1/' | sort -u`
 3. List CodexMonitor routed methods:
-   - `rg -n \"SUPPORTED_APP_SERVER_METHODS\" src/utils/appServerEvents.ts`
+   - `rg -n "SUPPORTED_APP_SERVER_METHODS" src/utils/appServerEvents.ts`
 4. Update the Supported and Missing sections.
 
 ## Quick Request Comparison Workflow
@@ -273,26 +290,25 @@ Use this when the method list is unchanged but behavior looks off.
 1. Confirm the current Codex hash:
    - `git -C ../Codex fetch --all --prune && git -C ../Codex rev-parse origin/main`
 2. Inspect the authoritative notification structs:
-   - `git -C ../Codex show origin/main:codex-rs/app-server-protocol/src/protocol/v2.rs | rg -n \"struct .*Notification\"`
+   - `git -C ../Codex show origin/main:codex-rs/app-server-protocol/src/protocol/v2.rs | rg -n "struct .*Notification"`
 3. For a specific method, jump to its struct definition:
-   - Example: `git -C ../Codex show origin/main:codex-rs/app-server-protocol/src/protocol/v2.rs | rg -n \"struct TurnPlanUpdatedNotification|struct ThreadTokenUsageUpdatedNotification|struct AccountRateLimitsUpdatedNotification|struct ItemStartedNotification|struct ItemCompletedNotification\"`
+   - Example: `git -C ../Codex show origin/main:codex-rs/app-server-protocol/src/protocol/v2.rs | rg -n "struct TurnPlanUpdatedNotification|struct ThreadTokenUsageUpdatedNotification|struct AccountRateLimitsUpdatedNotification|struct ItemStartedNotification|struct ItemCompletedNotification"`
 4. Compare payload shapes to the router expectations:
    - Parser/source of truth: `src/utils/appServerEvents.ts`
    - Router: `src/features/app/hooks/useAppServerEvents.ts`
    - Turn/plan/token/rate-limit normalization: `src/features/threads/utils/threadNormalize.ts`
    - Item shaping for display: `src/utils/threadItems.ts`
 5. Verify the ThreadItem schema (many UI issues start here):
-   - `git -C ../Codex show origin/main:codex-rs/app-server-protocol/src/protocol/v2.rs | rg -n \"enum ThreadItem|CommandExecution|FileChange|McpToolCall|EnteredReviewMode|ExitedReviewMode|ContextCompaction\"`
+   - `git -C ../Codex show origin/main:codex-rs/app-server-protocol/src/protocol/v2.rs | rg -n "enum ThreadItem|CommandExecution|FileChange|McpToolCall|EnteredReviewMode|ExitedReviewMode|ContextCompaction"`
 6. Check for camelCase vs snake_case mismatches:
-   - The protocol uses `#[serde(rename_all = \"camelCase\")]`, but fields are often declared in snake_case.
+   - The protocol uses `#[serde(rename_all = "camelCase")]`, but fields are often declared in snake_case.
    - CodexMonitor generally defends against this by checking both forms (for example in `threadNormalize.ts` and `useAppServerEvents.ts`), while centralizing method/type parsing in `appServerEvents.ts`.
 7. If a schema change is found, fix it at the edges first:
    - Prefer updating `src/utils/appServerEvents.ts`, `useAppServerEvents.ts`, and `threadNormalize.ts` rather than spreading conditionals into components.
 
 ## Notes
 
-- Not all missing events must be surfaced in the conversation view; some may
-  be better as toasts, settings warnings, or debug-only entries.
+- Not all missing events must be surfaced in the conversation view; some may be better as toasts, settings warnings, or debug-only entries.
 - For conversation view changes, prefer:
   - Add method/type support in `src/utils/appServerEvents.ts`
   - Route in `useAppServerEvents.ts`
@@ -310,5 +326,4 @@ Use this when the method list is unchanged but behavior looks off.
   - Local queue fallback on `steer_failed` is handled in the composer queued-send flow (`useQueuedSend`), not by all direct `sendUserMessageToThread` callers.
 - Feature toggles in Settings:
   - `experimentalFeature/list` is an app-server request.
-  - Toggle writes use local/daemon command surfaces (`set_codex_feature_flag` and app settings update),
-    which write `config.toml`; they are not app-server `ClientRequest` methods.
+  - Toggle writes use local/daemon command surfaces (`set_codex_feature_flag` and app settings update), which write `config.toml`; they are not app-server `ClientRequest` methods.

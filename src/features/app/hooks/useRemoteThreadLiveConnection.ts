@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { subscribeAppServerEvents } from "@services/events";
 import { threadLiveSubscribe, threadLiveUnsubscribe } from "@services/tauri";
 import {
@@ -19,6 +18,7 @@ type ReconnectOptions = {
 
 type UseRemoteThreadLiveConnectionOptions = {
   backendMode: string;
+  liveThreadSyncEnabled?: boolean;
   activeWorkspace: WorkspaceInfo | null;
   activeThreadId: string | null;
   activeThreadHasLocalSnapshot?: boolean;
@@ -76,10 +76,10 @@ function isWindowFocused() {
 
 export function useRemoteThreadLiveConnection({
   backendMode,
+  liveThreadSyncEnabled = backendMode === "remote",
   activeWorkspace,
   activeThreadId,
   activeThreadHasLocalSnapshot = true,
-  activeThreadIsProcessing = false,
   refreshThread,
   reconnectWorkspace,
 }: UseRemoteThreadLiveConnectionOptions) {
@@ -87,7 +87,7 @@ export function useRemoteThreadLiveConnection({
   const activeWorkspaceConnected = activeWorkspace?.connected ?? false;
   const [connectionState, setConnectionState] =
     useState<RemoteThreadConnectionState>(() => {
-      if (backendMode !== "remote") {
+      if (!liveThreadSyncEnabled) {
         return activeWorkspace?.connected ? "live" : "disconnected";
       }
       if (!activeWorkspace?.connected) {
@@ -96,11 +96,9 @@ export function useRemoteThreadLiveConnection({
       return "polling";
     });
 
-  const backendModeRef = useRef(backendMode);
   const activeWorkspaceRef = useRef(activeWorkspace);
   const activeThreadIdRef = useRef(activeThreadId);
   const activeThreadHasLocalSnapshotRef = useRef(activeThreadHasLocalSnapshot);
-  const activeThreadIsProcessingRef = useRef(activeThreadIsProcessing);
   const refreshThreadRef = useRef(refreshThread);
   const reconnectWorkspaceRef = useRef(reconnectWorkspace);
   const connectionStateRef = useRef(connectionState);
@@ -115,19 +113,15 @@ export function useRemoteThreadLiveConnection({
   const reconnectSequenceRef = useRef(0);
 
   useEffect(() => {
-    backendModeRef.current = backendMode;
     activeWorkspaceRef.current = activeWorkspace;
     activeThreadIdRef.current = activeThreadId;
     activeThreadHasLocalSnapshotRef.current = activeThreadHasLocalSnapshot;
-    activeThreadIsProcessingRef.current = activeThreadIsProcessing;
     refreshThreadRef.current = refreshThread;
     reconnectWorkspaceRef.current = reconnectWorkspace;
   }, [
-    backendMode,
     activeWorkspace,
     activeThreadId,
     activeThreadHasLocalSnapshot,
-    activeThreadIsProcessing,
     refreshThread,
     reconnectWorkspace,
   ]);
@@ -159,7 +153,7 @@ export function useRemoteThreadLiveConnection({
 
   const reconcileDisconnectedState = useCallback(() => {
     const workspace = activeWorkspaceRef.current;
-    if (backendModeRef.current !== "remote") {
+    if (!liveThreadSyncEnabled) {
       setState(workspace?.connected ? "live" : "disconnected");
       return;
     }
@@ -168,7 +162,7 @@ export function useRemoteThreadLiveConnection({
       return;
     }
     setState("polling");
-  }, [setState]);
+  }, [liveThreadSyncEnabled, setState]);
 
   const reconnectLive = useCallback(
     async (
@@ -177,7 +171,7 @@ export function useRemoteThreadLiveConnection({
       options?: ReconnectOptions,
     ): Promise<boolean> => {
       if (
-        backendModeRef.current !== "remote" ||
+        !liveThreadSyncEnabled ||
         !workspaceId ||
         !threadId ||
         !activeWorkspaceRef.current
@@ -281,12 +275,12 @@ export function useRemoteThreadLiveConnection({
       });
       return reconnectPromise;
     },
-    [reconcileDisconnectedState, setState],
+    [liveThreadSyncEnabled, reconcileDisconnectedState, setState],
   );
 
   useEffect(() => {
     const nextKey =
-      backendMode === "remote" && activeWorkspaceId && activeThreadId
+      liveThreadSyncEnabled && activeWorkspaceId && activeThreadId
         ? keyForThread(activeWorkspaceId, activeThreadId)
         : null;
     desiredSubscriptionKeyRef.current = nextKey;
@@ -325,7 +319,7 @@ export function useRemoteThreadLiveConnection({
     activeThreadId,
     activeWorkspaceConnected,
     activeWorkspaceId,
-    backendMode,
+    liveThreadSyncEnabled,
     reconcileDisconnectedState,
     reconnectLive,
     unsubscribeByKey,
@@ -462,35 +456,35 @@ export function useRemoteThreadLiveConnection({
     window.addEventListener("blur", handleBlur);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    try {
-      const windowHandle = getCurrentWindow();
-      windowHandle
-        .listen("tauri://focus", handleFocus)
-        .then((unlisten) => {
+    void import("@tauri-apps/api/window")
+      .then(({ getCurrentWindow }) => {
+        const windowHandle = getCurrentWindow();
+        return Promise.allSettled([
+          windowHandle.listen("tauri://focus", handleFocus),
+          windowHandle.listen("tauri://blur", handleBlur),
+        ]);
+      })
+      .then((results) => {
+        const focusResult = results?.[0];
+        if (focusResult?.status === "fulfilled") {
           if (didCleanup) {
-            unlisten();
-            return;
+            focusResult.value();
+          } else {
+            unlistenWindowFocus = focusResult.value;
           }
-          unlistenWindowFocus = unlisten;
-        })
-        .catch(() => {
-          // Ignore non-Tauri environments.
-        });
-      windowHandle
-        .listen("tauri://blur", handleBlur)
-        .then((unlisten) => {
+        }
+        const blurResult = results?.[1];
+        if (blurResult?.status === "fulfilled") {
           if (didCleanup) {
-            unlisten();
-            return;
+            blurResult.value();
+          } else {
+            unlistenWindowBlur = blurResult.value;
           }
-          unlistenWindowBlur = unlisten;
-        })
-        .catch(() => {
-          // Ignore non-Tauri environments.
-        });
-    } catch {
-      // Ignore non-Tauri environments.
-    }
+        }
+      })
+      .catch(() => {
+        // Ignore non-Tauri environments.
+      });
 
     return () => {
       didCleanup = true;

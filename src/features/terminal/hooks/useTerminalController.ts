@@ -9,6 +9,7 @@ type UseTerminalControllerOptions = {
   activeWorkspaceId: string | null;
   activeWorkspace: WorkspaceInfo | null;
   terminalOpen: boolean;
+  terminalSupported?: boolean | null;
   onCloseTerminalPanel?: () => void;
   onDebug: (entry: DebugEntry) => void;
 };
@@ -17,6 +18,7 @@ export function useTerminalController({
   activeWorkspaceId,
   activeWorkspace,
   terminalOpen,
+  terminalSupported = true,
   onCloseTerminalPanel,
   onDebug,
 }: UseTerminalControllerOptions) {
@@ -55,22 +57,32 @@ export function useTerminalController({
     closeTerminal,
     setActiveTerminal,
     ensureTerminal,
+    isRestoredTerminal,
+    markTerminalRestored,
   } = useTerminalTabs({
     activeWorkspaceId,
     onCloseTerminal: handleTerminalClose,
   });
 
   useEffect(() => {
-    if (terminalOpen && activeWorkspaceId) {
+    if (terminalSupported === true && terminalOpen && activeWorkspaceId) {
       ensureTerminal(activeWorkspaceId);
     }
-  }, [activeWorkspaceId, ensureTerminal, terminalOpen]);
+  }, [activeWorkspaceId, ensureTerminal, terminalOpen, terminalSupported]);
 
   const terminalState = useTerminalSession({
     activeWorkspace,
     activeTerminalId,
-    isVisible: terminalOpen,
+    isVisible: terminalSupported === true && terminalOpen,
     focusRequestVersion,
+    isRestoredTerminal,
+    markTerminalRestored,
+    onMissingRestoredTerminal: (workspaceId, terminalId) => {
+      closeTerminal(workspaceId, terminalId);
+      if (workspaceId === activeWorkspaceId) {
+        onCloseTerminalPanel?.();
+      }
+    },
     onDebug,
     onSessionExit: (workspaceId, terminalId) => {
       const shouldClosePanel =
@@ -90,22 +102,22 @@ export function useTerminalController({
 
   const onSelectTerminal = useCallback(
     (terminalId: string) => {
-      if (!activeWorkspaceId) {
+      if (!activeWorkspaceId || terminalSupported !== true) {
         return;
       }
       requestTerminalFocus();
       setActiveTerminal(activeWorkspaceId, terminalId);
     },
-    [activeWorkspaceId, requestTerminalFocus, setActiveTerminal],
+    [activeWorkspaceId, requestTerminalFocus, setActiveTerminal, terminalSupported],
   );
 
   const onNewTerminal = useCallback(() => {
-    if (!activeWorkspaceId) {
+    if (!activeWorkspaceId || terminalSupported !== true) {
       return;
     }
     requestTerminalFocus();
     createTerminal(activeWorkspaceId);
-  }, [activeWorkspaceId, createTerminal, requestTerminalFocus]);
+  }, [activeWorkspaceId, createTerminal, requestTerminalFocus, terminalSupported]);
 
   const onCloseTerminal = useCallback(
     (terminalId: string) => {
