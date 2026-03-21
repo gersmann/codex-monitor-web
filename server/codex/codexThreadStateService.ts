@@ -1,22 +1,34 @@
 import { randomUUID } from "node:crypto";
 import { buildAppServerUserInputItems, extractUserMessageTextFromStoredItem } from "./codexPrompts.js";
 import { errorMessage, trimString, toNullableString } from "./codexCoreUtils.js";
+import {
+  appServerItemIdMatches,
+  buildStoredTurnFromAppServerThread,
+  extractActiveTurnIdFromThread,
+  normalizeThreadStatusType,
+  toOptionalTimestamp,
+  toStoredItemFromAppServer,
+  toThreadResponse,
+  toThreadSummary,
+} from "./codexThreadCodec.js";
+import {
+  approvalPolicyForAccessMode,
+  buildSandboxPolicy,
+  getOptionalServiceTier,
+  mergeStoredThreadCodexParams,
+  normalizeStoredThreadCodexParamsPatch,
+} from "./codexThreadStateCodexParams.js";
 import type { CompanionStorage } from "../storage.js";
 import type {
   JsonRecord,
   RpcErrorShape,
   StoredThread,
   StoredThreadCodexParams,
-  StoredThreadItem,
-  StoredTurn,
   StoredWorkspace,
   ThreadBacklogItem,
 } from "../types.js";
 import type { CodexAppServerClient } from "../vendor/codexSdk.js";
 
-const MILLISECONDS_PER_SECOND = 10 ** 3;
-const SECONDS_PER_MINUTE = 60;
-const MAX_ACTIVITY_GAP_MS = 2 * SECONDS_PER_MINUTE * MILLISECONDS_PER_SECOND;
 const APP_SERVER_SOURCE_KINDS = [
   "cli",
   "vscode",
@@ -26,87 +38,19 @@ const APP_SERVER_SOURCE_KINDS = [
   "subAgentThreadSpawn",
   "unknown",
 ];
-const TURN_ACTIVITY_TIMESTAMP_KEYS = [
-  "updatedAt",
-  "updated_at",
-  "completedAt",
-  "completed_at",
-  "startedAt",
-  "started_at",
-  "createdAt",
-  "created_at",
-] as const;
-const THREAD_ACTIVITY_TIMESTAMP_KEYS = [
-  "updatedAt",
-  "updated_at",
-  "createdAt",
-  "created_at",
-] as const;
 export const NO_THREAD_SCOPE_SUFFIX = "__no_thread__";
-
-function toThreadStatus(thread: StoredThread) {
-  return {
-    type: thread.activeTurnId ? "active" : "idle",
-  } as const;
-}
-
-function toRpcTurnStatus(status: StoredTurn["status"]) {
-  return status === "active" ? "inProgress" : status;
-}
-
-export function toThreadSummary(thread: StoredThread) {
-  return {
-    id: thread.id,
-    cwd: thread.cwd,
-    ...(thread.name && thread.name !== thread.preview ? { name: thread.name } : {}),
-    preview: thread.preview,
-    createdAt: thread.createdAt,
-    updatedAt: thread.updatedAt,
-    status: toThreadStatus(thread),
-    model: thread.modelId,
-    modelReasoningEffort: thread.effort,
-    source: "appServer",
-    activeTurnId: thread.activeTurnId,
-    ...(thread.pinnedAt !== null ? { pinnedAt: thread.pinnedAt } : {}),
-    ...(thread.detachedReviewParentId !== null
-      ? { detachedReviewParentId: thread.detachedReviewParentId }
-      : {}),
-    ...(thread.codexParams !== null ? { codexParams: thread.codexParams } : {}),
-  };
-}
-
-export function toThreadResponse(
-  thread: StoredThread,
-  options: { includeStatus?: boolean } = {},
-) {
-  return {
-    id: thread.id,
-    cwd: thread.cwd,
-    ...(thread.name && thread.name !== thread.preview ? { name: thread.name } : {}),
-    preview: thread.preview,
-    createdAt: thread.createdAt,
-    updatedAt: thread.updatedAt,
-    ...(options.includeStatus === false ? {} : { status: toThreadStatus(thread) }),
-    activeTurnId: thread.activeTurnId,
-    source: "appServer",
-    model: thread.modelId,
-    modelReasoningEffort: thread.effort,
-    ...(thread.pinnedAt !== null ? { pinnedAt: thread.pinnedAt } : {}),
-    ...(thread.detachedReviewParentId !== null
-      ? { detachedReviewParentId: thread.detachedReviewParentId }
-      : {}),
-    ...(thread.codexParams !== null ? { codexParams: thread.codexParams } : {}),
-    turns: thread.turns.map((turn) => ({
-      id: turn.id,
-      createdAt: turn.createdAt,
-      completedAt: turn.completedAt,
-      status: toRpcTurnStatus(turn.status),
-      errorMessage: turn.errorMessage,
-      items: turn.items,
-    })),
-    tokenUsage: thread.tokenUsage,
-  };
-}
+export {
+  approvalPolicyForAccessMode,
+  appServerItemIdMatches,
+  buildSandboxPolicy,
+  extractActiveTurnIdFromThread,
+  getOptionalServiceTier,
+  mergeStoredThreadCodexParams,
+  normalizeStoredThreadCodexParamsPatch,
+  normalizeThreadStatusType,
+  toThreadResponse,
+  toThreadSummary,
+};
 
 export function defaultWorkspaceSettings() {
   return {
@@ -126,172 +70,11 @@ function normalizeRootPath(value: string) {
   return value ? value.replace(/[\\/]+$/, "") : "";
 }
 
-function readLifecycleTimestampMs(value: unknown) {
-  const numeric =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number(value)
-        : Number.NaN;
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
-function readFirstLifecycleTimestampMs(
-  raw: Record<string, unknown>,
-  keys: readonly string[],
-) {
-  for (const key of keys) {
-    const timestamp = readLifecycleTimestampMs(raw[key]);
-    if (timestamp !== null) {
-      return timestamp;
-    }
-  }
-  return null;
-}
-
-function readThreadActivityTimestampMs(rawThread: Record<string, unknown>, rawTurn: Record<string, unknown>) {
-  return (
-    readFirstLifecycleTimestampMs(rawTurn, TURN_ACTIVITY_TIMESTAMP_KEYS) ??
-    readFirstLifecycleTimestampMs(rawThread, THREAD_ACTIVITY_TIMESTAMP_KEYS)
-  );
-}
-
-function readThreadTurns(rawThread: Record<string, unknown>) {
-  return Array.isArray(rawThread.turns)
-    ? (rawThread.turns as Array<Record<string, unknown>>)
-    : [];
-}
-
 function asJsonRecord(value: unknown): JsonRecord | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
   return value as JsonRecord;
-}
-
-function readTurnItems(rawTurn: Record<string, unknown>) {
-  return Array.isArray(rawTurn.items)
-    ? (rawTurn.items as Array<Record<string, unknown>>)
-    : [];
-}
-
-function normalizeLifecycleStatus(value: unknown) {
-  const normalized = trimString(value).toLowerCase();
-  return normalized ? normalized.replace(/[\s_-]/g, "") : null;
-}
-
-function isTerminalAppServerItem(item: unknown) {
-  if (!item || typeof item !== "object" || Array.isArray(item)) {
-    return false;
-  }
-  const record = item as Record<string, unknown>;
-  const normalizedStatus =
-    normalizeLifecycleStatus(record.status) ??
-    normalizeLifecycleStatus(record.itemStatus) ??
-    normalizeLifecycleStatus(record.item_status);
-  return normalizedStatus !== null;
-}
-
-function hasExplicitAppServerItemStatus(item: unknown) {
-  if (!item || typeof item !== "object" || Array.isArray(item)) {
-    return false;
-  }
-  const record = item as JsonRecord;
-  return (normalizeLifecycleStatus(record.status) ?? "").length > 0;
-}
-
-function hasExplicitTerminalItemStatuses(items: unknown[]) {
-  return (
-    items.length > 0 &&
-    items.every((item) => isTerminalAppServerItem(item) && hasExplicitAppServerItemStatus(item))
-  );
-}
-
-function readDirectActiveTurnId(rawThread: Record<string, unknown>) {
-  return trimString(rawThread.activeTurnId) || trimString(rawThread.active_turn_id);
-}
-
-function isInactiveThreadStatus(statusType: string) {
-  return statusType === "idle" || statusType === "notloaded" || statusType === "systemerror";
-}
-
-function isStaleByActivityAge(activityTimestamp: number | null) {
-  return activityTimestamp !== null && Date.now() - activityTimestamp > MAX_ACTIVITY_GAP_MS;
-}
-
-function shouldNormalizeStaleThread(
-  statusType: string,
-  directActiveTurnId: string,
-  activityTimestamp: number | null,
-) {
-  if (statusType && isInactiveThreadStatus(statusType)) {
-    return true;
-  }
-  if (directActiveTurnId) {
-    return false;
-  }
-  return isStaleByActivityAge(activityTimestamp);
-}
-
-function markTurnCompleted(rawTurn: Record<string, unknown>) {
-  rawTurn.status = "completed";
-  if (!("error" in rawTurn)) {
-    rawTurn.error = null;
-  }
-}
-
-function normalizeThreadStatusToIdle(rawThread: Record<string, unknown>) {
-  const status = asJsonRecord(rawThread.status);
-  if (status && normalizeLifecycleStatus(status.type) === "active") {
-    rawThread.status = { type: "idle" };
-    return;
-  }
-  if (normalizeLifecycleStatus(rawThread.status) === "active") {
-    rawThread.status = "idle";
-  }
-}
-
-function clearThreadActiveTurn(rawThread: Record<string, unknown>) {
-  rawThread.activeTurnId = null;
-  rawThread.active_turn_id = null;
-}
-
-function normalizeStaleInProgressThread(rawThread: Record<string, unknown>) {
-  const turns = readThreadTurns(rawThread);
-  const lastTurn = turns.at(-1);
-  if (!lastTurn) {
-    return rawThread;
-  }
-  if (normalizeLifecycleStatus(lastTurn.status) !== "inprogress") {
-    return rawThread;
-  }
-  const items = readTurnItems(lastTurn);
-  if (items.length === 0) {
-    return rawThread;
-  }
-  if (!hasExplicitTerminalItemStatuses(items)) {
-    return rawThread;
-  }
-  const statusType = normalizeThreadStatusType(rawThread.status);
-  const directActiveTurnId = readDirectActiveTurnId(rawThread);
-  const activityTimestamp = readThreadActivityTimestampMs(rawThread, lastTurn);
-  if (!shouldNormalizeStaleThread(statusType, directActiveTurnId, activityTimestamp)) {
-    return rawThread;
-  }
-  markTurnCompleted(lastTurn);
-  normalizeThreadStatusToIdle(rawThread);
-  clearThreadActiveTurn(rawThread);
-  return rawThread;
-}
-
-export function normalizeThreadStatusType(status: unknown) {
-  const record = asJsonRecord(status);
-  if (!record) {
-    return trimString(status).toLowerCase().replace(/[\s_-]/g, "");
-  }
-  return trimString(record.type ?? record.statusType ?? record.status_type)
-    .toLowerCase()
-    .replace(/[\s_-]/g, "");
 }
 
 function extractEmbeddedThreadId(value: unknown) {
@@ -344,208 +127,27 @@ export function extractTurnIdFromParams(params: JsonRecord) {
   );
 }
 
-function extractActiveTurnRecord(rawThread: Record<string, unknown>) {
-  return rawThread.activeTurn && typeof rawThread.activeTurn === "object"
-    ? (rawThread.activeTurn as Record<string, unknown>)
-    : rawThread.active_turn && typeof rawThread.active_turn === "object"
-      ? (rawThread.active_turn as Record<string, unknown>)
-      : null;
-}
-
-function extractTurnObjectId(value: unknown) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? trimString((value as Record<string, unknown>).id)
-    : "";
-}
-
-function findLatestTurnId(turns: Array<Record<string, unknown>>) {
-  for (let index = turns.length - 1; index >= 0; index -= 1) {
-    const turnId = trimString(turns[index]?.id);
-    if (turnId) {
-      return turnId;
-    }
-  }
-  return null;
-}
-
-export function extractActiveTurnIdFromThread(rawThread: Record<string, unknown>) {
-  normalizeStaleInProgressThread(rawThread);
-  const direct = readDirectActiveTurnId(rawThread);
-  if (direct) {
-    return direct;
-  }
-  const activeTurnRecord = extractActiveTurnRecord(rawThread);
-  const fromRecord = extractTurnObjectId(activeTurnRecord);
-  if (fromRecord) {
-    return fromRecord;
-  }
-  if (normalizeThreadStatusType(rawThread.status) !== "active") {
-    return null;
-  }
-  return findLatestTurnId(readThreadTurns(rawThread));
-}
-
-function toStoredItemId(turnId: string, itemId: string) {
-  return itemId.startsWith(`${turnId}:`) ? itemId : `${turnId}:${itemId}`;
-}
-
-export function appServerItemIdMatches(storedItemId: string, requestedItemId: string) {
-  return (
-    storedItemId === requestedItemId ||
-    storedItemId.endsWith(`:${requestedItemId}`) ||
-    requestedItemId.endsWith(`:${storedItemId}`)
-  );
-}
-
-function toStoredItemFromAppServer(turnId: string, item: JsonRecord): StoredThreadItem {
-  const itemId = trimString(item.id) || `item-${randomUUID()}`;
-  return {
-    ...item,
-    id: toStoredItemId(turnId, itemId),
-  };
-}
-
-function appServerTurnStatus(value: unknown): StoredTurn["status"] {
-  switch (trimString(value).toLowerCase()) {
-    case "completed":
-      return "completed";
-    case "failed":
-    case "error":
-      return "failed";
-    case "cancelled":
-    case "canceled":
-      return "cancelled";
-    default:
-      return "active";
-  }
-}
-
-function buildStoredTurnFromAppServerThread(
-  threadId: string,
-  threadCreatedAt: number,
-  threadUpdatedAt: number,
-  rawTurn: Record<string, unknown>,
-  index: number,
-  existing?: StoredTurn,
-): StoredTurn {
-  const turnId = trimString(rawTurn.id) || `${threadId}:turn-${index + 1}`;
-  const status = appServerTurnStatus(rawTurn.status);
-  const rawItems = Array.isArray(rawTurn.items)
-    ? (rawTurn.items as Record<string, unknown>[])
-    : [];
-  const items = rawItems.map((item, itemIndex) => ({
-    ...item,
-    id: trimString(item.id) || `${turnId}:item-${itemIndex + 1}`,
-  }));
-  return {
-    id: turnId,
-    createdAt: existing?.createdAt ?? threadCreatedAt + index,
-    completedAt:
-      status === "completed" || status === "failed" || status === "cancelled"
-        ? (existing?.completedAt ?? threadUpdatedAt)
-        : null,
-    status,
-    errorMessage: toNullableString(rawTurn.error) ?? existing?.errorMessage ?? null,
-    items,
-  };
-}
-
-function coerceAccessMode(value: unknown): StoredThreadCodexParams["accessMode"] {
-  const normalized = trimString(value).toLowerCase();
-  if (normalized === "read-only" || normalized === "current" || normalized === "full-access") {
-    return normalized;
-  }
-  return null;
-}
-
-function coerceServiceTier(value: unknown): StoredThreadCodexParams["serviceTier"] {
-  const normalized = trimString(value).toLowerCase();
-  if (normalized === "fast" || normalized === "flex") {
-    return normalized;
-  }
-  return null;
-}
-
-export function normalizeStoredThreadCodexParamsPatch(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  const record = value as JsonRecord;
-  const normalized: Partial<StoredThreadCodexParams> = {
-    updatedAt: Date.now(),
-  };
-  if ("modelId" in record || "model" in record) {
-    normalized.modelId = toNullableString(record.modelId ?? record.model);
-  }
-  if ("effort" in record || "modelReasoningEffort" in record) {
-    normalized.effort = toNullableString(record.effort ?? record.modelReasoningEffort);
-  }
-  if ("serviceTier" in record) {
-    normalized.serviceTier = coerceServiceTier(record.serviceTier);
-  }
-  if ("accessMode" in record) {
-    normalized.accessMode = coerceAccessMode(record.accessMode);
-  }
-  if ("collaborationModeId" in record || "collaborationMode" in record) {
-    normalized.collaborationModeId = toNullableString(
-      record.collaborationModeId ?? record.collaborationMode,
-    );
-  }
-  if ("codexArgsOverride" in record || "codexArgs" in record) {
-    normalized.codexArgsOverride = toNullableString(record.codexArgsOverride ?? record.codexArgs);
-  }
-  return normalized;
-}
-
-export function mergeStoredThreadCodexParams(
-  existing: StoredThreadCodexParams | null,
-  patch: Partial<StoredThreadCodexParams>,
+function resolveActiveTurnIdFromPayload(
+  rawThread: Record<string, unknown>,
+  existingActiveTurnId: string | null | undefined,
 ) {
-  return {
-    modelId: patch.modelId ?? existing?.modelId ?? null,
-    effort: patch.effort ?? existing?.effort ?? null,
-    serviceTier: patch.serviceTier ?? existing?.serviceTier ?? null,
-    accessMode: patch.accessMode ?? existing?.accessMode ?? null,
-    collaborationModeId: patch.collaborationModeId ?? existing?.collaborationModeId ?? null,
-    codexArgsOverride: patch.codexArgsOverride ?? existing?.codexArgsOverride ?? null,
-    updatedAt: patch.updatedAt ?? existing?.updatedAt ?? Date.now(),
-  } satisfies StoredThreadCodexParams;
-}
-
-export function getOptionalServiceTier(
-  params: JsonRecord,
-  key: string,
-): "fast" | "flex" | null | undefined {
-  if (!(key in params)) {
-    return undefined;
+  const activeTurnId = extractActiveTurnIdFromThread(rawThread);
+  if (activeTurnId) {
+    return activeTurnId;
   }
-  const normalized = trimString(params[key]).toLowerCase();
-  if (!normalized) {
+  const hasExplicitActiveTurnField =
+    "activeTurnId" in rawThread ||
+    "active_turn_id" in rawThread ||
+    "activeTurn" in rawThread ||
+    "active_turn" in rawThread;
+  if (hasExplicitActiveTurnField) {
     return null;
   }
-  if (normalized === "fast" || normalized === "flex") {
-    return normalized;
+  const statusType = normalizeThreadStatusType(rawThread.status);
+  if (statusType === "idle" || statusType === "notloaded" || statusType === "systemerror") {
+    return null;
   }
-  return null;
-}
-
-export function approvalPolicyForAccessMode(accessMode: string | null) {
-  return accessMode === "full-access" ? "never" : "on-request";
-}
-
-export function buildSandboxPolicy(workspacePath: string, accessMode: string | null) {
-  switch (accessMode) {
-    case "full-access":
-      return { type: "dangerFullAccess" };
-    case "read-only":
-      return { type: "readOnly" };
-    default:
-      return {
-        type: "workspaceWrite",
-        writableRoots: [workspacePath],
-        networkAccess: true,
-      };
-  }
+  return existingActiveTurnId ?? null;
 }
 
 type BuildClient = (settings: JsonRecord, workspaceId?: string | null) => CodexAppServerClient;
@@ -807,34 +409,47 @@ export class ThreadStateService {
     rawThread: Record<string, unknown>,
     existing?: StoredThread | null,
   ): StoredThread {
-    const threadId = trimString(rawThread.id);
-    const createdAt = Number(rawThread.createdAt ?? rawThread.created_at ?? Date.now());
-    const updatedAt = Number(rawThread.updatedAt ?? rawThread.updated_at ?? createdAt);
+    const remoteThreadId = trimString(rawThread.id) || existing?.sdkThreadId || existing?.id || randomUUID();
+    const createdAt =
+      toOptionalTimestamp(rawThread.createdAt ?? rawThread.created_at) ??
+      existing?.createdAt ??
+      Date.now();
+    const updatedAt =
+      toOptionalTimestamp(rawThread.updatedAt ?? rawThread.updated_at) ??
+      existing?.updatedAt ??
+      createdAt;
     const rawTurns = Array.isArray(rawThread.turns)
       ? (rawThread.turns as Record<string, unknown>[])
-      : [];
-    const turns = rawTurns.map((turn, index) =>
-      buildStoredTurnFromAppServerThread(
-        threadId,
-        createdAt,
-        updatedAt,
-        turn,
-        index,
-        existing?.turns.find((entry) => entry.id === trimString(turn.id)),
-      ),
-    );
-    const activeTurnId = extractActiveTurnIdFromThread(rawThread);
+      : null;
+    const turns =
+      rawTurns?.map((turn, index) =>
+        buildStoredTurnFromAppServerThread(
+          remoteThreadId,
+          createdAt,
+          updatedAt,
+          turn,
+          index,
+          existing?.turns.find((entry) => entry.id === trimString(turn.id)),
+        ),
+      ) ?? existing?.turns ?? [];
+    const activeTurnId = resolveActiveTurnIdFromPayload(rawThread, existing?.activeTurnId);
     const appServerName = toNullableString(rawThread.name);
+    const remotePreview = trimString(rawThread.preview);
+    const remoteCwd = trimString(rawThread.cwd);
+    const tokenUsage =
+      (asJsonRecord(rawThread.tokenUsage ?? rawThread.token_usage) as StoredThread["tokenUsage"] | null) ??
+      existing?.tokenUsage ??
+      null;
     return {
-      id: existing?.id ?? threadId,
+      id: existing?.id ?? remoteThreadId,
       workspaceId,
-      sdkThreadId: existing?.sdkThreadId ?? threadId,
-      cwd: trimString(rawThread.cwd) || this.getWorkspace(workspaceId)?.path || "",
+      sdkThreadId: existing?.sdkThreadId ?? remoteThreadId,
+      cwd: remoteCwd || existing?.cwd || this.getWorkspace(workspaceId)?.path || "",
       createdAt,
       updatedAt,
       archivedAt: existing?.archivedAt ?? null,
       name: existing?.name ?? appServerName,
-      preview: existing?.name || existing?.preview || trimString(rawThread.preview) || "New Agent",
+      preview: existing?.name || existing?.preview || remotePreview || appServerName || "New Agent",
       activeTurnId,
       turns,
       modelId: existing?.modelId ?? null,
@@ -843,7 +458,7 @@ export class ThreadStateService {
       detachedReviewParentId: existing?.detachedReviewParentId ?? null,
       codexParams: existing?.codexParams ?? null,
       backlog: existing?.backlog ?? [],
-      tokenUsage: existing?.tokenUsage ?? null,
+      tokenUsage,
     };
   }
 
@@ -1164,7 +779,7 @@ export class ThreadStateService {
     localOnlyThreads: ReturnType<typeof toThreadSummary>[],
     externalData: Record<string, unknown>[],
   ) {
-    const merged = new Map<string, Record<string, unknown>>();
+    const merged = new Map<string, ReturnType<typeof toThreadSummary>>();
     const matchedLocalIds = new Set<string>();
 
     externalData.forEach((thread) => {
@@ -1182,36 +797,19 @@ export class ThreadStateService {
           return;
         }
         matchedLocalIds.add(localThread.id);
-        const externalActiveTurnId = extractActiveTurnIdFromThread(thread);
-        const externalUpdatedAt = Number(thread.updatedAt ?? thread.updated_at ?? 0);
-        const externalCreatedAt = Number(thread.createdAt ?? thread.created_at ?? 0);
-        const externalModel = trimString(thread.model);
-        const externalEffort = trimString(thread.modelReasoningEffort ?? thread.model_reasoning_effort);
-        merged.set(localThread.id, {
-          ...thread,
-          id: localThread.id,
-          cwd: localThread.cwd || trimString(thread.cwd),
-          name: localThread.name,
-          preview: trimString(thread.preview) || localThread.preview,
-          createdAt: externalCreatedAt || localThread.createdAt,
-          updatedAt: externalUpdatedAt || localThread.updatedAt,
-          pinnedAt: localThread.pinnedAt,
-          detachedReviewParentId: localThread.detachedReviewParentId,
-          codexParams: localThread.codexParams,
-          ...(externalActiveTurnId ? { activeTurnId: externalActiveTurnId } : {}),
-          ...(externalModel || localThread.modelId ? { model: externalModel || localThread.modelId } : {}),
-          ...(externalEffort || localThread.effort
-            ? { modelReasoningEffort: externalEffort || localThread.effort }
-            : {}),
-        });
+        const mergedThread = this.buildStoredThreadFromAppServer(workspaceId, thread, localThread);
+        merged.set(localThread.id, toThreadSummary(mergedThread));
         return;
       }
-      merged.set(externalId, thread);
+      merged.set(
+        externalId,
+        toThreadSummary(this.buildStoredThreadFromAppServer(workspaceId, thread, null)),
+      );
     });
 
     localOnlyThreads.forEach((thread) => {
       if (!matchedLocalIds.has(thread.id)) {
-        merged.set(thread.id, { ...thread });
+        merged.set(thread.id, thread);
       }
     });
 
