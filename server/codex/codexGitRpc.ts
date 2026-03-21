@@ -1,23 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { JsonRecord, RpcErrorShape, StoredWorkspace } from "../types.js";
-
-type GitStatusFile = {
-  path: string;
-  status: string;
-  additions: number;
-  deletions: number;
-};
-
-type GitStatusSummary = {
-  repoRoot: string;
-  branchName: string;
-  files: GitStatusFile[];
-  stagedFiles: GitStatusFile[];
-  unstagedFiles: GitStatusFile[];
-  totalAdditions: number;
-  totalDeletions: number;
-};
+import type { GitStatusSummary } from "./gitInspection.js";
 
 export type GitRpcContext = {
   getWorkspace: (workspaceId: string) => StoredWorkspace | null;
@@ -25,6 +9,17 @@ export type GitRpcContext = {
   notFound: (message: string) => RpcErrorShape;
   badRequest: (message: string) => RpcErrorShape;
   rpcBoundaryError: (error: unknown) => RpcErrorShape;
+  initializeGitRepo: (
+    workspacePath: string,
+    branch: string,
+    force: boolean,
+  ) => Promise<unknown>;
+  createGitHubRepo: (
+    workspacePath: string,
+    repo: string,
+    visibility: string,
+    branch: string | null,
+  ) => Promise<unknown>;
   runGit: (repoRoot: string, args: string[]) => Promise<{ stdout: string; stderr: string }>;
   runGitCommit: (repoRoot: string, message: string) => Promise<{ stdout: string; stderr: string }>;
   tryRunGit: (repoRoot: string, args: string[]) => Promise<{ stdout: string; stderr: string } | null>;
@@ -78,6 +73,14 @@ function readWorkspacePath(
 ): string | RpcErrorShape {
   const workspace = readWorkspace(context, String(params.workspaceId ?? ""));
   return "error" in workspace ? workspace : workspace.path;
+}
+
+function optionalTrimmedString(
+  context: GitRpcContext,
+  value: unknown,
+) {
+  const trimmed = context.trimString(value);
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 async function runWorkspaceGitCommand(
@@ -146,25 +149,6 @@ async function handleCreateGitBranch(context: GitRpcContext, params: JsonRecord)
   }
   await runWorkspaceGitCommand(context, workspacePath, ["checkout", "-b", context.trimString(params.name)]);
   return null;
-}
-
-const GIT_BRANCH_RPC_HANDLERS: Record<string, GitRpcHandler> = {
-  fetch_git: handleFetchGit,
-  sync_git: handleSyncGit,
-  list_git_branches: handleListGitBranches,
-  checkout_git_branch: handleCheckoutGitBranch,
-  create_git_branch: handleCreateGitBranch,
-};
-
-export function handleGitBranchRpc(
-  context: GitRpcContext,
-  method: string,
-  params: JsonRecord,
-): Promise<unknown | RpcErrorShape | undefined> {
-  const handler = GIT_BRANCH_RPC_HANDLERS[method];
-  return handler
-    ? Promise.resolve(handler(context, params))
-    : Promise.resolve(undefined);
 }
 
 async function handleGitHubIssues(context: GitRpcContext, params: JsonRecord) {
@@ -238,25 +222,6 @@ async function handleCheckoutGitHubPullRequest(context: GitRpcContext, params: J
   } catch (error) {
     return context.rpcBoundaryError(error);
   }
-}
-
-const GITHUB_RPC_HANDLERS: Record<string, GitRpcHandler> = {
-  get_github_issues: handleGitHubIssues,
-  get_github_pull_requests: handleGitHubPullRequests,
-  get_github_pull_request_diff: handleGitHubPullRequestDiff,
-  get_github_pull_request_comments: handleGitHubPullRequestComments,
-  checkout_github_pull_request: handleCheckoutGitHubPullRequest,
-};
-
-export function handleGitHubRpc(
-  context: GitRpcContext,
-  method: string,
-  params: JsonRecord,
-): Promise<unknown | RpcErrorShape | undefined> {
-  const handler = GITHUB_RPC_HANDLERS[method];
-  return handler
-    ? Promise.resolve(handler(context, params))
-    : Promise.resolve(undefined);
 }
 
 async function handleGetGitStatus(context: GitRpcContext, params: JsonRecord) {
@@ -482,7 +447,50 @@ async function handlePullGit(context: GitRpcContext, params: JsonRecord) {
   }
 }
 
-const GIT_WORKING_TREE_RPC_HANDLERS: Record<string, GitRpcHandler> = {
+async function handleInitGitRepo(context: GitRpcContext, params: JsonRecord) {
+  const workspacePath = readWorkspacePath(context, params);
+  if (typeof workspacePath !== "string") {
+    return workspacePath;
+  }
+  try {
+    return await context.initializeGitRepo(
+      workspacePath,
+      context.trimString(params.branch),
+      params.force === true,
+    );
+  } catch (error) {
+    return context.rpcBoundaryError(error);
+  }
+}
+
+async function handleCreateGitHubRepo(context: GitRpcContext, params: JsonRecord) {
+  const workspacePath = readWorkspacePath(context, params);
+  if (typeof workspacePath !== "string") {
+    return workspacePath;
+  }
+  try {
+    return await context.createGitHubRepo(
+      workspacePath,
+      context.trimString(params.repo),
+      context.trimString(params.visibility),
+      optionalTrimmedString(context, params.branch),
+    );
+  } catch (error) {
+    return context.rpcBoundaryError(error);
+  }
+}
+
+const GIT_RPC_HANDLERS: Record<string, GitRpcHandler> = {
+  fetch_git: handleFetchGit,
+  sync_git: handleSyncGit,
+  list_git_branches: handleListGitBranches,
+  checkout_git_branch: handleCheckoutGitBranch,
+  create_git_branch: handleCreateGitBranch,
+  get_github_issues: handleGitHubIssues,
+  get_github_pull_requests: handleGitHubPullRequests,
+  get_github_pull_request_diff: handleGitHubPullRequestDiff,
+  get_github_pull_request_comments: handleGitHubPullRequestComments,
+  checkout_github_pull_request: handleCheckoutGitHubPullRequest,
   get_git_status: handleGetGitStatus,
   list_git_roots: handleListGitRoots,
   get_git_diffs: handleGetGitDiffs,
@@ -497,14 +505,87 @@ const GIT_WORKING_TREE_RPC_HANDLERS: Record<string, GitRpcHandler> = {
   commit_git: handleCommitGit,
   push_git: handlePushGit,
   pull_git: handlePullGit,
+  init_git_repo: handleInitGitRepo,
+  create_github_repo: handleCreateGitHubRepo,
 };
+
+function dispatchGitHandler(
+  context: GitRpcContext,
+  method: string,
+  params: JsonRecord,
+  ownedMethods: ReadonlySet<string>,
+) {
+  if (!ownedMethods.has(method)) {
+    return Promise.resolve(undefined);
+  }
+  return Promise.resolve(GIT_RPC_HANDLERS[method]?.(context, params));
+}
+
+const GIT_BRANCH_METHODS = new Set([
+  "fetch_git",
+  "sync_git",
+  "list_git_branches",
+  "checkout_git_branch",
+  "create_git_branch",
+]);
+
+const GITHUB_METHODS = new Set([
+  "get_github_issues",
+  "get_github_pull_requests",
+  "get_github_pull_request_diff",
+  "get_github_pull_request_comments",
+  "checkout_github_pull_request",
+  "create_github_repo",
+]);
+
+const GIT_WORKING_TREE_METHODS = new Set([
+  "get_git_status",
+  "list_git_roots",
+  "get_git_diffs",
+  "get_git_log",
+  "get_git_commit_diff",
+  "get_git_remote",
+  "stage_git_file",
+  "stage_git_all",
+  "unstage_git_file",
+  "revert_git_file",
+  "revert_git_all",
+  "commit_git",
+  "push_git",
+  "pull_git",
+  "init_git_repo",
+]);
+
+export function handleGitBranchRpc(
+  context: GitRpcContext,
+  method: string,
+  params: JsonRecord,
+): Promise<unknown | RpcErrorShape | undefined> {
+  return dispatchGitHandler(context, method, params, GIT_BRANCH_METHODS);
+}
+
+export function handleGitHubRpc(
+  context: GitRpcContext,
+  method: string,
+  params: JsonRecord,
+): Promise<unknown | RpcErrorShape | undefined> {
+  return dispatchGitHandler(context, method, params, GITHUB_METHODS);
+}
 
 export function handleGitWorkingTreeRpc(
   context: GitRpcContext,
   method: string,
   params: JsonRecord,
 ): Promise<unknown | RpcErrorShape | undefined> {
-  const handler = GIT_WORKING_TREE_RPC_HANDLERS[method];
+  return dispatchGitHandler(context, method, params, GIT_WORKING_TREE_METHODS);
+}
+
+export function handleGitRpc(
+  context: GitRpcContext,
+  method: string,
+  params: JsonRecord,
+): Promise<unknown | RpcErrorShape | undefined> {
+  const handler = GIT_RPC_HANDLERS[method];
   return handler
     ? Promise.resolve(handler(context, params))
     : Promise.resolve(undefined);

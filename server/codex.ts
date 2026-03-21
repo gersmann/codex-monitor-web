@@ -1,10 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { execFile, spawn } from "node:child_process";
-import { createTwoFilesPatch } from "diff";
 import { buildAppServerEvent } from "./appServer.js";
 import {
   isHttpUrl,
@@ -15,10 +12,36 @@ import {
   handleWorkspaceFileRpc as dispatchWorkspaceFileRpc,
 } from "./codex/codexFileRpc.js";
 import {
-  handleGitBranchRpc as dispatchGitBranchRpc,
-  handleGitHubRpc as dispatchGitHubRpc,
-  handleGitWorkingTreeRpc as dispatchGitWorkingTreeRpc,
+  handleGitRpc as dispatchGitRpc,
 } from "./codex/codexGitRpc.js";
+import {
+  createGitHubRepo,
+  getGitHubIssues,
+  getGitHubPullRequestComments,
+  getGitHubPullRequestDiff,
+  getGitHubPullRequests,
+  checkoutGitHubPullRequest,
+} from "./codex/githubRepo.js";
+import {
+  buildGitStatusSummary,
+  buildWorkingTreeDiffs,
+  getCommitDiffEntries,
+  getGitLogSummary,
+  getPreferredRemote,
+  listLocalGitBranches,
+  scanGitRoots,
+} from "./codex/gitInspection.js";
+import { initializeGitRepo } from "./codex/gitRepoLifecycle.js";
+import {
+  applyGitPatch,
+  cloneRepository,
+  resolveGitRootFromPath,
+  runCommandCapture,
+  runGit,
+  runGitCommit,
+  runGitNoIndexDiff,
+  tryRunGit,
+} from "./codex/gitRuntime.js";
 import { handleCompanionRuntimeRpc as dispatchCompanionRuntimeRpc } from "./codex/codexRpcRuntime.js";
 import { handleThreadBacklogRpc as dispatchThreadBacklogRpc } from "./codex/codexRpcThreadBacklog.js";
 import { classifyRpcBoundaryError } from "./codex/rpcErrors.js";
@@ -32,15 +55,6 @@ import {
   parseAgentDescriptionValue,
   parseRunMetadataValue,
 } from "./codex/codexPrompts.js";
-import { parseGitLogEntries, parseNumstat, parseStatusEntries, type ParsedStatusEntry } from "./codex/gitParsers.js";
-import {
-  gitHubRepoNamesMatch,
-  githubRepoExistsMessage,
-  parseGitHubPullRequestDiff,
-  parseGitHubRepo,
-  validateGitHubRepoName,
-  validateNormalizedRepoName,
-} from "./codex/githubParsers.js";
 import { handlePromptRpc as dispatchPromptRpc } from "./codex/codexPromptRpc.js";
 import { CompanionStorage } from "./storage.js";
 import {
@@ -86,11 +100,6 @@ type BroadcastMessage = {
 
 type BroadcastFn = (message: BroadcastMessage | TerminalBroadcastMessage) => void;
 
-type FileSnapshot = {
-  path: string;
-  content: string;
-};
-
 const RPC_UNHANDLED = Symbol("rpc-unhandled");
 type RpcDispatchResult = unknown | RpcErrorShape | typeof RPC_UNHANDLED;
 
@@ -99,7 +108,6 @@ const APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
 const MILLISECONDS_PER_SECOND = 10 ** 3;
 const SECONDS_PER_MINUTE = 60;
 const MAX_ACTIVITY_GAP_MS = 2 * SECONDS_PER_MINUTE * MILLISECONDS_PER_SECOND;
-const EXEC_MAX_BUFFER_BYTES = 10 * (2 ** 20);
 const APP_SERVER_SOURCE_KINDS = [
   "cli",
   "vscode",
@@ -148,17 +156,6 @@ const RUN_METADATA_OUTPUT_SCHEMA = {
   required: ["title", "worktreeName"],
   additionalProperties: false,
 } as const;
-
-function parseJsonOrThrow<T>(raw: string, context: string): T {
-  try {
-    return JSON.parse(raw) as T;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`${context} returned invalid JSON: ${message}`, {
-      cause: error,
-    });
-  }
-}
 
 function rpcError(status: number, message: string): RpcErrorShape {
   return { error: { status, message } };
@@ -763,11 +760,6 @@ function defaultWorkspaceSettings() {
   };
 }
 
-function isWithinWorkspace(rootPath: string, candidatePath: string) {
-  const relative = path.relative(rootPath, candidatePath);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
 function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {
   return Boolean(
     error &&
@@ -800,64 +792,6 @@ async function directoryExists(targetPath: string) {
   }
 }
 
-async function readTextSnapshot(
-  workspacePath: string,
-  relativePath: string,
-): Promise<FileSnapshot | null> {
-  const absolutePath = path.resolve(workspacePath, relativePath);
-  if (!isWithinWorkspace(workspacePath, absolutePath)) {
-    return null;
-  }
-  try {
-    const metadata = await fs.stat(absolutePath);
-    if (!metadata.isFile()) {
-      return null;
-    }
-    const content = await fs.readFile(absolutePath, "utf8");
-    return {
-      path: relativePath,
-      content,
-    };
-  } catch (error) {
-    const code =
-      error && typeof error === "object" && "code" in error
-        ? String((error as { code?: unknown }).code ?? "")
-        : "";
-    if (code === "ENOENT") {
-      return {
-        path: relativePath,
-        content: "",
-      };
-    }
-    throw error;
-  }
-}
-
-function normalizePatchText(value: string) {
-  return value.endsWith("\n") ? value : `${value}\n`;
-}
-
-function buildUnifiedFileDiff(
-  relativePath: string,
-  beforeContent: string,
-  afterContent: string,
-) {
-  if (beforeContent === afterContent) {
-    return "";
-  }
-  const normalizedPath = relativePath.replace(/\\/g, "/");
-  const patch = createTwoFilesPatch(
-    `a/${normalizedPath}`,
-    `b/${normalizedPath}`,
-    normalizePatchText(beforeContent),
-    normalizePatchText(afterContent),
-    "",
-    "",
-    { context: 3 },
-  );
-  return `diff --git a/${normalizedPath} b/${normalizedPath}\n${patch}`;
-}
-
 function slugifyAgentName(name: string) {
   const slug = name
     .trim()
@@ -875,129 +809,6 @@ function parseTopLevelTomlString(content: string, key: string) {
   return match?.[1] ?? null;
 }
 
-function runCommand(
-  command: string,
-  args: string[],
-  cwd: string,
-  options: {
-    env?: NodeJS.ProcessEnv;
-    timeoutMs?: number;
-  } = {},
-) {
-  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    execFile(
-      command,
-      args,
-      {
-        cwd,
-        encoding: "utf8",
-        maxBuffer: EXEC_MAX_BUFFER_BYTES,
-        env: options.env,
-        timeout: options.timeoutMs,
-      },
-      (error, stdout, stderr) => {
-        if (!error) {
-          resolve({ stdout, stderr });
-          return;
-        }
-        const timedOut =
-          error.name === "TimeoutError" ||
-          error.killed ||
-          error.signal === "SIGTERM" ||
-          /timed out/i.test(error.message);
-        const detail = timedOut
-          ? `Command timed out: ${command} ${args.join(" ")}`
-          : `${stderr || stdout || error.message}`.trim() || "Command failed.";
-        reject(new Error(detail));
-      },
-    );
-  });
-}
-
-function runCommandCapture(
-  command: string,
-  args: string[],
-  options: {
-    env?: NodeJS.ProcessEnv;
-    timeoutMs?: number;
-  } = {},
-) {
-  return new Promise<{
-    ok: boolean;
-    stdout: string;
-    stderr: string;
-    error: string | null;
-  }>((resolve) => {
-    execFile(
-      command,
-      args,
-      {
-        encoding: "utf8",
-        env: options.env,
-        timeout: options.timeoutMs ?? 5_000,
-        maxBuffer: EXEC_MAX_BUFFER_BYTES,
-      },
-      (error, stdout, stderr) => {
-        if (!error) {
-          resolve({
-            ok: true,
-            stdout,
-            stderr,
-            error: null,
-          });
-          return;
-        }
-        resolve({
-          ok: false,
-          stdout,
-          stderr,
-          error: `${stderr || stdout || error.message}`.trim() || error.message,
-        });
-      },
-    );
-  });
-}
-
-async function runGit(repoRoot: string, args: string[]) {
-  return await runCommand("git", args, repoRoot);
-}
-
-function gitCommitTimeoutMs() {
-  const raw = Number(process.env.CODEX_MONITOR_GIT_COMMIT_TIMEOUT_MS ?? "120000");
-  if (!Number.isFinite(raw) || raw <= 0) {
-    return 120_000;
-  }
-  return Math.round(raw);
-}
-
-async function runGitCommit(repoRoot: string, message: string) {
-  const env = {
-    ...process.env,
-    GIT_TERMINAL_PROMPT: "0",
-    GIT_EDITOR: "true",
-  };
-  return await runCommand("git", ["commit", "-m", message], repoRoot, {
-    env,
-    timeoutMs: gitCommitTimeoutMs(),
-  });
-}
-
-async function runGh(repoRoot: string, args: string[]) {
-  return await runCommand("gh", args, repoRoot);
-}
-
-async function tryRunGit(repoRoot: string, args: string[]) {
-  try {
-    return await runGit(repoRoot, args);
-  } catch {
-    return null;
-  }
-}
-
-function normalizeGitPathForUi(filePath: string) {
-  return filePath.replace(/\\/g, "/");
-}
-
 function worktreeSetupMarkerPath(dataDir: string, workspaceId: string) {
   return path.join(dataDir, "worktree-setup", `${workspaceId}.ran`);
 }
@@ -1005,746 +816,6 @@ function worktreeSetupMarkerPath(dataDir: string, workspaceId: string) {
 function normalizeSetupScript(script: unknown) {
   const trimmed = trimString(script);
   return trimmed ? trimmed : null;
-}
-
-async function resolveGitRootFromPath(workspacePath: string) {
-  const result = await runGit(workspacePath, ["rev-parse", "--show-toplevel"]);
-  return result.stdout.trim();
-}
-
-async function countTextFileAdditions(absolutePath: string) {
-  try {
-    const metadata = await fs.stat(absolutePath);
-    if (!metadata.isFile()) {
-      return 0;
-    }
-    const content = await fs.readFile(absolutePath, "utf8");
-    if (!content) {
-      return 0;
-    }
-    return content.split(/\r?\n/).length;
-  } catch {
-    return 0;
-  }
-}
-
-async function scanGitRoots(root: string, depth: number) {
-  const resolvedRoot = path.resolve(root);
-  const roots = new Set<string>();
-  const pending: Array<{ current: string; remainingDepth: number }> = [
-    { current: resolvedRoot, remainingDepth: Math.max(0, depth) },
-  ];
-
-  while (pending.length > 0) {
-    const next = pending.pop();
-    if (!next) {
-      continue;
-    }
-    const gitEntry = path.join(next.current, ".git");
-    const gitStat = await fs.stat(gitEntry).catch(() => null);
-    if (gitStat) {
-      roots.add(next.current);
-      continue;
-    }
-    if (next.remainingDepth === 0) {
-      continue;
-    }
-    const entries = await fs.readdir(next.current, { withFileTypes: true }).catch(() => []);
-    for (const entry of entries) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-      if (entry.name === ".git" || entry.name === "node_modules") {
-        continue;
-      }
-      pending.push({
-        current: path.join(next.current, entry.name),
-        remainingDepth: next.remainingDepth - 1,
-      });
-    }
-  }
-
-  return Array.from(roots).sort((left, right) => left.localeCompare(right));
-}
-
-async function countEffectiveDirEntries(root: string) {
-  const entries = await fs.readdir(root, { withFileTypes: true });
-  let count = 0;
-  for (const entry of entries) {
-    if (entry.name === ".git" || entry.name === ".DS_Store" || entry.name === "Thumbs.db") {
-      continue;
-    }
-    count += 1;
-  }
-  return count;
-}
-
-function validateBranchName(name: string) {
-  const trimmed = name.trim();
-  if (!trimmed) {
-    throw new Error("Branch name is required.");
-  }
-  if (trimmed === "." || trimmed === "..") {
-    throw new Error("Branch name cannot be '.' or '..'.");
-  }
-  if (/\s/.test(trimmed)) {
-    throw new Error("Branch name cannot contain spaces.");
-  }
-  if (trimmed.startsWith("/") || trimmed.endsWith("/")) {
-    throw new Error("Branch name cannot start or end with '/'.");
-  }
-  if (trimmed.includes("//")) {
-    throw new Error("Branch name cannot contain '//'.");
-  }
-  if (trimmed.endsWith(".lock")) {
-    throw new Error("Branch name cannot end with '.lock'.");
-  }
-  if (trimmed.includes("..")) {
-    throw new Error("Branch name cannot contain '..'.");
-  }
-  if (trimmed.includes("@{")) {
-    throw new Error("Branch name cannot contain '@{'.");
-  }
-  if (/[~^:?*[\]\\]/.test(trimmed)) {
-    throw new Error("Branch name contains invalid characters.");
-  }
-  if (trimmed.endsWith(".")) {
-    throw new Error("Branch name cannot end with '.'.");
-  }
-  return trimmed;
-}
-
-type GitFileStats = { additions: number; deletions: number };
-type GitStatusFile = { path: string; status: string; additions: number; deletions: number };
-
-function readGitFileStats(
-  statsMap: Map<string, GitFileStats>,
-  filePath: string,
-): GitFileStats {
-  return statsMap.get(filePath) ?? { additions: 0, deletions: 0 };
-}
-
-function resolveWorktreeStatus(entry: ParsedStatusEntry) {
-  if (entry.worktreeStatus) {
-    return entry.worktreeStatus;
-  }
-  return entry.untracked ? "A" : null;
-}
-
-async function resolveUnstagedFileStats(
-  repoRoot: string,
-  entry: ParsedStatusEntry,
-  unstagedStatsMap: Map<string, GitFileStats>,
-) {
-  const stats = { ...readGitFileStats(unstagedStatsMap, entry.path) };
-  if (!entry.untracked) {
-    return stats;
-  }
-  return {
-    additions: await countTextFileAdditions(path.join(repoRoot, entry.path)),
-    deletions: stats.deletions,
-  };
-}
-
-function appendGitFile(
-  target: GitStatusFile[],
-  file: GitStatusFile,
-  totals: { additions: number; deletions: number },
-) {
-  target.push(file);
-  totals.additions += file.additions;
-  totals.deletions += file.deletions;
-}
-
-async function buildGitStatusSummary(workspacePath: string) {
-  const repoRoot = await resolveGitRootFromPath(workspacePath);
-  const [statusResult, branchResult, stagedStatsResult, unstagedStatsResult] = await Promise.all([
-    runGit(repoRoot, ["status", "--porcelain=v1", "-z", "--branch", "--untracked-files=all"]),
-    tryRunGit(repoRoot, ["branch", "--show-current"]),
-    runGit(repoRoot, ["diff", "--cached", "--numstat", "--"]),
-    runGit(repoRoot, ["diff", "--numstat", "--"]),
-  ]);
-  const branchName = branchResult?.stdout.trim() || "unknown";
-  const stagedStats = parseNumstat(stagedStatsResult.stdout);
-  const unstagedStats = parseNumstat(unstagedStatsResult.stdout);
-  const entries = parseStatusEntries(statusResult.stdout);
-
-  const files: GitStatusFile[] = [];
-  const stagedFiles: GitStatusFile[] = [];
-  const unstagedFiles: GitStatusFile[] = [];
-  let totalAdditions = 0;
-  let totalDeletions = 0;
-
-  for (const entry of entries) {
-    const staged = readGitFileStats(stagedStats, entry.path);
-    const unstaged = await resolveUnstagedFileStats(repoRoot, entry, unstagedStats);
-    const worktreeStatus = resolveWorktreeStatus(entry);
-    const totals = { additions: 0, deletions: 0 };
-    if (entry.indexStatus) {
-      appendGitFile(
-        stagedFiles,
-        {
-          path: entry.path,
-          status: entry.indexStatus,
-          additions: staged.additions,
-          deletions: staged.deletions,
-        },
-        totals,
-      );
-    }
-    if (worktreeStatus) {
-      appendGitFile(
-        unstagedFiles,
-        {
-          path: entry.path,
-          status: worktreeStatus,
-          additions: unstaged.additions,
-          deletions: unstaged.deletions,
-        },
-        totals,
-      );
-    }
-    files.push({
-      path: entry.path,
-      status: worktreeStatus || entry.indexStatus || "A",
-      additions: staged.additions + unstaged.additions,
-      deletions: staged.deletions + unstaged.deletions,
-    });
-    totalAdditions += totals.additions;
-    totalDeletions += totals.deletions;
-  }
-
-  return {
-    repoRoot,
-    branchName,
-    files,
-    stagedFiles,
-    unstagedFiles,
-    totalAdditions,
-    totalDeletions,
-  };
-}
-
-async function buildWorkingTreeDiffs(workspacePath: string) {
-  const status = await buildGitStatusSummary(workspacePath);
-  const diffs = await Promise.all(
-    status.files.map(async (file) => {
-      const isUntracked = !status.stagedFiles.some((entry) => entry.path === file.path) &&
-        status.unstagedFiles.some((entry) => entry.path === file.path && entry.status === "A");
-      let diff = "";
-      if (isUntracked) {
-        const snapshot = await readTextSnapshot(status.repoRoot, file.path);
-        if (!snapshot) {
-          return null;
-        }
-        diff = buildUnifiedFileDiff(file.path, "", snapshot?.content ?? "");
-      } else {
-        diff = (await runGit(status.repoRoot, ["diff", "--binary", "HEAD", "--", file.path])).stdout;
-      }
-      if (!diff.trim()) {
-        return null;
-      }
-      return {
-        path: file.path,
-        diff,
-      };
-    }),
-  );
-  return diffs.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
-}
-
-async function getPreferredRemote(repoRoot: string) {
-  const origin = await tryRunGit(repoRoot, ["remote", "get-url", "origin"]);
-  if (origin?.stdout.trim()) {
-    return origin.stdout.trim();
-  }
-  const remotes = await tryRunGit(repoRoot, ["remote"]);
-  const firstRemote = remotes?.stdout
-    .split(/\r?\n/)
-    .map((entry) => entry.trim())
-    .find(Boolean);
-  if (!firstRemote) {
-    return null;
-  }
-  const remote = await tryRunGit(repoRoot, ["remote", "get-url", firstRemote]);
-  return remote?.stdout.trim() || null;
-}
-
-async function githubRepoFromPath(repoRoot: string) {
-  const remotesResult = await runGit(repoRoot, ["remote"]);
-  const remoteNames = remotesResult.stdout
-    .split(/\r?\n/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-  const remoteName = remoteNames.includes("origin") ? "origin" : remoteNames[0] ?? null;
-  if (!remoteName) {
-    throw new Error("No git remote configured.");
-  }
-  let remoteUrl = "";
-  try {
-    remoteUrl = (await runGit(repoRoot, ["remote", "get-url", remoteName])).stdout.trim();
-  } catch {
-    throw new Error("Remote has no URL configured.");
-  }
-  const repo = parseGitHubRepo(remoteUrl);
-  if (!repo) {
-    throw new Error("Remote is not a GitHub repository.");
-  }
-  return repo;
-}
-
-async function ghStdoutTrim(repoRoot: string, args: string[]) {
-  return (await runGh(repoRoot, args)).stdout.trim();
-}
-
-async function ghGitProtocol(repoRoot: string) {
-  try {
-    return await ghStdoutTrim(repoRoot, ["config", "get", "git_protocol"]);
-  } catch {
-    return "https";
-  }
-}
-
-function ghRepoCreateArgs(fullName: string, visibilityFlag: string, originExists: boolean) {
-  if (originExists) {
-    return ["repo", "create", fullName, visibilityFlag];
-  }
-  return ["repo", "create", fullName, visibilityFlag, "--source=.", "--remote=origin"];
-}
-
-async function ensureGitHubRepoExists(
-  repoRoot: string,
-  fullName: string,
-  visibilityFlag: string,
-  originExists: boolean,
-) {
-  if (originExists) {
-    try {
-      await runGh(repoRoot, ["repo", "view", fullName, "--json", "name", "--jq", ".name"]);
-      return;
-    } catch {
-      // fall through to create
-    }
-  }
-  try {
-    await runGh(repoRoot, ghRepoCreateArgs(fullName, visibilityFlag, originExists));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!githubRepoExistsMessage(message)) {
-      throw error;
-    }
-  }
-}
-
-async function getGitHubIssues(workspacePath: string) {
-  const repoRoot = await resolveGitRootFromPath(workspacePath);
-  const repoName = await githubRepoFromPath(repoRoot);
-  const issues = parseJsonOrThrow<
-    Array<{
-      number: number;
-      title: string;
-      url: string;
-      updatedAt: string;
-    }>
-  >(
-    (
-      await runGh(repoRoot, [
-        "issue",
-        "list",
-        "--repo",
-        repoName,
-        "--limit",
-        "50",
-        "--json",
-        "number,title,url,updatedAt",
-      ])
-    ).stdout,
-    "gh issue list",
-  );
-  let total = issues.length;
-  try {
-    const searchQuery = `repo:${repoName} is:issue is:open`.replaceAll(" ", "+");
-    total = Number.parseInt(
-      (
-        await runGh(repoRoot, [
-          "api",
-          `/search/issues?q=${searchQuery}`,
-          "--jq",
-          ".total_count",
-        ])
-      ).stdout.trim(),
-      10,
-    ) || issues.length;
-  } catch {
-    total = issues.length;
-  }
-  return { total, issues };
-}
-
-async function getGitHubPullRequests(workspacePath: string) {
-  const repoRoot = await resolveGitRootFromPath(workspacePath);
-  const repoName = await githubRepoFromPath(repoRoot);
-  const pullRequests = parseJsonOrThrow<
-    Array<{
-      author: { login: string } | null;
-      baseRefName: string;
-      body: string;
-      createdAt: string;
-      headRefName: string;
-      isDraft: boolean;
-      number: number;
-      title: string;
-      updatedAt: string;
-      url: string;
-    }>
-  >(
-    (
-      await runGh(repoRoot, [
-        "pr",
-        "list",
-        "--repo",
-        repoName,
-        "--state",
-        "open",
-        "--limit",
-        "50",
-        "--json",
-        "number,title,url,updatedAt,createdAt,body,headRefName,baseRefName,isDraft,author",
-      ])
-    ).stdout,
-    "gh pr list",
-  );
-  let total = pullRequests.length;
-  try {
-    const searchQuery = `repo:${repoName} is:pr is:open`.replaceAll(" ", "+");
-    total = Number.parseInt(
-      (
-        await runGh(repoRoot, [
-          "api",
-          `/search/issues?q=${searchQuery}`,
-          "--jq",
-          ".total_count",
-        ])
-      ).stdout.trim(),
-      10,
-    ) || pullRequests.length;
-  } catch {
-    total = pullRequests.length;
-  }
-  return { total, pullRequests };
-}
-
-async function getGitHubPullRequestDiff(workspacePath: string, prNumber: number) {
-  const repoRoot = await resolveGitRootFromPath(workspacePath);
-  const repoName = await githubRepoFromPath(repoRoot);
-  const diff = await runGh(repoRoot, [
-    "pr",
-    "diff",
-    String(prNumber),
-    "--repo",
-    repoName,
-    "--color",
-    "never",
-  ]);
-  return parseGitHubPullRequestDiff(diff.stdout);
-}
-
-async function getGitHubPullRequestComments(workspacePath: string, prNumber: number) {
-  const repoRoot = await resolveGitRootFromPath(workspacePath);
-  const repoName = await githubRepoFromPath(repoRoot);
-  const commentsEndpoint = `/repos/${repoName}/issues/${prNumber}/comments?per_page=30`;
-  const jqFilter = "[.[] | {id, body, createdAt: .created_at, url: .html_url, author: (if .user then {login: .user.login} else null end)}]";
-  return parseJsonOrThrow<
-    Array<{
-      author: { login: string } | null;
-      body: string;
-      createdAt: string;
-      id: number;
-      url: string;
-    }>
-  >(
-    (await runGh(repoRoot, ["api", commentsEndpoint, "--jq", jqFilter])).stdout,
-    "gh api issue comments",
-  );
-}
-
-async function checkoutGitHubPullRequest(workspacePath: string, prNumber: number) {
-  const repoRoot = await resolveGitRootFromPath(workspacePath);
-  await runGh(repoRoot, ["pr", "checkout", String(prNumber)]);
-}
-
-async function createGitHubRepo(
-  workspacePath: string,
-  repo: string,
-  visibility: string,
-  branch: string | null,
-) {
-  const repoRoot = await resolveGitRootFromPath(workspacePath);
-  const repoName = validateNormalizedRepoName(validateGitHubRepoName(repo));
-  const visibilityFlag = visibility.trim() === "private"
-    ? "--private"
-    : visibility.trim() === "public"
-      ? "--public"
-      : null;
-  if (!visibilityFlag) {
-    throw new Error(`Invalid repo visibility: ${visibility}`);
-  }
-
-  try {
-    await runGit(repoRoot, ["rev-parse", "--git-dir"]);
-  } catch {
-    throw new Error("Git is not initialized in this folder yet.");
-  }
-
-  const originUrlBefore = await tryRunGit(repoRoot, ["remote", "get-url", "origin"]);
-  const originRepoBefore = originUrlBefore?.stdout.trim() ? parseGitHubRepo(originUrlBefore.stdout.trim()) : null;
-
-  const fullName = repoName.includes("/")
-    ? repoName
-    : `${await ghStdoutTrim(repoRoot, ["api", "user", "--jq", ".login"])}/${repoName}`;
-  if (fullName.startsWith("/")) {
-    throw new Error("Failed to determine GitHub username.");
-  }
-
-  if (originUrlBefore?.stdout.trim()) {
-    if (!originRepoBefore) {
-      throw new Error(
-        "Origin remote is not a GitHub repository. Remove or reconfigure origin before creating a GitHub remote.",
-      );
-    }
-    if (!gitHubRepoNamesMatch(originRepoBefore, fullName)) {
-      throw new Error(
-        `Origin remote already points to '${originRepoBefore}', but '${fullName}' was requested. Remove or reconfigure origin to continue.`,
-      );
-    }
-  }
-
-  await ensureGitHubRepoExists(repoRoot, fullName, visibilityFlag, Boolean(originUrlBefore?.stdout.trim()));
-
-  let remoteUrl = (await tryRunGit(repoRoot, ["remote", "get-url", "origin"]))?.stdout.trim() || null;
-  if (!remoteUrl) {
-    const protocol = await ghGitProtocol(repoRoot);
-    const jqField = protocol.trim() === "ssh" ? ".sshUrl" : ".httpsUrl";
-    remoteUrl = await ghStdoutTrim(repoRoot, [
-      "repo",
-      "view",
-      fullName,
-      "--json",
-      "sshUrl,httpsUrl",
-      "--jq",
-      jqField,
-    ]);
-    if (!remoteUrl.trim()) {
-      throw new Error("Failed to resolve GitHub remote URL.");
-    }
-    await runGit(repoRoot, ["remote", "add", "origin", remoteUrl.trim()]);
-  }
-
-  const pushError = await runGit(repoRoot, ["push", "-u", "origin", "HEAD"]).then(
-    () => null,
-    (error: unknown) => (error instanceof Error ? error.message : String(error)),
-  );
-
-  let defaultBranch = branch ? validateBranchName(branch) : null;
-  if (!defaultBranch) {
-    const currentBranch = await tryRunGit(repoRoot, ["branch", "--show-current"]);
-    defaultBranch = currentBranch?.stdout.trim() || null;
-    if (defaultBranch) {
-      defaultBranch = validateBranchName(defaultBranch);
-    }
-  }
-
-  const defaultBranchError = defaultBranch
-    ? await runGh(repoRoot, [
-        "api",
-        "-X",
-        "PATCH",
-        `/repos/${fullName}`,
-        "-f",
-        `default_branch=${defaultBranch}`,
-      ]).then(
-        () => null,
-        (error: unknown) => (error instanceof Error ? error.message : String(error)),
-      )
-    : null;
-
-  if (pushError || defaultBranchError) {
-    return {
-      status: "partial" as const,
-      repo: fullName,
-      remoteUrl,
-      pushError,
-      defaultBranchError,
-    };
-  }
-
-  return {
-    status: "ok" as const,
-    repo: fullName,
-    remoteUrl,
-  };
-}
-
-async function getGitLogSummary(workspacePath: string, limit: number) {
-  const repoRoot = await resolveGitRootFromPath(workspacePath);
-  const totalResult = await runGit(repoRoot, ["rev-list", "--count", "HEAD"]);
-  const entriesResult = await runGit(repoRoot, [
-    "log",
-    `--max-count=${limit}`,
-    "--date=unix",
-    "--pretty=format:%H%x1f%s%x1f%an%x1f%at%x1e",
-  ]);
-  let ahead = 0;
-  let behind = 0;
-  let aheadEntries: Array<{ sha: string; summary: string; author: string; timestamp: number }> = [];
-  let behindEntries: Array<{ sha: string; summary: string; author: string; timestamp: number }> = [];
-  let upstream: string | null = null;
-  const upstreamName = await tryRunGit(repoRoot, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]);
-  if (upstreamName?.stdout.trim()) {
-    upstream = upstreamName.stdout.trim();
-    const counts = await runGit(repoRoot, ["rev-list", "--left-right", "--count", `HEAD...${upstream}`]);
-    const [aheadRaw = "0", behindRaw = "0"] = counts.stdout.trim().split(/\s+/);
-    ahead = Number.parseInt(aheadRaw, 10) || 0;
-    behind = Number.parseInt(behindRaw, 10) || 0;
-    const [aheadResult, behindResult] = await Promise.all([
-      runGit(repoRoot, [
-        "log",
-        `--max-count=${limit}`,
-        "--date=unix",
-        "--pretty=format:%H%x1f%s%x1f%an%x1f%at%x1e",
-        `${upstream}..HEAD`,
-      ]),
-      runGit(repoRoot, [
-        "log",
-        `--max-count=${limit}`,
-        "--date=unix",
-        "--pretty=format:%H%x1f%s%x1f%an%x1f%at%x1e",
-        `HEAD..${upstream}`,
-      ]),
-    ]);
-    aheadEntries = parseGitLogEntries(aheadResult.stdout);
-    behindEntries = parseGitLogEntries(behindResult.stdout);
-  }
-  return {
-    total: Number.parseInt(totalResult.stdout.trim(), 10) || 0,
-    entries: parseGitLogEntries(entriesResult.stdout),
-    ahead,
-    behind,
-    aheadEntries,
-    behindEntries,
-    upstream,
-  };
-}
-
-async function getCommitDiffEntries(workspacePath: string, sha: string) {
-  const repoRoot = await resolveGitRootFromPath(workspacePath);
-  const names = await runGit(repoRoot, ["diff-tree", "--no-commit-id", "--name-status", "-r", sha]);
-  const entries = names.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [status = "", ...pathParts] = line.split("\t");
-      return {
-        status,
-        path: normalizeGitPathForUi(pathParts[pathParts.length - 1] ?? ""),
-      };
-    })
-    .filter((entry) => entry.path);
-
-  return await Promise.all(
-    entries.map(async (entry) => ({
-      path: entry.path,
-      status: entry.status.charAt(0) || "M",
-      diff: (await runGit(repoRoot, ["show", "--format=", "--binary", sha, "--", entry.path])).stdout,
-    })),
-  );
-}
-
-async function listLocalGitBranches(workspacePath: string) {
-  const repoRoot = await resolveGitRootFromPath(workspacePath);
-  const result = await runGit(repoRoot, [
-    "for-each-ref",
-    "--format=%(refname:short)\t%(committerdate:unix)",
-    "refs/heads",
-  ]);
-  return result.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [name = "", lastCommit = "0"] = line.split("\t");
-      return {
-        name,
-        lastCommit: (Number.parseInt(lastCommit, 10) || 0) * MILLISECONDS_PER_SECOND,
-      };
-    })
-    .filter((entry) => entry.name);
-}
-
-function nullDevicePath() {
-  return process.platform === "win32" ? "NUL" : "/dev/null";
-}
-
-function resolveNoIndexDiff(
-  resolve: (value: string | PromiseLike<string>) => void,
-  reject: (reason?: unknown) => void,
-  error: import("node:child_process").ExecFileException | null,
-  stdout: string,
-  stderr: string,
-) {
-  const message = `${stderr || stdout || error?.message || ""}`.trim();
-  if (!error) {
-    resolve(stdout);
-    return;
-  }
-  const code =
-    typeof error.code === "number" ? error.code : Number(error.code);
-  if (code === 1) {
-    resolve(stdout);
-    return;
-  }
-  reject(new Error(message || "Git diff failed."));
-}
-
-async function runGitNoIndexDiff(repoRoot: string, relativePath: string) {
-  return await new Promise<string>((resolve, reject) => {
-    execFile(
-      "git",
-      ["diff", "--binary", "--no-color", "--no-index", "--", nullDevicePath(), relativePath],
-      { cwd: repoRoot, encoding: "utf8", maxBuffer: EXEC_MAX_BUFFER_BYTES },
-      resolveNoIndexDiff.bind(null, resolve, reject),
-    );
-  });
-}
-
-async function writeTemporaryPatchFile(patch: string) {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-monitor-patch-"));
-  const patchPath = path.join(tempDir, "apply.patch");
-  await fs.writeFile(patchPath, patch, "utf8");
-  return { tempDir, patchPath };
-}
-
-function normalizePatchApplyFailure(error: unknown) {
-  const detail = (error instanceof Error ? error.message : String(error)).trim() || "Git apply failed.";
-  if (!detail.includes("Applied patch to")) {
-    return detail;
-  }
-  if (detail.includes("with conflicts")) {
-    return "Applied with conflicts. Resolve conflicts in the parent repo before retrying.";
-  }
-  return "Patch applied partially. Resolve changes in the parent repo before retrying.";
-}
-
-async function applyGitPatch(repoRoot: string, patch: string) {
-  const { tempDir, patchPath } = await writeTemporaryPatchFile(patch);
-  try {
-    await runGit(repoRoot, ["apply", "--3way", "--whitespace=nowarn", patchPath]);
-  } catch (error) {
-    throw new Error(normalizePatchApplyFailure(error), { cause: error });
-  } finally {
-    await fs.rm(tempDir, { recursive: true, force: true });
-  }
 }
 
 function escapeRuleString(value: string) {
@@ -1827,23 +898,6 @@ async function appendPrefixRule(rulesPath: string, pattern: string[]) {
   updated += formatPrefixRule(pattern);
   await fs.mkdir(path.dirname(rulesPath), { recursive: true });
   await fs.writeFile(rulesPath, updated, "utf8");
-}
-
-async function cloneRepository(url: string, destinationPath: string) {
-  await fs.mkdir(path.dirname(destinationPath), { recursive: true });
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn("git", ["clone", url, destinationPath], {
-      stdio: "inherit",
-    });
-    child.once("error", reject);
-    child.once("exit", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(`git clone exited with code ${code ?? -1}`));
-    });
-  });
 }
 
 export class CodexCompanionServer {
@@ -3351,6 +2405,8 @@ export class CodexCompanionServer {
       notFound,
       badRequest,
       rpcBoundaryError,
+      initializeGitRepo,
+      createGitHubRepo,
       runGit,
       runGitCommit,
       tryRunGit,
@@ -3370,35 +2426,11 @@ export class CodexCompanionServer {
     };
   }
 
-  private async handleGitBranchRpc(
+  private async handleGitRpc(
     method: string,
     params: JsonRecord,
   ): Promise<RpcDispatchResult> {
-    const result = await dispatchGitBranchRpc(
-      this.createGitRpcContext(),
-      method,
-      params,
-    );
-    return result === undefined ? RPC_UNHANDLED : result;
-  }
-
-  private async handleGitHubRpc(
-    method: string,
-    params: JsonRecord,
-  ): Promise<RpcDispatchResult> {
-    const result = await dispatchGitHubRpc(
-      this.createGitRpcContext(),
-      method,
-      params,
-    );
-    return result === undefined ? RPC_UNHANDLED : result;
-  }
-
-  private async handleGitWorkingTreeRpc(
-    method: string,
-    params: JsonRecord,
-  ): Promise<RpcDispatchResult> {
-    const result = await dispatchGitWorkingTreeRpc(
+    const result = await dispatchGitRpc(
       this.createGitRpcContext(),
       method,
       params,
@@ -3672,13 +2704,11 @@ export class CodexCompanionServer {
       case "list_git_branches":
       case "checkout_git_branch":
       case "create_git_branch":
-        return await this.handleGitBranchRpc(method, params);
       case "get_github_issues":
       case "get_github_pull_requests":
       case "get_github_pull_request_diff":
       case "get_github_pull_request_comments":
       case "checkout_github_pull_request":
-        return await this.handleGitHubRpc(method, params);
       case "get_git_status":
       case "list_git_roots":
       case "get_git_diffs":
@@ -3693,7 +2723,9 @@ export class CodexCompanionServer {
       case "commit_git":
       case "push_git":
       case "pull_git":
-        return await this.handleGitWorkingTreeRpc(method, params);
+      case "init_git_repo":
+      case "create_github_repo":
+        return await this.handleGitRpc(method, params);
       case "file_read":
       case "file_write":
         return (
@@ -4225,73 +3257,6 @@ export class CodexCompanionServer {
         }
         try {
           return await this.generateRunMetadataForWorkspace(workspace, prompt);
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "init_git_repo": {
-        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
-        const force = params.force === true;
-        if (!workspace) {
-          return notFound("Workspace not found.");
-        }
-        try {
-          const repoRoot = path.resolve(workspace.path);
-          const branch = validateBranchName(String(params.branch ?? ""));
-          if (await pathExists(path.join(repoRoot, ".git"))) {
-            return { status: "already_initialized" };
-          }
-          if (!force) {
-            const entryCount = await countEffectiveDirEntries(repoRoot);
-            if (entryCount > 0) {
-              return { status: "needs_confirmation", entryCount };
-            }
-          }
-
-          try {
-            await runGit(repoRoot, ["init", "--initial-branch", branch]);
-          } catch (error) {
-            const detail = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-            const unsupported =
-              detail.includes("initial-branch") &&
-              (detail.includes("unknown option") ||
-                detail.includes("unrecognized option") ||
-                detail.includes("unknown switch") ||
-                detail.includes("usage:"));
-            if (!unsupported) {
-              throw error;
-            }
-            await runGit(repoRoot, ["init"]);
-            await runGit(repoRoot, ["symbolic-ref", "HEAD", `refs/heads/${branch}`]);
-          }
-
-          let commitError: string | null = null;
-          try {
-            await runGit(repoRoot, ["add", "-A"]);
-            await runGit(repoRoot, ["commit", "--allow-empty", "-m", "Initial commit"]);
-          } catch (error) {
-            commitError = error instanceof Error ? error.message : String(error);
-          }
-
-          return commitError
-            ? { status: "initialized", commitError }
-            : { status: "initialized" };
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "create_github_repo": {
-        const workspace = this.getWorkspace(String(params.workspaceId ?? ""));
-        if (!workspace) {
-          return notFound("Workspace not found.");
-        }
-        try {
-          return await createGitHubRepo(
-            workspace.path,
-            String(params.repo ?? ""),
-            String(params.visibility ?? ""),
-            toNullableString(params.branch),
-          );
         } catch (error) {
           return rpcBoundaryError(error);
         }

@@ -28,6 +28,8 @@ function createContext(overrides: Partial<GitRpcContext> = {}): GitRpcContext {
         message: error instanceof Error ? error.message : String(error),
       },
     }),
+    initializeGitRepo: vi.fn().mockResolvedValue({ status: "initialized" }),
+    createGitHubRepo: vi.fn().mockResolvedValue({ status: "ok", repo: "openai/codex", remoteUrl: "origin" }),
     runGit: vi.fn().mockResolvedValue({ stdout: "", stderr: "" }),
     runGitCommit: vi.fn().mockResolvedValue({ stdout: "", stderr: "" }),
     tryRunGit: vi.fn().mockResolvedValue(null),
