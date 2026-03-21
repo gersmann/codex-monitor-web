@@ -1233,6 +1233,65 @@ describe("useThreadActions", () => {
     expect(onSubagentThreadDetected).toHaveBeenCalledWith("ws-1", "child-thread");
   });
 
+  it("applies collaboration link restoration during thread/list hydration", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "parent-thread-collab",
+            cwd: "/tmp/codex",
+            preview: "Parent",
+            updated_at: 5000,
+            turns: [
+              {
+                items: [
+                  {
+                    type: "collabToolCall",
+                    senderThreadId: "parent-thread-collab",
+                    newThreadId: "child-thread-collab",
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            id: "child-thread-collab",
+            cwd: "/tmp/codex",
+            preview: "Child",
+            updated_at: 4500,
+            source: {
+              subAgent: {
+                kind: "review",
+              },
+            },
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+    vi.mocked(getThreadTimestamp).mockImplementation((thread) => {
+      const value = (thread as Record<string, unknown>).updated_at as number;
+      return value ?? 0;
+    });
+
+    const { result, applyCollabThreadLinksFromThread } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    expect(applyCollabThreadLinksFromThread).toHaveBeenCalledWith(
+      "ws-1",
+      "parent-thread-collab",
+      expect.objectContaining({ id: "parent-thread-collab" }),
+    );
+    expect(applyCollabThreadLinksFromThread).toHaveBeenCalledWith(
+      "ws-1",
+      "child-thread-collab",
+      expect.objectContaining({ id: "child-thread-collab" }),
+    );
+  });
+
   it("restores parent-child links from thread/list top-level parent metadata", async () => {
     vi.mocked(listThreads).mockResolvedValue({
       result: {

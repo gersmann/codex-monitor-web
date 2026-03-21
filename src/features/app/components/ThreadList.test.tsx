@@ -211,6 +211,48 @@ describe("ThreadList", () => {
     expect(screen.getByRole("button", { name: "Hide sub-agents" })).toBeTruthy();
   });
 
+  it("keeps inactive descendants collapsed when only the parent thread is active", () => {
+    render(
+      <ThreadList
+        {...baseProps}
+        activeThreadId="thread-1"
+        unpinnedRows={[
+          { thread, depth: 0 },
+          { thread: nestedThread, depth: 1 },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText("Nested Agent")).toBeNull();
+    expect(screen.getByRole("button", { name: "Show sub-agents" })).toBeTruthy();
+  });
+
+  it("does not auto-expand descendants when the first sync hydrates a collapsed tree", async () => {
+    const { queryByText, rerender } = render(
+      <ThreadList
+        {...baseProps}
+        unpinnedRows={[]}
+        totalThreadRoots={0}
+      />,
+    );
+
+    rerender(
+      <ThreadList
+        {...baseProps}
+        unpinnedRows={[
+          { thread, depth: 0 },
+          { thread: nestedThread, depth: 1 },
+        ]}
+        totalThreadRoots={1}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(queryByText("Nested Agent")).toBeNull();
+      expect(screen.getByRole("button", { name: "Show sub-agents" })).toBeTruthy();
+    });
+  });
+
   it("auto-expands a collapsed tree when a new subagent is added", async () => {
     const { queryByText, rerender } = render(
       <ThreadList

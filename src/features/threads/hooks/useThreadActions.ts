@@ -171,6 +171,30 @@ export function useThreadActions({
   threadStatusByIdRef.current = threadStatusById;
   activeTurnIdByThreadRef.current = activeTurnIdByThread;
 
+  const restoreThreadParentLinks = useCallback(
+    (
+      workspaceId: string,
+      threadId: string,
+      thread: Record<string, unknown>,
+    ) => {
+      if (!threadId) {
+        return;
+      }
+      applyCollabThreadLinksFromThread(workspaceId, threadId, thread);
+      const sourceParentId = getParentThreadIdFromThread(thread);
+      if (!sourceParentId) {
+        return;
+      }
+      updateThreadParent(sourceParentId, [threadId]);
+      onSubagentThreadDetected(workspaceId, threadId);
+    },
+    [
+      applyCollabThreadLinksFromThread,
+      onSubagentThreadDetected,
+      updateThreadParent,
+    ],
+  );
+
   const extractThreadId = useCallback((response: Record<string, any>) => {
     const thread = response.result?.thread ?? response.thread ?? null;
     return String(thread?.id ?? "");
@@ -280,12 +304,7 @@ export function useThreadActions({
             onThreadCodexMetadataDetected?.(workspaceId, threadId, codexMetadata);
           }
           dispatch({ type: "ensureThread", workspaceId, threadId });
-          applyCollabThreadLinksFromThread(workspaceId, threadId, thread);
-          const sourceParentId = getParentThreadIdFromThread(thread);
-          if (sourceParentId) {
-            updateThreadParent(sourceParentId, [threadId]);
-            onSubagentThreadDetected(workspaceId, threadId);
-          }
+          restoreThreadParentLinks(workspaceId, threadId, thread);
           const items = buildItemsFromThread(thread);
           const localItems = itemsByThread[threadId] ?? [];
           const shouldReplace =
@@ -412,16 +431,14 @@ export function useThreadActions({
       }
     },
     [
-      applyCollabThreadLinksFromThread,
       dispatch,
       getCustomName,
       itemsByThread,
       loadedThreadsRef,
       onDebug,
-      onSubagentThreadDetected,
       onThreadCodexMetadataDetected,
       replaceOnResumeRef,
-      updateThreadParent,
+      restoreThreadParentLinks,
     ],
   );
 
@@ -696,14 +713,10 @@ export function useThreadActions({
             if (!threadId) {
               return;
             }
+            restoreThreadParentLinks(workspace.id, threadId, thread);
             const codexMetadata = extractThreadCodexMetadata(thread);
             if (codexMetadata.modelId || codexMetadata.effort) {
               onThreadCodexMetadataDetected?.(workspace.id, threadId, codexMetadata);
-            }
-            const sourceParentId = getParentThreadIdFromThread(thread);
-            if (sourceParentId) {
-              updateThreadParent(sourceParentId, [threadId]);
-              onSubagentThreadDetected(workspace.id, threadId);
             }
             const timestamp = getThreadTimestamp(thread);
             if (timestamp > (nextActivityByThread[threadId] ?? 0)) {
@@ -838,15 +851,14 @@ export function useThreadActions({
       buildThreadSummary,
       dispatch,
       onDebug,
-      onSubagentThreadDetected,
       onThreadCodexMetadataDetected,
       activeThreadIdByWorkspace,
-      threadParentById,
+      restoreThreadParentLinks,
       threadActivityRef,
       threadStatusById,
       threadSortKey,
       threadsByWorkspace,
-      updateThreadParent,
+      threadParentById,
     ],
   );
 
@@ -961,13 +973,10 @@ export function useThreadActions({
           if (!id || existingIds.has(id)) {
             return;
           }
+          restoreThreadParentLinks(workspace.id, id, thread);
           const codexMetadata = extractThreadCodexMetadata(thread);
           if (codexMetadata.modelId || codexMetadata.effort) {
             onThreadCodexMetadataDetected?.(workspace.id, id, codexMetadata);
-          }
-          const sourceParentId = getParentThreadIdFromThread(thread);
-          if (sourceParentId) {
-            updateThreadParent(sourceParentId, [id]);
           }
           const summary = buildThreadSummary(
             workspace.id,
@@ -1027,10 +1036,10 @@ export function useThreadActions({
       buildThreadSummary,
       dispatch,
       onDebug,
+      restoreThreadParentLinks,
       threadListCursorByWorkspace,
       threadsByWorkspace,
       threadSortKey,
-      updateThreadParent,
       onThreadCodexMetadataDetected,
     ],
   );

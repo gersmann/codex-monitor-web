@@ -38,7 +38,6 @@ import {
   applyGitPatch,
   cloneRepository,
   resolveGitRootFromPath,
-  runCommandCapture,
   runGit,
   runGitCommit,
   runGitNoIndexDiff,
@@ -48,16 +47,12 @@ import { handleCompanionRuntimeRpc as dispatchCompanionRuntimeRpc } from "./code
 import { handleThreadBacklogRpc as dispatchThreadBacklogRpc } from "./codex/codexRpcThreadBacklog.js";
 import { classifyRpcBoundaryError } from "./codex/rpcErrors.js";
 import { buildLocalUsageSnapshot } from "./codex/localUsage.js";
-import {
-  buildAgentDescriptionPrompt,
-  buildAppServerUserInputItems,
-  buildRunMetadataPrompt,
-  extractUserMessageTextFromStoredItem,
-  findLastAgentMessageText,
-  parseAgentDescriptionValue,
-  parseRunMetadataValue,
-} from "./codex/codexPrompts.js";
 import { handlePromptRpc as dispatchPromptRpc } from "./codex/codexPromptRpc.js";
+import { AccountRuntimeService } from "./codex/codexAccountRuntimeService.js";
+import { AppServerRuntimeService } from "./codex/codexAppServerRuntimeService.js";
+import { errorMessage } from "./codex/codexCoreUtils.js";
+import { GenerationRuntimeService } from "./codex/codexGenerationRuntimeService.js";
+import { ThreadStateService } from "./codex/codexThreadStateService.js";
 import { CompanionStorage } from "./storage.js";
 import {
   createTerminalRuntime,
@@ -74,21 +69,13 @@ import type {
   RpcErrorShape,
   StoredThread,
   StoredThreadCodexParams,
-  StoredThreadItem,
-  StoredTurn,
   StoredWorkspace,
-  ThreadBacklogItem,
 } from "./types.js";
 export {
   buildAppServerUserInputItems,
   buildRunMetadataPrompt,
   parseRunMetadataValue,
 } from "./codex/codexPrompts.js";
-
-type AccountFallback = {
-  email: string | null;
-  planType: string | null;
-};
 
 type LoginState = {
   canceled: boolean;
@@ -108,58 +95,6 @@ type RpcDispatchResult = unknown | RpcErrorShape | typeof RPC_UNHANDLED;
 
 const APP_SERVER_INIT_TIMEOUT_MS = 15_000;
 const APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
-const MILLISECONDS_PER_SECOND = 10 ** 3;
-const SECONDS_PER_MINUTE = 60;
-const MAX_ACTIVITY_GAP_MS = 2 * SECONDS_PER_MINUTE * MILLISECONDS_PER_SECOND;
-const APP_SERVER_SOURCE_KINDS = [
-  "cli",
-  "vscode",
-  "appServer",
-  "subAgentReview",
-  "subAgentCompact",
-  "subAgentThreadSpawn",
-  "unknown",
-];
-
-const APP_SERVER_GLOBAL_NOTIFICATION_METHODS = new Set([
-  "account/login/completed",
-  "account/rateLimits/updated",
-  "account/updated",
-  "app/list/updated",
-  "configWarning",
-  "deprecationNotice",
-  "model/rerouted",
-  "skills/changed",
-]);
-const OPENAI_AUTH_CLAIM = "https://api.openai.com/auth";
-const OPENAI_PROFILE_CLAIM = "https://api.openai.com/profile";
-const TURN_ACTIVITY_TIMESTAMP_KEYS = [
-  "updatedAt",
-  "updated_at",
-  "completedAt",
-  "completed_at",
-  "startedAt",
-  "started_at",
-  "createdAt",
-  "created_at",
-] as const;
-const THREAD_ACTIVITY_TIMESTAMP_KEYS = [
-  "updatedAt",
-  "updated_at",
-  "createdAt",
-  "created_at",
-] as const;
-const NO_THREAD_SCOPE_SUFFIX = "__no_thread__";
-
-const RUN_METADATA_OUTPUT_SCHEMA = {
-  type: "object",
-  properties: {
-    title: { type: "string" },
-    worktreeName: { type: "string" },
-  },
-  required: ["title", "worktreeName"],
-  additionalProperties: false,
-} as const;
 
 function rpcError(status: number, message: string): RpcErrorShape {
   return { error: { status, message } };
@@ -177,85 +112,12 @@ function rpcBoundaryError(error: unknown): RpcErrorShape {
   return classifyRpcBoundaryError(error);
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function mapPathValidationError(error: unknown): RpcErrorShape {
   const message = errorMessage(error);
   if (message === "Workspace not found.") {
     return notFound(message);
   }
   return badRequest(message);
-}
-
-function toThreadSummary(thread: StoredThread) {
-  return {
-    id: thread.id,
-    cwd: thread.cwd,
-    name: thread.name,
-    preview: thread.preview,
-    createdAt: thread.createdAt,
-    updatedAt: thread.updatedAt,
-    model: thread.modelId,
-    modelReasoningEffort: thread.effort,
-    source: "appServer",
-    activeTurnId: thread.activeTurnId,
-    pinnedAt: thread.pinnedAt,
-    detachedReviewParentId: thread.detachedReviewParentId,
-    codexParams: thread.codexParams,
-  };
-}
-
-function toThreadResponse(thread: StoredThread) {
-  return {
-    id: thread.id,
-    cwd: thread.cwd,
-    name: thread.name,
-    preview: thread.preview,
-    createdAt: thread.createdAt,
-    updatedAt: thread.updatedAt,
-    activeTurnId: thread.activeTurnId,
-    source: "appServer",
-    model: thread.modelId,
-    modelReasoningEffort: thread.effort,
-    pinnedAt: thread.pinnedAt,
-    detachedReviewParentId: thread.detachedReviewParentId,
-    codexParams: thread.codexParams,
-    turns: thread.turns.map((turn) => ({
-      id: turn.id,
-      status: turn.status,
-      createdAt: turn.createdAt,
-      completedAt: turn.completedAt,
-      items: turn.items,
-      errorMessage: turn.errorMessage,
-    })),
-    tokenUsage: thread.tokenUsage,
-  };
-}
-
-type ThreadSummary = ReturnType<typeof toThreadSummary>;
-
-function normalizeRootPath(value: string) {
-  const normalized = path.resolve(value).replace(/\\/g, "/");
-  return normalized === "/" ? normalized : normalized.replace(/\/+$/, "");
-}
-
-function buildCommitMessagePrompt(diff: string, template: string) {
-  const defaultTemplate =
-    "Generate a concise git commit message for the following changes. " +
-    "Follow conventional commit format (e.g., feat:, fix:, refactor:, docs:, etc.). " +
-    "Keep the summary line under 72 characters. " +
-    "Only output the commit message, nothing else.\n\nChanges:\n{diff}";
-  const base = template.trim() ? template : defaultTemplate;
-  return base.includes("{diff}") ? base.replace("{diff}", diff) : `${base}\n\nChanges:\n${diff}`;
-}
-
-function buildCommitMessagePromptForDiff(diff: string, template: string) {
-  if (!diff.trim()) {
-    throw new Error("No changes to generate commit message for");
-  }
-  return buildCommitMessagePrompt(diff, template);
 }
 
 function appServerClientVersion() {
@@ -276,377 +138,6 @@ function buildAppServerInitializeParams() {
   };
 }
 
-function buildSandboxPolicy(workspacePath: string, accessMode: string | null) {
-  switch (accessMode) {
-    case "full-access":
-      return {
-        type: "dangerFullAccess",
-      };
-    case "read-only":
-      return {
-        type: "readOnly",
-      };
-    default:
-      return {
-        type: "workspaceWrite",
-        writableRoots: [workspacePath],
-        networkAccess: true,
-      };
-  }
-}
-
-function approvalPolicyForAccessMode(accessMode: string | null) {
-  return accessMode === "full-access" ? "never" : "on-request";
-}
-
-function asJsonRecord(value: unknown): JsonRecord | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  return value as JsonRecord;
-}
-
-function extractEmbeddedThreadId(value: unknown) {
-  return trimString(asJsonRecord(value)?.id);
-}
-
-function extractThreadIdFromRecord(value: unknown) {
-  const record = asJsonRecord(value);
-  if (!record) {
-    return "";
-  }
-  return (
-    trimString(record.threadId) ||
-    trimString(record.thread_id) ||
-    extractEmbeddedThreadId(record.thread)
-  );
-}
-
-function extractThreadIdFromParams(params: JsonRecord) {
-  const direct = trimString(params.threadId) || trimString(params.thread_id);
-  if (direct) {
-    return direct;
-  }
-  const fromTurn = extractThreadIdFromRecord(params.turn);
-  if (fromTurn) {
-    return fromTurn;
-  }
-  const fromItem = extractThreadIdFromRecord(params.item);
-  if (fromItem) {
-    return fromItem;
-  }
-  return extractEmbeddedThreadId(params.thread);
-}
-
-function extractTurnIdFromTurnRecord(value: unknown) {
-  const record = asJsonRecord(value);
-  if (!record) {
-    return "";
-  }
-  return trimString(record.id);
-}
-
-function extractTurnIdFromItemRecord(value: unknown) {
-  const record = asJsonRecord(value);
-  if (!record) {
-    return "";
-  }
-  return trimString(record.turnId) || trimString(record.turn_id);
-}
-
-function extractTurnIdFromParams(params: JsonRecord) {
-  const direct = trimString(params.turnId) || trimString(params.turn_id);
-  if (direct) {
-    return direct;
-  }
-  const fromTurn = extractTurnIdFromTurnRecord(params.turn);
-  if (fromTurn) {
-    return fromTurn;
-  }
-  return extractTurnIdFromItemRecord(params.item);
-}
-
-function normalizeLifecycleStatus(value: unknown) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_-]/g, "");
-}
-
-function isTerminalAppServerItem(item: unknown) {
-  if (!item || typeof item !== "object" || Array.isArray(item)) {
-    return true;
-  }
-  const record = item as JsonRecord;
-  const normalizedStatus = normalizeLifecycleStatus(record.status);
-  if (!normalizedStatus) {
-    return true;
-  }
-  return !(
-    normalizedStatus === "inprogress" ||
-    normalizedStatus === "running" ||
-    normalizedStatus === "processing" ||
-    normalizedStatus === "pending" ||
-    normalizedStatus === "queued" ||
-    normalizedStatus === "waiting" ||
-    normalizedStatus === "blocked"
-  );
-}
-
-function hasExplicitAppServerItemStatus(item: unknown) {
-  if (!item || typeof item !== "object" || Array.isArray(item)) {
-    return false;
-  }
-  const record = item as JsonRecord;
-  return normalizeLifecycleStatus(record.status).length > 0;
-}
-
-function readLifecycleTimestampMs(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-    return value;
-  }
-  const trimmed = trimString(value);
-  if (!trimmed) {
-    return null;
-  }
-  const parsedDate = Date.parse(trimmed);
-  if (Number.isFinite(parsedDate) && parsedDate > 0) {
-    return parsedDate;
-  }
-  const parsedNumber = Number(trimmed);
-  return Number.isFinite(parsedNumber) && parsedNumber > 0 ? parsedNumber : null;
-}
-
-function readFirstLifecycleTimestampMs(
-  source: Record<string, unknown>,
-  keys: readonly string[],
-) {
-  for (const key of keys) {
-    const timestamp = readLifecycleTimestampMs(source[key]);
-    if (timestamp !== null) {
-      return timestamp;
-    }
-  }
-  return null;
-}
-
-function readThreadActivityTimestampMs(rawThread: Record<string, unknown>, rawTurn: Record<string, unknown>) {
-  return (
-    readFirstLifecycleTimestampMs(rawTurn, TURN_ACTIVITY_TIMESTAMP_KEYS) ??
-    readFirstLifecycleTimestampMs(rawThread, THREAD_ACTIVITY_TIMESTAMP_KEYS)
-  );
-}
-
-function readThreadTurns(rawThread: Record<string, unknown>) {
-  return Array.isArray(rawThread.turns)
-    ? (rawThread.turns as Array<Record<string, unknown>>)
-    : [];
-}
-
-function readTurnItems(rawTurn: Record<string, unknown>) {
-  return Array.isArray(rawTurn.items) ? rawTurn.items : [];
-}
-
-function hasExplicitTerminalItemStatuses(items: unknown[]) {
-  return items.length > 0 &&
-    items.every((item) => isTerminalAppServerItem(item) && hasExplicitAppServerItemStatus(item));
-}
-
-function readDirectActiveTurnId(rawThread: Record<string, unknown>) {
-  return trimString(rawThread.activeTurnId) || trimString(rawThread.active_turn_id);
-}
-
-function isInactiveThreadStatus(statusType: string) {
-  return statusType === "idle" || statusType === "notloaded" || statusType === "systemerror";
-}
-
-function isStaleByActivityAge(activityTimestamp: number | null) {
-  return activityTimestamp !== null && Date.now() - activityTimestamp > MAX_ACTIVITY_GAP_MS;
-}
-
-function shouldNormalizeStaleThread(
-  statusType: string,
-  directActiveTurnId: string,
-  activityTimestamp: number | null,
-) {
-  if (isInactiveThreadStatus(statusType)) {
-    return true;
-  }
-  if (directActiveTurnId) {
-    return false;
-  }
-  return isStaleByActivityAge(activityTimestamp);
-}
-
-function markTurnCompleted(rawTurn: Record<string, unknown>) {
-  rawTurn.status = "completed";
-  if (!("error" in rawTurn)) {
-    rawTurn.error = null;
-  }
-}
-
-function normalizeThreadStatusToIdle(rawThread: Record<string, unknown>) {
-  const status = asJsonRecord(rawThread.status);
-  if (status && normalizeLifecycleStatus(status.type) === "active") {
-    rawThread.status = { type: "idle" };
-    return;
-  }
-  if (normalizeLifecycleStatus(rawThread.status) === "active") {
-    rawThread.status = "idle";
-  }
-}
-
-function clearThreadActiveTurn(rawThread: Record<string, unknown>) {
-  rawThread.activeTurnId = null;
-  rawThread.active_turn_id = null;
-}
-
-function normalizeStaleInProgressThread(rawThread: Record<string, unknown>) {
-  const turns = readThreadTurns(rawThread);
-  const lastTurn = turns.at(-1);
-  if (!lastTurn) {
-    return rawThread;
-  }
-  if (normalizeLifecycleStatus(lastTurn.status) !== "inprogress") {
-    return rawThread;
-  }
-  const items = readTurnItems(lastTurn);
-  if (items.length === 0) {
-    return rawThread;
-  }
-  if (!hasExplicitTerminalItemStatuses(items)) {
-    return rawThread;
-  }
-  const statusType = normalizeThreadStatusType(rawThread.status);
-  const directActiveTurnId = readDirectActiveTurnId(rawThread);
-  const activityTimestamp = readThreadActivityTimestampMs(rawThread, lastTurn);
-  if (!shouldNormalizeStaleThread(statusType, directActiveTurnId, activityTimestamp)) {
-    return rawThread;
-  }
-  markTurnCompleted(lastTurn);
-  normalizeThreadStatusToIdle(rawThread);
-  clearThreadActiveTurn(rawThread);
-  return rawThread;
-}
-
-function normalizeThreadStatusType(status: unknown) {
-  const record = asJsonRecord(status);
-  if (!record) {
-    return trimString(status).toLowerCase().replace(/[\s_-]/g, "");
-  }
-  return trimString(record.type ?? record.statusType ?? record.status_type)
-    .toLowerCase()
-    .replace(/[\s_-]/g, "");
-}
-
-function extractActiveTurnRecord(rawThread: Record<string, unknown>) {
-  return asJsonRecord(rawThread.activeTurn) ?? asJsonRecord(rawThread.active_turn);
-}
-
-function extractTurnObjectId(value: unknown) {
-  const record = asJsonRecord(value);
-  if (!record) {
-    return "";
-  }
-  return (
-    trimString(record.id) ||
-    trimString(record.turnId) ||
-    trimString(record.turn_id)
-  );
-}
-
-function findLatestTurnId(turns: Array<Record<string, unknown>>) {
-  for (let index = turns.length - 1; index >= 0; index -= 1) {
-    const turnId = trimString(turns[index]?.id);
-    if (turnId) {
-      return turnId;
-    }
-  }
-  return null;
-}
-
-function extractActiveTurnIdFromThread(rawThread: Record<string, unknown>) {
-  normalizeStaleInProgressThread(rawThread);
-  const direct = readDirectActiveTurnId(rawThread);
-  if (direct) {
-    return direct;
-  }
-  const objectId = extractTurnObjectId(extractActiveTurnRecord(rawThread));
-  if (objectId) {
-    return objectId;
-  }
-  if (normalizeThreadStatusType(rawThread.status) !== "active") {
-    return null;
-  }
-  return findLatestTurnId(readThreadTurns(rawThread));
-}
-
-function toStoredItemFromAppServer(turnId: string, item: JsonRecord): StoredThreadItem {
-  const itemId = trimString(item.id) || `item-${randomUUID()}`;
-  return {
-    ...item,
-    id: toStoredItemId(turnId, itemId),
-  };
-}
-
-function appServerTurnStatus(value: unknown): StoredTurn["status"] {
-  const normalized = trimString(value).toLowerCase();
-  switch (normalized) {
-    case "completed":
-      return "completed";
-    case "failed":
-    case "error":
-      return "failed";
-    case "cancelled":
-    case "canceled":
-      return "cancelled";
-    default:
-      return "active";
-  }
-}
-
-function buildStoredTurnFromAppServerThread(
-  threadId: string,
-  threadCreatedAt: number,
-  threadUpdatedAt: number,
-  rawTurn: Record<string, unknown>,
-  index: number,
-  existing?: StoredTurn,
-): StoredTurn {
-  const turnId = trimString(rawTurn.id) || `${threadId}:turn-${index + 1}`;
-  const status = appServerTurnStatus(rawTurn.status);
-  const rawItems = Array.isArray(rawTurn.items)
-    ? (rawTurn.items as Record<string, unknown>[])
-    : [];
-  const items = rawItems.map((item, itemIndex) => ({
-    ...item,
-    id: trimString(item.id) || `${turnId}:item-${itemIndex + 1}`,
-  }));
-  return {
-    id: turnId,
-    createdAt: existing?.createdAt ?? threadCreatedAt + index,
-    completedAt:
-      status === "completed" || status === "failed" || status === "cancelled"
-        ? (existing?.completedAt ?? threadUpdatedAt)
-        : null,
-    status,
-    errorMessage: toNullableString(rawTurn.error) ?? existing?.errorMessage ?? null,
-    items,
-  };
-}
-
-function toStoredItemId(turnId: string, itemId: string) {
-  return `${turnId}:${itemId}`;
-}
-
-function appServerItemIdMatches(storedItemId: string, requestedItemId: string) {
-  return (
-    storedItemId === requestedItemId ||
-    storedItemId.endsWith(`:${requestedItemId}`) ||
-    requestedItemId.endsWith(`:${storedItemId}`)
-  );
-}
-
 function trimString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -654,20 +145,6 @@ function trimString(value: unknown) {
 function toNullableString(value: unknown) {
   const trimmed = trimString(value);
   return trimmed.length > 0 ? trimmed : null;
-}
-
-function getOptionalServiceTier(
-  params: Record<string, unknown>,
-  key: string,
-): "fast" | "flex" | null | undefined {
-  if (!Object.prototype.hasOwnProperty.call(params, key)) {
-    return undefined;
-  }
-  if (params[key] === null) {
-    return null;
-  }
-  const value = toNullableString(params[key]);
-  return value === "fast" || value === "flex" ? value : undefined;
 }
 
 function parseCodexArgs(value: string | null) {
@@ -689,76 +166,6 @@ function parseCodexArgs(value: string | null) {
   });
 }
 
-function buildCodexPathEnv(codexBin: string | null) {
-  const resolved = trimString(codexBin);
-  if (!resolved || (!resolved.includes("/") && !resolved.includes("\\"))) {
-    return null;
-  }
-  const codexDir = path.dirname(path.resolve(resolved));
-  const currentPath = process.env.PATH ?? "";
-  return currentPath ? `${codexDir}${path.delimiter}${currentPath}` : codexDir;
-}
-
-function decodeBase64Url(value: string) {
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = normalized.length % 4;
-  const padded = padding === 0 ? normalized : normalized + "=".repeat(4 - padding);
-  return Buffer.from(padded, "base64").toString("utf8");
-}
-
-function readJwtPayload(token: string) {
-  const segments = token.split(".");
-  if (segments.length < 2) {
-    return null;
-  }
-  try {
-    return JSON.parse(decodeBase64Url(segments[1])) as JsonRecord;
-  } catch {
-    return null;
-  }
-}
-
-function cloneAccountRecord(response: JsonRecord | null) {
-  const account = asJsonRecord(response?.account) ?? asJsonRecord(response);
-  return account ? { ...account } : {};
-}
-
-function shouldApplyAccountFallback(account: JsonRecord) {
-  const accountType = trimString(account.type).toLowerCase();
-  return (
-    Object.keys(account).length === 0 ||
-    !accountType ||
-    accountType === "chatgpt" ||
-    accountType === "unknown"
-  );
-}
-
-function applyAccountFallback(account: JsonRecord, fallback: AccountFallback) {
-  if (!trimString(account.email) && fallback.email) {
-    account.email = fallback.email;
-  }
-  if (!trimString(account.planType) && fallback.planType) {
-    account.planType = fallback.planType;
-  }
-  if (!trimString(account.type) && (fallback.email || fallback.planType)) {
-    account.type = "chatgpt";
-  }
-}
-
-function buildAccountResponse(response: JsonRecord | null, fallback: AccountFallback | null) {
-  const account = cloneAccountRecord(response);
-  if (fallback && shouldApplyAccountFallback(account)) {
-    applyAccountFallback(account, fallback);
-  }
-  const accountResponse: { account: JsonRecord | null; requiresOpenaiAuth?: boolean } = {
-    account: Object.keys(account).length > 0 ? account : null,
-  };
-  if (typeof response?.requiresOpenaiAuth === "boolean") {
-    accountResponse.requiresOpenaiAuth = response.requiresOpenaiAuth;
-  }
-  return accountResponse;
-}
-
 function defaultWorkspaceSettings() {
   return {
     sidebarCollapsed: false,
@@ -771,62 +178,6 @@ function defaultWorkspaceSettings() {
     worktreeSetupScript: null,
     composerDefaults: null,
   };
-}
-
-function coerceAccessMode(value: unknown): StoredThreadCodexParams["accessMode"] {
-  return value === "read-only" || value === "current" || value === "full-access"
-    ? value
-    : null;
-}
-
-function coerceServiceTier(value: unknown): StoredThreadCodexParams["serviceTier"] {
-  if (value === "fast" || value === "flex") {
-    return value;
-  }
-  if (value === null) {
-    return null;
-  }
-  return undefined;
-}
-
-function normalizeStoredThreadCodexParamsPatch(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  const record = value as Record<string, unknown>;
-  const hasServiceTierField = Object.prototype.hasOwnProperty.call(record, "serviceTier");
-  const hasCodexArgsOverrideField = Object.prototype.hasOwnProperty.call(
-    record,
-    "codexArgsOverride",
-  );
-  return {
-    ...(Object.prototype.hasOwnProperty.call(record, "modelId")
-      ? { modelId: typeof record.modelId === "string" || record.modelId === null ? record.modelId : null }
-      : {}),
-    ...(Object.prototype.hasOwnProperty.call(record, "effort")
-      ? { effort: typeof record.effort === "string" || record.effort === null ? record.effort : null }
-      : {}),
-    ...(hasServiceTierField ? { serviceTier: coerceServiceTier(record.serviceTier) } : {}),
-    ...(Object.prototype.hasOwnProperty.call(record, "accessMode")
-      ? { accessMode: coerceAccessMode(record.accessMode) }
-      : {}),
-    ...(Object.prototype.hasOwnProperty.call(record, "collaborationModeId")
-      ? {
-          collaborationModeId:
-            typeof record.collaborationModeId === "string" || record.collaborationModeId === null
-              ? record.collaborationModeId
-              : null,
-        }
-      : {}),
-    ...(hasCodexArgsOverrideField
-      ? {
-          codexArgsOverride:
-            typeof record.codexArgsOverride === "string" || record.codexArgsOverride === null
-              ? record.codexArgsOverride
-              : null,
-        }
-      : {}),
-  } satisfies Partial<StoredThreadCodexParams>;
 }
 
 function mergeStoredThreadCodexParams(
@@ -1000,6 +351,10 @@ export class CodexCompanionServer {
   >();
   private readonly terminalRuntime: TerminalRuntime | null;
   private readonly terminalEnabled: boolean;
+  private readonly threadState: ThreadStateService;
+  private readonly appServerRuntime: AppServerRuntimeService;
+  private readonly accountRuntime: AccountRuntimeService;
+  private readonly generationRuntime: GenerationRuntimeService;
 
   constructor(
     private readonly storage: CompanionStorage,
@@ -1009,6 +364,48 @@ export class CodexCompanionServer {
   ) {
     this.terminalRuntime = terminalRuntime ?? createTerminalRuntime(broadcast);
     this.terminalEnabled = this.terminalRuntime !== null;
+    this.threadState = new ThreadStateService({
+      storage: this.storage,
+      workspacesById: this.workspacesById,
+      threadsById: this.threadsById,
+      appServerThreadWorkspaceIds: this.appServerThreadWorkspaceIds,
+      readSettings: () => this.storage.readSettings(),
+      buildAppServerClient: (settings, workspaceId) => this.buildAppServerClient(settings, workspaceId),
+      notFound,
+      badRequest,
+      rpcBoundaryError,
+    });
+    this.appServerRuntime = new AppServerRuntimeService({
+      broadcast: this.broadcast,
+      appServerClients: this.appServerClients,
+      appServerClientWorkspaceIds: this.appServerClientWorkspaceIds,
+      appServerNotificationUnsubscribers: this.appServerNotificationUnsubscribers,
+      connectedWorkspaceIds: this.connectedWorkspaceIds,
+      threadState: this.threadState,
+      appServerClientKey: this.appServerClientKey.bind(this),
+      appServerClientOptions: this.appServerClientOptions.bind(this),
+    });
+    this.accountRuntime = new AccountRuntimeService({
+      settingsPath: this.storage.settingsPath,
+      getWorkspace: this.getWorkspace.bind(this),
+      readSettings: () => this.storage.readSettings(),
+      buildAppServerClient: (settings, workspaceId) => this.buildAppServerClient(settings, workspaceId),
+      readAuthAccountFallback: () => this.readAuthAccountFallback(),
+      loginStateByWorkspace: this.loginStateByWorkspace,
+      notFound,
+    });
+    this.generationRuntime = new GenerationRuntimeService({
+      storage: this.storage,
+      readSettings: () => this.storage.readSettings(),
+      createDetachedAppServerClient: (settings, workspaceId) =>
+        this.createDetachedAppServerClient(settings, workspaceId),
+      emit: this.emit.bind(this),
+      codexCommand: this.codexCommand.bind(this),
+      resolveRuntimeCodexArgs: this.resolveRuntimeCodexArgs.bind(this),
+      localUsageCacheTtlMs: CodexCompanionServer.LOCAL_USAGE_CACHE_TTL_MS,
+      localUsageSnapshotCache: this.localUsageSnapshotCache,
+      localUsageSnapshotInFlight: this.localUsageSnapshotInFlight,
+    });
   }
 
   async initialize() {
@@ -1023,7 +420,10 @@ export class CodexCompanionServer {
     });
     threads.forEach((thread) => {
       this.threadsById.set(thread.id, thread);
-      this.appServerThreadWorkspaceIds.set(this.resolveAppServerThreadId(thread), thread.workspaceId);
+      this.appServerThreadWorkspaceIds.set(
+        this.threadState.resolveAppServerThreadId(thread),
+        thread.workspaceId,
+      );
     });
   }
 
@@ -1042,12 +442,9 @@ export class CodexCompanionServer {
   }
 
   async close() {
-    await Promise.all(Array.from(this.appServerClients.values(), (client) => client.close()));
+    await this.appServerRuntime.close();
     await this.terminalRuntime?.closeAll();
-    this.appServerClients.clear();
-    this.appServerClientWorkspaceIds.clear();
     this.appServerThreadWorkspaceIds.clear();
-    this.appServerNotificationUnsubscribers.clear();
   }
 
   private get dataDir() {
@@ -1148,172 +545,6 @@ export class CodexCompanionServer {
     };
   }
 
-  private async importClientThreadMetadata(params: JsonRecord) {
-    const pinnedThreads =
-      params.pinnedThreads && typeof params.pinnedThreads === "object"
-        ? (params.pinnedThreads as Record<string, unknown>)
-        : {};
-    const threadCodexParams =
-      params.threadCodexParams && typeof params.threadCodexParams === "object"
-        ? (params.threadCodexParams as Record<string, unknown>)
-        : {};
-    const detachedReviewLinks =
-      params.detachedReviewLinks && typeof params.detachedReviewLinks === "object"
-        ? (params.detachedReviewLinks as Record<string, unknown>)
-        : {};
-    const customNames =
-      params.customNames && typeof params.customNames === "object"
-        ? (params.customNames as Record<string, unknown>)
-        : {};
-    let didChangeThreads = false;
-    let didChangeWorkspaces = false;
-
-    for (const [key, value] of Object.entries(pinnedThreads)) {
-      const scope = this.splitThreadScopeKey(key);
-      const pinnedAt = typeof value === "number" && Number.isFinite(value) ? value : null;
-      if (!scope || pinnedAt === null) {
-        continue;
-      }
-      const thread = this.getThreadForWorkspace(scope.workspaceId, scope.threadId);
-      if (!thread) {
-        continue;
-      }
-      if (thread.pinnedAt === null || pinnedAt > thread.pinnedAt) {
-        thread.pinnedAt = pinnedAt;
-        didChangeThreads = true;
-      }
-    }
-
-    for (const [key, value] of Object.entries(threadCodexParams)) {
-      const scope = this.splitThreadScopeKey(key);
-      const patch = normalizeStoredThreadCodexParamsPatch(value);
-      if (!scope || !patch) {
-        continue;
-      }
-      if (scope.threadId === NO_THREAD_SCOPE_SUFFIX) {
-        const workspace = this.patchWorkspaceComposerDefaultsRecord(scope.workspaceId, patch);
-        if (workspace) {
-          didChangeWorkspaces = true;
-        }
-        continue;
-      }
-      const thread = this.patchThreadCodexParamsRecord(scope.workspaceId, scope.threadId, patch);
-      if (thread) {
-        didChangeThreads = true;
-      }
-    }
-
-    for (const [workspaceId, links] of Object.entries(detachedReviewLinks)) {
-      if (!links || typeof links !== "object") {
-        continue;
-      }
-      for (const [childId, parentId] of Object.entries(links as Record<string, unknown>)) {
-        const thread = this.getThreadForWorkspace(workspaceId, childId);
-        if (!thread || typeof parentId !== "string" || !parentId.trim()) {
-          continue;
-        }
-        if (!thread.detachedReviewParentId) {
-          thread.detachedReviewParentId = parentId;
-          didChangeThreads = true;
-        }
-      }
-    }
-
-    for (const [key, value] of Object.entries(customNames)) {
-      const scope = this.splitThreadScopeKey(key);
-      const name = typeof value === "string" ? value.trim() : "";
-      if (!scope || !name) {
-        continue;
-      }
-      const thread = this.getThreadForWorkspace(scope.workspaceId, scope.threadId);
-      if (!thread || thread.name) {
-        continue;
-      }
-      thread.name = name;
-      didChangeThreads = true;
-    }
-
-    await Promise.all([
-      didChangeThreads ? this.persistThreads() : Promise.resolve(),
-      didChangeWorkspaces ? this.persistWorkspaces() : Promise.resolve(),
-    ]);
-
-    return {
-      imported: {
-        pinnedThreads: Object.keys(pinnedThreads).length,
-        threadCodexParams: Object.keys(threadCodexParams).length,
-        detachedReviewLinks: Object.keys(detachedReviewLinks).length,
-        customNames: Object.keys(customNames).length,
-      },
-    };
-  }
-
-  private createBacklogItem(text: string): ThreadBacklogItem {
-    const now = Date.now();
-    return {
-      id: randomUUID(),
-      text,
-      createdAt: now,
-      updatedAt: now,
-    };
-  }
-
-  private sortBacklog(items: ThreadBacklogItem[]) {
-    items.sort((a, b) => b.createdAt - a.createdAt);
-    return items;
-  }
-
-  private findRollbackTarget(thread: StoredThread, messageItemId: string) {
-    for (let index = 0; index < thread.turns.length; index += 1) {
-      const turn = thread.turns[index];
-      const item = turn.items.find((entry) =>
-        appServerItemIdMatches(trimString(entry.id), messageItemId),
-      );
-      if (!item) {
-        continue;
-      }
-      return {
-        turnIndex: index,
-        turn,
-        item,
-      };
-    }
-    return null;
-  }
-
-  private findThreadBySdkThreadId(threadId: string) {
-    return (
-      Array.from(this.threadsById.values()).find(
-        (entry) => entry.sdkThreadId === threadId || entry.id === threadId,
-      ) ?? null
-    );
-  }
-
-  private resolveWorkspaceIdForCwd(cwd: string) {
-    const normalizedCwd = normalizeRootPath(cwd);
-    if (!normalizedCwd) {
-      return null;
-    }
-    const matches = Array.from(this.workspacesById.values())
-      .map((workspace) => ({
-        workspaceId: workspace.id,
-        root: normalizeRootPath(workspace.path),
-      }))
-      .filter(({ root }) => {
-        if (!root) {
-          return false;
-        }
-        return (
-          root === normalizedCwd ||
-          (normalizedCwd.length > root.length &&
-            normalizedCwd.startsWith(root) &&
-            normalizedCwd.charCodeAt(root.length) === 47)
-        );
-      })
-      .sort((left, right) => right.root.length - left.root.length);
-    return matches[0]?.workspaceId ?? null;
-  }
-
   private codexCommand(settings: JsonRecord) {
     const configured = trimString(settings.codexBin);
     return configured || "codex";
@@ -1348,588 +579,27 @@ export class CodexCompanionServer {
   }
 
   private createDetachedAppServerClient(settings: JsonRecord, workspaceId?: string | null) {
-    return new CodexAppServerClient(this.appServerClientOptions(settings, workspaceId));
+    return this.appServerRuntime.createDetachedAppServerClient(settings, workspaceId);
+  }
+
+  private async readAuthAccountFallback() {
+    return await this.accountRuntime.readAuthAccountFallbackFromDisk();
   }
 
   private buildAppServerClient(settings: JsonRecord, workspaceId?: string | null) {
-    const key = this.appServerClientKey(settings, workspaceId);
-    const existing = this.appServerClients.get(key);
-    if (workspaceId) {
-      const workspaceIds = this.appServerClientWorkspaceIds.get(key) ?? new Set<string>();
-      workspaceIds.add(workspaceId);
-      this.appServerClientWorkspaceIds.set(key, workspaceIds);
-    }
-    if (existing) {
-      return existing;
-    }
-    const client = this.createDetachedAppServerClient(settings, workspaceId);
-    this.appServerClients.set(key, client);
-    this.appServerNotificationUnsubscribers.set(
-      key,
-      client.onNotification((message) => {
-        void this.handleAppServerNotification(key, message);
-      }),
-    );
-    return client;
+    return this.appServerRuntime.buildAppServerClient(settings, workspaceId);
   }
 
   private async resetAppServerClients() {
-    await Promise.all(Array.from(this.appServerClients.values(), (client) => client.close()));
-    this.appServerClients.clear();
-    this.appServerClientWorkspaceIds.clear();
-    this.appServerNotificationUnsubscribers.clear();
+    await this.appServerRuntime.resetAppServerClients();
   }
 
   private hasActiveAppServerRuntime() {
-    return this.appServerClients.size > 0;
-  }
-
-  private buildStoredThreadFromAppServer(
-    workspaceId: string,
-    rawThread: Record<string, unknown>,
-    existing?: StoredThread | null,
-  ): StoredThread {
-    const threadId = trimString(rawThread.id);
-    const createdAt = Number(rawThread.createdAt ?? rawThread.created_at ?? Date.now());
-    const updatedAt = Number(rawThread.updatedAt ?? rawThread.updated_at ?? createdAt);
-    const rawTurns = Array.isArray(rawThread.turns)
-      ? (rawThread.turns as Record<string, unknown>[])
-      : [];
-    const turns = rawTurns.map((turn, index) =>
-      buildStoredTurnFromAppServerThread(
-        threadId,
-        createdAt,
-        updatedAt,
-        turn,
-        index,
-        existing?.turns.find((entry) => entry.id === trimString(turn.id)),
-      ),
-    );
-    const activeTurnId = extractActiveTurnIdFromThread(rawThread);
-    const appServerName = toNullableString(rawThread.name);
-    return {
-      id: existing?.id ?? threadId,
-      workspaceId,
-      sdkThreadId: existing?.sdkThreadId ?? threadId,
-      cwd: trimString(rawThread.cwd) || this.getWorkspace(workspaceId)?.path || "",
-      createdAt,
-      updatedAt,
-      archivedAt: existing?.archivedAt ?? null,
-      name: existing?.name ?? appServerName,
-      preview: trimString(rawThread.preview) || existing?.preview || "New Agent",
-      activeTurnId,
-      turns,
-      modelId: existing?.modelId ?? null,
-      effort: existing?.effort ?? null,
-      pinnedAt: existing?.pinnedAt ?? null,
-      detachedReviewParentId: existing?.detachedReviewParentId ?? null,
-      codexParams: existing?.codexParams ?? null,
-      backlog: existing?.backlog ?? [],
-      tokenUsage: existing?.tokenUsage ?? null,
-    };
-  }
-
-  private async listThreadsFromCodexAppServer(
-    workspaceId: string,
-    cursor: string | null,
-    limit: number | null,
-    sortKey: "created_at" | "updated_at",
-  ) {
-    const settings = await this.storage.readSettings();
-    const client = this.buildAppServerClient(settings, workspaceId);
-    return await client.listThreads({
-      cursor,
-      limit,
-      sortKey,
-      sourceKinds: APP_SERVER_SOURCE_KINDS,
-    });
-  }
-
-  private async resumeThreadFromCodexAppServer(threadId: string) {
-    const settings = await this.storage.readSettings();
-    const client = this.buildAppServerClient(settings);
-    return await client.resumeThread(threadId);
-  }
-
-  private updateThreadWorkspaceMapping(thread: StoredThread) {
-    this.appServerThreadWorkspaceIds.set(this.resolveAppServerThreadId(thread), thread.workspaceId);
-  }
-
-  private findThreadByAppServerThreadId(threadId: string) {
-    const mappedWorkspaceId = this.appServerThreadWorkspaceIds.get(threadId) ?? null;
-    if (mappedWorkspaceId) {
-      const directMatch = Array.from(this.threadsById.values()).find(
-        (thread) =>
-          thread.workspaceId === mappedWorkspaceId &&
-          this.resolveAppServerThreadId(thread) === threadId,
-      );
-      if (directMatch) {
-        return directMatch;
-      }
-    }
-    return this.findThreadBySdkThreadId(threadId);
-  }
-
-  private clearStoredActiveTurn(thread: StoredThread, turnId?: string | null) {
-    const targetTurnId = turnId ?? thread.activeTurnId;
-    if (targetTurnId) {
-      const existing = thread.turns.find((entry) => entry.id === targetTurnId);
-      if (existing && existing.completedAt === null) {
-        existing.completedAt = Date.now();
-        if (existing.status === "active") {
-          existing.status = "completed";
-        }
-      }
-    }
-    thread.activeTurnId = null;
-    thread.updatedAt = Date.now();
-  }
-
-  private async refreshThreadStateFromAppServer(
-    settings: JsonRecord,
-    workspaceId: string,
-    thread: StoredThread,
-  ) {
-    const client = this.buildAppServerClient(settings, workspaceId);
-    const response = await client.readThreadWithTurns(this.resolveAppServerThreadId(thread));
-    const rawThread =
-      response.thread && typeof response.thread === "object"
-        ? (response.thread as Record<string, unknown>)
-        : null;
-    if (!rawThread) {
-      return thread;
-    }
-    const stored = this.buildStoredThreadFromAppServer(workspaceId, rawThread, thread);
-    this.threadsById.set(stored.id, stored);
-    this.updateThreadWorkspaceMapping(stored);
-    await this.persistThreads();
-    return stored;
-  }
-
-  private upsertStoredTurn(
-    thread: StoredThread,
-    rawTurn: Record<string, unknown>,
-    completedFallback = Date.now(),
-  ) {
-    const threadId = this.resolveAppServerThreadId(thread);
-    const existingIndex = thread.turns.findIndex(
-      (entry) => entry.id === (trimString(rawTurn.id) || ""),
-    );
-    const nextTurn = buildStoredTurnFromAppServerThread(
-      threadId,
-      thread.createdAt,
-      completedFallback,
-      rawTurn,
-      existingIndex >= 0 ? existingIndex : thread.turns.length,
-      existingIndex >= 0 ? thread.turns[existingIndex] : undefined,
-    );
-    if (existingIndex >= 0) {
-      thread.turns[existingIndex] = nextTurn;
-    } else {
-      thread.turns.push(nextTurn);
-    }
-    return nextTurn;
-  }
-
-  private upsertStoredItem(
-    thread: StoredThread,
-    turnId: string,
-    item: JsonRecord,
-  ) {
-    const turn = thread.turns.find((entry) => entry.id === turnId);
-    if (!turn) {
-      return null;
-    }
-    const storedItem = toStoredItemFromAppServer(turnId, item);
-    const existingIndex = turn.items.findIndex((entry) => entry.id === storedItem.id);
-    if (existingIndex >= 0) {
-      turn.items[existingIndex] = storedItem;
-    } else {
-      turn.items.push(storedItem);
-    }
-    return storedItem;
-  }
-
-  private workspaceIdsForClient(key: string) {
-    const workspaceIds = this.appServerClientWorkspaceIds.get(key);
-    if (workspaceIds && workspaceIds.size > 0) {
-      return Array.from(workspaceIds);
-    }
-    return Array.from(this.connectedWorkspaceIds);
-  }
-
-  private findStoredThreadForTurn(workspaceIds: string[], turnId: string) {
-    for (const thread of this.threadsById.values()) {
-      if (!workspaceIds.includes(thread.workspaceId)) {
-        continue;
-      }
-      if (thread.activeTurnId === turnId || thread.turns.some((turn) => turn.id === turnId)) {
-        return thread;
-      }
-    }
-    return null;
-  }
-
-  private findStoredThreadByTurnId(turnId: string) {
-    for (const thread of this.threadsById.values()) {
-      if (thread.activeTurnId === turnId || thread.turns.some((turn) => turn.id === turnId)) {
-        return thread;
-      }
-    }
-    return null;
-  }
-
-  private inferThreadIdForNotification(workspaceIds: string[], params: JsonRecord) {
-    const turnId = extractTurnIdFromParams(params);
-    if (turnId) {
-      const thread = this.findStoredThreadForTurn(workspaceIds, turnId);
-      if (thread) {
-        return this.resolveAppServerThreadId(thread);
-      }
-    }
-    if (workspaceIds.length !== 1) {
-      return null;
-    }
-    const activeThreads = Array.from(this.threadsById.values()).filter(
-      (thread) => thread.workspaceId === workspaceIds[0] && Boolean(thread.activeTurnId),
-    );
-    if (activeThreads.length === 1) {
-      return this.resolveAppServerThreadId(activeThreads[0]!);
-    }
-    return null;
-  }
-
-  private enrichNotificationParams(workspaceIds: string[], params: JsonRecord) {
-    if (extractThreadIdFromParams(params)) {
-      return params;
-    }
-    const inferredThreadId = this.inferThreadIdForNotification(workspaceIds, params);
-    if (!inferredThreadId) {
-      return params;
-    }
-    return {
-      ...params,
-      threadId: inferredThreadId,
-    };
-  }
-
-  private resolveWorkspaceIdsForNotification(
-    key: string,
-    method: string,
-    params: JsonRecord,
-  ) {
-    const threadId = extractThreadIdFromParams(params);
-    if (threadId) {
-      const workspaceId = this.appServerThreadWorkspaceIds.get(threadId);
-      if (workspaceId) {
-        return [workspaceId];
-      }
-    }
-    const turnId = extractTurnIdFromParams(params);
-    if (turnId) {
-      const thread = this.findStoredThreadByTurnId(turnId);
-      if (thread) {
-        return [thread.workspaceId];
-      }
-    }
-    if (method === "thread/started") {
-      const thread =
-        params.thread && typeof params.thread === "object" && !Array.isArray(params.thread)
-          ? (params.thread as JsonRecord)
-          : null;
-      const workspaceId =
-        (thread ? this.resolveWorkspaceIdForCwd(trimString(thread.cwd)) : null) ??
-        null;
-      if (workspaceId) {
-        return [workspaceId];
-      }
-    }
-    if (APP_SERVER_GLOBAL_NOTIFICATION_METHODS.has(method)) {
-      return this.workspaceIdsForClient(key);
-    }
-    return [];
-  }
-
-  private async applyAppServerNotificationToState(
-    workspaceIds: string[],
-    method: string,
-    params: JsonRecord,
-  ) {
-    if (workspaceIds.length === 0) {
-      return false;
-    }
-    const threadId = extractThreadIdFromParams(params);
-    const workspaceId = workspaceIds[0]!;
-    if (method === "thread/started") {
-      const rawThread =
-        params.thread && typeof params.thread === "object" && !Array.isArray(params.thread)
-          ? (params.thread as Record<string, unknown>)
-          : null;
-      if (!rawThread) {
-        return false;
-      }
-      const existing = threadId ? this.findThreadByAppServerThreadId(threadId) : null;
-      const stored = this.buildStoredThreadFromAppServer(workspaceId, rawThread, existing);
-      this.threadsById.set(stored.id, stored);
-      this.updateThreadWorkspaceMapping(stored);
-      await this.persistThreads();
-      return true;
-    }
-    if (!threadId) {
-      return false;
-    }
-    const thread = this.findThreadByAppServerThreadId(threadId);
-    if (!thread) {
-      return false;
-    }
-    let shouldPersist = false;
-    switch (method) {
-      case "thread/name/updated":
-        thread.name = toNullableString(params.threadName) ?? toNullableString(params.thread_name);
-        thread.updatedAt = Date.now();
-        shouldPersist = true;
-        break;
-      case "thread/archived":
-        thread.archivedAt = Date.now();
-        thread.updatedAt = Date.now();
-        shouldPersist = true;
-        break;
-      case "thread/unarchived":
-        thread.archivedAt = null;
-        thread.updatedAt = Date.now();
-        shouldPersist = true;
-        break;
-      case "thread/closed":
-        thread.activeTurnId = null;
-        thread.updatedAt = Date.now();
-        shouldPersist = true;
-        break;
-      case "turn/started": {
-        const rawTurn =
-          params.turn && typeof params.turn === "object" && !Array.isArray(params.turn)
-            ? (params.turn as Record<string, unknown>)
-            : null;
-        if (!rawTurn) {
-          break;
-        }
-        const turn = this.upsertStoredTurn(thread, rawTurn);
-        thread.activeTurnId = turn.id;
-        thread.updatedAt = Date.now();
-        shouldPersist = true;
-        break;
-      }
-      case "turn/completed": {
-        const rawTurn =
-          params.turn && typeof params.turn === "object" && !Array.isArray(params.turn)
-            ? (params.turn as Record<string, unknown>)
-            : null;
-        if (rawTurn) {
-          const turn = this.upsertStoredTurn(thread, rawTurn);
-          turn.status = "completed";
-          turn.completedAt = Date.now();
-          this.clearStoredActiveTurn(thread, turn.id);
-          shouldPersist = true;
-          break;
-        }
-        const turnId = extractTurnIdFromParams(params);
-        if (turnId) {
-          this.clearStoredActiveTurn(thread, turnId);
-          shouldPersist = true;
-        }
-        break;
-      }
-      case "thread/status/changed": {
-        const statusType = normalizeThreadStatusType(params.status);
-        if (
-          statusType === "idle" ||
-          statusType === "notloaded" ||
-          statusType === "systemerror"
-        ) {
-          this.clearStoredActiveTurn(thread);
-          shouldPersist = true;
-        }
-        break;
-      }
-      case "item/started":
-      case "item/completed": {
-        const turnId = extractTurnIdFromParams(params);
-        const item =
-          params.item && typeof params.item === "object" && !Array.isArray(params.item)
-            ? (params.item as JsonRecord)
-            : null;
-        if (!turnId || !item) {
-          break;
-        }
-        this.upsertStoredItem(thread, turnId, item);
-        thread.updatedAt = Date.now();
-        shouldPersist = method === "item/completed";
-        break;
-      }
-      case "thread/tokenUsage/updated":
-        if (params.tokenUsage && typeof params.tokenUsage === "object" && !Array.isArray(params.tokenUsage)) {
-          thread.tokenUsage = params.tokenUsage as StoredThread["tokenUsage"];
-          thread.updatedAt = Date.now();
-          shouldPersist = true;
-        }
-        break;
-      case "error": {
-        const turn =
-          params.turn && typeof params.turn === "object" && !Array.isArray(params.turn)
-            ? (params.turn as JsonRecord)
-            : null;
-        const turnId = trimString(turn?.id);
-        if (turnId) {
-          const existing = thread.turns.find((entry) => entry.id === turnId);
-          if (existing) {
-            existing.status = "failed";
-            existing.completedAt = Date.now();
-            existing.errorMessage = trimString(params.message) || existing.errorMessage;
-            this.clearStoredActiveTurn(thread, turnId);
-            shouldPersist = true;
-          }
-        }
-        break;
-      }
-      default:
-        break;
-    }
-    if (shouldPersist) {
-      await this.persistThreads();
-    }
-    return shouldPersist;
-  }
-
-  private async handleAppServerNotification(
-    key: string,
-    message: AppServerNotificationMessage,
-  ) {
-    const workspaceIds = this.resolveWorkspaceIdsForNotification(key, message.method, message.params);
-    const normalizedParams = this.enrichNotificationParams(workspaceIds, message.params);
-    await this.applyAppServerNotificationToState(workspaceIds, message.method, normalizedParams);
-    for (const workspaceId of workspaceIds) {
-      this.broadcast({
-        event: "app-server-event",
-        payload: buildAppServerEvent(workspaceId, message.method, normalizedParams, message.id),
-      });
-    }
-  }
-
-  private resolveCodexHomePath() {
-    return path.dirname(this.storage.globalConfigPath());
-  }
-
-  private async readAuthAccountFallback(): Promise<AccountFallback | null> {
-    const authPath = path.join(this.resolveCodexHomePath(), "auth.json");
-    try {
-      const raw = JSON.parse(await fs.readFile(authPath, "utf8")) as JsonRecord;
-      const tokens =
-        raw.tokens && typeof raw.tokens === "object" ? (raw.tokens as JsonRecord) : null;
-      const idToken = trimString(tokens?.idToken) || trimString(tokens?.id_token);
-      if (!idToken) {
-        return null;
-      }
-      const payload = readJwtPayload(idToken);
-      if (!payload) {
-        return null;
-      }
-      const auth =
-        payload[OPENAI_AUTH_CLAIM] &&
-        typeof payload[OPENAI_AUTH_CLAIM] === "object"
-          ? (payload[OPENAI_AUTH_CLAIM] as JsonRecord)
-          : null;
-      const profile =
-        payload[OPENAI_PROFILE_CLAIM] &&
-        typeof payload[OPENAI_PROFILE_CLAIM] === "object"
-          ? (payload[OPENAI_PROFILE_CLAIM] as JsonRecord)
-          : null;
-      const email =
-        toNullableString(payload.email) ?? toNullableString(profile?.email) ?? null;
-      const planType =
-        toNullableString(auth?.chatgpt_plan_type) ??
-        toNullableString(payload.chatgpt_plan_type) ??
-        null;
-      if (!email && !planType) {
-        return null;
-      }
-      return { email, planType };
-    } catch {
-      return null;
-    }
-  }
-
-  private async readAccountInfo(workspaceId: string) {
-    const settings = await this.storage.readSettings();
-    const client = this.buildAppServerClient(settings, workspaceId);
-    let response: JsonRecord | null = null;
-    try {
-      response = await client.accountRead();
-    } catch {
-      response = null;
-    }
-    return buildAccountResponse(response, await this.readAuthAccountFallback());
-  }
-
-  private getOrCreateLoginState(workspaceId: string) {
-    const existing = this.loginStateByWorkspace.get(workspaceId);
-    if (existing) {
-      return existing;
-    }
-    const created: LoginState = { canceled: false, loginId: null, pending: null };
-    this.loginStateByWorkspace.set(workspaceId, created);
-    return created;
-  }
-
-  private async startCodexLogin(workspaceId: string) {
-    const state = this.getOrCreateLoginState(workspaceId);
-    state.canceled = false;
-    const settings = await this.storage.readSettings();
-    const client = this.buildAppServerClient(settings, workspaceId);
-    const pending = client.startLogin("chatgpt");
-    state.pending = pending;
-    try {
-      const response = await pending;
-      const loginId =
-        toNullableString(response.loginId) ?? toNullableString(response.login_id) ?? null;
-      state.loginId = loginId;
-      return {
-        loginId,
-        authUrl:
-          toNullableString(response.authUrl) ?? toNullableString(response.auth_url) ?? null,
-        raw: response,
-      };
-    } finally {
-      state.pending = null;
-    }
-  }
-
-  private async cancelCodexLogin(workspaceId: string) {
-    const state = this.getOrCreateLoginState(workspaceId);
-    if (state.pending) {
-      state.canceled = true;
-      state.loginId = null;
-      return { canceled: true, status: "canceled" };
-    }
-    if (!state.loginId) {
-      return { canceled: false };
-    }
-    const settings = await this.storage.readSettings();
-    const client = this.buildAppServerClient(settings, workspaceId);
-    const response = await client.cancelLogin(state.loginId);
-    const canceled = Boolean(
-      response.canceled ??
-        response.cancelled ??
-        response.ok ??
-        true,
-    );
-    const status =
-      toNullableString(response.status) ??
-      (canceled ? "canceled" : "unknown");
-    state.loginId = null;
-    return { canceled, status, raw: response };
+    return this.appServerRuntime.hasActiveAppServerRuntime();
   }
 
   private resolveAppServerThreadId(thread: StoredThread) {
-    return thread.sdkThreadId || thread.id;
+    return this.threadState.resolveAppServerThreadId(thread);
   }
 
   private async syncStoredThreadFromAppServer(
@@ -1937,255 +607,14 @@ export class CodexCompanionServer {
     threadId: string,
     existing?: StoredThread | null,
   ) {
-    const resumed = await this.resumeThreadFromCodexAppServer(threadId);
-    const rawThread =
-      resumed.thread && typeof resumed.thread === "object"
-        ? (resumed.thread as Record<string, unknown>)
-        : resumed;
-    const stored = this.buildStoredThreadFromAppServer(workspaceId, rawThread, existing);
-    this.threadsById.set(stored.id, stored);
-    this.updateThreadWorkspaceMapping(stored);
-    await this.persistThreads();
-    return stored;
+    return await this.threadState.syncStoredThreadFromAppServer(workspaceId, threadId, existing);
   }
 
-  private async runDetachedBackgroundPrompt(
-    workspace: StoredWorkspace,
-    prompt: string,
-    options: {
-      model?: string | null;
-      outputSchema?: unknown;
-      timeoutMessage: string;
-      turnErrorFallback: string;
-    },
+  private async handleAppServerNotification(
+    key: string,
+    message: AppServerNotificationMessage,
   ) {
-    const settings = await this.storage.readSettings();
-    const client = this.createDetachedAppServerClient(settings, workspace.id);
-    let threadId: string | null = null;
-    try {
-      const threadResponse = await client.startThread({
-        cwd: workspace.path,
-        approvalPolicy: "never",
-      });
-      threadId = extractThreadIdFromParams(threadResponse);
-      if (!threadId) {
-        throw new Error("Detached background thread did not return an id.");
-      }
-      this.emit(workspace.id, "codex/backgroundThread", {
-        threadId,
-        action: "hide",
-      });
-
-      let responseText = "";
-      const unsubscribe = client.onNotification((message) => {
-        if (message.method !== "item/agentMessage/delta") {
-          return;
-        }
-        const messageThreadId = extractThreadIdFromParams(message.params);
-        if (messageThreadId && messageThreadId !== threadId) {
-          return;
-        }
-        const delta = typeof message.params.delta === "string" ? message.params.delta : "";
-        if (delta) {
-          responseText += delta;
-        }
-      });
-
-      let expectedTurnId: string | null = null;
-      const completion = client.waitForNotification((message) => {
-        if (message.method !== "turn/completed") {
-          return null;
-        }
-        const completedThreadId = extractThreadIdFromParams(message.params);
-        if (completedThreadId !== threadId) {
-          return null;
-        }
-        const completedTurnId = extractTurnIdFromParams(message.params);
-        if (expectedTurnId && completedTurnId && completedTurnId !== expectedTurnId) {
-          return null;
-        }
-        return message.params;
-      });
-
-      const turnResponse = await client.startTurn({
-        threadId,
-        input: buildAppServerUserInputItems(prompt),
-        cwd: workspace.path,
-        approvalPolicy: "never",
-        sandboxPolicy: { type: "readOnly" },
-        model: options.model ?? undefined,
-        outputSchema: options.outputSchema,
-      });
-      expectedTurnId = extractTurnIdFromParams(turnResponse);
-
-      const completed = await completion;
-      unsubscribe();
-      const completedTurn =
-        completed.turn && typeof completed.turn === "object" && !Array.isArray(completed.turn)
-          ? (completed.turn as JsonRecord)
-          : null;
-      const status = trimString(completedTurn?.status).toLowerCase();
-      if (status && status !== "completed") {
-        const turnError =
-          (completedTurn?.error && typeof completedTurn.error === "object"
-            ? trimString((completedTurn.error as JsonRecord).message)
-            : "") || trimString(completed.message);
-        throw new Error(turnError || options.turnErrorFallback);
-      }
-      if (responseText.trim()) {
-        return responseText.trim();
-      }
-
-      const threadRead = await client.readThreadWithTurns(threadId);
-      const rawThread =
-        threadRead.thread && typeof threadRead.thread === "object" && !Array.isArray(threadRead.thread)
-          ? (threadRead.thread as JsonRecord)
-          : threadRead;
-      return findLastAgentMessageText(rawThread, expectedTurnId).trim();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("Timed out while waiting for app-server notification.")) {
-        throw new Error(options.timeoutMessage, { cause: error });
-      }
-      throw error;
-    } finally {
-      if (threadId) {
-        await client.archiveThread(threadId).catch(() => undefined);
-      }
-      await client.close();
-    }
-  }
-
-  private async generateRunMetadataForWorkspace(workspace: StoredWorkspace, prompt: string) {
-    const cleanedPrompt = prompt.trim();
-    if (!cleanedPrompt) {
-      throw new Error("Prompt is required.");
-    }
-    const response = await this.runDetachedBackgroundPrompt(
-      workspace,
-      buildRunMetadataPrompt(cleanedPrompt),
-      {
-        outputSchema: RUN_METADATA_OUTPUT_SCHEMA,
-        timeoutMessage: "Timeout waiting for metadata generation",
-        turnErrorFallback: "Unknown error during metadata generation",
-      },
-    );
-    return parseRunMetadataValue(response);
-  }
-
-  private async generateCommitMessageForWorkspace(
-    workspace: StoredWorkspace,
-    commitMessageModelId: string | null,
-  ) {
-    const settings = await this.storage.readSettings();
-    const diffs = await buildWorkingTreeDiffs(workspace.path);
-    const diff = diffs
-      .map((entry) => entry.diff)
-      .filter((entry) => entry.trim().length > 0)
-      .join("\n");
-    const prompt = buildCommitMessagePromptForDiff(diff, String(settings.commitMessagePrompt ?? ""));
-    return await this.runDetachedBackgroundPrompt(workspace, prompt, {
-      model: commitMessageModelId,
-      timeoutMessage: "Timeout waiting for commit message generation",
-      turnErrorFallback: "Unknown error during commit message generation",
-    });
-  }
-
-  private async generateAgentDescriptionForWorkspace(
-    workspace: StoredWorkspace,
-    description: string,
-  ) {
-    const cleanedDescription = description.trim();
-    if (!cleanedDescription) {
-      throw new Error("Description is required.");
-    }
-    const response = await this.runDetachedBackgroundPrompt(
-      workspace,
-      buildAgentDescriptionPrompt(cleanedDescription),
-      {
-        timeoutMessage: "Timeout waiting for agent configuration generation",
-        turnErrorFallback: "Unknown error during agent configuration generation",
-      },
-    );
-    return parseAgentDescriptionValue(response);
-  }
-
-  private async runCodexDoctor(codexBin: string | null, codexArgs: string | null) {
-    const settings = await this.storage.readSettings();
-    const resolvedBin = codexBin?.trim() ? codexBin.trim() : this.codexCommand(settings);
-    const resolvedArgs = codexArgs?.trim()
-      ? codexArgs.trim()
-      : this.resolveRuntimeCodexArgs(settings, null);
-    const pathEnv = buildCodexPathEnv(resolvedBin);
-    const env = pathEnv ? { ...process.env, PATH: pathEnv } : process.env;
-    const versionResult = await runCommandCapture(resolvedBin, ["--version"], { env });
-    const version = versionResult.ok
-      ? toNullableString(versionResult.stdout) ?? toNullableString(versionResult.stderr)
-      : null;
-    const appServerResult = await runCommandCapture(
-      resolvedBin,
-      [...parseCodexArgs(resolvedArgs), "app-server", "--help"],
-      { env },
-    );
-    const nodeResult = await runCommandCapture("node", ["--version"], { env });
-    const nodeVersion = nodeResult.ok
-      ? toNullableString(nodeResult.stdout) ?? toNullableString(nodeResult.stderr)
-      : null;
-    const nodeDetails = nodeResult.ok
-      ? null
-      : nodeResult.error || "Node failed to start.";
-    const details = appServerResult.ok
-      ? null
-      : appServerResult.error || "Failed to run `codex app-server --help`.";
-    return {
-      ok: Boolean(version) && appServerResult.ok,
-      codexBin: resolvedBin,
-      version,
-      appServerOk: appServerResult.ok,
-      details,
-      path: pathEnv,
-      nodeOk: Boolean(nodeVersion),
-      nodeVersion,
-      nodeDetails,
-    };
-  }
-
-  private async getLocalUsageSnapshot(days: number | null, workspacePath: string | null) {
-    const requestedDays = Number.isFinite(days) ? Math.trunc(days ?? 30) : 30;
-    const clampedDays = Math.min(Math.max(requestedDays || 30, 1), 90);
-    const normalizedWorkspacePath = toNullableString(workspacePath)
-      ? normalizeRootPath(String(workspacePath))
-      : null;
-    const cacheKey = JSON.stringify({
-      days: clampedDays,
-      workspacePath: normalizedWorkspacePath,
-    });
-    const now = Date.now();
-    const cached = this.localUsageSnapshotCache.get(cacheKey);
-    if (cached && cached.expiresAt > now) {
-      return cached.snapshot;
-    }
-    const inFlight = this.localUsageSnapshotInFlight.get(cacheKey);
-    if (inFlight) {
-      return await inFlight;
-    }
-    const sessionsRoots = [path.join(this.storage.codexHome, "sessions")];
-    const loadPromise = buildLocalUsageSnapshot(
-      sessionsRoots,
-      clampedDays,
-      normalizedWorkspacePath,
-    );
-    this.localUsageSnapshotInFlight.set(cacheKey, loadPromise);
-    try {
-      const snapshot = await loadPromise;
-      this.localUsageSnapshotCache.set(cacheKey, {
-        expiresAt: now + CodexCompanionServer.LOCAL_USAGE_CACHE_TTL_MS,
-        snapshot,
-      });
-      return snapshot;
-    } finally {
-      this.localUsageSnapshotInFlight.delete(cacheKey);
-    }
+    await this.appServerRuntime.handleAppServerNotification(key, message);
   }
 
   private async addWorkspaceFromPath(
@@ -2370,8 +799,8 @@ export class CodexCompanionServer {
       {
         terminalRuntime: this.terminalRuntime,
         getWorkspace: this.getWorkspace.bind(this),
-        getLocalUsageSnapshot: this.getLocalUsageSnapshot.bind(this),
-        runCodexDoctor: this.runCodexDoctor.bind(this),
+        getLocalUsageSnapshot: this.generationRuntime.getLocalUsageSnapshot.bind(this.generationRuntime),
+        runCodexDoctor: this.generationRuntime.runCodexDoctor.bind(this.generationRuntime),
         badRequest,
         notFound,
       },
@@ -2487,185 +916,16 @@ export class CodexCompanionServer {
     return result === undefined ? RPC_UNHANDLED : result;
   }
 
-  private listLocalThreadSummaries(
-    workspaceId: string,
-    sortKey: "created_at" | "updated_at",
-  ): ThreadSummary[] {
-    return Array.from(this.threadsById.values())
-      .filter((thread) => thread.workspaceId === workspaceId && thread.archivedAt === null)
-      .sort((left, right) =>
-        sortKey === "created_at"
-          ? right.createdAt - left.createdAt
-          : right.updatedAt - left.updatedAt,
-      )
-      .map(toThreadSummary);
-  }
-
-  private mergeThreadListData(
-    workspaceId: string,
-    localOnlyThreads: ThreadSummary[],
-    externalData: Record<string, unknown>[],
-  ): Record<string, unknown>[] {
-    const merged = new Map<string, Record<string, unknown>>();
-    const matchedLocalIds = new Set<string>();
-
-    externalData.forEach((thread) => {
-      const externalId = trimString(thread.id);
-      if (!externalId) {
-        return;
-      }
-      const localThread = this.findThreadBySdkThreadId(externalId);
-      if (localThread) {
-        if (localThread.workspaceId !== workspaceId) {
-          return;
-        }
-        if (localThread.archivedAt !== null) {
-          matchedLocalIds.add(localThread.id);
-          return;
-        }
-        matchedLocalIds.add(localThread.id);
-        const externalActiveTurnId = extractActiveTurnIdFromThread(thread);
-        const externalUpdatedAt = Number(thread.updatedAt ?? thread.updated_at ?? 0);
-        const externalCreatedAt = Number(thread.createdAt ?? thread.created_at ?? 0);
-        const externalModel = trimString(thread.model);
-        const externalEffort = trimString(thread.modelReasoningEffort ?? thread.model_reasoning_effort);
-        merged.set(localThread.id, {
-          ...thread,
-          id: localThread.id,
-          cwd: localThread.cwd || trimString(thread.cwd),
-          name: localThread.name,
-          preview: trimString(thread.preview) || localThread.preview,
-          createdAt: externalCreatedAt || localThread.createdAt,
-          updatedAt: externalUpdatedAt || localThread.updatedAt,
-          pinnedAt: localThread.pinnedAt,
-          detachedReviewParentId: localThread.detachedReviewParentId,
-          codexParams: localThread.codexParams,
-          ...(externalActiveTurnId ? { activeTurnId: externalActiveTurnId } : {}),
-          ...(externalModel || localThread.modelId
-            ? { model: externalModel || localThread.modelId }
-            : {}),
-          ...(externalEffort || localThread.effort
-            ? {
-                modelReasoningEffort: externalEffort || localThread.effort,
-              }
-            : {}),
-        });
-        return;
-      }
-      merged.set(externalId, thread);
-    });
-
-    localOnlyThreads.forEach((thread) => {
-      if (!matchedLocalIds.has(thread.id)) {
-        merged.set(thread.id, { ...thread });
-      }
-    });
-
-    return Array.from(merged.values());
-  }
-
-  private async listThreadsRpc(params: JsonRecord): Promise<unknown | RpcErrorShape> {
-    const workspaceId = String(params.workspaceId ?? "");
-    const sortKey =
-      String(params.sortKey ?? "updated_at") === "created_at" ? "created_at" : "updated_at";
-    const cursor = toNullableString(params.cursor);
-    const limit =
-      typeof params.limit === "number" && Number.isFinite(params.limit) ? params.limit : null;
-    if (!this.getWorkspace(workspaceId)) {
-      return notFound("Workspace not found.");
-    }
-
-    const localOnlyThreads = this.listLocalThreadSummaries(workspaceId, sortKey);
-
-    try {
-      const result = await this.listThreadsFromCodexAppServer(
-        workspaceId,
-        cursor,
-        limit,
-        sortKey,
-      );
-      const externalData = Array.isArray(result.data)
-        ? (result.data as Record<string, unknown>[])
-        : [];
-      return {
-        data: this.mergeThreadListData(workspaceId, localOnlyThreads, externalData),
-        nextCursor: result.nextCursor ?? result.next_cursor ?? null,
-      };
-    } catch (error) {
-      return {
-        data: localOnlyThreads,
-        nextCursor: null,
-        degraded: {
-          source: "local_cache",
-          reason: errorMessage(error),
-        },
-      };
-    }
-  }
-
-  private async resumeThreadRpc(params: JsonRecord): Promise<unknown | RpcErrorShape> {
-    const workspaceId = String(params.workspaceId ?? "");
-    const threadId = String(params.threadId ?? "");
-    const thread = this.getThread(threadId);
-    if (thread && thread.id !== thread.sdkThreadId) {
-      return {
-        thread: toThreadResponse(thread),
-      };
-    }
-
-    try {
-      const result = await this.resumeThreadFromCodexAppServer(threadId);
-      const rawThread =
-        result.thread && typeof result.thread === "object"
-          ? (result.thread as Record<string, unknown>)
-          : null;
-      if (!rawThread) {
-        return notFound("Thread not found.");
-      }
-      const resolvedWorkspaceId =
-        workspaceId ||
-        this.resolveWorkspaceIdForCwd(trimString(rawThread.cwd)) ||
-        thread?.workspaceId ||
-        null;
-      if (!resolvedWorkspaceId) {
-        return {
-          thread: rawThread,
-        };
-      }
-      const stored = this.buildStoredThreadFromAppServer(
-        resolvedWorkspaceId,
-        rawThread,
-        thread,
-      );
-      this.threadsById.set(stored.id, stored);
-      await this.persistThreads();
-      return {
-        thread: toThreadResponse(stored),
-      };
-    } catch (error) {
-      if (!thread) {
-        return notFound("Thread not found.");
-      }
-      return {
-        thread: toThreadResponse(thread),
-        degraded: {
-          source: "local_cache",
-          reason: errorMessage(error),
-        },
-      };
-    }
-  }
-
   private async handleThreadBacklogRpc(
     method: string,
     params: JsonRecord,
   ): Promise<RpcDispatchResult> {
     const result = await dispatchThreadBacklogRpc(
       {
-        getThreadForWorkspace: this.getThreadForWorkspace.bind(this),
-        createBacklogItem: this.createBacklogItem.bind(this),
-        sortBacklog: this.sortBacklog.bind(this),
-        persistThreads: this.persistThreads.bind(this),
+        getThreadForWorkspace: this.threadState.getThreadForWorkspace.bind(this.threadState),
+        createBacklogItem: this.threadState.createBacklogItem.bind(this.threadState),
+        sortBacklog: this.threadState.sortBacklog.bind(this.threadState),
+        persistThreads: this.threadState.persistThreads.bind(this.threadState),
         notFound,
         badRequest,
       },
@@ -2793,442 +1053,62 @@ export class CodexCompanionServer {
             params,
           )) ?? RPC_UNHANDLED
         );
-      case "start_thread": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const workspace = this.getWorkspace(workspaceId);
-        if (!workspace) {
-          return notFound("Workspace not found.");
-        }
-        try {
-          const settings = await this.storage.readSettings();
-          const client = this.buildAppServerClient(settings, workspaceId);
-          const response = await client.startThread({
-            cwd: workspace.path,
-            approvalPolicy: "on-request",
-          });
-          const rawThread =
-            response.thread && typeof response.thread === "object"
-              ? (response.thread as Record<string, unknown>)
-              : null;
-          if (!rawThread) {
-            return badRequest("codex app-server did not return a thread.");
-          }
-          const stored = this.buildStoredThreadFromAppServer(workspaceId, rawThread);
-          stored.modelId = toNullableString(response.model) ?? stored.modelId;
-          this.threadsById.set(stored.id, stored);
-          this.updateThreadWorkspaceMapping(stored);
-          await this.persistThreads();
-          return {
-            thread: {
-              id: stored.id,
-              preview: stored.preview,
-              createdAt: stored.createdAt,
-              updatedAt: stored.updatedAt,
-              cwd: stored.cwd,
-            },
-          };
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "send_user_message": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const threadId = String(params.threadId ?? "");
-        const workspace = this.getWorkspace(workspaceId);
-        let thread = this.getThread(threadId) ?? this.findThreadBySdkThreadId(threadId);
-        if (!workspace || !thread || thread.workspaceId !== workspaceId) {
-          return notFound("Thread or workspace not found.");
-        }
-        try {
-          const settings = await this.storage.readSettings();
-          const client = this.buildAppServerClient(settings, workspaceId);
-          if (thread.activeTurnId) {
-            thread = await this.refreshThreadStateFromAppServer(settings, workspaceId, thread);
-            if (thread.activeTurnId) {
-              return notFound("A turn is already active for this thread.");
-            }
-          }
-          const accessMode = toNullableString(params.accessMode);
-          const serviceTier = getOptionalServiceTier(params, "serviceTier");
-          const response = await client.startTurn({
-            threadId: this.resolveAppServerThreadId(thread),
-            input: buildAppServerUserInputItems(
-              String(params.text ?? ""),
-              Array.isArray(params.images)
-                ? params.images.filter((entry): entry is string => typeof entry === "string")
-                : [],
-              params.appMentions,
-            ),
-            cwd: workspace.path,
-            approvalPolicy: approvalPolicyForAccessMode(accessMode),
-            sandboxPolicy: buildSandboxPolicy(workspace.path, accessMode),
-            model: toNullableString(params.model),
-            effort: toNullableString(params.effort),
-            ...(serviceTier !== undefined ? { serviceTier } : {}),
-            collaborationMode: params.collaborationMode ?? null,
-          });
-          const rawTurn =
-            response.turn && typeof response.turn === "object"
-              ? (response.turn as Record<string, unknown>)
-              : null;
-          if (!rawTurn) {
-            return badRequest("codex app-server did not return a turn.");
-          }
-          const storedTurn = this.upsertStoredTurn(thread, rawTurn);
-          thread.activeTurnId = storedTurn.id;
-          thread.updatedAt = Date.now();
-          thread.modelId = toNullableString(params.model) ?? thread.modelId;
-          thread.effort = toNullableString(params.effort) ?? thread.effort;
-          await this.persistThreads();
-          return {
-            turn: {
-              id: storedTurn.id,
-              threadId: thread.id,
-            },
-          };
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "turn_interrupt": {
-        const threadId = String(params.threadId ?? "");
-        const workspaceId = String(params.workspaceId ?? "");
-        const thread = this.getThread(threadId) ?? this.findThreadBySdkThreadId(threadId);
-        if (!thread || thread.workspaceId !== workspaceId) {
-          return notFound("No active turn found.");
-        }
-        const turnId = toNullableString(params.turnId) ?? thread.activeTurnId;
-        if (!turnId) {
-          return notFound("No active turn found.");
-        }
-        try {
-          const settings = await this.storage.readSettings();
-          const client = this.buildAppServerClient(settings, workspaceId);
-          await client.interruptTurn({
-            threadId: this.resolveAppServerThreadId(thread),
-            turnId,
-          });
-          return {
-            turnId,
-          };
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "turn_steer": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const threadId = String(params.threadId ?? "");
-        const turnId = String(params.turnId ?? "");
-        const thread = this.getThread(threadId);
-        if (!workspaceId || !thread || thread.workspaceId !== workspaceId) {
-          return notFound("Thread or workspace not found.");
-        }
-        if (!turnId.trim()) {
-          return badRequest("Missing active turn id.");
-        }
-        try {
-          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
-          return await client.steerTurn({
-            threadId: this.resolveAppServerThreadId(thread),
-            expectedTurnId: turnId,
-            input: buildAppServerUserInputItems(
-              String(params.text ?? ""),
-              Array.isArray(params.images)
-                ? params.images.filter((entry): entry is string => typeof entry === "string")
-                : [],
-              params.appMentions,
-            ),
-          });
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "start_review": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const threadId = String(params.threadId ?? "");
-        const workspace = this.getWorkspace(workspaceId);
-        const thread = this.getThread(threadId);
-        if (!workspace || !thread || thread.workspaceId !== workspaceId) {
-          return notFound("Thread or workspace not found.");
-        }
-        try {
-          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
-          const response = await client.startReview({
-            threadId: this.resolveAppServerThreadId(thread),
-            target:
-              params.target && typeof params.target === "object"
-                ? (params.target as JsonRecord)
-                : {},
-            delivery: toNullableString(params.delivery),
-          });
-          const reviewThreadId =
-            trimString(response.reviewThreadId) || trimString(response.review_thread_id);
-          if (reviewThreadId) {
-            const reviewThread = await this.syncStoredThreadFromAppServer(workspaceId, reviewThreadId);
-            reviewThread.detachedReviewParentId = thread.id;
-            reviewThread.updatedAt = Date.now();
-            await this.persistThreads();
-          }
-          return response;
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "respond_to_server_request": {
-        const workspaceId = String(params.workspaceId ?? "");
-        if (!this.getWorkspace(workspaceId)) {
-          return notFound("Workspace not found.");
-        }
-        const requestId = params.requestId ?? params.request_id;
-        if (typeof requestId !== "string" && typeof requestId !== "number") {
-          return badRequest("requestId is required.");
-        }
-        try {
-          const settings = await this.storage.readSettings();
-          const client = this.buildAppServerClient(settings, workspaceId);
-          await client.sendResponse(requestId, params.result ?? null);
-          return null;
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
+      case "start_thread":
+      case "send_user_message":
+      case "turn_interrupt":
+      case "turn_steer":
+      case "start_review":
+      case "respond_to_server_request":
       case "remember_approval_rule": {
-        const workspaceId = String(params.workspaceId ?? "");
-        if (!this.getWorkspace(workspaceId)) {
-          return notFound("Workspace not found.");
+        const result = await this.threadState.handleRpc(method, params);
+        if (result !== undefined) {
+          return result;
         }
-        const command = Array.isArray(params.command)
-          ? params.command
-              .filter((entry): entry is string => typeof entry === "string")
-              .map((entry) => entry.trim())
-              .filter(Boolean)
-          : [];
-        if (command.length === 0) {
-          return badRequest("Command is required.");
+        if (method === "remember_approval_rule") {
+          const workspaceId = String(params.workspaceId ?? "");
+          if (!this.getWorkspace(workspaceId)) {
+            return notFound("Workspace not found.");
+          }
+          const command = Array.isArray(params.command)
+            ? params.command
+                .filter((entry): entry is string => typeof entry === "string")
+                .map((entry) => entry.trim())
+                .filter(Boolean)
+            : [];
+          if (command.length === 0) {
+            return badRequest("Command is required.");
+          }
+          const rulesPath = path.join(this.accountRuntime.resolveCodexHomePath(), "rules", "default.rules");
+          try {
+            await appendPrefixRule(rulesPath, command);
+            return {
+              ok: true,
+              rulesPath,
+            };
+          } catch (error) {
+            return rpcBoundaryError(error);
+          }
         }
-        const rulesPath = path.join(this.resolveCodexHomePath(), "rules", "default.rules");
-        try {
-          await appendPrefixRule(rulesPath, command);
-          return {
-            ok: true,
-            rulesPath,
-          };
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
+        return RPC_UNHANDLED;
       }
       case "thread_live_subscribe":
-      case "thread_live_unsubscribe": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const threadId = String(params.threadId ?? "");
-        if (!this.getWorkspace(workspaceId)) {
-          return notFound("Workspace not found.");
-        }
-        if (!threadId.trim()) {
-          return badRequest("threadId is required.");
-        }
-        return null;
-      }
+      case "thread_live_unsubscribe":
       case "list_threads":
-        return await this.listThreadsRpc(params);
       case "resume_thread":
-        return await this.resumeThreadRpc(params);
-      case "fork_thread": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const threadId = String(params.threadId ?? "");
-        const workspace = this.getWorkspace(workspaceId);
-        const thread = this.getThread(threadId);
-        if (!workspace || !thread || thread.workspaceId !== workspaceId) {
-          return notFound("Thread or workspace not found.");
-        }
-        try {
-          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
-          const response = await client.forkThread(this.resolveAppServerThreadId(thread));
-          const rawThread =
-            response.thread && typeof response.thread === "object"
-              ? (response.thread as Record<string, unknown>)
-              : null;
-          if (rawThread) {
-            const stored = this.buildStoredThreadFromAppServer(workspaceId, rawThread);
-            this.threadsById.set(stored.id, stored);
-            await this.persistThreads();
-          }
-          return response;
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
+      case "fork_thread":
+      case "rollback_thread_to_message":
+      case "compact_thread":
+      case "archive_thread":
+      case "set_thread_name":
+      case "pin_thread":
+      case "unpin_thread":
+      case "patch_thread_codex_params":
+      case "clear_thread_codex_params":
+      case "patch_workspace_composer_defaults":
+      case "import_client_thread_metadata": {
+        const result = await this.threadState.handleRpc(method, params);
+        return result === undefined ? RPC_UNHANDLED : result;
       }
-      case "rollback_thread_to_message": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const threadId = String(params.threadId ?? "");
-        const messageItemId = trimString(params.messageItemId);
-        const workspace = this.getWorkspace(workspaceId);
-        const thread = this.getThreadForWorkspace(workspaceId, threadId);
-        if (!workspace || !thread) {
-          return notFound("Thread or workspace not found.");
-        }
-        if (!messageItemId) {
-          return badRequest("Message item id is required.");
-        }
-        const target = this.findRollbackTarget(thread, messageItemId);
-        if (!target) {
-          return notFound("Message not found.");
-        }
-        if (trimString(target.item.type) !== "userMessage") {
-          return badRequest("Only user messages can be used as rollback targets.");
-        }
-        const numTurns = thread.turns.length - target.turnIndex;
-        if (numTurns < 1) {
-          return badRequest("Rollback target is invalid.");
-        }
-        const restoredText = extractUserMessageTextFromStoredItem(target.item);
-        try {
-          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
-          const response = await client.rollbackThread(
-            this.resolveAppServerThreadId(thread),
-            numTurns,
-          );
-          const rawThread =
-            response.thread && typeof response.thread === "object"
-              ? (response.thread as Record<string, unknown>)
-              : null;
-          if (!rawThread) {
-            return notFound("Rolled back thread was not returned by app-server.");
-          }
-          const stored = this.buildStoredThreadFromAppServer(workspaceId, rawThread, thread);
-          this.threadsById.set(stored.id, stored);
-          this.updateThreadWorkspaceMapping(stored);
-          await this.persistThreads();
-          return {
-            restoredText,
-            thread: toThreadResponse(stored),
-          };
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "compact_thread": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const threadId = String(params.threadId ?? "");
-        const workspace = this.getWorkspace(workspaceId);
-        const thread = this.getThread(threadId);
-        if (!workspace || !thread || thread.workspaceId !== workspaceId) {
-          return notFound("Thread or workspace not found.");
-        }
-        try {
-          const client = this.buildAppServerClient(await this.storage.readSettings(), workspaceId);
-          return await client.compactThread(this.resolveAppServerThreadId(thread));
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "archive_thread": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const threadId = String(params.threadId ?? "");
-        const thread = this.getThread(threadId);
-        if (!thread || thread.workspaceId !== workspaceId) {
-          return notFound("Thread not found.");
-        }
-        try {
-          const settings = await this.storage.readSettings();
-          const client = this.buildAppServerClient(settings, workspaceId);
-          await client.archiveThread(this.resolveAppServerThreadId(thread));
-          thread.archivedAt = Date.now();
-          thread.updatedAt = Date.now();
-          await this.persistThreads();
-          return null;
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "set_thread_name": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const threadId = String(params.threadId ?? "");
-        const name = String(params.name ?? "");
-        const thread = this.getThread(threadId);
-        if (!thread || thread.workspaceId !== workspaceId) {
-          return notFound("Thread not found.");
-        }
-        try {
-          const settings = await this.storage.readSettings();
-          const client = this.buildAppServerClient(settings, workspaceId);
-          await client.setThreadName(this.resolveAppServerThreadId(thread), name);
-          thread.name = name || null;
-          thread.updatedAt = Date.now();
-          await this.persistThreads();
-          return null;
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "pin_thread": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const threadId = String(params.threadId ?? "");
-        const thread = this.getThreadForWorkspace(workspaceId, threadId);
-        if (!thread) {
-          return notFound("Thread not found.");
-        }
-        thread.pinnedAt = Date.now();
-        thread.updatedAt = Date.now();
-        await this.persistThreads();
-        return { pinnedAt: thread.pinnedAt };
-      }
-      case "unpin_thread": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const threadId = String(params.threadId ?? "");
-        const thread = this.getThreadForWorkspace(workspaceId, threadId);
-        if (!thread) {
-          return notFound("Thread not found.");
-        }
-        thread.pinnedAt = null;
-        thread.updatedAt = Date.now();
-        await this.persistThreads();
-        return null;
-      }
-      case "patch_thread_codex_params": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const threadId = String(params.threadId ?? "");
-        const patch = normalizeStoredThreadCodexParamsPatch(params.patch);
-        if (!patch) {
-          return badRequest("Thread codex params patch is required.");
-        }
-        const thread = this.patchThreadCodexParamsRecord(workspaceId, threadId, patch);
-        if (!thread) {
-          return notFound("Thread not found.");
-        }
-        await this.persistThreads();
-        return { codexParams: thread.codexParams };
-      }
-      case "clear_thread_codex_params": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const threadId = String(params.threadId ?? "");
-        const thread = this.getThreadForWorkspace(workspaceId, threadId);
-        if (!thread) {
-          return notFound("Thread not found.");
-        }
-        thread.codexParams = null;
-        thread.updatedAt = Date.now();
-        await this.persistThreads();
-        return null;
-      }
-      case "patch_workspace_composer_defaults": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const patch = normalizeStoredThreadCodexParamsPatch(params.patch);
-        if (!patch) {
-          return badRequest("Workspace composer defaults patch is required.");
-        }
-        const workspace = this.patchWorkspaceComposerDefaultsRecord(workspaceId, patch);
-        if (!workspace) {
-          return notFound("Workspace not found.");
-        }
-        await this.persistWorkspaces();
-        return {
-          ...workspace,
-          connected: this.connectedWorkspaceIds.has(workspace.id),
-        };
-      }
-      case "import_client_thread_metadata":
-        return await this.importClientThreadMetadata(params);
       case "get_thread_backlog":
       case "add_thread_backlog_item":
       case "update_thread_backlog_item":
@@ -3349,25 +1229,11 @@ export class CodexCompanionServer {
         }
       }
       case "account_read":
-        return await this.readAccountInfo(String(params.workspaceId ?? ""));
-      case "codex_login": {
-        const workspaceId = String(params.workspaceId ?? "");
-        if (!this.getWorkspace(workspaceId)) {
-          return notFound("Workspace not found.");
-        }
-        try {
-          return await this.startCodexLogin(workspaceId);
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
+      case "codex_login":
       case "codex_login_cancel": {
-        const workspaceId = String(params.workspaceId ?? "");
-        if (!this.getWorkspace(workspaceId)) {
-          return notFound("Workspace not found.");
-        }
         try {
-          return await this.cancelCodexLogin(workspaceId);
+          const result = await this.accountRuntime.handleRpc(method, params);
+          return result === undefined ? RPC_UNHANDLED : result;
         } catch (error) {
           return rpcBoundaryError(error);
         }
@@ -3380,7 +1246,7 @@ export class CodexCompanionServer {
           return notFound("Workspace not found.");
         }
         try {
-          return await this.generateRunMetadataForWorkspace(workspace, prompt);
+          return await this.generationRuntime.generateRunMetadataForWorkspace(workspace, prompt);
         } catch (error) {
           return rpcBoundaryError(error);
         }
@@ -3421,7 +1287,7 @@ export class CodexCompanionServer {
           return notFound("Workspace not found.");
         }
         try {
-          return await this.generateCommitMessageForWorkspace(
+          return await this.generationRuntime.generateCommitMessageForWorkspace(
             workspace,
             toNullableString(params.commitMessageModelId),
           );
@@ -3435,7 +1301,7 @@ export class CodexCompanionServer {
           return notFound("Workspace not found.");
         }
         try {
-          return await this.generateAgentDescriptionForWorkspace(
+          return await this.generationRuntime.generateAgentDescriptionForWorkspace(
             workspace,
             String(params.description ?? ""),
           );

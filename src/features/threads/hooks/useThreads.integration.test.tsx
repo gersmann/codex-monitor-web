@@ -2006,6 +2006,75 @@ describe("useThreads UX integration", () => {
     expect(unpinnedRows.map((row) => row.thread.id)).toEqual(["thread-b"]);
   });
 
+  it("restores dormant Web UI subthread links on first thread-list sync", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [
+          {
+            id: "thread-parent-webui",
+            preview: "Parent",
+            updated_at: 3000,
+            cwd: workspace.path,
+            turns: [
+              {
+                items: [
+                  {
+                    type: "collabToolCall",
+                    senderThreadId: "thread-parent-webui",
+                    newThreadId: "thread-child-webui",
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            id: "thread-child-webui",
+            preview: "Dormant child",
+            updated_at: 2500,
+            cwd: workspace.path,
+            source: {
+              subAgent: {
+                kind: "review",
+              },
+            },
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    await waitFor(() => {
+      expect(result.current.threadParentById["thread-child-webui"]).toBe(
+        "thread-parent-webui",
+      );
+    });
+
+    const { result: threadRowsResult } = renderHook(() =>
+      useThreadRows(result.current.threadParentById),
+    );
+    const rows = threadRowsResult.current.getThreadRows(
+      result.current.threadsByWorkspace["ws-1"] ?? [],
+      true,
+      "ws-1",
+      () => null,
+    );
+    expect(rows.unpinnedRows.map((row) => [row.thread.id, row.depth])).toEqual([
+      ["thread-parent-webui", 0],
+      ["thread-child-webui", 1],
+    ]);
+  });
+
 
   it("keeps parent rows anchored when refresh only returns subagent children", async () => {
     vi.mocked(listThreads)

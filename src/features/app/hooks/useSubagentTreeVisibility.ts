@@ -30,6 +30,7 @@ export function useSubagentTreeVisibility<T extends RowWithThread>({
   const [expandedThreadKeys, setExpandedThreadKeys] = useState<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const previousDescendantCountsRef = useRef<Map<string, number>>(new Map());
+  const previousThreadKeysRef = useRef<Set<string>>(new Set());
 
   const treeState = useMemo(() => {
     const rowsWithChildren = new Set<T>();
@@ -78,7 +79,9 @@ export function useSubagentTreeVisibility<T extends RowWithThread>({
 
   useEffect(() => {
     const previousDescendantCounts = previousDescendantCountsRef.current;
+    const previousThreadKeys = previousThreadKeysRef.current;
     previousDescendantCountsRef.current = treeState.descendantCounts;
+    previousThreadKeysRef.current = treeState.currentThreadKeys;
     if (!initializedRef.current) {
       initializedRef.current = true;
       return;
@@ -97,6 +100,9 @@ export function useSubagentTreeVisibility<T extends RowWithThread>({
       });
 
       rows.forEach((row) => {
+        if (previousThreadKeys.size === 0) {
+          return;
+        }
         if (!treeState.rowsWithChildren.has(row)) {
           return;
         }
