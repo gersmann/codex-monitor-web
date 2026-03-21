@@ -14,6 +14,8 @@ import {
 import {
   handleGitRpc as dispatchGitRpc,
 } from "./codex/codexGitRpc.js";
+import { handleWorkspaceRpc as dispatchWorkspaceRpc } from "./codex/codexWorkspaceRpc.js";
+import { handleWorkspaceGitRpc as dispatchWorkspaceGitRpc } from "./codex/codexWorkspaceGitRpc.js";
 import {
   createGitHubRepo,
   getGitHubIssues,
@@ -792,30 +794,12 @@ async function directoryExists(targetPath: string) {
   }
 }
 
-function slugifyAgentName(name: string) {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug || "agent";
-}
-
 function parseTopLevelTomlString(content: string, key: string) {
   const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = content.match(
     new RegExp(`^\\s*${escapedKey}\\s*=\\s*["']([^"']+)["']\\s*$`, "m"),
   );
   return match?.[1] ?? null;
-}
-
-function worktreeSetupMarkerPath(dataDir: string, workspaceId: string) {
-  return path.join(dataDir, "worktree-setup", `${workspaceId}.ran`);
-}
-
-function normalizeSetupScript(script: unknown) {
-  const trimmed = trimString(script);
-  return trimmed ? trimmed : null;
 }
 
 function escapeRuleString(value: string) {
@@ -1997,353 +1981,144 @@ export class CodexCompanionServer {
     return { ...workspace, connected: false };
   }
 
+  private async addCloneWorkspace(
+    sourceWorkspaceId: string,
+    copiesFolder: string,
+    copyName: string,
+  ): Promise<unknown | RpcErrorShape> {
+    const source = this.getWorkspace(sourceWorkspaceId);
+    if (!source) {
+      return notFound("Source workspace not found.");
+    }
+    if (!copiesFolder || !copyName) {
+      return badRequest("Copies folder and copy name are required.");
+    }
+    const targetPath = path.join(copiesFolder, copyName);
+    await fs.mkdir(copiesFolder, { recursive: true });
+    await fs.cp(source.path, targetPath, { recursive: true });
+    const cloneWorkspace: StoredWorkspace = {
+      id: `ws-${randomUUID()}`,
+      name: copyName,
+      path: targetPath,
+      kind: "main",
+      parentId: source.id,
+      worktree: null,
+      settings: {
+        ...defaultWorkspaceSettings(),
+        cloneSourceWorkspaceId: source.id,
+      },
+    };
+    this.workspacesById.set(cloneWorkspace.id, cloneWorkspace);
+    await this.persistWorkspaces();
+    return { ...cloneWorkspace, connected: false };
+  }
+
+  private connectWorkspace(workspaceId: string): unknown | RpcErrorShape {
+    const workspace = this.getWorkspace(workspaceId);
+    if (!workspace) {
+      return notFound("Workspace not found.");
+    }
+    this.connectedWorkspaceIds.add(workspaceId);
+    this.emit(workspaceId, "codex/connected", {});
+    return null;
+  }
+
+  private async removeWorkspaceCascade(workspaceId: string): Promise<unknown | RpcErrorShape> {
+    const workspace = this.getWorkspace(workspaceId);
+    if (!workspace) {
+      return notFound("Workspace not found.");
+    }
+    this.workspacesById.delete(workspaceId);
+    this.connectedWorkspaceIds.delete(workspaceId);
+    for (const thread of Array.from(this.threadsById.values())) {
+      if (thread.workspaceId === workspaceId) {
+        this.threadsById.delete(thread.id);
+      }
+    }
+    await Promise.all([this.persistWorkspaces(), this.persistThreads()]);
+    return null;
+  }
+
+  private openWorkspaceIn(targetPath: string): unknown | RpcErrorShape {
+    const normalizedPath = trimString(targetPath);
+    if (!normalizedPath) {
+      return badRequest("path is required.");
+    }
+    if (isHttpUrl(normalizedPath)) {
+      return null;
+    }
+    return badRequest("open_workspace_in only supports http(s) URLs in the web companion.");
+  }
+
+  private async setWorkspaceRuntimeCodexArgs(
+    params: JsonRecord,
+  ): Promise<unknown | RpcErrorShape> {
+    const workspaceId = String(params.workspaceId ?? "");
+    const workspace = this.getWorkspace(workspaceId);
+    if (!workspace) {
+      return notFound("Workspace not found.");
+    }
+    const settings = await this.storage.readSettings();
+    const nextArgs =
+      params.codexArgs === null || params.codexArgs === undefined
+        ? toNullableString(settings.codexArgs)
+        : toNullableString(params.codexArgs);
+    const previousArgs = this.resolveRuntimeCodexArgs(settings, workspaceId);
+    if (params.codexArgs === null || params.codexArgs === undefined) {
+      this.workspaceRuntimeCodexArgs.delete(workspaceId);
+    } else {
+      this.workspaceRuntimeCodexArgs.set(workspaceId, nextArgs);
+    }
+    const respawned =
+      this.connectedWorkspaceIds.has(workspaceId) &&
+      this.hasActiveAppServerRuntime() &&
+      previousArgs !== nextArgs;
+    if (respawned) {
+      await this.resetAppServerClients();
+    }
+    return {
+      appliedCodexArgs: nextArgs,
+      respawned,
+    };
+  }
+
+  private async handleWorkspaceGitRpc(
+    method: string,
+    params: JsonRecord,
+  ): Promise<unknown | RpcErrorShape | undefined> {
+    return await dispatchWorkspaceGitRpc(
+      this.createWorkspaceGitRpcContext(),
+      method,
+      params,
+    );
+  }
+
+  private createWorkspaceRpcContext() {
+    return {
+      listWorkspaces: () => Array.from(this.workspacesById.values()),
+      isWorkspaceConnected: (workspaceId: string) => this.connectedWorkspaceIds.has(workspaceId),
+      directoryExists,
+      addWorkspaceFromPath: this.addWorkspaceFromPath.bind(this),
+      handleWorkspaceGitRpc: this.handleWorkspaceGitRpc.bind(this),
+      addCloneWorkspace: this.addCloneWorkspace.bind(this),
+      connectWorkspace: this.connectWorkspace.bind(this),
+      updateWorkspaceSettingsRecord: this.updateWorkspaceSettingsRecord.bind(this),
+      removeWorkspaceCascade: this.removeWorkspaceCascade.bind(this),
+      openWorkspaceIn: this.openWorkspaceIn.bind(this),
+      setWorkspaceRuntimeCodexArgs: this.setWorkspaceRuntimeCodexArgs.bind(this),
+    };
+  }
+
   private async handleWorkspaceRpc(
     method: string,
     params: JsonRecord,
   ): Promise<RpcDispatchResult> {
-    switch (method) {
-      case "list_workspaces":
-        return Array.from(this.workspacesById.values()).map((workspace) => ({
-          ...workspace,
-          connected: this.connectedWorkspaceIds.has(workspace.id),
-        }));
-      case "is_workspace_path_dir": {
-        const targetPath = String(params.path ?? "");
-        if (!targetPath) {
-          return false;
-        }
-        return await directoryExists(targetPath);
-      }
-      case "add_workspace": {
-        const targetPath = String(params.path ?? "");
-        return await this.addWorkspaceFromPath(targetPath);
-      }
-      case "add_workspace_from_git_url": {
-        const url = String(params.url ?? "");
-        const destinationPath = String(params.destinationPath ?? "");
-        const targetFolderName =
-          params.targetFolderName == null ? null : String(params.targetFolderName);
-        if (!url || !destinationPath) {
-          return notFound("Git URL and destination path are required.");
-        }
-        const folderName =
-          targetFolderName ??
-          url.replace(/\/+$/, "").split("/").at(-1)?.replace(/\.git$/, "") ??
-          "workspace";
-        const targetPath = path.join(destinationPath, folderName);
-        try {
-          await cloneRepository(url, targetPath);
-          return await this.addWorkspaceFromPath(targetPath);
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "add_clone": {
-        const sourceWorkspaceId = String(params.sourceWorkspaceId ?? "");
-        const copiesFolder = String(params.copiesFolder ?? "");
-        const copyName = String(params.copyName ?? "");
-        const source = this.getWorkspace(sourceWorkspaceId);
-        if (!source) {
-          return notFound("Source workspace not found.");
-        }
-        if (!copiesFolder || !copyName) {
-          return badRequest("Copies folder and copy name are required.");
-        }
-        const targetPath = path.join(copiesFolder, copyName);
-        await fs.mkdir(copiesFolder, { recursive: true });
-        await fs.cp(source.path, targetPath, { recursive: true });
-        const cloneWorkspace: StoredWorkspace = {
-          id: `ws-${randomUUID()}`,
-          name: copyName,
-          path: targetPath,
-          kind: "main",
-          parentId: source.id,
-          worktree: null,
-          settings: {
-            ...defaultWorkspaceSettings(),
-            cloneSourceWorkspaceId: source.id,
-          },
-        };
-        this.workspacesById.set(cloneWorkspace.id, cloneWorkspace);
-        await this.persistWorkspaces();
-        return { ...cloneWorkspace, connected: false };
-      }
-      case "add_worktree": {
-        const parentId = String(params.parentId ?? "");
-        const branch = trimString(params.branch);
-        const requestedName = toNullableString(params.name);
-        const copyAgentsMd = params.copyAgentsMd !== false;
-        const parent = this.getWorkspace(parentId);
-        if (!parent) {
-          return notFound("Parent workspace not found.");
-        }
-        if (!branch) {
-          return badRequest("Branch name is required.");
-        }
-        try {
-          const repoRoot = await resolveGitRootFromPath(parent.path);
-          const worktreesDir = path.join(this.dataDir, "worktrees");
-          const baseName = slugifyAgentName(requestedName ?? branch.replace(/\//g, "-"));
-          let targetPath = path.join(worktreesDir, baseName);
-          let suffix = 2;
-          while (await pathExists(targetPath)) {
-            targetPath = path.join(worktreesDir, `${baseName}-${suffix}`);
-            suffix += 1;
-          }
-          await fs.mkdir(worktreesDir, { recursive: true });
-          const branchExists = Boolean(
-            await tryRunGit(repoRoot, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]),
-          );
-          if (branchExists) {
-            await runGit(repoRoot, ["worktree", "add", targetPath, branch]);
-          } else {
-            await runGit(repoRoot, ["worktree", "add", "-b", branch, targetPath]);
-          }
-          if (copyAgentsMd) {
-            const sourceAgents = path.join(parent.path, "AGENTS.md");
-            const destinationAgents = path.join(targetPath, "AGENTS.md");
-            const sourceExists = await pathExists(sourceAgents);
-            const destinationExists = await pathExists(destinationAgents);
-            if (sourceExists && !destinationExists) {
-              await fs.copyFile(sourceAgents, destinationAgents);
-            }
-          }
-          const workspace: StoredWorkspace = {
-            id: `ws-${randomUUID()}`,
-            name: requestedName ?? branch,
-            path: targetPath,
-            kind: "worktree",
-            parentId,
-            worktree: { branch },
-            settings: {
-              ...defaultWorkspaceSettings(),
-              sidebarCollapsed: parent.settings.sidebarCollapsed,
-              groupId: parent.settings.groupId ?? null,
-              sortOrder: parent.settings.sortOrder ?? null,
-              gitRoot: parent.settings.gitRoot ?? null,
-              worktreeSetupScript: parent.settings.worktreeSetupScript ?? null,
-            },
-          };
-          this.workspacesById.set(workspace.id, workspace);
-          await this.persistWorkspaces();
-          return { ...workspace, connected: false };
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "connect_workspace": {
-        const workspaceId = String(params.id ?? "");
-        const workspace = this.getWorkspace(workspaceId);
-        if (!workspace) {
-          return notFound("Workspace not found.");
-        }
-        this.connectedWorkspaceIds.add(workspaceId);
-        this.emit(workspaceId, "codex/connected", {});
-        return null;
-      }
-      case "update_workspace_settings": {
-        const workspaceId = String(params.id ?? "");
-        const settings =
-          params.settings && typeof params.settings === "object"
-            ? (params.settings as JsonRecord)
-            : {};
-        return this.updateWorkspaceSettingsRecord(workspaceId, settings);
-      }
-      case "remove_workspace":
-      case "remove_worktree": {
-        const workspaceId = String(params.id ?? "");
-        const workspace = this.getWorkspace(workspaceId);
-        if (!workspace) {
-          return notFound("Workspace not found.");
-        }
-        this.workspacesById.delete(workspaceId);
-        this.connectedWorkspaceIds.delete(workspaceId);
-        for (const thread of Array.from(this.threadsById.values())) {
-          if (thread.workspaceId === workspaceId) {
-            this.threadsById.delete(thread.id);
-          }
-        }
-        await Promise.all([this.persistWorkspaces(), this.persistThreads()]);
-        return null;
-      }
-      case "rename_worktree": {
-        const workspaceId = String(params.id ?? "");
-        const nextBranch = trimString(params.branch);
-        const workspace = this.getWorkspace(workspaceId);
-        if (!workspace) {
-          return notFound("Workspace not found.");
-        }
-        if (workspace.kind !== "worktree" || !workspace.worktree?.branch) {
-          return badRequest("Not a worktree workspace.");
-        }
-        if (!nextBranch) {
-          return badRequest("Branch name is required.");
-        }
-        try {
-          const repoRoot = await resolveGitRootFromPath(workspace.path);
-          let actualBranch = nextBranch;
-          let suffix = 2;
-          while (
-            await tryRunGit(repoRoot, ["show-ref", "--verify", "--quiet", `refs/heads/${actualBranch}`])
-          ) {
-            actualBranch = `${nextBranch}-${suffix}`;
-            suffix += 1;
-          }
-          await runGit(repoRoot, ["branch", "-m", workspace.worktree.branch, actualBranch]);
-          workspace.worktree = { branch: actualBranch };
-          await this.persistWorkspaces();
-          return { ...workspace, connected: this.connectedWorkspaceIds.has(workspace.id) };
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "rename_worktree_upstream": {
-        const workspaceId = String(params.id ?? "");
-        const oldBranch = trimString(params.oldBranch);
-        const newBranch = trimString(params.newBranch);
-        const workspace = this.getWorkspace(workspaceId);
-        if (!workspace) {
-          return notFound("Workspace not found.");
-        }
-        if (!oldBranch || !newBranch) {
-          return badRequest("Both old and new branch names are required.");
-        }
-        try {
-          const repoRoot = await resolveGitRootFromPath(workspace.path);
-          const remoteName = "origin";
-          await runGit(repoRoot, ["push", remoteName, `refs/heads/${newBranch}:refs/heads/${newBranch}`]);
-          await tryRunGit(repoRoot, ["push", remoteName, "--delete", oldBranch]);
-          await tryRunGit(repoRoot, ["branch", "--set-upstream-to", `${remoteName}/${newBranch}`, newBranch]);
-          return null;
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "apply_worktree_changes": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const workspace = this.getWorkspace(workspaceId);
-        if (!workspace) {
-          return notFound("Workspace not found.");
-        }
-        if (workspace.kind !== "worktree") {
-          return badRequest("Not a worktree workspace.");
-        }
-        const parentId = workspace.parentId ?? null;
-        const parent = parentId ? this.getWorkspace(parentId) : null;
-        if (!parent) {
-          return badRequest("Worktree parent not found.");
-        }
-        try {
-          const worktreeRoot = await resolveGitRootFromPath(workspace.path);
-          const parentRoot = await resolveGitRootFromPath(parent.path);
-          const parentStatus = await runGit(parentRoot, ["status", "--porcelain"]);
-          if (parentStatus.stdout.trim()) {
-            return badRequest(
-              "Your current branch has uncommitted changes. Please commit, stash, or discard them before applying worktree changes.",
-            );
-          }
-
-          let patch = "";
-          patch += (await runGit(worktreeRoot, ["diff", "--binary", "--no-color", "--cached"])).stdout;
-          patch += (await runGit(worktreeRoot, ["diff", "--binary", "--no-color"])).stdout;
-
-          const untracked = await runGit(worktreeRoot, [
-            "ls-files",
-            "--others",
-            "--exclude-standard",
-            "-z",
-          ]);
-          for (const rawPath of untracked.stdout.split("\0").filter(Boolean)) {
-            patch += await runGitNoIndexDiff(worktreeRoot, rawPath);
-          }
-
-          if (!patch.trim()) {
-            return badRequest("No changes to apply.");
-          }
-
-          await applyGitPatch(parentRoot, patch);
-          return null;
-        } catch (error) {
-          return rpcBoundaryError(error);
-        }
-      }
-      case "worktree_setup_status": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const workspace = this.getWorkspace(workspaceId);
-        if (!workspace) {
-          return notFound("Workspace not found.");
-        }
-        const script = normalizeSetupScript(workspace.settings.worktreeSetupScript);
-        const markerExists =
-          workspace.kind === "worktree" &&
-          (await pathExists(worktreeSetupMarkerPath(this.dataDir, workspace.id)));
-        return {
-          shouldRun: workspace.kind === "worktree" && Boolean(script) && !markerExists,
-          script,
-        };
-      }
-      case "worktree_setup_mark_ran": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const workspace = this.getWorkspace(workspaceId);
-        if (!workspace) {
-          return notFound("Workspace not found.");
-        }
-        if (workspace.kind !== "worktree") {
-          return badRequest("Not a worktree workspace.");
-        }
-        const markerPath = worktreeSetupMarkerPath(this.dataDir, workspace.id);
-        await fs.mkdir(path.dirname(markerPath), { recursive: true });
-        await fs.writeFile(
-          markerPath,
-          `ran_at=${Math.floor(Date.now() / MILLISECONDS_PER_SECOND)}\n`,
-          "utf8",
-        );
-        return { ok: true };
-      }
-      case "open_workspace_in": {
-        const targetPath = trimString(params.path);
-        if (!targetPath) {
-          return badRequest("path is required.");
-        }
-        if (isHttpUrl(targetPath)) {
-          return null;
-        }
-        return badRequest("open_workspace_in only supports http(s) URLs in the web companion.");
-      }
-      case "get_open_app_icon":
-        return null;
-      case "set_workspace_runtime_codex_args": {
-        const workspaceId = String(params.workspaceId ?? "");
-        const workspace = this.getWorkspace(workspaceId);
-        if (!workspace) {
-          return notFound("Workspace not found.");
-        }
-        const settings = await this.storage.readSettings();
-        const nextArgs =
-          params.codexArgs === null || params.codexArgs === undefined
-            ? toNullableString(settings.codexArgs)
-            : toNullableString(params.codexArgs);
-        const previousArgs = this.resolveRuntimeCodexArgs(settings, workspaceId);
-        if (params.codexArgs === null || params.codexArgs === undefined) {
-          this.workspaceRuntimeCodexArgs.delete(workspaceId);
-        } else {
-          this.workspaceRuntimeCodexArgs.set(workspaceId, nextArgs);
-        }
-        const respawned =
-          this.connectedWorkspaceIds.has(workspaceId) &&
-          this.hasActiveAppServerRuntime() &&
-          previousArgs !== nextArgs;
-        if (respawned) {
-          await this.resetAppServerClients();
-        }
-        return {
-          appliedCodexArgs: nextArgs,
-          respawned,
-        };
-      }
-      default:
-        return RPC_UNHANDLED;
-    }
+    const result = await dispatchWorkspaceRpc(
+      this.createWorkspaceRpcContext(),
+      method,
+      params,
+    );
+    return result === undefined ? RPC_UNHANDLED : result;
   }
 
   private async handleCompanionRuntimeRpc(
@@ -2423,6 +2198,39 @@ export class CodexCompanionServer {
       getGitLogSummary,
       getCommitDiffEntries,
       getPreferredRemote,
+    };
+  }
+
+  private createWorkspaceGitRpcContext() {
+    return {
+      dataDir: this.dataDir,
+      getWorkspace: this.getWorkspace.bind(this),
+      addWorkspaceFromPath: this.addWorkspaceFromPath.bind(this),
+      setWorkspace: (workspace: StoredWorkspace) => {
+        this.workspacesById.set(workspace.id, workspace);
+      },
+      persistWorkspaces: this.persistWorkspaces.bind(this),
+      isWorkspaceConnected: (workspaceId: string) => this.connectedWorkspaceIds.has(workspaceId),
+      createWorkspaceId: () => `ws-${randomUUID()}`,
+      defaultWorkspaceSettings,
+      slugifyAgentName: (name: string) =>
+        name
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9._-]+/g, "-")
+          .replace(/^-+|-+$/g, "") || "agent",
+      trimString,
+      toNullableString,
+      pathExists,
+      notFound,
+      badRequest,
+      rpcBoundaryError,
+      resolveGitRootFromPath,
+      runGit,
+      tryRunGit,
+      cloneRepository,
+      runGitNoIndexDiff,
+      applyGitPatch,
     };
   }
 

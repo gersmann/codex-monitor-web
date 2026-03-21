@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  handleGitRpc,
   handleGitBranchRpc,
   handleGitHubRpc,
   handleGitWorkingTreeRpc,
@@ -108,5 +109,49 @@ describe("codexGitRpc", () => {
     ).resolves.toBeNull();
 
     expect(runGit).toHaveBeenCalledWith("/tmp/workspace", ["add", "-A", "--", "src/a.ts", "src/b.ts"]);
+  });
+
+  it("routes init_git_repo through the unified git dispatcher", async () => {
+    const initializeGitRepo = vi.fn().mockResolvedValue({ status: "initialized" });
+    const context = createContext({ initializeGitRepo });
+
+    await expect(
+      handleGitRpc(context, "init_git_repo", {
+        workspaceId: "ws-1",
+        branch: "main",
+        force: true,
+      }),
+    ).resolves.toEqual({ status: "initialized" });
+
+    expect(initializeGitRepo).toHaveBeenCalledWith("/tmp/workspace", "main", true);
+  });
+
+  it("routes create_github_repo through the unified git dispatcher", async () => {
+    const createGitHubRepo = vi.fn().mockResolvedValue({
+      status: "ok",
+      repo: "openai/codex",
+      remoteUrl: "git@github.com:openai/codex.git",
+    });
+    const context = createContext({ createGitHubRepo });
+
+    await expect(
+      handleGitRpc(context, "create_github_repo", {
+        workspaceId: "ws-1",
+        repo: "openai/codex",
+        visibility: "public",
+        branch: "main",
+      }),
+    ).resolves.toEqual({
+      status: "ok",
+      repo: "openai/codex",
+      remoteUrl: "git@github.com:openai/codex.git",
+    });
+
+    expect(createGitHubRepo).toHaveBeenCalledWith(
+      "/tmp/workspace",
+      "openai/codex",
+      "public",
+      "main",
+    );
   });
 });
