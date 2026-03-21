@@ -13,6 +13,7 @@ import type {
   TailscaleStatus,
   TrayRecentThreadEntry,
   TraySessionUsage,
+  ThreadCodexParams,
   WorkspaceInfo,
   AppMention,
   WorkspaceSettings,
@@ -1386,12 +1387,82 @@ export async function archiveThread(workspaceId: string, threadId: string) {
   return invoke<any>("archive_thread", { workspaceId, threadId });
 }
 
+export async function pinThread(workspaceId: string, threadId: string) {
+  return invoke<{ pinnedAt: number }>("pin_thread", { workspaceId, threadId });
+}
+
+export async function unpinThread(workspaceId: string, threadId: string) {
+  return invoke<void>("unpin_thread", { workspaceId, threadId });
+}
+
 export async function setThreadName(
   workspaceId: string,
   threadId: string,
   name: string,
 ) {
   return invoke<any>("set_thread_name", { workspaceId, threadId, name });
+}
+
+export async function patchThreadCodexParams(
+  workspaceId: string,
+  threadId: string,
+  patch: Partial<
+    Pick<
+      ThreadCodexParams,
+      | "modelId"
+      | "effort"
+      | "serviceTier"
+      | "accessMode"
+      | "collaborationModeId"
+      | "codexArgsOverride"
+    >
+  >,
+) {
+  return invoke<{ codexParams: ThreadCodexParams | null }>("patch_thread_codex_params", {
+    workspaceId,
+    threadId,
+    patch,
+  });
+}
+
+export async function clearThreadCodexParams(workspaceId: string, threadId: string) {
+  return invoke<void>("clear_thread_codex_params", { workspaceId, threadId });
+}
+
+export async function patchWorkspaceComposerDefaults(
+  workspaceId: string,
+  patch: Partial<
+    Pick<
+      ThreadCodexParams,
+      | "modelId"
+      | "effort"
+      | "serviceTier"
+      | "accessMode"
+      | "collaborationModeId"
+      | "codexArgsOverride"
+    >
+  >,
+) {
+  return invoke<WorkspaceInfo>("patch_workspace_composer_defaults", {
+    workspaceId,
+    patch,
+  });
+}
+
+export async function importClientThreadMetadata(payload: {
+  pinnedThreads?: Record<string, number>;
+  threadCodexParams?: Record<string, unknown>;
+  detachedReviewLinks?: Record<string, Record<string, string>>;
+  customNames?: Record<string, string>;
+}) {
+  return invoke<{
+    imported: {
+      pinnedThreads: number;
+      threadCodexParams: number;
+      detachedReviewLinks: number;
+      customNames: number;
+    };
+  }>("import_client_thread_metadata", payload);
 }
 
 export async function getThreadBacklog(workspaceId: string, threadId: string) {

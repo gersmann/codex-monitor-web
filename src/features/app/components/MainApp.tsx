@@ -215,6 +215,7 @@ export default function MainApp() {
   );
   const {
     threadCodexParamsVersion,
+    syncThreadCodexParamsFromBackend,
     getThreadCodexParams,
     patchThreadCodexParams,
     accessMode,
@@ -236,6 +237,13 @@ export default function MainApp() {
     persistThreadCodexParams,
   } = useThreadCodexBootstrapOrchestration({
     activeWorkspaceId,
+    onError: (error) => addDebugEntry({
+      id: `${Date.now()}-thread-codex-params-error`,
+      timestamp: Date.now(),
+      source: "error",
+      label: "thread codex params error",
+      payload: error instanceof Error ? error.message : String(error),
+    }),
   });
   const {
     appRef,
@@ -599,6 +607,9 @@ export default function MainApp() {
     threadSortKey: threadListSortKey,
     onThreadCodexMetadataDetected: handleThreadCodexMetadataDetected,
   });
+  useEffect(() => {
+    syncThreadCodexParamsFromBackend(threadsByWorkspace, workspacesById);
+  }, [syncThreadCodexParamsFromBackend, threadsByWorkspace, workspacesById]);
   const backlogState = useThreadBacklog({
     activeWorkspaceId,
     activeThreadId,

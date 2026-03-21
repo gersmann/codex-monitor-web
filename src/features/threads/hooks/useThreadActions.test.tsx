@@ -18,7 +18,6 @@ import {
   mergeThreadItems,
   previewThreadName,
 } from "@utils/threadItems";
-import { saveThreadActivity } from "@threads/utils/threadStorage";
 import { useThreadActions } from "./useThreadActions";
 
 vi.mock("@services/tauri", () => ({
@@ -40,7 +39,6 @@ vi.mock("@utils/threadItems", () => ({
 }));
 
 vi.mock("@threads/utils/threadStorage", () => ({
-  saveThreadActivity: vi.fn(),
 }));
 
 describe("useThreadActions", () => {
@@ -312,6 +310,7 @@ describe("useThreadActions", () => {
       workspaceId: "ws-1",
       threadId: "thread-2",
       name: "Preview Name",
+      storedName: null,
     });
     expect(dispatch).toHaveBeenCalledWith({
       type: "setLastAgentMessage",
@@ -844,6 +843,7 @@ describe("useThreadActions", () => {
         {
           id: "thread-1",
           name: "Custom",
+          preview: "Remote preview",
           updatedAt: 5000,
           createdAt: 0,
         },
@@ -853,9 +853,6 @@ describe("useThreadActions", () => {
       type: "setThreadListCursor",
       workspaceId: "ws-1",
       cursor: "cursor-1",
-    });
-    expect(saveThreadActivity).toHaveBeenCalledWith({
-      "ws-1": { "thread-1": 5000 },
     });
     expect(threadActivityRef.current).toEqual({
       "ws-1": { "thread-1": 5000 },
@@ -957,6 +954,7 @@ describe("useThreadActions", () => {
         {
           id: "thread-1",
           name: "WS1 thread",
+          preview: "WS1 thread",
           updatedAt: 5000,
           createdAt: 0,
         },
@@ -971,6 +969,7 @@ describe("useThreadActions", () => {
         {
           id: "thread-2",
           name: "WS2 thread",
+          preview: "WS2 thread",
           updatedAt: 4500,
           createdAt: 0,
         },
@@ -1032,6 +1031,7 @@ describe("useThreadActions", () => {
         {
           id: "thread-shared-root",
           name: "Shared root thread",
+          preview: "Shared root thread",
           updatedAt: 5000,
           createdAt: 0,
         },
@@ -1305,6 +1305,7 @@ describe("useThreadActions", () => {
         {
           id: "subagent-thread",
           name: "Review helper",
+          preview: "Review helper",
           updatedAt: 4500,
           createdAt: 0,
           isSubagent: true,
@@ -1396,6 +1397,7 @@ describe("useThreadActions", () => {
         {
           id: "thread-win-1",
           name: "Windows thread",
+          preview: "Windows thread",
           updatedAt: 5000,
           createdAt: 0,
         },
@@ -1438,6 +1440,7 @@ describe("useThreadActions", () => {
         {
           id: "thread-win-ns-1",
           name: "Windows namespace thread",
+          preview: "Windows namespace thread",
           updatedAt: 5000,
           createdAt: 0,
         },
@@ -1476,6 +1479,7 @@ describe("useThreadActions", () => {
         {
           id: "thread-nested-1",
           name: "Nested thread",
+          preview: "Nested thread",
           updatedAt: 5000,
           createdAt: 0,
         },
@@ -1616,7 +1620,13 @@ describe("useThreadActions", () => {
       sortKey: "updated_at",
       threads: [
         { id: "thread-1", name: "Agent 1", updatedAt: 6000 },
-        { id: "thread-2", name: "Older preview", updatedAt: 4000, createdAt: 0 },
+        {
+          id: "thread-2",
+          name: "Older preview",
+          preview: "Older preview",
+          updatedAt: 4000,
+          createdAt: 0,
+        },
       ],
     });
     expect(dispatch).toHaveBeenCalledWith({
@@ -1741,6 +1751,7 @@ describe("useThreadActions", () => {
         {
           id: "thread-win-older",
           name: "Older windows preview",
+          preview: "Older windows preview",
           updatedAt: 4000,
           createdAt: 0,
         },
@@ -1787,6 +1798,7 @@ describe("useThreadActions", () => {
         {
           id: "thread-nested-older",
           name: "Nested older preview",
+          preview: "Nested older preview",
           updatedAt: 4000,
           createdAt: 0,
         },

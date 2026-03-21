@@ -23,6 +23,7 @@ type ThreadCodexOrchestration = {
   threadCodexSelectionKey: string | null;
   setThreadCodexSelectionKey: Dispatch<SetStateAction<string | null>>;
   threadCodexParamsVersion: number;
+  syncThreadCodexParamsFromBackend: ReturnType<typeof useThreadCodexParams>["syncThreadCodexParamsFromBackend"];
   getThreadCodexParams: ReturnType<typeof useThreadCodexParams>["getThreadCodexParams"];
   patchThreadCodexParams: ReturnType<typeof useThreadCodexParams>["patchThreadCodexParams"];
   persistThreadCodexParams: (patch: {
@@ -39,16 +40,22 @@ type ThreadCodexOrchestration = {
 
 type UseThreadCodexOrchestrationParams = {
   activeWorkspaceIdForParamsRef: MutableRefObject<string | null>;
+  onError?: (error: unknown) => void;
 };
 
 export function useThreadCodexOrchestration({
   activeWorkspaceIdForParamsRef,
+  onError,
 }: UseThreadCodexOrchestrationParams): ThreadCodexOrchestration {
   const {
     version: threadCodexParamsVersion,
+    syncThreadCodexParamsFromBackend,
     getThreadCodexParams,
     patchThreadCodexParams,
-  } = useThreadCodexParams();
+  } = useThreadCodexParams({
+    noThreadScopeSuffix: NO_THREAD_SCOPE_SUFFIX,
+    onError,
+  });
   const [accessMode, setAccessMode] = useState<AccessMode>("current");
   const [preferredModelId, setPreferredModelId] = useState<string | null>(null);
   const [preferredEffort, setPreferredEffort] = useState<string | null>(null);
@@ -111,6 +118,7 @@ export function useThreadCodexOrchestration({
       threadCodexSelectionKey,
       setThreadCodexSelectionKey,
       threadCodexParamsVersion,
+      syncThreadCodexParamsFromBackend,
       getThreadCodexParams,
       patchThreadCodexParams,
       persistThreadCodexParams,
@@ -126,6 +134,7 @@ export function useThreadCodexOrchestration({
       preferredServiceTier,
       threadCodexSelectionKey,
       threadCodexParamsVersion,
+      syncThreadCodexParamsFromBackend,
       setPreferredCodexArgsOverride,
       getThreadCodexParams,
       patchThreadCodexParams,

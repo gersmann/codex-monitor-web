@@ -6,7 +6,7 @@ import {
   resolveWorkspaceRuntimeCodexArgsOverride,
   resolveThreadCodexState,
 } from "./threadCodexParamsSeed";
-import type { ThreadCodexParams } from "./threadStorage";
+import type { ThreadCodexParams } from "@/types";
 
 describe("threadCodexParamsSeed", () => {
   it("creates a pending seed only for first-message no-thread composer", () => {

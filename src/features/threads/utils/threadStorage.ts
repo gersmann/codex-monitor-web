@@ -1,34 +1,17 @@
-import type { AccessMode, ServiceTier } from "@/types";
+import type { ThreadCodexParams } from "@/types";
 
 const STORAGE_KEY_THREAD_ACTIVITY = "codexmonitor.threadLastUserActivity";
 export const STORAGE_KEY_PINNED_THREADS = "codexmonitor.pinnedThreads";
 export const STORAGE_KEY_CUSTOM_NAMES = "codexmonitor.threadCustomNames";
 export const STORAGE_KEY_THREAD_CODEX_PARAMS = "codexmonitor.threadCodexParams";
 export const STORAGE_KEY_DETACHED_REVIEW_LINKS = "codexmonitor.detachedReviewLinks";
+export const MIGRATED_THREAD_METADATA_STORAGE_KEY = "codexmonitor.threadMetadataMigrated";
 export const MAX_PINS_SOFT_LIMIT = 5;
 
 export type ThreadActivityMap = Record<string, Record<string, number>>;
 export type PinnedThreadsMap = Record<string, number>;
 export type CustomNamesMap = Record<string, string>;
 type DetachedReviewLinksMap = Record<string, Record<string, string>>;
-
-// Per-thread Codex parameter overrides. Keyed by `${workspaceId}:${threadId}`.
-// These are UI-level preferences (not server state) and are best-effort persisted.
-export type ThreadCodexParams = {
-  modelId: string | null;
-  effort: string | null;
-  // string => explicit per-thread tier override
-  // null => explicit "Default/off" override
-  // undefined => legacy/unset thread value that should inherit no-thread scope
-  serviceTier: ServiceTier | null | undefined;
-  accessMode: AccessMode | null;
-  collaborationModeId: string | null;
-  // string => explicit per-thread override
-  // null => explicit "Default" (no override)
-  // undefined => legacy/unset thread value that should inherit no-thread scope
-  codexArgsOverride: string | null | undefined;
-  updatedAt: number;
-};
 
 export type ThreadCodexParamsMap = Record<string, ThreadCodexParams>;
 

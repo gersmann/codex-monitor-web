@@ -64,7 +64,19 @@ export type ThreadAction =
   | { type: "markReviewing"; threadId: string; isReviewing: boolean }
   | { type: "markUnread"; threadId: string; hasUnread: boolean }
   | { type: "addAssistantMessage"; threadId: string; text: string }
-  | { type: "setThreadName"; workspaceId: string; threadId: string; name: string }
+  | {
+      type: "setThreadName";
+      workspaceId: string;
+      threadId: string;
+      name: string;
+      storedName?: string | null;
+    }
+  | {
+      type: "setThreadPinnedAt";
+      workspaceId: string;
+      threadId: string;
+      pinnedAt: number | null;
+    }
   | {
       type: "setThreadTimestamp";
       workspaceId: string;

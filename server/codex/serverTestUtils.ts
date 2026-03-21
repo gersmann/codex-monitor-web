@@ -45,6 +45,9 @@ export async function createServerFixture(
     turns: [],
     modelId: null,
     effort: null,
+    pinnedAt: null,
+    detachedReviewParentId: null,
+    codexParams: null,
     backlog: [],
     tokenUsage: null,
   };

@@ -73,6 +73,7 @@ import type {
   JsonRecord,
   RpcErrorShape,
   StoredThread,
+  StoredThreadCodexParams,
   StoredThreadItem,
   StoredTurn,
   StoredWorkspace,
@@ -148,6 +149,7 @@ const THREAD_ACTIVITY_TIMESTAMP_KEYS = [
   "createdAt",
   "created_at",
 ] as const;
+const NO_THREAD_SCOPE_SUFFIX = "__no_thread__";
 
 const RUN_METADATA_OUTPUT_SCHEMA = {
   type: "object",
@@ -191,13 +193,17 @@ function toThreadSummary(thread: StoredThread) {
   return {
     id: thread.id,
     cwd: thread.cwd,
-    preview: thread.name ?? thread.preview,
+    name: thread.name,
+    preview: thread.preview,
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     model: thread.modelId,
     modelReasoningEffort: thread.effort,
     source: "appServer",
     activeTurnId: thread.activeTurnId,
+    pinnedAt: thread.pinnedAt,
+    detachedReviewParentId: thread.detachedReviewParentId,
+    codexParams: thread.codexParams,
   };
 }
 
@@ -205,13 +211,17 @@ function toThreadResponse(thread: StoredThread) {
   return {
     id: thread.id,
     cwd: thread.cwd,
-    preview: thread.name ?? thread.preview,
+    name: thread.name,
+    preview: thread.preview,
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     activeTurnId: thread.activeTurnId,
     source: "appServer",
     model: thread.modelId,
     modelReasoningEffort: thread.effort,
+    pinnedAt: thread.pinnedAt,
+    detachedReviewParentId: thread.detachedReviewParentId,
+    codexParams: thread.codexParams,
     turns: thread.turns.map((turn) => ({
       id: turn.id,
       status: turn.status,
@@ -759,7 +769,92 @@ function defaultWorkspaceSettings() {
     launchScript: null,
     launchScripts: null,
     worktreeSetupScript: null,
+    composerDefaults: null,
   };
+}
+
+function coerceAccessMode(value: unknown): StoredThreadCodexParams["accessMode"] {
+  return value === "read-only" || value === "current" || value === "full-access"
+    ? value
+    : null;
+}
+
+function coerceServiceTier(value: unknown): StoredThreadCodexParams["serviceTier"] {
+  if (value === "fast" || value === "flex") {
+    return value;
+  }
+  if (value === null) {
+    return null;
+  }
+  return undefined;
+}
+
+function normalizeStoredThreadCodexParamsPatch(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const hasServiceTierField = Object.prototype.hasOwnProperty.call(record, "serviceTier");
+  const hasCodexArgsOverrideField = Object.prototype.hasOwnProperty.call(
+    record,
+    "codexArgsOverride",
+  );
+  return {
+    ...(Object.prototype.hasOwnProperty.call(record, "modelId")
+      ? { modelId: typeof record.modelId === "string" || record.modelId === null ? record.modelId : null }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(record, "effort")
+      ? { effort: typeof record.effort === "string" || record.effort === null ? record.effort : null }
+      : {}),
+    ...(hasServiceTierField ? { serviceTier: coerceServiceTier(record.serviceTier) } : {}),
+    ...(Object.prototype.hasOwnProperty.call(record, "accessMode")
+      ? { accessMode: coerceAccessMode(record.accessMode) }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(record, "collaborationModeId")
+      ? {
+          collaborationModeId:
+            typeof record.collaborationModeId === "string" || record.collaborationModeId === null
+              ? record.collaborationModeId
+              : null,
+        }
+      : {}),
+    ...(hasCodexArgsOverrideField
+      ? {
+          codexArgsOverride:
+            typeof record.codexArgsOverride === "string" || record.codexArgsOverride === null
+              ? record.codexArgsOverride
+              : null,
+        }
+      : {}),
+  } satisfies Partial<StoredThreadCodexParams>;
+}
+
+function mergeStoredThreadCodexParams(
+  current: StoredThreadCodexParams | null,
+  patch: Partial<StoredThreadCodexParams>,
+): StoredThreadCodexParams | null {
+  const nextBase: StoredThreadCodexParams = {
+    modelId: current?.modelId ?? null,
+    effort: current?.effort ?? null,
+    ...(Object.prototype.hasOwnProperty.call(current ?? {}, "serviceTier")
+      ? { serviceTier: current?.serviceTier }
+      : {}),
+    accessMode: current?.accessMode ?? null,
+    collaborationModeId: current?.collaborationModeId ?? null,
+    ...(Object.prototype.hasOwnProperty.call(current ?? {}, "codexArgsOverride")
+      ? { codexArgsOverride: current?.codexArgsOverride }
+      : {}),
+    updatedAt: current?.updatedAt ?? 0,
+  };
+  const next: StoredThreadCodexParams = { ...nextBase, ...patch, updatedAt: Date.now() };
+  const hasMeaningfulValue =
+    next.modelId !== null ||
+    next.effort !== null ||
+    next.serviceTier !== undefined ||
+    next.accessMode !== null ||
+    next.collaborationModeId !== null ||
+    next.codexArgsOverride !== undefined;
+  return hasMeaningfulValue ? next : null;
 }
 
 function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {
@@ -1010,6 +1105,149 @@ export class CodexCompanionServer {
     return thread;
   }
 
+  private patchThreadCodexParamsRecord(
+    workspaceId: string,
+    threadId: string,
+    patch: Partial<StoredThreadCodexParams>,
+  ) {
+    const thread = this.getThreadForWorkspace(workspaceId, threadId);
+    if (!thread) {
+      return null;
+    }
+    thread.codexParams = mergeStoredThreadCodexParams(thread.codexParams, patch);
+    thread.updatedAt = Date.now();
+    return thread;
+  }
+
+  private patchWorkspaceComposerDefaultsRecord(
+    workspaceId: string,
+    patch: Partial<StoredThreadCodexParams>,
+  ) {
+    const workspace = this.getWorkspace(workspaceId);
+    if (!workspace) {
+      return null;
+    }
+    workspace.settings = {
+      ...workspace.settings,
+      composerDefaults: mergeStoredThreadCodexParams(
+        workspace.settings.composerDefaults ?? null,
+        patch,
+      ),
+    };
+    return workspace;
+  }
+
+  private splitThreadScopeKey(key: string) {
+    const separatorIndex = key.indexOf(":");
+    if (separatorIndex <= 0 || separatorIndex >= key.length - 1) {
+      return null;
+    }
+    return {
+      workspaceId: key.slice(0, separatorIndex),
+      threadId: key.slice(separatorIndex + 1),
+    };
+  }
+
+  private async importClientThreadMetadata(params: JsonRecord) {
+    const pinnedThreads =
+      params.pinnedThreads && typeof params.pinnedThreads === "object"
+        ? (params.pinnedThreads as Record<string, unknown>)
+        : {};
+    const threadCodexParams =
+      params.threadCodexParams && typeof params.threadCodexParams === "object"
+        ? (params.threadCodexParams as Record<string, unknown>)
+        : {};
+    const detachedReviewLinks =
+      params.detachedReviewLinks && typeof params.detachedReviewLinks === "object"
+        ? (params.detachedReviewLinks as Record<string, unknown>)
+        : {};
+    const customNames =
+      params.customNames && typeof params.customNames === "object"
+        ? (params.customNames as Record<string, unknown>)
+        : {};
+    let didChangeThreads = false;
+    let didChangeWorkspaces = false;
+
+    for (const [key, value] of Object.entries(pinnedThreads)) {
+      const scope = this.splitThreadScopeKey(key);
+      const pinnedAt = typeof value === "number" && Number.isFinite(value) ? value : null;
+      if (!scope || pinnedAt === null) {
+        continue;
+      }
+      const thread = this.getThreadForWorkspace(scope.workspaceId, scope.threadId);
+      if (!thread) {
+        continue;
+      }
+      if (thread.pinnedAt === null || pinnedAt > thread.pinnedAt) {
+        thread.pinnedAt = pinnedAt;
+        didChangeThreads = true;
+      }
+    }
+
+    for (const [key, value] of Object.entries(threadCodexParams)) {
+      const scope = this.splitThreadScopeKey(key);
+      const patch = normalizeStoredThreadCodexParamsPatch(value);
+      if (!scope || !patch) {
+        continue;
+      }
+      if (scope.threadId === NO_THREAD_SCOPE_SUFFIX) {
+        const workspace = this.patchWorkspaceComposerDefaultsRecord(scope.workspaceId, patch);
+        if (workspace) {
+          didChangeWorkspaces = true;
+        }
+        continue;
+      }
+      const thread = this.patchThreadCodexParamsRecord(scope.workspaceId, scope.threadId, patch);
+      if (thread) {
+        didChangeThreads = true;
+      }
+    }
+
+    for (const [workspaceId, links] of Object.entries(detachedReviewLinks)) {
+      if (!links || typeof links !== "object") {
+        continue;
+      }
+      for (const [childId, parentId] of Object.entries(links as Record<string, unknown>)) {
+        const thread = this.getThreadForWorkspace(workspaceId, childId);
+        if (!thread || typeof parentId !== "string" || !parentId.trim()) {
+          continue;
+        }
+        if (!thread.detachedReviewParentId) {
+          thread.detachedReviewParentId = parentId;
+          didChangeThreads = true;
+        }
+      }
+    }
+
+    for (const [key, value] of Object.entries(customNames)) {
+      const scope = this.splitThreadScopeKey(key);
+      const name = typeof value === "string" ? value.trim() : "";
+      if (!scope || !name) {
+        continue;
+      }
+      const thread = this.getThreadForWorkspace(scope.workspaceId, scope.threadId);
+      if (!thread || thread.name) {
+        continue;
+      }
+      thread.name = name;
+      didChangeThreads = true;
+    }
+
+    await Promise.all([
+      didChangeThreads ? this.persistThreads() : Promise.resolve(),
+      didChangeWorkspaces ? this.persistWorkspaces() : Promise.resolve(),
+    ]);
+
+    return {
+      imported: {
+        pinnedThreads: Object.keys(pinnedThreads).length,
+        threadCodexParams: Object.keys(threadCodexParams).length,
+        detachedReviewLinks: Object.keys(detachedReviewLinks).length,
+        customNames: Object.keys(customNames).length,
+      },
+    };
+  }
+
   private createBacklogItem(text: string): ThreadBacklogItem {
     const now = Date.now();
     return {
@@ -1183,6 +1421,9 @@ export class CodexCompanionServer {
       turns,
       modelId: existing?.modelId ?? null,
       effort: existing?.effort ?? null,
+      pinnedAt: existing?.pinnedAt ?? null,
+      detachedReviewParentId: existing?.detachedReviewParentId ?? null,
+      codexParams: existing?.codexParams ?? null,
       backlog: existing?.backlog ?? [],
       tokenUsage: existing?.tokenUsage ?? null,
     };
@@ -2292,9 +2533,13 @@ export class CodexCompanionServer {
           ...thread,
           id: localThread.id,
           cwd: localThread.cwd || trimString(thread.cwd),
-          preview: localThread.name ?? trimString(thread.preview) ?? localThread.preview,
+          name: localThread.name,
+          preview: trimString(thread.preview) || localThread.preview,
           createdAt: externalCreatedAt || localThread.createdAt,
           updatedAt: externalUpdatedAt || localThread.updatedAt,
+          pinnedAt: localThread.pinnedAt,
+          detachedReviewParentId: localThread.detachedReviewParentId,
+          codexParams: localThread.codexParams,
           ...(externalActiveTurnId ? { activeTurnId: externalActiveTurnId } : {}),
           ...(externalModel || localThread.modelId
             ? { model: externalModel || localThread.modelId }
@@ -2395,7 +2640,7 @@ export class CodexCompanionServer {
       this.threadsById.set(stored.id, stored);
       await this.persistThreads();
       return {
-        thread: rawThread,
+        thread: toThreadResponse(stored),
       };
     } catch (error) {
       if (!thread) {
@@ -2719,7 +2964,10 @@ export class CodexCompanionServer {
           const reviewThreadId =
             trimString(response.reviewThreadId) || trimString(response.review_thread_id);
           if (reviewThreadId) {
-            await this.syncStoredThreadFromAppServer(workspaceId, reviewThreadId);
+            const reviewThread = await this.syncStoredThreadFromAppServer(workspaceId, reviewThreadId);
+            reviewThread.detachedReviewParentId = thread.id;
+            reviewThread.updatedAt = Date.now();
+            await this.persistThreads();
           }
           return response;
         } catch (error) {
@@ -2913,6 +3161,74 @@ export class CodexCompanionServer {
           return rpcBoundaryError(error);
         }
       }
+      case "pin_thread": {
+        const workspaceId = String(params.workspaceId ?? "");
+        const threadId = String(params.threadId ?? "");
+        const thread = this.getThreadForWorkspace(workspaceId, threadId);
+        if (!thread) {
+          return notFound("Thread not found.");
+        }
+        thread.pinnedAt = Date.now();
+        thread.updatedAt = Date.now();
+        await this.persistThreads();
+        return { pinnedAt: thread.pinnedAt };
+      }
+      case "unpin_thread": {
+        const workspaceId = String(params.workspaceId ?? "");
+        const threadId = String(params.threadId ?? "");
+        const thread = this.getThreadForWorkspace(workspaceId, threadId);
+        if (!thread) {
+          return notFound("Thread not found.");
+        }
+        thread.pinnedAt = null;
+        thread.updatedAt = Date.now();
+        await this.persistThreads();
+        return null;
+      }
+      case "patch_thread_codex_params": {
+        const workspaceId = String(params.workspaceId ?? "");
+        const threadId = String(params.threadId ?? "");
+        const patch = normalizeStoredThreadCodexParamsPatch(params.patch);
+        if (!patch) {
+          return badRequest("Thread codex params patch is required.");
+        }
+        const thread = this.patchThreadCodexParamsRecord(workspaceId, threadId, patch);
+        if (!thread) {
+          return notFound("Thread not found.");
+        }
+        await this.persistThreads();
+        return { codexParams: thread.codexParams };
+      }
+      case "clear_thread_codex_params": {
+        const workspaceId = String(params.workspaceId ?? "");
+        const threadId = String(params.threadId ?? "");
+        const thread = this.getThreadForWorkspace(workspaceId, threadId);
+        if (!thread) {
+          return notFound("Thread not found.");
+        }
+        thread.codexParams = null;
+        thread.updatedAt = Date.now();
+        await this.persistThreads();
+        return null;
+      }
+      case "patch_workspace_composer_defaults": {
+        const workspaceId = String(params.workspaceId ?? "");
+        const patch = normalizeStoredThreadCodexParamsPatch(params.patch);
+        if (!patch) {
+          return badRequest("Workspace composer defaults patch is required.");
+        }
+        const workspace = this.patchWorkspaceComposerDefaultsRecord(workspaceId, patch);
+        if (!workspace) {
+          return notFound("Workspace not found.");
+        }
+        await this.persistWorkspaces();
+        return {
+          ...workspace,
+          connected: this.connectedWorkspaceIds.has(workspace.id),
+        };
+      }
+      case "import_client_thread_metadata":
+        return await this.importClientThreadMetadata(params);
       case "get_thread_backlog":
       case "add_thread_backlog_item":
       case "update_thread_backlog_item":

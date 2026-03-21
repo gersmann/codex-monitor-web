@@ -1,19 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
+import type { ThreadSummary } from "@/types";
 import {
-  MAX_PINS_SOFT_LIMIT,
-  STORAGE_KEY_CUSTOM_NAMES,
-  STORAGE_KEY_PINNED_THREADS,
   type CustomNamesMap,
   type PinnedThreadsMap,
   type ThreadActivityMap,
-  loadCustomNames,
-  loadPinnedThreads,
-  loadThreadActivity,
   makeCustomNameKey,
   makePinKey,
-  savePinnedThreads,
-  saveThreadActivity,
 } from "@threads/utils/threadStorage";
 
 type UseThreadStorageResult = {
@@ -27,31 +20,51 @@ type UseThreadStorageResult = {
     threadId: string,
     timestamp?: number,
   ) => void;
-  pinThread: (workspaceId: string, threadId: string) => boolean;
-  unpinThread: (workspaceId: string, threadId: string) => void;
   isThreadPinned: (workspaceId: string, threadId: string) => boolean;
   getPinTimestamp: (workspaceId: string, threadId: string) => number | null;
 };
 
-export function useThreadStorage(): UseThreadStorageResult {
-  const threadActivityRef = useRef<ThreadActivityMap>(loadThreadActivity());
-  const pinnedThreadsRef = useRef<PinnedThreadsMap>(loadPinnedThreads());
+type UseThreadStorageParams = {
+  threadsByWorkspace: Record<string, ThreadSummary[]>;
+};
+
+export function useThreadStorage({
+  threadsByWorkspace,
+}: UseThreadStorageParams): UseThreadStorageResult {
+  const derived = useMemo(() => {
+    const nextCustomNames: CustomNamesMap = {};
+    const nextPinnedThreads: PinnedThreadsMap = {};
+    const nextThreadActivity: ThreadActivityMap = {};
+
+    Object.entries(threadsByWorkspace).forEach(([workspaceId, threads]) => {
+      const activityForWorkspace: Record<string, number> = {};
+      threads.forEach((thread) => {
+        if (thread.storedName?.trim()) {
+          nextCustomNames[makeCustomNameKey(workspaceId, thread.id)] = thread.storedName;
+        }
+        if (typeof thread.pinnedAt === "number") {
+          nextPinnedThreads[makePinKey(workspaceId, thread.id)] = thread.pinnedAt;
+        }
+        activityForWorkspace[thread.id] = thread.updatedAt;
+      });
+      nextThreadActivity[workspaceId] = activityForWorkspace;
+    });
+
+    return {
+      customNames: nextCustomNames,
+      pinnedThreads: nextPinnedThreads,
+      threadActivity: nextThreadActivity,
+    };
+  }, [threadsByWorkspace]);
+
+  const threadActivityRef = useRef<ThreadActivityMap>(derived.threadActivity);
+  const pinnedThreadsRef = useRef<PinnedThreadsMap>(derived.pinnedThreads);
   const [pinnedThreadsVersion, setPinnedThreadsVersion] = useState(0);
-  const customNamesRef = useRef<CustomNamesMap>({});
+  const customNamesRef = useRef<CustomNamesMap>(derived.customNames);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return undefined;
-    }
-    customNamesRef.current = loadCustomNames();
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === STORAGE_KEY_CUSTOM_NAMES) {
-        customNamesRef.current = loadCustomNames();
-      }
-    };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, []);
+    customNamesRef.current = derived.customNames;
+  }, [derived.customNames]);
 
   const getCustomName = useCallback((workspaceId: string, threadId: string) => {
     const key = makeCustomNameKey(workspaceId, threadId);
@@ -69,57 +82,21 @@ export function useThreadStorage(): UseThreadStorageResult {
         [workspaceId]: nextForWorkspace,
       };
       threadActivityRef.current = next;
-      saveThreadActivity(next);
     },
     [],
   );
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return undefined;
-    }
-    pinnedThreadsRef.current = loadPinnedThreads();
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY_PINNED_THREADS) {
-        return;
-      }
-      pinnedThreadsRef.current = loadPinnedThreads();
-      setPinnedThreadsVersion((version) => version + 1);
+    const previous = pinnedThreadsRef.current;
+    pinnedThreadsRef.current = derived.pinnedThreads;
+    threadActivityRef.current = {
+      ...derived.threadActivity,
+      ...threadActivityRef.current,
     };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, []);
-
-  const pinThread = useCallback((workspaceId: string, threadId: string): boolean => {
-    const key = makePinKey(workspaceId, threadId);
-    if (key in pinnedThreadsRef.current) {
-      return false;
+    if (JSON.stringify(previous) !== JSON.stringify(derived.pinnedThreads)) {
+      setPinnedThreadsVersion((version) => version + 1);
     }
-    const currentPinsForWorkspace = Object.keys(pinnedThreadsRef.current).filter(
-      (entry) => entry.startsWith(`${workspaceId}:`),
-    ).length;
-    if (currentPinsForWorkspace >= MAX_PINS_SOFT_LIMIT) {
-      console.warn(
-        `Pin limit reached (${MAX_PINS_SOFT_LIMIT}). Consider unpinning some threads.`,
-      );
-    }
-    const next = { ...pinnedThreadsRef.current, [key]: Date.now() };
-    pinnedThreadsRef.current = next;
-    savePinnedThreads(next);
-    setPinnedThreadsVersion((version) => version + 1);
-    return true;
-  }, []);
-
-  const unpinThread = useCallback((workspaceId: string, threadId: string) => {
-    const key = makePinKey(workspaceId, threadId);
-    if (!(key in pinnedThreadsRef.current)) {
-      return;
-    }
-    const { [key]: _removed, ...rest } = pinnedThreadsRef.current;
-    pinnedThreadsRef.current = rest;
-    savePinnedThreads(rest);
-    setPinnedThreadsVersion((version) => version + 1);
-  }, []);
+  }, [derived.pinnedThreads, derived.threadActivity]);
 
   const isThreadPinned = useCallback(
     (workspaceId: string, threadId: string): boolean => {
@@ -144,8 +121,6 @@ export function useThreadStorage(): UseThreadStorageResult {
     pinnedThreadsVersion,
     getCustomName,
     recordThreadActivity,
-    pinThread,
-    unpinThread,
     isThreadPinned,
     getPinTimestamp,
   };

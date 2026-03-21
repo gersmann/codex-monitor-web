@@ -50,6 +50,7 @@ type UseThreadSelectionHandlersOrchestrationParams = {
 
 type UseThreadCodexBootstrapOrchestrationParams = {
   activeWorkspaceId: string | null | undefined;
+  onError?: (error: unknown) => void;
 };
 
 type UseThreadCodexSyncOrchestrationParams = {
@@ -112,6 +113,7 @@ type UseThreadUiOrchestrationParams = {
 
 export function useThreadCodexBootstrapOrchestration({
   activeWorkspaceId,
+  onError,
 }: UseThreadCodexBootstrapOrchestrationParams) {
   const activeWorkspaceIdForParamsRef = useRef<string | null>(activeWorkspaceId ?? null);
 
@@ -119,7 +121,10 @@ export function useThreadCodexBootstrapOrchestration({
     activeWorkspaceIdForParamsRef.current = activeWorkspaceId ?? null;
   }, [activeWorkspaceId]);
 
-  return useThreadCodexOrchestration({ activeWorkspaceIdForParamsRef });
+  return useThreadCodexOrchestration({
+    activeWorkspaceIdForParamsRef,
+    onError,
+  });
 }
 
 export function useThreadCodexSyncOrchestration({

@@ -1,9 +1,8 @@
-import type { AccessMode, ServiceTier } from "@/types";
+import type { AccessMode, ServiceTier, ThreadCodexParams } from "@/types";
 import {
   buildEffectiveCodexArgsBadgeLabel,
   sanitizeRuntimeCodexArgs,
 } from "./codexArgsProfiles";
-import type { ThreadCodexParams } from "./threadStorage";
 import { makeThreadCodexParamsKey } from "./threadStorage";
 
 export const NO_THREAD_SCOPE_SUFFIX = "__no_thread__";

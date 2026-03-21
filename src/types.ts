@@ -8,6 +8,7 @@ export type WorkspaceSettings = {
   launchScripts?: LaunchScriptEntry[] | null;
   worktreeSetupScript?: string | null;
   worktreesFolder?: string | null;
+  composerDefaults?: ThreadCodexParams | null;
 };
 
 export type LaunchScriptIconId =
@@ -144,11 +145,16 @@ export type ConversationItem =
 export type ThreadSummary = {
   id: string;
   name: string;
+  storedName?: string | null;
+  preview?: string;
   updatedAt: number;
   createdAt?: number;
   modelId?: string | null;
   effort?: string | null;
   isSubagent?: boolean;
+  pinnedAt?: number | null;
+  detachedReviewParentId?: string | null;
+  codexParams?: ThreadCodexParams | null;
 };
 
 export type ThreadListSortKey = "created_at" | "updated_at";
@@ -193,6 +199,15 @@ export type PullRequestSelectionRange = {
 
 export type AccessMode = "read-only" | "current" | "full-access";
 export type ServiceTier = "fast" | "flex";
+export type ThreadCodexParams = {
+  modelId: string | null;
+  effort: string | null;
+  serviceTier?: ServiceTier | null;
+  accessMode: AccessMode | null;
+  collaborationModeId: string | null;
+  codexArgsOverride?: string | null;
+  updatedAt: number;
+};
 export type BackendMode = "local" | "remote";
 export type RemoteBackendProvider = "tcp";
 export type RemoteBackendTarget = {

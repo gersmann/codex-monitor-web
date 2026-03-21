@@ -265,7 +265,28 @@ export function reduceThreadLifecycle(
     case "setThreadName": {
       const list = state.threadsByWorkspace[action.workspaceId] ?? [];
       const next = list.map((thread) =>
-        thread.id === action.threadId ? { ...thread, name: action.name } : thread,
+        thread.id === action.threadId
+          ? {
+              ...thread,
+              name: action.name,
+              ...(Object.prototype.hasOwnProperty.call(action, "storedName")
+                ? { storedName: action.storedName ?? null }
+                : {}),
+            }
+          : thread,
+      );
+      return {
+        ...state,
+        threadsByWorkspace: {
+          ...state.threadsByWorkspace,
+          [action.workspaceId]: next,
+        },
+      };
+    }
+    case "setThreadPinnedAt": {
+      const list = state.threadsByWorkspace[action.workspaceId] ?? [];
+      const next = list.map((thread) =>
+        thread.id === action.threadId ? { ...thread, pinnedAt: action.pinnedAt } : thread,
       );
       return {
         ...state,

@@ -35,6 +35,9 @@ describe("codexRpcThreadBacklog", () => {
       turns: [],
       modelId: null,
       effort: null,
+      pinnedAt: null,
+      detachedReviewParentId: null,
+      codexParams: null,
       backlog: [{ id: "item-1", text: "Follow up", createdAt: 1, updatedAt: 1 }],
       tokenUsage: null,
     } satisfies StoredThread;
@@ -63,6 +66,9 @@ describe("codexRpcThreadBacklog", () => {
       turns: [],
       modelId: null,
       effort: null,
+      pinnedAt: null,
+      detachedReviewParentId: null,
+      codexParams: null,
       backlog: [],
       tokenUsage: null,
     } satisfies StoredThread;
@@ -118,6 +124,9 @@ describe("codexRpcThreadBacklog", () => {
       turns: [],
       modelId: null,
       effort: null,
+      pinnedAt: null,
+      detachedReviewParentId: null,
+      codexParams: null,
       backlog: [],
       tokenUsage: null,
     } satisfies StoredThread;

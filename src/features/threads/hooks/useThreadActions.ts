@@ -38,7 +38,6 @@ import {
   isSubagentThreadSource,
   shouldHideSubagentThreadFromSidebar,
 } from "@threads/utils/threadRpc";
-import { saveThreadActivity } from "@threads/utils/threadStorage";
 import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 
 const THREAD_LIST_TARGET_COUNT = 20;
@@ -359,6 +358,7 @@ export function useThreadActions({
               workspaceId,
               threadId,
               name: serverName,
+              storedName: serverName,
             });
           } else if (!customName && preview) {
             dispatch({
@@ -366,6 +366,7 @@ export function useThreadActions({
               workspaceId,
               threadId,
               name: previewThreadName(preview, "New Agent"),
+              storedName: null,
             });
           }
           const lastAgentMessage = [...mergedItems]
@@ -542,8 +543,19 @@ export function useThreadActions({
         name,
         updatedAt: getThreadTimestamp(thread),
         createdAt: getThreadCreatedTimestamp(thread),
+        ...(serverName ? { storedName: serverName } : {}),
+        ...(preview ? { preview } : {}),
         ...(metadata.modelId ? { modelId: metadata.modelId } : {}),
         ...(metadata.effort ? { effort: metadata.effort } : {}),
+        ...(typeof thread.pinnedAt === "number" || thread.pinnedAt === null
+          ? { pinnedAt: (thread.pinnedAt as number | null | undefined) ?? null }
+          : {}),
+        ...(typeof thread.detachedReviewParentId === "string"
+          ? { detachedReviewParentId: thread.detachedReviewParentId }
+          : {}),
+        ...(thread.codexParams && typeof thread.codexParams === "object"
+          ? { codexParams: thread.codexParams as ThreadSummary["codexParams"] }
+          : {}),
         ...(isSubagent ? { isSubagent: true } : {}),
       };
     },
@@ -801,7 +813,6 @@ export function useThreadActions({
         }
         if (didChangeAnyActivity) {
           threadActivityRef.current = nextThreadActivity;
-          saveThreadActivity(nextThreadActivity);
         }
       } catch (error) {
         onDebug?.({

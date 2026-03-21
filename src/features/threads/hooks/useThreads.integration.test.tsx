@@ -6,16 +6,25 @@ import type { useAppServerEvents } from "@app/hooks/useAppServerEvents";
 import { useThreadRows } from "@app/hooks/useThreadRows";
 import {
   archiveThread,
+  importClientThreadMetadata,
   interruptTurn,
   listThreads,
+  pinThread,
   resumeThread,
   sendUserMessage as sendUserMessageService,
   setThreadName,
   startThread,
   startReview,
   steerTurn,
+  unpinThread,
 } from "@services/tauri";
-import { STORAGE_KEY_DETACHED_REVIEW_LINKS } from "@threads/utils/threadStorage";
+import {
+  MIGRATED_THREAD_METADATA_STORAGE_KEY,
+  STORAGE_KEY_CUSTOM_NAMES,
+  STORAGE_KEY_DETACHED_REVIEW_LINKS,
+  STORAGE_KEY_PINNED_THREADS,
+  STORAGE_KEY_THREAD_CODEX_PARAMS,
+} from "@threads/utils/threadStorage";
 import { useQueuedSend } from "./useQueuedSend";
 import { useThreads } from "./useThreads";
 
@@ -40,6 +49,9 @@ vi.mock("@services/tauri", () => ({
   listThreads: vi.fn(),
   resumeThread: vi.fn(),
   archiveThread: vi.fn(),
+  pinThread: vi.fn(),
+  unpinThread: vi.fn(),
+  importClientThreadMetadata: vi.fn(),
   setThreadName: vi.fn(),
   getAccountRateLimits: vi.fn(),
   getAccountInfo: vi.fn(),
@@ -62,6 +74,16 @@ describe("useThreads UX integration", () => {
     handlers = null;
     localStorage.clear();
     vi.clearAllMocks();
+    vi.mocked(pinThread).mockResolvedValue({ pinnedAt: 1000 });
+    vi.mocked(unpinThread).mockResolvedValue(undefined);
+    vi.mocked(importClientThreadMetadata).mockResolvedValue({
+      imported: {
+        pinnedThreads: 0,
+        threadCodexParams: 0,
+        detachedReviewLinks: 0,
+        customNames: 0,
+      },
+    });
     now = 1000;
     nowSpy = vi.spyOn(Date, "now").mockImplementation(() => now++);
   });
@@ -205,6 +227,84 @@ describe("useThreads UX integration", () => {
           (thread) => thread.id === "thread-archive-me",
         ),
       ).toBe(false);
+    });
+  });
+
+  it("imports legacy client metadata once and marks the migration complete", async () => {
+    localStorage.setItem(
+      STORAGE_KEY_PINNED_THREADS,
+      JSON.stringify({
+        "ws-1:thread-1": 123,
+      }),
+    );
+    localStorage.setItem(
+      STORAGE_KEY_THREAD_CODEX_PARAMS,
+      JSON.stringify({
+        "ws-1:thread-1": {
+          serviceTier: "fast",
+          updatedAt: 5,
+        },
+      }),
+    );
+    localStorage.setItem(
+      STORAGE_KEY_DETACHED_REVIEW_LINKS,
+      JSON.stringify({
+        "ws-1": {
+          "thread-child": "thread-parent",
+        },
+      }),
+    );
+    localStorage.setItem(
+      STORAGE_KEY_CUSTOM_NAMES,
+      JSON.stringify({
+        "ws-1:thread-1": "Imported name",
+      }),
+    );
+
+    const firstRender = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(vi.mocked(importClientThreadMetadata)).toHaveBeenCalledWith({
+        pinnedThreads: {
+          "ws-1:thread-1": 123,
+        },
+        threadCodexParams: {
+          "ws-1:thread-1": {
+            serviceTier: "fast",
+            updatedAt: 5,
+          },
+        },
+        detachedReviewLinks: {
+          "ws-1": {
+            "thread-child": "thread-parent",
+          },
+        },
+        customNames: {
+          "ws-1:thread-1": "Imported name",
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(localStorage.getItem(MIGRATED_THREAD_METADATA_STORAGE_KEY)).toBe("1");
+    });
+
+    firstRender.unmount();
+
+    renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(vi.mocked(importClientThreadMetadata)).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1740,6 +1840,7 @@ describe("useThreads UX integration", () => {
             preview: "Detached review",
             updated_at: 9,
             cwd: workspace.path,
+            detachedReviewParentId: "thread-parent",
           },
         ],
         nextCursor: null,
@@ -1763,9 +1864,6 @@ describe("useThreads UX integration", () => {
     });
 
     expect(first.result.current.threadParentById["thread-review-1"]).toBe("thread-parent");
-    expect(localStorage.getItem(STORAGE_KEY_DETACHED_REVIEW_LINKS)).toContain(
-      "thread-review-1",
-    );
 
     first.unmount();
 
@@ -1818,7 +1916,6 @@ describe("useThreads UX integration", () => {
     });
 
     expect(result.current.threadParentById["thread-parent"]).toBeUndefined();
-    expect(localStorage.getItem(STORAGE_KEY_DETACHED_REVIEW_LINKS)).toBeNull();
   });
 
   it("orders thread lists, applies custom names, and keeps pin ordering stable", async () => {

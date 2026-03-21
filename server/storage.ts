@@ -12,6 +12,7 @@ import {
 import type {
   JsonRecord,
   StoredThread,
+  StoredThreadCodexParams,
   ThreadBacklogItem,
   StoredWorkspace,
   TextFileResponse,
@@ -212,7 +213,55 @@ function normalizeWorkspace(raw: StoredWorkspace): StoredWorkspace {
       launchScript: nullableValue(settings.launchScript),
       launchScripts: nullableValue(settings.launchScripts),
       worktreeSetupScript: nullableValue(settings.worktreeSetupScript),
+      composerDefaults: normalizeStoredThreadCodexParams(settings.composerDefaults),
     },
+  };
+}
+
+function normalizeStoredThreadCodexParams(
+  raw: StoredThreadCodexParams | unknown,
+): StoredThreadCodexParams | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const hasServiceTierField = Object.prototype.hasOwnProperty.call(record, "serviceTier");
+  const hasCodexArgsOverrideField = Object.prototype.hasOwnProperty.call(
+    record,
+    "codexArgsOverride",
+  );
+  const serviceTierValue = record.serviceTier;
+  const codexArgsOverrideValue = record.codexArgsOverride;
+  return {
+    modelId: typeof record.modelId === "string" ? record.modelId : null,
+    effort: typeof record.effort === "string" ? record.effort : null,
+    ...(hasServiceTierField
+      ? {
+          serviceTier:
+            serviceTierValue === "fast" || serviceTierValue === "flex"
+              ? serviceTierValue
+              : serviceTierValue === null
+                ? null
+                : undefined,
+        }
+      : {}),
+    accessMode:
+      record.accessMode === "read-only" ||
+      record.accessMode === "current" ||
+      record.accessMode === "full-access"
+        ? record.accessMode
+        : null,
+    collaborationModeId:
+      typeof record.collaborationModeId === "string" ? record.collaborationModeId : null,
+    ...(hasCodexArgsOverrideField
+      ? {
+          codexArgsOverride:
+            typeof codexArgsOverrideValue === "string" || codexArgsOverrideValue === null
+              ? codexArgsOverrideValue
+              : null,
+        }
+      : {}),
+    updatedAt: typeof record.updatedAt === "number" ? record.updatedAt : 0,
   };
 }
 
@@ -280,6 +329,9 @@ function normalizeThread(raw: StoredThread): StoredThread {
     activeTurnId: nullableValue(raw.activeTurnId),
     modelId: nullableValue(raw.modelId),
     effort: nullableValue(raw.effort),
+    pinnedAt: nullableValue(raw.pinnedAt),
+    detachedReviewParentId: nullableValue(raw.detachedReviewParentId),
+    codexParams: normalizeStoredThreadCodexParams(raw.codexParams),
     backlog: normalizeThreadBacklog(raw.backlog),
     tokenUsage: nullableValue(raw.tokenUsage),
     turns: normalizeThreadTurns(raw.turns),

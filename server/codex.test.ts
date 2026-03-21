@@ -196,6 +196,208 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
     expect(listed).toEqual([]);
   });
 
+  it("persists pin and thread codex params metadata through list and resume RPCs", async () => {
+    const { server, storage, thread } = await createServerFixture();
+
+    const pinResult = (await server.handleRpc("pin_thread", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+    })) as { pinnedAt: number };
+    expect(pinResult.pinnedAt).toEqual(expect.any(Number));
+
+    const patchResult = await server.handleRpc("patch_thread_codex_params", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      patch: {
+        modelId: "gpt-5.4",
+        serviceTier: "fast",
+        accessMode: "current",
+        codexArgsOverride: "--profile web",
+      },
+    });
+    expect(patchResult).toEqual({
+      codexParams: expect.objectContaining({
+        modelId: "gpt-5.4",
+        serviceTier: "fast",
+        accessMode: "current",
+        codexArgsOverride: "--profile web",
+      }),
+    });
+
+    const persistedThread = (await storage.readThreads())[0];
+    expect(persistedThread).toMatchObject({
+      pinnedAt: pinResult.pinnedAt,
+      codexParams: expect.objectContaining({
+        modelId: "gpt-5.4",
+        serviceTier: "fast",
+        accessMode: "current",
+        codexArgsOverride: "--profile web",
+      }),
+    });
+
+    const listThreads = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "sdk-thread-1",
+          cwd: thread.cwd,
+          preview: "Thread One",
+          createdAt: 1,
+          updatedAt: 25,
+          turns: [],
+        },
+      ],
+      nextCursor: null,
+    });
+    const readThreadWithTurns = vi.fn().mockResolvedValue({
+      thread: {
+        id: "sdk-thread-1",
+        cwd: thread.cwd,
+        preview: "Thread One",
+        createdAt: 1,
+        updatedAt: 25,
+        turns: [],
+        status: "idle",
+      },
+    });
+    mockAppServerClient(server, { listThreads, readThreadWithTurns });
+
+    const listed = await server.handleRpc("list_threads", {
+      workspaceId: "ws-1",
+      cursor: null,
+      limit: 20,
+      sortKey: "updated_at",
+    });
+    expect(listed).toMatchObject({
+      data: [
+        expect.objectContaining({
+          id: "thread-1",
+          pinnedAt: pinResult.pinnedAt,
+          codexParams: expect.objectContaining({
+            modelId: "gpt-5.4",
+            serviceTier: "fast",
+            accessMode: "current",
+            codexArgsOverride: "--profile web",
+          }),
+        }),
+      ],
+    });
+
+    const resumed = await server.handleRpc("resume_thread", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+    });
+    expect(resumed).toMatchObject({
+      thread: expect.objectContaining({
+        id: "thread-1",
+        pinnedAt: pinResult.pinnedAt,
+        codexParams: expect.objectContaining({
+          modelId: "gpt-5.4",
+          serviceTier: "fast",
+          accessMode: "current",
+          codexArgsOverride: "--profile web",
+        }),
+      }),
+    });
+
+    const unpinned = await server.handleRpc("unpin_thread", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+    });
+    expect(unpinned).toBeNull();
+
+    const cleared = await server.handleRpc("clear_thread_codex_params", {
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+    });
+    expect(cleared).toBeNull();
+
+    const clearedThread = (await storage.readThreads())[0];
+    expect(clearedThread).toMatchObject({
+      pinnedAt: null,
+      codexParams: null,
+    });
+  });
+
+  it("persists workspace composer defaults and imports legacy client thread metadata", async () => {
+    const { server, storage } = await createServerFixture();
+
+    const patchedWorkspace = await server.handleRpc("patch_workspace_composer_defaults", {
+      workspaceId: "ws-1",
+      patch: {
+        serviceTier: "fast",
+        accessMode: "current",
+        codexArgsOverride: "--profile workspace",
+      },
+    });
+    expect(patchedWorkspace).toMatchObject({
+      id: "ws-1",
+      settings: {
+        composerDefaults: expect.objectContaining({
+          serviceTier: "fast",
+          accessMode: "current",
+          codexArgsOverride: "--profile workspace",
+        }),
+      },
+    });
+
+    const imported = await server.handleRpc("import_client_thread_metadata", {
+      pinnedThreads: {
+        "ws-1:thread-1": 777,
+      },
+      threadCodexParams: {
+        "ws-1:thread-1": {
+          modelId: "gpt-5.4",
+          serviceTier: "fast",
+          updatedAt: 10,
+        },
+        "ws-1:__no_thread__": {
+          accessMode: "full-access",
+          updatedAt: 11,
+        },
+      },
+      detachedReviewLinks: {
+        "ws-1": {
+          "thread-1": "thread-parent",
+        },
+      },
+      customNames: {
+        "ws-1:thread-1": "Imported thread name",
+      },
+    });
+    expect(imported).toEqual({
+      imported: {
+        pinnedThreads: 1,
+        threadCodexParams: 2,
+        detachedReviewLinks: 1,
+        customNames: 1,
+      },
+    });
+
+    const persistedThread = (await storage.readThreads())[0];
+    expect(persistedThread).toMatchObject({
+      id: "thread-1",
+      pinnedAt: 777,
+      detachedReviewParentId: "thread-parent",
+      name: "Imported thread name",
+      codexParams: expect.objectContaining({
+        modelId: "gpt-5.4",
+        serviceTier: "fast",
+      }),
+    });
+
+    const persistedWorkspace = (await storage.readWorkspaces())[0];
+    expect(persistedWorkspace).toMatchObject({
+      id: "ws-1",
+      settings: {
+        composerDefaults: expect.objectContaining({
+          serviceTier: "fast",
+          accessMode: "full-access",
+          codexArgsOverride: "--profile workspace",
+        }),
+      },
+    });
+  });
+
   it("routes start_thread through codex app-server and persists the remote thread id", async () => {
     const { server, storage, workspace } = await createServerFixture();
     const startThread = vi.fn().mockResolvedValue({
@@ -722,6 +924,9 @@ describe("CodexCompanionServer phase 1 rpc support", () => {
       turns: [],
       modelId: null,
       effort: null,
+      pinnedAt: null,
+      detachedReviewParentId: null,
+      codexParams: null,
       backlog: [],
       tokenUsage: null,
     };

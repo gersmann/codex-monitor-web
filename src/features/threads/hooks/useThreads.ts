@@ -24,13 +24,18 @@ import { useThreadUserInput } from "./useThreadUserInput";
 import { useThreadTitleAutogeneration } from "./useThreadTitleAutogeneration";
 import {
   archiveThread as archiveThreadService,
+  importClientThreadMetadata as importClientThreadMetadataService,
+  pinThread as pinThreadService,
   setThreadName as setThreadNameService,
+  unpinThread as unpinThreadService,
 } from "@services/tauri";
 import {
+  loadCustomNames,
   loadDetachedReviewLinks,
-  makeCustomNameKey,
-  saveCustomName,
-  saveDetachedReviewLinks,
+  loadPinnedThreads,
+  loadThreadCodexParams,
+  MIGRATED_THREAD_METADATA_STORAGE_KEY,
+  MAX_PINS_SOFT_LIMIT,
 } from "@threads/utils/threadStorage";
 import { getParentThreadIdFromThread } from "@threads/utils/threadRpc";
 import { getSubagentDescendantThreadIds } from "@threads/utils/subagentTree";
@@ -118,7 +123,7 @@ export function useThreads({
   const subagentThreadByWorkspaceThreadRef = useRef<Record<string, true>>({});
   const threadParentByIdRef = useRef(state.threadParentById);
   const cascadeArchiveSkipRef = useRef<Record<string, number>>({});
-  const detachedReviewLinksByWorkspaceRef = useRef(loadDetachedReviewLinks());
+  const detachedReviewLinksByWorkspaceRef = useRef<Record<string, Record<string, string>>>({});
   planByThreadRef.current = state.planByThread;
   itemsByThreadRef.current = state.itemsByThread;
   threadsByWorkspaceRef.current = state.threadsByWorkspace;
@@ -130,16 +135,58 @@ export function useThreads({
     useThreadApprovals({ dispatch, onDebug });
   const { handleUserInputSubmit } = useThreadUserInput({ dispatch });
   const {
-    customNamesRef,
     threadActivityRef,
     pinnedThreadsVersion,
     getCustomName,
     recordThreadActivity,
-    pinThread,
-    unpinThread,
     isThreadPinned,
     getPinTimestamp,
-  } = useThreadStorage();
+  } = useThreadStorage({
+    threadsByWorkspace: state.threadsByWorkspace,
+  });
+  const clientMetadataMigrationStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || clientMetadataMigrationStartedRef.current) {
+      return;
+    }
+    if (window.localStorage.getItem(MIGRATED_THREAD_METADATA_STORAGE_KEY) === "1") {
+      return;
+    }
+    const pinnedThreads = loadPinnedThreads();
+    const threadCodexParams = loadThreadCodexParams();
+    const detachedReviewLinks = loadDetachedReviewLinks();
+    const customNames = loadCustomNames();
+    const hasLegacyMetadata =
+      Object.keys(pinnedThreads).length > 0 ||
+      Object.keys(threadCodexParams).length > 0 ||
+      Object.keys(detachedReviewLinks).length > 0 ||
+      Object.keys(customNames).length > 0;
+    if (!hasLegacyMetadata) {
+      window.localStorage.setItem(MIGRATED_THREAD_METADATA_STORAGE_KEY, "1");
+      return;
+    }
+    clientMetadataMigrationStartedRef.current = true;
+    void importClientThreadMetadataService({
+      pinnedThreads,
+      threadCodexParams,
+      detachedReviewLinks,
+      customNames,
+    })
+      .then(() => {
+        window.localStorage.setItem(MIGRATED_THREAD_METADATA_STORAGE_KEY, "1");
+      })
+      .catch((error) => {
+        clientMetadataMigrationStartedRef.current = false;
+        onDebug?.({
+          id: `${Date.now()}-client-thread-metadata-import-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread metadata import error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      });
+  }, [onDebug]);
 
   const activeWorkspaceId = activeWorkspace?.id ?? null;
   const { activeThreadId, activeItems } = useThreadSelectors({
@@ -199,10 +246,13 @@ export function useThreads({
 
   const renameThread = useCallback(
     (workspaceId: string, threadId: string, newName: string) => {
-      saveCustomName(workspaceId, threadId, newName);
-      const key = makeCustomNameKey(workspaceId, threadId);
-      customNamesRef.current[key] = newName;
-      dispatch({ type: "setThreadName", workspaceId, threadId, name: newName });
+      dispatch({
+        type: "setThreadName",
+        workspaceId,
+        threadId,
+        name: newName,
+        storedName: newName,
+      });
       void Promise.resolve(
         setThreadNameService(workspaceId, threadId, newName),
       ).catch((error) => {
@@ -215,7 +265,7 @@ export function useThreads({
         });
       });
     },
-    [customNamesRef, dispatch, onDebug],
+    [dispatch, onDebug],
   );
 
   const onSubagentThreadDetected = useCallback(
@@ -292,7 +342,6 @@ export function useThreads({
           },
         };
         detachedReviewLinksByWorkspaceRef.current = nextLinksByWorkspace;
-        saveDetachedReviewLinks(nextLinksByWorkspace);
       }
 
       const timestamp = Date.now();
@@ -321,6 +370,21 @@ export function useThreads({
     },
     [activeThreadId, dispatch, recordThreadActivity, safeMessageActivity],
   );
+
+  useEffect(() => {
+    const nextLinksByWorkspace: Record<string, Record<string, string>> = {};
+    Object.entries(state.threadsByWorkspace).forEach(([workspaceId, threads]) => {
+      threads.forEach((thread) => {
+        if (!thread.detachedReviewParentId) {
+          return;
+        }
+        nextLinksByWorkspace[workspaceId] ??= {};
+        nextLinksByWorkspace[workspaceId][thread.id] = thread.detachedReviewParentId;
+        detachedReviewParentByChildRef.current[thread.id] = thread.detachedReviewParentId;
+      });
+    });
+    detachedReviewLinksByWorkspaceRef.current = nextLinksByWorkspace;
+  }, [state.threadsByWorkspace]);
 
   useEffect(() => {
     const linksByWorkspace = detachedReviewLinksByWorkspaceRef.current;
@@ -448,7 +512,16 @@ export function useThreads({
         return;
       }
       threadHandlers.onThreadArchived?.(workspaceId, threadId);
-      unpinThread(workspaceId, threadId);
+      dispatch({ type: "setThreadPinnedAt", workspaceId, threadId, pinnedAt: null });
+      void unpinThreadService(workspaceId, threadId).catch((error) => {
+        onDebug?.({
+          id: `${Date.now()}-client-thread-unpin-on-archive-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread/unpin on archive error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      });
 
       const skipKey = buildWorkspaceThreadKey(workspaceId, threadId);
       const skipAt = cascadeArchiveSkipRef.current[skipKey] ?? null;
@@ -512,7 +585,7 @@ export function useThreads({
         }
       })();
     },
-    [isSubagentThread, onDebug, threadHandlers, unpinThread],
+    [dispatch, isSubagentThread, onDebug, threadHandlers],
   );
 
   const handleThreadUnarchived = useCallback(
@@ -573,6 +646,62 @@ export function useThreads({
     onSubagentThreadDetected,
     onThreadCodexMetadataDetected,
   });
+
+  const pinThread = useCallback(
+    (workspaceId: string, threadId: string): boolean => {
+      if (isThreadPinned(workspaceId, threadId)) {
+        return false;
+      }
+      const currentPinsForWorkspace = (state.threadsByWorkspace[workspaceId] ?? []).filter(
+        (thread) => thread.pinnedAt !== null && thread.pinnedAt !== undefined,
+      ).length;
+      if (currentPinsForWorkspace >= MAX_PINS_SOFT_LIMIT) {
+        console.warn(
+          `Pin limit reached (${MAX_PINS_SOFT_LIMIT}). Consider unpinning some threads.`,
+        );
+      }
+      const pinnedAt = Date.now();
+      dispatch({ type: "setThreadPinnedAt", workspaceId, threadId, pinnedAt });
+      void pinThreadService(workspaceId, threadId).catch((error) => {
+        dispatch({ type: "setThreadPinnedAt", workspaceId, threadId, pinnedAt: null });
+        onDebug?.({
+          id: `${Date.now()}-client-thread-pin-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread/pin error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      });
+      return true;
+    },
+    [dispatch, isThreadPinned, onDebug, state.threadsByWorkspace],
+  );
+
+  const unpinThread = useCallback(
+    (workspaceId: string, threadId: string) => {
+      if (!isThreadPinned(workspaceId, threadId)) {
+        return;
+      }
+      const previousPinnedAt = getPinTimestamp(workspaceId, threadId);
+      dispatch({ type: "setThreadPinnedAt", workspaceId, threadId, pinnedAt: null });
+      void unpinThreadService(workspaceId, threadId).catch((error) => {
+        dispatch({
+          type: "setThreadPinnedAt",
+          workspaceId,
+          threadId,
+          pinnedAt: previousPinnedAt,
+        });
+        onDebug?.({
+          id: `${Date.now()}-client-thread-unpin-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "thread/unpin error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      });
+    },
+    [dispatch, getPinTimestamp, isThreadPinned, onDebug],
+  );
 
   const ensureWorkspaceRuntimeCodexArgsBestEffort = useCallback(
     async (workspaceId: string, threadId: string | null, phase: string) => {

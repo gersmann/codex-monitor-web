@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AccessMode, ServiceTier } from "@/types";
+import { useCallback, useMemo, useRef, useState } from "react";
+import type { ThreadCodexParams, ThreadSummary, WorkspaceInfo } from "@/types";
 import {
-  STORAGE_KEY_THREAD_CODEX_PARAMS,
-  type ThreadCodexParams,
-  type ThreadCodexParamsMap,
-  loadThreadCodexParams,
-  makeThreadCodexParamsKey,
-  saveThreadCodexParams,
-} from "@threads/utils/threadStorage";
+  clearThreadCodexParams as clearThreadCodexParamsService,
+  patchThreadCodexParams as patchThreadCodexParamsService,
+  patchWorkspaceComposerDefaults as patchWorkspaceComposerDefaultsService,
+} from "@services/tauri";
+import { makeThreadCodexParamsKey } from "@threads/utils/threadStorage";
 
 type ThreadCodexParamsPatch = Partial<
   Pick<
@@ -21,8 +19,17 @@ type ThreadCodexParamsPatch = Partial<
   >
 >;
 
+type UseThreadCodexParamsParams = {
+  noThreadScopeSuffix: string;
+  onError?: (error: unknown, context: string) => void;
+};
+
 type UseThreadCodexParamsResult = {
   version: number;
+  syncThreadCodexParamsFromBackend: (
+    threadsByWorkspace: Record<string, ThreadSummary[]>,
+    workspacesById: Map<string, WorkspaceInfo>,
+  ) => void;
   getThreadCodexParams: (workspaceId: string, threadId: string) => ThreadCodexParams | null;
   patchThreadCodexParams: (
     workspaceId: string,
@@ -32,131 +39,135 @@ type UseThreadCodexParamsResult = {
   deleteThreadCodexParams: (workspaceId: string, threadId: string) => void;
 };
 
-const DEFAULT_ENTRY: ThreadCodexParams = {
-  modelId: null,
-  effort: null,
-  serviceTier: undefined,
-  accessMode: null,
-  collaborationModeId: null,
-  codexArgsOverride: null,
-  updatedAt: 0,
-};
-
-function coerceAccessMode(value: unknown): AccessMode | null {
-  if (value === "read-only" || value === "current" || value === "full-access") {
-    return value;
-  }
-  return null;
+function buildThreadCodexParamsMap(options: {
+  threadsByWorkspace: Record<string, ThreadSummary[]>;
+  workspacesById: Map<string, WorkspaceInfo>;
+  noThreadScopeSuffix: string;
+}) {
+  const next = new Map<string, ThreadCodexParams>();
+  options.workspacesById.forEach((workspace, workspaceId) => {
+    if (workspace?.settings.composerDefaults) {
+      next.set(
+        makeThreadCodexParamsKey(workspaceId, options.noThreadScopeSuffix),
+        workspace.settings.composerDefaults,
+      );
+    }
+  });
+  Object.entries(options.threadsByWorkspace).forEach(([workspaceId, threads]) => {
+    threads.forEach((thread) => {
+      if (thread.codexParams) {
+        next.set(makeThreadCodexParamsKey(workspaceId, thread.id), thread.codexParams);
+      }
+    });
+  });
+  return next;
 }
 
-function coerceServiceTier(value: unknown): ServiceTier | null {
-  if (value === "fast" || value === "flex") {
-    return value;
-  }
-  return null;
-}
-
-function sanitizeEntry(value: unknown): ThreadCodexParams | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-  const entry = value as Record<string, unknown>;
-  const hasCodexArgsOverrideField = Object.prototype.hasOwnProperty.call(
-    entry,
-    "codexArgsOverride",
-  );
-  const codexArgsOverride = hasCodexArgsOverrideField
-    ? entry.codexArgsOverride === undefined
-      ? undefined
-      : typeof entry.codexArgsOverride === "string" || entry.codexArgsOverride === null
-        ? entry.codexArgsOverride
-        : null
-    : undefined;
-  const hasServiceTierField = Object.prototype.hasOwnProperty.call(entry, "serviceTier");
-  const serviceTier = hasServiceTierField
-    ? entry.serviceTier === undefined
-      ? undefined
-      : entry.serviceTier === null
-        ? null
-        : coerceServiceTier(entry.serviceTier)
-    : undefined;
-  return {
-    modelId: typeof entry.modelId === "string" ? entry.modelId : null,
-    effort: typeof entry.effort === "string" ? entry.effort : null,
-    serviceTier,
-    accessMode: coerceAccessMode(entry.accessMode),
-    collaborationModeId:
-      typeof entry.collaborationModeId === "string"
-        ? entry.collaborationModeId
-        : null,
-    codexArgsOverride,
-    updatedAt: typeof entry.updatedAt === "number" ? entry.updatedAt : 0,
-  };
-}
-
-export function useThreadCodexParams(): UseThreadCodexParamsResult {
-  const paramsRef = useRef<ThreadCodexParamsMap>(loadThreadCodexParams());
+export function useThreadCodexParams({
+  noThreadScopeSuffix,
+  onError,
+}: UseThreadCodexParamsParams): UseThreadCodexParamsResult {
+  const paramsRef = useRef<Map<string, ThreadCodexParams>>(new Map());
   const [version, setVersion] = useState(0);
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return undefined;
-    }
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY_THREAD_CODEX_PARAMS) {
-        return;
+  const syncThreadCodexParamsFromBackend = useCallback(
+    (
+      threadsByWorkspace: Record<string, ThreadSummary[]>,
+      workspacesById: Map<string, WorkspaceInfo>,
+    ) => {
+      const next = buildThreadCodexParamsMap({
+        threadsByWorkspace,
+        workspacesById,
+        noThreadScopeSuffix,
+      });
+      const previous = JSON.stringify(Array.from(paramsRef.current.entries()));
+      const nextSerialized = JSON.stringify(Array.from(next.entries()));
+      paramsRef.current = next;
+      if (previous !== nextSerialized) {
+        setVersion((value) => value + 1);
       }
-      paramsRef.current = loadThreadCodexParams();
-      setVersion((v) => v + 1);
-    };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, []);
+    },
+    [noThreadScopeSuffix],
+  );
 
   const getThreadCodexParams = useCallback(
-    (workspaceId: string, threadId: string): ThreadCodexParams | null => {
-      const key = makeThreadCodexParamsKey(workspaceId, threadId);
-      const entry = paramsRef.current[key];
-      return sanitizeEntry(entry) ?? null;
-    },
+    (workspaceId: string, threadId: string): ThreadCodexParams | null =>
+      paramsRef.current.get(makeThreadCodexParamsKey(workspaceId, threadId)) ?? null,
     [],
   );
 
   const patchThreadCodexParams = useCallback(
     (workspaceId: string, threadId: string, patch: ThreadCodexParamsPatch) => {
       const key = makeThreadCodexParamsKey(workspaceId, threadId);
-      const current = sanitizeEntry(paramsRef.current[key]) ?? DEFAULT_ENTRY;
+      const current = paramsRef.current.get(key) ?? {
+        modelId: null,
+        effort: null,
+        accessMode: null,
+        collaborationModeId: null,
+        updatedAt: 0,
+      };
       const nextEntry: ThreadCodexParams = {
         ...current,
         ...patch,
         updatedAt: Date.now(),
       };
-      const next: ThreadCodexParamsMap = { ...paramsRef.current, [key]: nextEntry };
+      const next = new Map(paramsRef.current);
+      next.set(key, nextEntry);
       paramsRef.current = next;
-      saveThreadCodexParams(next);
-      setVersion((v) => v + 1);
+      setVersion((value) => value + 1);
+      const promise =
+        threadId === noThreadScopeSuffix
+          ? patchWorkspaceComposerDefaultsService(workspaceId, patch)
+          : patchThreadCodexParamsService(workspaceId, threadId, patch);
+      void promise.catch((error) => {
+        onError?.(error, "patchThreadCodexParams");
+      });
     },
-    [],
+    [noThreadScopeSuffix, onError],
   );
 
-  const deleteThreadCodexParams = useCallback((workspaceId: string, threadId: string) => {
-    const key = makeThreadCodexParamsKey(workspaceId, threadId);
-    if (!(key in paramsRef.current)) {
-      return;
-    }
-    const { [key]: _removed, ...rest } = paramsRef.current;
-    paramsRef.current = rest;
-    saveThreadCodexParams(rest);
-    setVersion((v) => v + 1);
-  }, []);
+  const deleteThreadCodexParams = useCallback(
+    (workspaceId: string, threadId: string) => {
+      const key = makeThreadCodexParamsKey(workspaceId, threadId);
+      if (!paramsRef.current.has(key)) {
+        return;
+      }
+      const next = new Map(paramsRef.current);
+      next.delete(key);
+      paramsRef.current = next;
+      setVersion((value) => value + 1);
+      const promise =
+        threadId === noThreadScopeSuffix
+          ? patchWorkspaceComposerDefaultsService(workspaceId, {
+              modelId: null,
+              effort: null,
+              serviceTier: undefined,
+              accessMode: null,
+              collaborationModeId: null,
+              codexArgsOverride: undefined,
+            })
+          : clearThreadCodexParamsService(workspaceId, threadId);
+      void promise.catch((error) => {
+        onError?.(error, "deleteThreadCodexParams");
+      });
+    },
+    [noThreadScopeSuffix, onError],
+  );
 
   return useMemo(
     () => ({
       version,
+      syncThreadCodexParamsFromBackend,
       getThreadCodexParams,
       patchThreadCodexParams,
       deleteThreadCodexParams,
     }),
-    [deleteThreadCodexParams, getThreadCodexParams, patchThreadCodexParams, version],
+    [
+      deleteThreadCodexParams,
+      getThreadCodexParams,
+      patchThreadCodexParams,
+      syncThreadCodexParamsFromBackend,
+      version,
+    ],
   );
 }
