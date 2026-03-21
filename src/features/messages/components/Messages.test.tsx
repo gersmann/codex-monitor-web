@@ -1330,6 +1330,63 @@ describe("Messages", () => {
     expect(scrollNode.scrollTop).toBe(900);
   });
 
+  it("forces scroll to bottom for explicit reopen requests even without a thread switch", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-shared",
+        kind: "message",
+        role: "assistant",
+        text: "Shared tail",
+      },
+    ];
+
+    const { container, rerender } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+        reopenScrollRequestId={0}
+      />,
+    );
+
+    const messagesNode = container.querySelector(".messages.messages-full");
+    expect(messagesNode).toBeTruthy();
+    const scrollNode = messagesNode as HTMLDivElement;
+
+    Object.defineProperty(scrollNode, "clientHeight", {
+      configurable: true,
+      value: 200,
+    });
+    Object.defineProperty(scrollNode, "scrollHeight", {
+      configurable: true,
+      value: 600,
+    });
+    scrollNode.scrollTop = 100;
+    fireEvent.scroll(scrollNode);
+
+    Object.defineProperty(scrollNode, "scrollHeight", {
+      configurable: true,
+      value: 900,
+    });
+
+    rerender(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+        reopenScrollRequestId={1}
+      />,
+    );
+
+    expect(scrollNode.scrollTop).toBe(900);
+  });
+
   it("shows a plan-ready follow-up prompt after a completed plan tool item", () => {
     const onPlanAccept = vi.fn();
     const onPlanSubmitChanges = vi.fn();

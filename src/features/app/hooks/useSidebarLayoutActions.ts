@@ -5,6 +5,7 @@ import type { WorkspaceInfo, WorkspaceSettings } from "../../../types";
 type AppTab = "home" | "projects" | "codex" | "git" | "log";
 
 type UseSidebarLayoutActionsOptions = {
+  activeThreadId: string | null;
   openSettings: () => void;
   resetPullRequestSelection: () => void;
   clearDraftState: () => void;
@@ -34,9 +35,11 @@ type UseSidebarLayoutActionsOptions = {
   removeWorktree: (workspaceId: string) => void | Promise<unknown>;
   loadOlderThreadsForWorkspace: (workspace: WorkspaceInfo) => void | Promise<unknown>;
   listThreadsForWorkspace: (workspace: WorkspaceInfo) => void | Promise<unknown>;
+  requestReopenThreadScroll: () => void;
 };
 
 export function useSidebarLayoutActions({
+  activeThreadId,
   openSettings,
   resetPullRequestSelection,
   clearDraftState,
@@ -60,6 +63,7 @@ export function useSidebarLayoutActions({
   removeWorktree,
   loadOlderThreadsForWorkspace,
   listThreadsForWorkspace,
+  requestReopenThreadScroll,
 }: UseSidebarLayoutActionsOptions) {
   const onOpenSettings = useCallback(() => {
     openSettings();
@@ -113,6 +117,9 @@ export function useSidebarLayoutActions({
 
   const onSelectThread = useCallback(
     (workspaceId: string, threadId: string) => {
+      if (!activeThreadId) {
+        requestReopenThreadScroll();
+      }
       exitDiffView();
       resetPullRequestSelection();
       clearDraftState();
@@ -120,8 +127,10 @@ export function useSidebarLayoutActions({
       setActiveThreadId(threadId, workspaceId);
     },
     [
+      activeThreadId,
       clearDraftState,
       exitDiffView,
+      requestReopenThreadScroll,
       resetPullRequestSelection,
       selectWorkspace,
       setActiveThreadId,

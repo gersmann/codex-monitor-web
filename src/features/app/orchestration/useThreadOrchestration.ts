@@ -106,6 +106,7 @@ type UseThreadUiOrchestrationParams = {
   setActiveThreadId: (threadId: string | null, workspaceId?: string) => void;
   setActiveTab: SetState<MainTab>;
   isCompact: boolean;
+  requestReopenThreadScroll: () => void;
   removeThread: (workspaceId: string, threadId: string) => void;
   clearDraftForThread: (threadId: string) => void;
   removeImagesForThread: (threadId: string) => void;
@@ -410,6 +411,7 @@ export function useThreadUiOrchestration({
   setActiveThreadId,
   setActiveTab,
   isCompact,
+  requestReopenThreadScroll,
   removeThread,
   clearDraftForThread,
   removeImagesForThread,
@@ -452,6 +454,9 @@ export function useThreadUiOrchestration({
 
   const handleSelectWorkspaceInstance = useCallback(
     (workspaceId: string, threadId: string) => {
+      if (!activeThreadId) {
+        requestReopenThreadScroll();
+      }
       exitDiffView();
       resetPullRequestSelection();
       clearDraftState();
@@ -462,9 +467,11 @@ export function useThreadUiOrchestration({
       }
     },
     [
+      activeThreadId,
       clearDraftState,
       exitDiffView,
       isCompact,
+      requestReopenThreadScroll,
       resetPullRequestSelection,
       selectWorkspace,
       setActiveTab,
@@ -478,6 +485,9 @@ export function useThreadUiOrchestration({
       if (!targetWorkspaceId) {
         return;
       }
+      if (!activeThreadId) {
+        requestReopenThreadScroll();
+      }
       exitDiffView();
       resetPullRequestSelection();
       clearDraftState();
@@ -487,9 +497,11 @@ export function useThreadUiOrchestration({
       setActiveThreadId(threadId, targetWorkspaceId);
     },
     [
+      activeThreadId,
       activeWorkspaceId,
       clearDraftState,
       exitDiffView,
+      requestReopenThreadScroll,
       resetPullRequestSelection,
       selectWorkspace,
       setActiveThreadId,

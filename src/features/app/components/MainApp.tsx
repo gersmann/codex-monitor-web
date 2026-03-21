@@ -151,6 +151,7 @@ export default function MainApp() {
     "home" | "projects" | "codex" | "git" | "log"
   >("codex");
   const [mobileThreadRefreshLoading, setMobileThreadRefreshLoading] = useState(false);
+  const [reopenThreadScrollRequestId, setReopenThreadScrollRequestId] = useState(0);
   const tabletTab =
     activeTab === "projects" || activeTab === "home" ? "codex" : activeTab;
   const {
@@ -607,6 +608,9 @@ export default function MainApp() {
     threadSortKey: threadListSortKey,
     onThreadCodexMetadataDetected: handleThreadCodexMetadataDetected,
   });
+  const requestReopenThreadScroll = useCallback(() => {
+    setReopenThreadScrollRequestId((current) => current + 1);
+  }, []);
   useEffect(() => {
     syncThreadCodexParamsFromBackend(threadsByWorkspace, workspacesById);
   }, [syncThreadCodexParamsFromBackend, threadsByWorkspace, workspacesById]);
@@ -1547,6 +1551,7 @@ export default function MainApp() {
     setActiveThreadId,
     setActiveTab,
     isCompact,
+    requestReopenThreadScroll,
     removeThread,
     clearDraftForThread,
     removeImagesForThread,
@@ -1625,6 +1630,7 @@ export default function MainApp() {
 
   const sidebarMenuOrchestration = useMainAppSidebarMenuOrchestration({
     sidebarActions: {
+      activeThreadId,
       openSettings: modalActions.openSettings,
       resetPullRequestSelection,
       clearDraftState,
@@ -1648,6 +1654,7 @@ export default function MainApp() {
       removeWorktree,
       loadOlderThreadsForWorkspace,
       listThreadsForWorkspace,
+      requestReopenThreadScroll,
     },
     workspaceCycling: {
       workspaces,
@@ -1820,6 +1827,7 @@ export default function MainApp() {
     activeWorkspace,
     activeWorkspaceId,
     activeThreadId,
+    reopenThreadScrollRequestId,
     activeItems,
     userInputRequests,
     approvals,
@@ -1900,6 +1908,7 @@ export default function MainApp() {
     handleAddAgent,
     handleAddWorktreeAgent,
     handleAddCloneAgent,
+    handleSelectWorkspaceInstance,
     handleOpenThreadLink,
     handleRollbackMessage,
     handleSelectOpenAppId,

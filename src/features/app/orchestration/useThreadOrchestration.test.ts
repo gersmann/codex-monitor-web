@@ -334,6 +334,7 @@ describe("useThreadUiOrchestration", () => {
       setActiveThreadId: vi.fn(),
       setActiveTab,
       isCompact: false,
+      requestReopenThreadScroll: vi.fn(),
       removeThread: vi.fn(),
       clearDraftForThread: vi.fn(),
       removeImagesForThread: vi.fn(),
@@ -350,5 +351,84 @@ describe("useThreadUiOrchestration", () => {
     expect(params.clearDraftState).toHaveBeenCalledTimes(1);
     expect(params.selectWorkspace).toHaveBeenCalledWith("ws-2");
     expect(params.setActiveThreadId).toHaveBeenCalledWith("thread-review-1", "ws-2");
+    expect(params.requestReopenThreadScroll).not.toHaveBeenCalled();
+  });
+
+  it("requests bottom scroll when opening a thread link from a no-thread state", () => {
+    const params = {
+      activeWorkspaceId: "ws-1",
+      activeThreadId: null,
+      accessMode: "current" as const,
+      selectedServiceTier: null,
+      selectedCollaborationModeId: null,
+      selectedCodexArgsOverride: null,
+      pendingNewThreadSeedRef: {
+        current: null,
+      } as MutableRefObject<PendingNewThreadSeed | null>,
+      runWithDraftStart: vi.fn(async (runner: () => Promise<void>) => runner()),
+      handleComposerSend: vi.fn(async () => undefined),
+      clearDraftState: vi.fn(),
+      exitDiffView: vi.fn(),
+      resetPullRequestSelection: vi.fn(),
+      selectWorkspace: vi.fn(),
+      setActiveThreadId: vi.fn(),
+      setActiveTab: vi.fn() as unknown as Dispatch<
+        SetStateAction<"home" | "projects" | "codex" | "git" | "log">
+      >,
+      isCompact: false,
+      requestReopenThreadScroll: vi.fn(),
+      removeThread: vi.fn(),
+      clearDraftForThread: vi.fn(),
+      removeImagesForThread: vi.fn(),
+    };
+
+    const { result } = renderHook(() => useThreadUiOrchestration(params));
+
+    act(() => {
+      result.current.handleOpenThreadLink("thread-review-1", "ws-2");
+    });
+
+    expect(params.requestReopenThreadScroll).toHaveBeenCalledTimes(1);
+  });
+
+  it("requests bottom scroll when reopening a thread from home or workspace shell", () => {
+    const setActiveTab = vi.fn() as unknown as Dispatch<
+      SetStateAction<"home" | "projects" | "codex" | "git" | "log">
+    >;
+    const params = {
+      activeWorkspaceId: "ws-1",
+      activeThreadId: null,
+      accessMode: "current" as const,
+      selectedServiceTier: null,
+      selectedCollaborationModeId: null,
+      selectedCodexArgsOverride: null,
+      pendingNewThreadSeedRef: {
+        current: null,
+      } as MutableRefObject<PendingNewThreadSeed | null>,
+      runWithDraftStart: vi.fn(async (runner: () => Promise<void>) => runner()),
+      handleComposerSend: vi.fn(async () => undefined),
+      clearDraftState: vi.fn(),
+      exitDiffView: vi.fn(),
+      resetPullRequestSelection: vi.fn(),
+      selectWorkspace: vi.fn(),
+      setActiveThreadId: vi.fn(),
+      setActiveTab,
+      isCompact: true,
+      requestReopenThreadScroll: vi.fn(),
+      removeThread: vi.fn(),
+      clearDraftForThread: vi.fn(),
+      removeImagesForThread: vi.fn(),
+    };
+
+    const { result } = renderHook(() => useThreadUiOrchestration(params));
+
+    act(() => {
+      result.current.handleSelectWorkspaceInstance("ws-2", "thread-home-1");
+    });
+
+    expect(params.requestReopenThreadScroll).toHaveBeenCalledTimes(1);
+    expect(params.selectWorkspace).toHaveBeenCalledWith("ws-2");
+    expect(params.setActiveThreadId).toHaveBeenCalledWith("thread-home-1", "ws-2");
+    expect(setActiveTab).toHaveBeenCalledWith("codex");
   });
 });

@@ -54,6 +54,7 @@ type UseMainAppLayoutSurfacesArgs = {
   activeWorkspace: WorkspaceInfo | null;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
+  reopenThreadScrollRequestId: number;
   activeItems: LayoutNodesOptions["primary"]["messagesProps"]["items"];
   userInputRequests: SidebarProps["userInputRequests"];
   approvals: LayoutNodesOptions["primary"]["approvalToastsProps"]["approvals"];
@@ -135,6 +136,7 @@ type UseMainAppLayoutSurfacesArgs = {
   handleAddAgent: SidebarProps["onAddAgent"];
   handleAddWorktreeAgent: SidebarProps["onAddWorktreeAgent"];
   handleAddCloneAgent: SidebarProps["onAddCloneAgent"];
+  handleSelectWorkspaceInstance: (workspaceId: string, threadId: string) => void;
   handleOpenThreadLink: LayoutNodesOptions["primary"]["messagesProps"]["onOpenThreadLink"];
   handleRollbackMessage: LayoutNodesOptions["primary"]["messagesProps"]["onRollbackMessage"];
   handleSelectOpenAppId: MainHeaderProps["onSelectOpenAppId"];
@@ -263,6 +265,7 @@ export function useMainAppLayoutSurfaces({
   activeWorkspace,
   activeWorkspaceId,
   activeThreadId,
+  reopenThreadScrollRequestId,
   activeItems,
   userInputRequests,
   approvals,
@@ -311,6 +314,7 @@ export function useMainAppLayoutSurfaces({
   handleAddAgent,
   handleAddWorktreeAgent,
   handleAddCloneAgent,
+  handleSelectWorkspaceInstance,
   handleOpenThreadLink,
   handleRollbackMessage,
   handleSelectOpenAppId,
@@ -472,6 +476,7 @@ export function useMainAppLayoutSurfaces({
       messagesProps: {
         items: activeItems,
         threadId: activeThreadId ?? null,
+        reopenScrollRequestId: reopenThreadScrollRequestId,
         workspaceId: activeWorkspace?.id ?? null,
         workspacePath: activeWorkspace?.path ?? null,
         openTargets: appSettings.openAppTargets,
@@ -632,15 +637,7 @@ export function useMainAppLayoutSurfaces({
         accountRateLimits: homeRateLimits,
         usageShowRemaining: appSettings.usageShowRemaining,
         accountInfo: homeAccount,
-        onSelectThread: (workspaceId, threadId) => {
-          threadNavigation.exitDiffView();
-          threadNavigation.clearDraftState();
-          threadNavigation.selectWorkspace(workspaceId);
-          threadNavigation.setActiveThreadId(threadId, workspaceId);
-          if (isCompact) {
-            setActiveTab("codex");
-          }
-        },
+        onSelectThread: handleSelectWorkspaceInstance,
       },
       mainHeaderProps: activeWorkspace
         ? {

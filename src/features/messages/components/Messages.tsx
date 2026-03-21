@@ -55,6 +55,7 @@ type UserMessageItem = {
 type MessagesProps = {
   items: ConversationItem[];
   threadId: string | null;
+  reopenScrollRequestId?: number;
   workspaceId?: string | null;
   isThinking: boolean;
   isLoadingMessages?: boolean;
@@ -94,6 +95,7 @@ function toMarkdownQuote(text: string): string {
 export const Messages = memo(function Messages({
   items,
   threadId,
+  reopenScrollRequestId = 0,
   workspaceId = null,
   isThinking,
   isLoadingMessages = false,
@@ -186,6 +188,20 @@ export const Messages = memo(function Messages({
   useLayoutEffect(() => {
     autoScrollRef.current = true;
   }, [threadId]);
+
+  useLayoutEffect(() => {
+    if (reopenScrollRequestId <= 0) {
+      return;
+    }
+    const container = containerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+      autoScrollRef.current = true;
+      return;
+    }
+    bottomRef.current?.scrollIntoView({ block: "end" });
+    autoScrollRef.current = true;
+  }, [reopenScrollRequestId]);
 
   const toggleExpanded = useCallback((id: string) => {
     manuallyToggledExpandedRef.current.add(id);

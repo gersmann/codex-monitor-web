@@ -16,6 +16,7 @@ const workspace: WorkspaceInfo = {
 describe("useSidebarLayoutActions", () => {
   it("keeps handlers referentially stable across unrelated rerenders", () => {
     const options = {
+      activeThreadId: null,
       openSettings: vi.fn(),
       resetPullRequestSelection: vi.fn(),
       clearDraftState: vi.fn(),
@@ -39,6 +40,7 @@ describe("useSidebarLayoutActions", () => {
       removeWorktree: vi.fn(async () => {}),
       loadOlderThreadsForWorkspace: vi.fn(async () => {}),
       listThreadsForWorkspace: vi.fn(async () => {}),
+      requestReopenThreadScroll: vi.fn(),
     } as const;
 
     const { result, rerender } = renderHook(
@@ -74,6 +76,7 @@ describe("useSidebarLayoutActions", () => {
     const setActiveThreadId = vi.fn();
     const { result } = renderHook(() =>
       useSidebarLayoutActions({
+        activeThreadId: null,
         openSettings: vi.fn(),
         resetPullRequestSelection,
         clearDraftState: vi.fn(),
@@ -97,6 +100,7 @@ describe("useSidebarLayoutActions", () => {
         removeWorktree: vi.fn(async () => {}),
         loadOlderThreadsForWorkspace: vi.fn(async () => {}),
         listThreadsForWorkspace: vi.fn(async () => {}),
+        requestReopenThreadScroll: vi.fn(),
       }),
     );
 
@@ -116,6 +120,7 @@ describe("useSidebarLayoutActions", () => {
     const setActiveTab = vi.fn();
     const { result } = renderHook(() =>
       useSidebarLayoutActions({
+        activeThreadId: null,
         openSettings: vi.fn(),
         resetPullRequestSelection: vi.fn(),
         clearDraftState: vi.fn(),
@@ -139,6 +144,7 @@ describe("useSidebarLayoutActions", () => {
         removeWorktree: vi.fn(async () => {}),
         loadOlderThreadsForWorkspace: vi.fn(async () => {}),
         listThreadsForWorkspace: vi.fn(async () => {}),
+        requestReopenThreadScroll: vi.fn(),
       }),
     );
 
@@ -148,5 +154,83 @@ describe("useSidebarLayoutActions", () => {
 
     expect(connectWorkspace).toHaveBeenCalledWith(workspace);
     expect(setActiveTab).toHaveBeenCalledWith("codex");
+  });
+
+  it("requests bottom scroll when reopening a thread from a no-thread state", () => {
+    const requestReopenThreadScroll = vi.fn();
+    const { result } = renderHook(() =>
+      useSidebarLayoutActions({
+        activeThreadId: null,
+        openSettings: vi.fn(),
+        resetPullRequestSelection: vi.fn(),
+        clearDraftState: vi.fn(),
+        clearDraftStateIfDifferentWorkspace: vi.fn(),
+        selectHome: vi.fn(),
+        exitDiffView: vi.fn(),
+        selectWorkspace: vi.fn(),
+        setActiveThreadId: vi.fn(),
+        connectWorkspace: vi.fn(async () => {}),
+        isCompact: false,
+        setActiveTab: vi.fn(),
+        workspacesById: new Map([[workspace.id, workspace]]),
+        updateWorkspaceSettings: vi.fn(async () => workspace),
+        removeThread: vi.fn(),
+        clearDraftForThread: vi.fn(),
+        removeImagesForThread: vi.fn(),
+        refreshThread: vi.fn(async () => {}),
+        forkThreadForWorkspace: vi.fn(async () => null),
+        handleRenameThread: vi.fn(),
+        removeWorkspace: vi.fn(async () => {}),
+        removeWorktree: vi.fn(async () => {}),
+        loadOlderThreadsForWorkspace: vi.fn(async () => {}),
+        listThreadsForWorkspace: vi.fn(async () => {}),
+        requestReopenThreadScroll,
+      }),
+    );
+
+    act(() => {
+      result.current.onSelectThread("ws-1", "thread-1");
+    });
+
+    expect(requestReopenThreadScroll).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not request bottom scroll when switching directly between threads", () => {
+    const requestReopenThreadScroll = vi.fn();
+    const { result } = renderHook(() =>
+      useSidebarLayoutActions({
+        activeThreadId: "thread-active",
+        openSettings: vi.fn(),
+        resetPullRequestSelection: vi.fn(),
+        clearDraftState: vi.fn(),
+        clearDraftStateIfDifferentWorkspace: vi.fn(),
+        selectHome: vi.fn(),
+        exitDiffView: vi.fn(),
+        selectWorkspace: vi.fn(),
+        setActiveThreadId: vi.fn(),
+        connectWorkspace: vi.fn(async () => {}),
+        isCompact: false,
+        setActiveTab: vi.fn(),
+        workspacesById: new Map([[workspace.id, workspace]]),
+        updateWorkspaceSettings: vi.fn(async () => workspace),
+        removeThread: vi.fn(),
+        clearDraftForThread: vi.fn(),
+        removeImagesForThread: vi.fn(),
+        refreshThread: vi.fn(async () => {}),
+        forkThreadForWorkspace: vi.fn(async () => null),
+        handleRenameThread: vi.fn(),
+        removeWorkspace: vi.fn(async () => {}),
+        removeWorktree: vi.fn(async () => {}),
+        loadOlderThreadsForWorkspace: vi.fn(async () => {}),
+        listThreadsForWorkspace: vi.fn(async () => {}),
+        requestReopenThreadScroll,
+      }),
+    );
+
+    act(() => {
+      result.current.onSelectThread("ws-1", "thread-next");
+    });
+
+    expect(requestReopenThreadScroll).not.toHaveBeenCalled();
   });
 });
